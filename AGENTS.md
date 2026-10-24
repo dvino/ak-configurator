@@ -8,7 +8,8 @@ whole tree into this repository.
 
 - Read [requirements](docs/REQUIREMENTS.md), [plan](docs/PLAN.md) and
   [status](docs/STATUS.md) before implementation. Native adaptation starts
-  first and the browser/Wasm version develops in parallel from shared code.
+  first; the browser/Wasm stage starts after a reasonably usable desktop
+  milestone. Keep protocol code reusable without adding a web implementation yet.
 - Use `desktop-dev` for native work, `web-dev` for browser work and `desktop`
   for native release preparation. `main` is the common reviewed source.
   Merge shared changes instead of maintaining separate copies.

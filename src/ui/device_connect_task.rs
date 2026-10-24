@@ -14,7 +14,7 @@ pub(super) fn load_selected_display_settings(
 }
 
 fn vial_cache_dir() -> Option<std::path::PathBuf> {
-    let dir = dirs::config_dir()?.join("entropy").join("vial_cache");
+    let dir = dirs::config_dir()?.join(crate::APP_ID).join("vial_cache");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
@@ -552,6 +552,7 @@ fn supports_vial_macro_ext_keycodes(
 
 impl EntropyApp {
     pub(super) fn start_connect(&mut self, device_idx: usize) {
+        if self.ak820_demo { return; }
         self.start_connect_with_reconnect(device_idx, None);
     }
 
@@ -792,6 +793,9 @@ impl EntropyApp {
                 #[cfg(not(test))]
                 let opened = HidDevice::open_fresh_for(&dev);
                 let dev_conn = opened.map_err(|e| format!("Open failed: {e:#}"))?;
+                if dev.is_ak820() {
+                    return super::ak820_connection::load_ak820(&dev, dev_conn, progress);
+                }
                 let standby_animation_load = Self::device_uses_automatic_display_host_data(&dev)
                     .then(|| dev_conn.pause_standby_animation_for_load());
                 let staged_bluetooth_load = dev_conn.is_bluetooth_transport();

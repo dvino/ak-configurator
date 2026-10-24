@@ -333,7 +333,7 @@ fn macropad_ordinary_import_retries_unconfirmed_capability_after_transport_recov
             .application_layout_probe_failed
     );
     assert!(app.application_layout_device_key().is_none());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
     assert_eq!(std::fs::read(app_settings_path()).unwrap(), saved);
     assert_eq!(std::fs::read(&input).unwrap(), original_input);
@@ -409,7 +409,7 @@ fn macropad_ordinary_import_malformed_sources_never_probe_or_read_macro_capacity
             "{malformed}: {:?}",
             recorder.requests()
         );
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
         assert!(!app_settings_path().exists());
         assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
         assert_eq!(std::fs::read(input).unwrap(), original);
@@ -442,7 +442,7 @@ fn macropad_ordinary_import_does_not_retry_explicit_unsupported_or_wrong_identit
         assert!(app.import_entlayout_from_path(&input).is_err());
         assert!(recorder.requests().is_empty(), "{mismatch}");
         assert!(app.application_layout_device_key().is_none());
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
         assert!(!app_settings_path().exists());
     }
 }
@@ -484,7 +484,7 @@ fn macropad_ordinary_import_retry_rejection_never_grants_capability() {
         );
         assert!(app.application_layout_device_key().is_none());
         assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
         assert!(!app_settings_path().exists());
         assert!(app.import_entlayout_from_path(&input).is_err());
         assert_eq!(
@@ -520,7 +520,7 @@ fn macropad_cold_import_discovers_pictograms_before_validation_and_backup() {
     assert!(report.contains("Layout import complete"));
     assert_eq!(app.display_settings.pictograms.supported, Some(true));
     assert_eq!(app.display_settings.pictograms.library, library);
-    let backup = std::fs::read_dir(storage.path().join("entropy/backups"))
+    let backup = std::fs::read_dir(storage.path().join(crate::APP_ID).join("backups"))
         .unwrap()
         .next()
         .unwrap()
@@ -625,7 +625,7 @@ fn macropad_cold_query_and_read_errors_abort_export_and_import_without_publicati
         assert!(app.import_entlayout_from_path(&input).is_err());
         assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
         assert_eq!(std::fs::read(app_settings_path()).unwrap(), settings);
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
         assert!(recorder
             .requests()
             .iter()
@@ -921,7 +921,7 @@ fn macropad_unified_invalid_profile_rejected_before_backup_persistence_or_hid() 
     assert!(app.import_entlayout_from_path(&path).is_err());
     assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
     assert!(recorder.requests().is_empty());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     assert!(!app_settings_path().exists());
 }
 
@@ -1054,7 +1054,7 @@ fn macropad_unified_geometry_and_shared_dependencies_are_validated_before_writes
         );
         assert_eq!(serde_json::to_value(&app.app_settings).unwrap(), before);
         assert!(recorder.requests().is_empty());
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
         assert!(!app_settings_path().exists());
     }
 }
@@ -1350,7 +1350,7 @@ fn macropad_unified_invalid_pictogram_rejected_before_backup_or_hid() {
     write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
     assert!(app.import_entlayout_from_path(&path).is_err());
     assert!(recorder.requests().is_empty());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     assert!(!app_settings_path().exists());
 }
 
@@ -1450,7 +1450,7 @@ fn macropad_unified_rejects_unrestorable_shared_tap_dance_dependency_before_writ
     write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
     assert!(app.import_entlayout_from_path(&path).is_err());
     assert!(recorder.requests().is_empty());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
 }
 
 #[test]
@@ -1470,7 +1470,7 @@ fn macropad_unified_duplicate_profile_identity_is_rejected_before_writes() {
     std::fs::write(&path, json).unwrap();
     assert!(app.import_entlayout_from_path(&path).is_err());
     assert!(recorder.requests().is_empty());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
 }
 
 #[test]
@@ -1543,7 +1543,7 @@ fn macropad_unified_unknown_custom_action_is_rejected_on_keys_and_encoder_stacks
         write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
         assert!(app.import_entlayout_from_path(&path).is_err());
         assert!(recorder.requests().is_empty());
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     }
 }
 
@@ -2619,7 +2619,7 @@ fn macropad_default_import_updates_rendered_default_and_preserves_application_pr
     assert_eq!(generation, app.connection_generation);
     let before_import = app.entlayout_snapshot().unwrap();
     app.import_entlayout_from_path(&path).unwrap();
-    let backup_dir = _storage.path().join("entropy/backups");
+    let backup_dir = _storage.path().join(crate::APP_ID).join("backups");
     let backups: Vec<_> = std::fs::read_dir(&backup_dir)
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -2846,7 +2846,7 @@ fn reviewed_macro_slot_overflow_rejected_on_import_and_export() {
     write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
     assert!(app.import_entlayout_from_path(&path).is_err());
     assert!(recorder.requests().is_empty());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     std::fs::write(&path, b"keep").unwrap();
     app.write_entlayout_export(&path);
     assert_eq!(std::fs::read(path).unwrap(), b"keep");
@@ -2871,7 +2871,7 @@ fn reviewed_macro_capacity_counts_terminators_before_writes() {
     let path = storage.path().join("overflow.entlayout");
     write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
     assert!(app.import_entlayout_from_path(&path).is_err());
-    assert!(!storage.path().join("entropy/backups").exists());
+    assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     assert!(recorder.requests().iter().all(|r| r[0] == 0x0d));
     std::fs::write(&path, b"keep").unwrap();
     app.write_entlayout_export(&path);
@@ -3170,7 +3170,7 @@ fn reviewed_duplicate_and_missing_category_definitions_rejected_before_writes() 
         write_entlayout_file(&path, &bundle, app.app_settings.language).unwrap();
         assert!(app.import_entlayout_from_path(&path).is_err());
         assert!(recorder.requests().is_empty());
-        assert!(!storage.path().join("entropy/backups").exists());
+        assert!(!storage.path().join(crate::APP_ID).join("backups").exists());
     }
 }
 

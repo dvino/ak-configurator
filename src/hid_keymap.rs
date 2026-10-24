@@ -236,6 +236,11 @@ impl HidDevice {
             .with_context(|| {
                 format!("failed to set keycode at layer {layer}, row {row}, col {col}")
             })?;
+        if self.is_ak820_session() {
+            // The AK820 transaction already verified exactly one GET and
+            // checked storage before returning from usb_send.
+            return Ok(());
+        }
         // Some older Vial-QMK builds acknowledge SET before the dynamic
         // keymap becomes visible to GET. Keep strict verification, but allow
         // that bounded propagation window instead of rolling back a write

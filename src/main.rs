@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod action_icons;
+mod ak820;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod app_discovery;
@@ -10,6 +11,7 @@ mod device;
 mod diagnostics;
 mod firmware;
 mod firmware_builtin_icons;
+mod ak820_help;
 #[cfg(not(target_arch = "wasm32"))]
 mod hid;
 mod i18n;
@@ -36,9 +38,9 @@ mod universal_symbols;
 
 use app::EntropyApp;
 
-const APP_TITLE: &str = "Entropy";
-const APP_ID: &str = "entropy";
-const SINGLE_INSTANCE_ENV: &str = "ENTROPY_SINGLE_INSTANCE";
+const APP_TITLE: &str = "AK Configurator";
+const APP_ID: &str = "ak-configurator";
+const SINGLE_INSTANCE_ENV: &str = "AK_CONFIGURATOR_SINGLE_INSTANCE";
 const LAUNCH_MINIMIZED_ARG: &str = "--minimized";
 
 #[cfg(target_os = "windows")]
@@ -75,7 +77,7 @@ fn try_acquire_single_instance() -> bool {
     use std::ptr::null_mut;
 
     const ERROR_ALREADY_EXISTS: u32 = 183;
-    let name: Vec<u16> = OsStr::new("Global\\EntropySingleInstance")
+    let name: Vec<u16> = OsStr::new("Global\\AKConfiguratorSingleInstance")
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
@@ -99,7 +101,7 @@ fn try_acquire_single_instance() -> bool {
 fn notify_existing_instance() {
     let dir = dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     let _ = std::fs::create_dir_all(&dir);
     let signal_path = dir.join("single_instance_signal");
     let now_ms = std::time::SystemTime::now()
@@ -153,7 +155,7 @@ fn restore_existing_instance_window() {
         }
 
         let title = String::from_utf16_lossy(&title[..copied as usize]);
-        if title == APP_TITLE || title.starts_with("Entropy (v") {
+        if title == APP_TITLE || title.starts_with("AK Configurator (v") {
             let out = lparam as *mut HWND;
             if !out.is_null() {
                 unsafe {
@@ -194,7 +196,7 @@ fn try_acquire_single_instance() -> bool {
 
     let dir = dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     if std::fs::create_dir_all(&dir).is_err() {
         return true;
     }
@@ -309,7 +311,7 @@ fn main() -> eframe::Result<()> {
         if let Some(request) = headless_export {
             if single_instance_enabled() && !try_acquire_single_instance() {
                 log::error!(
-                    "Another Entropy instance is running; close it or export from its Layout menu"
+                    "Another AK Configurator instance is running; close it or export from its Layout menu"
                 );
                 std::process::exit(app::EXIT_INSTANCE_RUNNING);
             }
@@ -476,7 +478,11 @@ fn main() -> eframe::Result<()> {
                     .insert(egui::FontFamily::Name(family.into()), vec![font.to_owned()]);
             }
             cc.egui_ctx.set_fonts(fonts);
-            let app = EntropyApp::new(cc);
+            let app = if std::env::args().any(|arg| arg == "--demo-ak820") {
+                EntropyApp::new_ak820_demo(cc)
+            } else {
+                EntropyApp::new(cc)
+            };
             #[cfg(target_os = "windows")]
             let app = if launch_minimized {
                 app.with_start_hidden_to_tray()

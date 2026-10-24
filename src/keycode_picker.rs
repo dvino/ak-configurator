@@ -136,6 +136,8 @@ enum PickerValuePolicy {
     #[default]
     Any,
     KeyOverrideTrigger,
+    Ak820ComboTrigger,
+    Ak820ComboOutput,
 }
 
 pub struct KeycodePicker {
@@ -151,6 +153,8 @@ pub struct KeycodePicker {
     pub result: Option<crate::keyboard::KeyBinding>,
     pub custom_keycodes: Vec<(String, String, String, u16)>,
     pub supports_rgb: bool,
+    /// Exact AK820 alpha.3 action allowlist, independent of Vial version.
+    pub(crate) ak820_profile: bool,
     pub supports_macro: bool,
     pub supports_tap_dance: bool,
     pub supports_mouse_keys: bool,
@@ -1084,6 +1088,7 @@ impl Default for KeycodePicker {
             result: None,
             custom_keycodes: vec![],
             supports_rgb: true,
+            ak820_profile: false,
             supports_macro: true,
             supports_tap_dance: true,
             supports_mouse_keys: true,
@@ -1184,11 +1189,16 @@ impl KeycodePicker {
     }
 
     pub(crate) fn picker_value_supported(&self, value: u16) -> bool {
+        if self.ak820_profile && !crate::ak820::is_assignable_keycode(value) {
+            return false;
+        }
         match self.value_policy {
             PickerValuePolicy::Any => true,
             PickerValuePolicy::KeyOverrideTrigger => {
                 !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7)
             }
+            PickerValuePolicy::Ak820ComboTrigger => value == 0 || (4..=0xA4).contains(&value),
+            PickerValuePolicy::Ak820ComboOutput => value == 0 || crate::ak820::valid_combo([4, 5, 0, 0], value),
         }
     }
 
@@ -1408,6 +1418,12 @@ impl KeycodePicker {
         self.rmk_native_key_actions_allowed_for_target = false;
         if self.picker_value_supported(current_value) {
             self.select_tab_for_keycode(current_value);
+        }
+    }
+
+    pub(crate) fn constrain_ak820_combo_picker(&mut self, output: bool) {
+        if self.ak820_profile {
+            self.value_policy = if output { PickerValuePolicy::Ak820ComboOutput } else { PickerValuePolicy::Ak820ComboTrigger };
         }
     }
 

@@ -74,7 +74,7 @@ pub(crate) fn init(enabled: bool) {
     install_panic_hook();
     set_enabled(enabled);
     log::info!(
-        "Entropy v{} starting on {} {}",
+        "AK Configurator v{} starting on {} {}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH
@@ -197,7 +197,7 @@ pub(crate) fn active_log_path_display() -> String {
 fn entropy_config_dir() -> std::path::PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy")
+        .join(crate::APP_ID)
 }
 
 fn diagnostics_log_dir() -> std::path::PathBuf {

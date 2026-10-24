@@ -99,6 +99,12 @@ use combo_write::ComboWriteTask;
 mod combo_settings_ui;
 #[path = "ui/device_connect_apply.rs"]
 mod device_connect_apply;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_connection.rs"]
+mod ak820_connection;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_status.rs"]
+mod ak820_status;
 #[path = "ui/device_connect_task.rs"]
 mod device_connect_task;
 #[path = "ui/device_connection.rs"]

@@ -84,6 +84,8 @@ impl EntropyApp {
         self.keycode_picker
             .open_full_key_picker(crate::keycode_picker::KeycodeTab::Basic);
         self.keycode_picker
+            .constrain_ak820_combo_picker(matches!(field, ComboPickField::Output));
+        self.keycode_picker
             .rmk_native_key_actions_allowed_for_target = combo_picker_allows_native_actions(
             field,
             self.keycode_picker.supports_rmk_native_combo_output,
@@ -513,7 +515,12 @@ impl EntropyApp {
                     input_keys_control_width,
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0 * scale;
-                        for key_idx in 0..4 {
+                        let input_count = if self.keycode_picker.ak820_profile {
+                            2
+                        } else {
+                            4
+                        };
+                        for key_idx in 0..input_count {
                             let value = self.combo_entries[combo_idx].keys[key_idx];
                             let button_label = if value == 0 {
                                 String::new()
@@ -672,7 +679,16 @@ impl EntropyApp {
                     }
                 }
 
-                if let Some(current_combo_term) = self.combo_term {
+                if self.keycode_picker.ak820_profile {
+                    ui.label(match self.app_settings.language {
+                        crate::i18n::Language::Russian => {
+                            "Две клавиши, интервал 40 мс (фиксирован в прошивке)"
+                        }
+                        crate::i18n::Language::English => {
+                            "Two keys, 40 ms interval (fixed in firmware)"
+                        }
+                    });
+                } else if let Some(current_combo_term) = self.combo_term {
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
                         row_content_width,

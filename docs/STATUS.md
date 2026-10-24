@@ -2,38 +2,72 @@
 
 # Project status
 
-Updated 2026-10-24. The repository starts from Entropy commit
-`5b222b5d6349fb351f53b36c66169095b3039fc1`, with its Git history and licenses.
-Requirements and the implementation plan were moved from the AK820 planning
-branch and updated for a separate configurator repository.
+Updated 2026-10-24. Native development is on `desktop-dev`, application version
+`0.1.0-alpha.1`. Entropy commit `5b222b5d6349fb351f53b36c66169095b3039fc1`
+remains the foundation, with its history and licenses retained. Browser work
+starts after a reasonably usable desktop milestone.
 
-## Source, builds and device state
+## Implemented desktop scope
 
-The Rust application is imported upstream source. Its Cargo package, executable
-name, UI branding and hardware behavior still belong to Entropy; they have not
-been changed to implement AK820 support. This is not an AK820-qualified client.
-No AK Configurator binary, installer or website was built, released or deployed
-in this migration. No USB commands or device tests were run.
+The executable and window are named AK Configurator. Settings, caches and
+backups use a separate `ak-configurator` directory. The imported updater cannot
+download Entropy as an application update, and startup does not enable global
+typing hooks. A bundled Russian/English guide describes the supported firmware
+and limitations.
 
-Entropy provides native configuration and some Wasm-specific code, but no
-working browser WebHID path was established by the source study. Native
-adaptation starts first, while the shared browser path is developed in parallel.
-The chosen foundation does not establish browser flashing feasibility.
+The wired AK820 path accepts only the full permanent v0.6.0-alpha.3 firmware
+referenced by `dvino/ak820` commit `8ffa3e6`. USB IDs and Vial UID identify a
+candidate; they do not enable editing. Connection checks VIA/Vial identity,
+the manifest and the SHA-256 of actual CODE bytes in `[0x2800, 0xC700)`, then
+reads every required setting before enabling writes. The catalog pins are in
+[assets/ak820/catalog.json](../assets/ak820/catalog.json).
 
-## Repository and branches
+| Area | Implemented behavior |
+| --- | --- |
+| Layout | All 6 layers, 83 physical keys, matrix mask and both encoder directions |
+| Assignments | Firmware-specific keycode policy; unsupported and destructive new actions blocked |
+| Macros | 16 slots, 8192-byte capacity, ASCII and Vial opcodes 1–7; complete validation, explicit unlock, chunked upload and final exact readback |
+| Combo | 8 entries, two distinct supported input keys, firmware-valid output, fixed 40 ms term |
+| RGB | Off, Direct, Solid, Breathing, Cycle all, Cycle left/right and Reactive; maximum brightness 160; saved state checked after save |
+| Errors | One attempt per AK820 request; timeout, storage fault or readback mismatch stops the session until explicit reread |
+| Linux access | AK820-only hidraw permission installer for USB `320f:505b` |
+| Offline preview | `--demo-ak820` opens bundled example layout and help without device discovery or HID |
 
-`main` holds the shared reviewed source. Native development uses `desktop-dev`,
-native release preparation uses `desktop`, and browser development uses
-`web-dev`. These branches now belong to `dvino/ak-configurator`, not `dvino/ak820`.
-Shared changes must be merged between development branches and checked for both
-targets. Firmware compatibility is tied to exact firmware and configurator
-versions across the two repositories.
+Read-only connection does not start an unlock, rename layers, initialize missing
+settings, or write defaults. Unknown, custom, trial or inconsistent images fail
+connection; the application does not present them as a usable editor.
 
-The imported workflows are Entropy's build infrastructure. They are not a
-completed AK820 qualification or cross-repository release gate. The imported
-release workflow is restricted to the upstream repository. No upstream tags
-are copied as AK Configurator releases.
+## Verification boundary
 
-The remaining work and release checks are in the [plan](PLAN.md).
-Documentation checks, independent review and migration closure are recorded
-in [REVIEW.md](REVIEW.md).
+A Linux x86_64 development executable was built with Rust 1.97.0 and started in
+an isolated Xvfb display using `--demo-ak820`. Offline protocol tests exercise
+required reads, wrong capacities, malformed responses, write readback,
+macro limits, lock state and failure latching. Firmware-verification negative
+fixtures reject a trial manifest, an unknown image and synthetic CODE that does
+not match a known manifest. The successful settings-loader fixture starts after
+image verification and does not prove a real image was read from USB.
+
+The test and independent-review results are recorded in [REVIEW.md](REVIEW.md).
+No physical keyboard commands, flash, reset, unlock or retention tests were run.
+A successful model or GUI preview is not hardware qualification.
+
+The new `desktop-dev` workflow defines Linux x86_64, Windows x86_64, macOS arm64
+and macOS x86_64 development binaries with SHA-256 manifests. A workflow
+definition is not evidence that those remote builds have passed. Imported
+Entropy release/packaging workflows are not used for this development milestone.
+
+## Remaining work
+
+The Linux development binary is not a packaged or qualified release. Windows
+and macOS execution, installers, signing, resource measurements, device
+read/write behavior and retention still need evidence. Full backup/restore,
+firmware updates, OEM recovery, per-LED palette editing and the optional OS
+helper are not implemented here. `.entlayout` export remains a partial editor
+snapshot; AK820 import is blocked until preservation and compatibility checks
+exist. Direct-mode colors are volatile and cannot be read back through this
+firmware API.
+
+The next desktop milestone is a complete versioned settings backup and restore
+model, followed by separately authorized hardware qualification. Browser
+implementation remains deferred. See the [plan](PLAN.md) and
+[desktop guide](DESKTOP.md).

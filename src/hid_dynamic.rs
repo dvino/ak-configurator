@@ -110,6 +110,9 @@ impl HidDevice {
         if resp[0] != 0 {
             anyhow::bail!("combo set error: {}", resp[0]);
         }
+        if self.is_ak820_session() {
+            return Ok(());
+        }
         let readback = self.get_combo(idx)?;
         verify_combo_writeback(idx, requested, readback)
     }

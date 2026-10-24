@@ -124,7 +124,7 @@ pub(super) fn device_id_slug(device_name: &str) -> String {
 pub(super) fn layer_names_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("layer_names_{}.json", slug))
@@ -133,7 +133,7 @@ pub(super) fn layer_names_path(device_name: &str) -> std::path::PathBuf {
 pub(super) fn single_instance_signal_path() -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     dir.join("single_instance_signal")
 }
@@ -148,7 +148,7 @@ pub(super) fn read_single_instance_signal() -> String {
 pub(super) fn app_settings_path() -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     dir.join("app_settings.json")
 }
@@ -213,7 +213,7 @@ const TEXT_EXPANDER_MAIN_RULES_FILE: &str = "text_expansion_rules.json";
 pub(super) fn text_expander_config_dir() -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     dir
 }
@@ -326,7 +326,7 @@ pub(super) fn text_expander_rules_signature(
 pub(super) fn display_preset_restore_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     dir.join(format!(
         "display_preset_restore_{}.txt",
@@ -671,7 +671,7 @@ pub(super) fn encoder_visibility_id(device_name: &str, keyboard_id: u64) -> Stri
 pub(super) fn encoder_visibility_path(device_id: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_id);
     dir.join(format!("encoder_visibility_{}.json", slug))
@@ -714,7 +714,7 @@ pub(super) fn save_layer_names(names: &[String], device_name: &str) {
 pub(super) fn tap_dance_names_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("tap_dance_names_{}.json", slug))
@@ -744,7 +744,7 @@ pub(super) fn save_tap_dance_names(names: &[String], device_name: &str) {
 pub(super) fn combo_names_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("combo_names_{}.json", slug))
@@ -774,7 +774,7 @@ pub(super) fn save_combo_names(names: &[String], device_name: &str) {
 pub(super) fn combo_colors_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("combo_colors_{}.json", slug))
@@ -811,7 +811,7 @@ pub(super) fn combo_display_name(combo_names: &[String], idx: usize) -> String {
 pub(super) fn key_override_names_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("key_override_names_{}.json", slug))
@@ -848,7 +848,7 @@ pub(super) fn key_override_display_name(key_override_names: &[String], idx: usiz
 pub(super) fn alt_repeat_names_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("alt_repeat_names_{}.json", slug))
@@ -893,7 +893,7 @@ impl MacroMetadata {
 pub(super) fn macro_metadata_path(device_name: &str) -> std::path::PathBuf {
     let dir = storage_config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("entropy");
+        .join(crate::APP_ID);
     std::fs::create_dir_all(&dir).ok();
     let slug = device_id_slug(device_name);
     dir.join(format!("macro_metadata_{}.json", slug))

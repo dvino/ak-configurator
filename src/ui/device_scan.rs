@@ -59,6 +59,7 @@ impl EntropyApp {
     }
 
     pub(super) fn start_device_scan(&mut self) {
+        if self.ak820_demo { return; }
         // All entrypoints (including reconnect/manual refresh) obey the actual
         // transport-owner fence, not just the periodic scheduler.
         let usb_only = self.bluetooth_discovery_owner_active();
@@ -67,6 +68,7 @@ impl EntropyApp {
     }
 
     pub(super) fn start_usb_device_scan(&mut self) {
+        if self.ak820_demo { return; }
         self.start_device_scan_kind(true);
     }
 

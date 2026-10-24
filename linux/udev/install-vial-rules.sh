@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-rule_path="/etc/udev/rules.d/59-vial.rules"
+rule_path="/etc/udev/rules.d/59-ak820.rules"
 
 install_rule() {
     user_gid="$1"
@@ -16,22 +16,21 @@ install_rule() {
     trap 'rm -f "$tmp_file"' EXIT
 
     printf '%s\n' \
-        "# Entropy Vial hidraw access v2" \
-        "KERNEL==\"hidraw*\", SUBSYSTEM==\"hidraw\", ATTRS{serial}==\"*vial:f64c2b3c*\", MODE=\"0660\", GROUP=\"$user_gid\", TAG+=\"uaccess\", TAG+=\"udev-acl\"" \
-        "KERNEL==\"hidraw*\", SUBSYSTEM==\"hidraw\", KERNELS==\"0005:E126:*\", MODE=\"0660\", GROUP=\"$user_gid\", TAG+=\"uaccess\", TAG+=\"udev-acl\"" \
+        "# AK Configurator AK820 hidraw access v1" \
+        "KERNEL==\"hidraw*\", SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"320f\", ATTRS{idProduct}==\"505b\", MODE=\"0660\", GROUP=\"$user_gid\", TAG+=\"uaccess\"" \
         > "$tmp_file"
 
     install -D -m 0644 "$tmp_file" "$rule_path"
 
     if command -v udevadm >/dev/null 2>&1; then
         udevadm control --reload-rules
-        udevadm trigger
+        udevadm trigger --subsystem-match=hidraw
     else
         printf '%s\n' "Installed, but udevadm was not found. Reload udev rules manually." >&2
         exit 1
     fi
 
-    printf '%s\n' "Installed Vial udev rule: $rule_path"
+    printf '%s\n' "Installed AK820 udev rule: $rule_path"
 }
 
 if [ "${1:-}" = "--as-root" ]; then

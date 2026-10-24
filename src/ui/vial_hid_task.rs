@@ -342,9 +342,7 @@ fn run_vial_hid_operation_with_progress(
             .set_encoder(layer as u8, encoder_index, direction, keycode)
             .map(|()| VialHidOutcome::EncoderWritten),
         VialHidOperation::MacroWrite { macros, .. } => {
-            let size = hid.get_macro_buffer_size()?;
-            let buffer = crate::hid::HidDevice::encode_macros(&macros, size);
-            hid.set_macro_buffer(&buffer)?;
+            hid.write_macros(&macros)?;
             Ok(VialHidOutcome::MacrosWritten)
         }
         VialHidOperation::BackgroundUpload {

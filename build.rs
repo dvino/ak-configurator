@@ -27,8 +27,8 @@ fn main() {
     }
 
     res.set_icon(WINDOWS_ICON_PATH);
-    res.set("ProductName", "Entropy");
-    res.set("FileDescription", "Entropy");
+    res.set("ProductName", "AK Configurator");
+    res.set("FileDescription", "AK Configurator");
     res.set("CompanyName", "Ergohaven");
     res.set("LegalCopyright", "© Ergohaven");
 

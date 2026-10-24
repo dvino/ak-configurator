@@ -77,6 +77,11 @@ pub struct Device {
 }
 
 impl Device {
+    /// Candidate model only. The connection checks the actual firmware CODE.
+    pub(crate) fn is_ak820(&self) -> bool {
+        crate::ak820::is_candidate(self.vendor_id, self.product_id)
+            && !self.is_bluetooth_transport()
+    }
     /// The dedicated customization page implements only these two protocols.
     /// Other LCD/OLED devices keep their definition-driven settings routes;
     /// QSID numbers are firmware-local and cannot identify this protocol.
@@ -510,6 +515,7 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
+    pub(crate) fn empty() -> Self { Self { devices: Vec::new() } }
     #[cfg(test)]
     pub(crate) fn empty_for_test() -> Self {
         Self { devices: vec![] }
@@ -537,7 +543,9 @@ impl DeviceManager {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn scan_usb_devices() -> Result<Vec<Device>, String> { usb_discovery::scan() }
+    pub fn scan_usb_devices() -> Result<Vec<Device>, String> {
+        usb_discovery::scan().map(|devices| devices.into_iter().filter(Device::is_ak820).collect())
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan_devices() -> Result<Vec<Device>, String> {
@@ -599,6 +607,7 @@ impl DeviceManager {
             merge_bluez_vial_devices(&mut devices, bluez_devices);
         }
 
+        devices.retain(Device::is_ak820);
         Ok(devices)
     }
 

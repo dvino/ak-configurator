@@ -943,6 +943,12 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn import_entlayout_from_path(&mut self, path: &Path) -> Result<String> {
+        if self.keycode_picker.ak820_profile {
+            bail!(match self.app_settings.language {
+                crate::i18n::Language::Russian => "Импорт AK820 пока недоступен: формат должен сохранять точную версию прошивки и все настройки. Экспорт .entlayout доступен как снимок редактора.",
+                crate::i18n::Language::English => "AK820 import is not available yet: it needs exact firmware identity and complete settings preservation. Export .entlayout is available as an editor snapshot.",
+            });
+        }
         let lang = self.app_settings.language;
         let data = std::fs::read_to_string(path).with_context(|| {
             crate::i18n::tr_catalog_format(
@@ -1369,7 +1375,7 @@ impl EntropyApp {
         ))?;
         let dir = storage_config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("entropy")
+            .join(crate::APP_ID)
             .join("backups");
         std::fs::create_dir_all(&dir).context(crate::i18n::tr_catalog(
             self.app_settings.language,

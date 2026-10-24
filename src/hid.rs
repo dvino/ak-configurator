@@ -192,11 +192,16 @@ pub(crate) use hid_settings::BatteryHalves;
 #[path = "hid_vial.rs"]
 mod hid_vial;
 
+#[path = "hid_ak820.rs"]
+mod hid_ak820;
+use hid_ak820::Ak820Session;
+
 #[cfg(not(target_arch = "wasm32"))]
 pub struct HidDevice {
     backend: HidBackend,
     unlock_confirmation_pending: std::sync::atomic::AtomicBool,
     read_only: Option<ReadOnlyHidSession>,
+    ak820: Option<std::sync::Mutex<Ak820Session>>,
 }
 
 /// A read-only HID session (`--export-layout`): every handle opened while it
@@ -415,6 +420,7 @@ impl LinuxBluetoothHidWriter {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HidTransport {
     Usb,
+    Ak820Usb,
     Bluetooth,
 }
 
@@ -647,6 +653,7 @@ impl HidDevice {
         let device = Self {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: HidBackend::Test {
                 recorder: recorder.clone(),
                 combo: std::sync::Mutex::new(([0; 4], 0)),
@@ -682,6 +689,9 @@ impl HidDevice {
     }
 
     pub fn open_fresh_for(device: &crate::device::Device) -> Result<Self> {
+        if !device.is_ak820() {
+            bail!("AK Configurator supports only the wired AK820 Raw HID interface");
+        }
         Self::open_proxy_for(device)
     }
 
@@ -694,6 +704,7 @@ impl HidDevice {
                     return Ok(Self {
                         unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
                         read_only: read_only_hid_session(),
+                        ak820: None,
                         backend: HidBackend::LinuxBle(bluez_device),
                     })
                 }
@@ -735,7 +746,7 @@ impl HidDevice {
 
     pub(crate) fn shared_output(&self) -> Option<SharedHidOutput> {
         // The shared path is write-only; a read-only handle has none to share.
-        if self.read_only.is_some() {
+        if self.read_only.is_some() || self.ak820.is_some() {
             return None;
         }
         match &self.backend {
@@ -797,6 +808,7 @@ impl HidDevice {
         Ok(Self {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: read_only_hid_session(),
+            ak820: device.is_ak820().then(Default::default),
             backend: HidBackend::Proxy(std::sync::Arc::new(HidProxy::open(device)?)),
         })
     }
@@ -845,6 +857,7 @@ impl HidDevice {
             return Ok(Self {
                 unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
                 read_only: read_only_hid_session(),
+                ak820: None,
                 backend: HidBackend::Local {
                     device: hid_device,
                     transport,
@@ -862,6 +875,9 @@ impl HidDevice {
     /// Live host data is write-only, but it must use the same transport-specific
     /// report framing as normal Vial commands (notably report ID 5 over RMK BLE).
     pub(crate) fn write_output_report(&self, data: &[u8]) -> Result<()> {
+        if self.ak820.is_some() {
+            bail!("AK820 host output is unavailable in this firmware");
+        }
         if let Some(session) = &self.read_only {
             return Err(session.refuse(data));
         }
@@ -885,8 +901,8 @@ impl HidDevice {
     /// Send exactly MSG_LEN bytes (with 0x00 report ID prepended), receive MSG_LEN bytes back.
     pub(crate) fn usb_send(&self, data: &[u8]) -> Result<[u8; MSG_LEN]> {
         match &self.read_only {
-            Some(session) => session.send(data, || self.usb_send_traced(data)),
-            None => self.usb_send_traced(data),
+            Some(session) => session.send(data, || self.ak820_send_or_passthrough(data)),
+            None => self.ak820_send_or_passthrough(data),
         }
     }
 
@@ -1049,6 +1065,8 @@ impl HidDevice {
 fn device_transport(device: &crate::device::Device) -> HidTransport {
     if device.is_bluetooth_transport() {
         HidTransport::Bluetooth
+    } else if device.is_ak820() {
+        HidTransport::Ak820Usb
     } else {
         HidTransport::Usb
     }
@@ -1184,6 +1202,9 @@ fn usb_read_timeout_ms(transport: HidTransport, data: &[u8]) -> i32 {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn usb_send_max_attempts(transport: HidTransport, data: &[u8]) -> usize {
+    if transport == HidTransport::Ak820Usb {
+        return 1;
+    }
     // Runtime firmware metadata and optional QMK-settings discovery both have
     // safe fallbacks, so an unsupported probe must not hold up the whole
     // connection retry budget.
@@ -1767,6 +1788,11 @@ fn response_matches_command(command: &[u8], resp: &[u8; MSG_LEN]) -> bool {
     };
 
     match cmd {
+        0xFD => command.len() >= 2 && match command[1] {
+            0 => command.len() >= 5 && resp[..5] == command[..5],
+            1 => resp[..4] == [0xFD, 1, 1, 0xA8],
+            _ => false,
+        },
         CMD_VIA_GET_PROTOCOL_VERSION => {
             resp[0] == CMD_VIA_GET_PROTOCOL_VERSION
                 && is_supported_via_protocol(u16::from_be_bytes([resp[1], resp[2]]))

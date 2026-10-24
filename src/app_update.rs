@@ -147,23 +147,8 @@ pub(crate) fn current_platform_label() -> String {
 }
 
 pub(crate) fn start_update_check() -> UpdateCheckState {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let outcome = match fetch_latest_release() {
-                Ok(release) => UpdateCheckOutcome::Success(build_update_result(release)),
-                Err(error) => UpdateCheckOutcome::Failed(error),
-            };
-            let _ = sender.send(outcome);
-        });
-        UpdateCheckState::Checking { receiver }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        UpdateCheckState::Failed("Update checks are not available in the web build".to_owned())
-    }
+    // Upstream Entropy packages are not compatible updates for this application.
+    UpdateCheckState::Failed("AK Configurator update packages are not available yet".to_owned())
 }
 
 pub(crate) fn start_firmware_update_check(

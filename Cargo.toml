@@ -1,12 +1,12 @@
 [package]
-name = "ergohaven-entropy"
-version = "0.5.0-test.4"
+name = "ak-configurator"
+version = "0.1.0-alpha.1"
 edition = "2021"
-description = "Desktop app for configuring Vial-QMK and Vial-RMK programmable keyboards and input devices"
+description = "Native configurator for supported AK820 firmware, based on Entropy"
 authors = ["Ergohaven"]
 license = "GPL-3.0-or-later"
-repository = "https://github.com/ergohaven/entropy"
-homepage = "https://github.com/ergohaven/entropy"
+repository = "https://github.com/dvino/ak-configurator"
+homepage = "https://github.com/dvino/ak-configurator"
 readme = "README.md"
 keywords = ["keyboard", "vial", "qmk", "rmk", "hid"]
 categories = ["gui", "hardware-support"]
@@ -25,7 +25,7 @@ include = [
 ]
 
 [[bin]]
-name = "entropy"
+name = "ak-configurator"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -36,6 +36,7 @@ eframe = { version = "0.34.3", default-features = false, features = ["accesskit"
 egui = "0.34.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "=0.10.9"
 emojis = "0.9"
 twemoji-assets = { version = "=1.5.1", default-features = false, features = ["png"] }
 unicode-segmentation = "1.13"

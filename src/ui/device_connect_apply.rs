@@ -1392,13 +1392,15 @@ impl EntropyApp {
                 self.migrate_fixed_encoder_visibility_to_layout(&r.layout);
 
                 // Populate picker
+                let ak820_profile = r.hid_device.as_ref().is_some_and(crate::hid::HidDevice::is_ak820_session);
+                self.keycode_picker.ak820_profile = ak820_profile;
                 self.keycode_picker.supports_rgb =
                     r.layout.supports_rgb || self.rgb_settings.supported;
                 self.keycode_picker.supports_macro = self.keycode_picker.macro_count > 0;
                 self.keycode_picker.supports_tap_dance = !r.tap_dance_entries.is_empty();
                 // Mouse keycodes are assignable through the keymap even when a
                 // firmware does not expose Vial/QMK mouse-key settings.
-                self.keycode_picker.supports_mouse_keys = true;
+                self.keycode_picker.supports_mouse_keys = !ak820_profile;
                 self.keycode_picker.supports_combo = !self.combo_entries.is_empty();
                 self.keycode_picker.supports_auto_shift = r.supported_qmk_settings.contains(&4);
                 self.keycode_picker.supports_caps_word = r.vial_features.caps_word;

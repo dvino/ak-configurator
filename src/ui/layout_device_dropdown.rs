@@ -299,7 +299,7 @@ impl EntropyApp {
                             dropdown_size.x - 16.0,
                             TopMenuIcon::ImportLayout,
                             entlayout_import_label(lang),
-                            self.layout.is_some(),
+                            self.layout.is_some() && !self.keycode_picker.ak820_profile,
                             false,
                         )
                         .clicked()

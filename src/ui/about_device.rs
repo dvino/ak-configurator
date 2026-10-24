@@ -42,15 +42,15 @@ fn about_empty_detail(lang: crate::i18n::Language) -> &'static str {
 
 fn about_entropy_title(lang: crate::i18n::Language) -> &'static str {
     match lang {
-        crate::i18n::Language::Russian => "Об Entropy",
-        crate::i18n::Language::English => "About Entropy",
+        crate::i18n::Language::Russian => "Об AK Configurator",
+        crate::i18n::Language::English => "About AK Configurator",
     }
 }
 
 fn about_entropy_description(lang: crate::i18n::Language) -> &'static str {
     match lang {
-        crate::i18n::Language::Russian => "Версия приложения и обновления для вашей ОС",
-        crate::i18n::Language::English => "Application version and updates for your OS",
+        crate::i18n::Language::Russian => "Настройка AK820 · на основе Entropy (Ergohaven)",
+        crate::i18n::Language::English => "AK820 configuration · based on Entropy (Ergohaven)",
     }
 }
 
@@ -474,7 +474,7 @@ fn about_entropy_update_rows(
             "Application",
             "Название программы",
             "Application name",
-            "Entropy",
+            "AK Configurator",
         ),
         localized_monospace_row(
             lang,

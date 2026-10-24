@@ -13,6 +13,76 @@ struct AppBootstrap {
 }
 
 impl EntropyApp {
+    /// Offline preview: no discovery, HID handle, typing hook or update worker.
+    pub(crate) fn new_ak820_demo(cc: &eframe::CreationContext<'_>) -> Self {
+        let settings = AppSettings {
+            language: crate::i18n::Language::Russian,
+            onboarding_tour_seen_version: ONBOARDING_TOUR_VERSION,
+            ..Default::default()
+        };
+        cc.egui_ctx.set_zoom_factor(settings.ui_scale);
+        let mut app = Self::from_bootstrap(AppBootstrap {
+            typing_trainer: TypingTrainerState::from_settings(settings.typing_trainer),
+            app_settings: settings,
+            device_manager: DeviceManager::empty(),
+            text_expander_rules_signature: Vec::new(),
+            last_single_instance_signal: String::new(),
+            layer_names: Vec::new(),
+            update_check: UpdateCheckState::Idle,
+        });
+        let definition = serde_json::from_str(include_str!("../assets/ak820/layout.json"))
+            .expect("bundled AK820 layout");
+        let mut layout =
+            KeyboardLayout::from_vial_json(&definition).expect("bundled AK820 layout contract");
+        let demo: serde_json::Value =
+            serde_json::from_str(include_str!("../assets/ak820/demo-keymap.json"))
+                .expect("bundled demo keymap");
+        layout.layers = vec![vec![1u16.into(); layout.keys.len()]; 6];
+        for (index, key) in layout.keys.iter().enumerate() {
+            let slot = key.row as usize * 8 + key.col as usize;
+            layout.layers[0][index] =
+                (demo["base_layer"][slot].as_u64().expect("demo keycode") as u16).into();
+        }
+        layout.encoder_layers = vec![vec![1; layout.encoders.len()]; 6];
+        for (index, encoder) in layout.encoders.iter().enumerate() {
+            layout.encoder_layers[0][index] = if encoder.direction == 0 { 0xAA } else { 0xA9 };
+        }
+        app.ak820_demo = true;
+        app.current_device_name = "AK820 · demo".to_owned();
+        app.device_manager.replace_devices(vec![Device {
+            name: app.current_device_name.clone(),
+            vendor_id: crate::ak820::VID,
+            product_id: crate::ak820::PID,
+            manufacturer: "AJAZZ".to_owned(),
+            serial_number: String::new(),
+            bus_type: "Usb".to_owned(),
+            path: String::new(),
+            instance_token: String::new(),
+            firmware: FirmwareProtocol::Vial,
+        }]);
+        app.selected_device = Some(0);
+        app.layer_count = 6;
+        app.layer_names = (0..6).map(|i| i.to_string()).collect();
+        app.keycode_picker.ak820_profile = true;
+        app.keycode_picker.layer_count = 6;
+        app.keycode_picker.layer_names = app.layer_names.clone();
+        app.keycode_picker.supports_mouse_keys = false;
+        app.keycode_picker.supports_auto_shift = false;
+        app.keycode_picker.supports_tap_dance = false;
+        app.keycode_picker.supports_layer_lock = false;
+        app.keycode_picker.supports_persistent_default_layer = false;
+        app.keycode_picker.macro_count = 16;
+        app.keycode_picker.macro_texts = vec![vec![]; 16];
+        app.keycode_picker.macro_actions = vec![vec![]; 16];
+        app.combo_entries = vec![ComboEntry::default(); 8];
+        app.combo_synced_entries = app.combo_entries.clone();
+        app.combo_term = Some(40);
+        app.encoder_visibility = vec![true];
+        app.layout = Some(layout);
+        app.status_msg = "Демонстрационный режим. Настройки устройства не считывались.".to_owned();
+        app
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut app_settings = load_app_settings();
         app_settings.ui_scale = clamp_ui_scale(app_settings.ui_scale);
@@ -30,9 +100,8 @@ impl EntropyApp {
             },
             parse_text_expander_blacklist(&app_settings.text_expander_app_blacklist),
         );
-        #[cfg(target_os = "linux")]
-        crate::smart_input::refresh_installed_ibus_backend();
-        crate::smart_input::start();
+        // The AK820 editor does not start the inherited global typing hooks.
+        // A firmware-aware OS helper is a separate, opt-in future module.
 
         let text_expander_rules_signature =
             text_expander_rules_signature(&app_settings.text_expander_rule_files);
@@ -45,7 +114,7 @@ impl EntropyApp {
             text_expander_rules_signature,
             last_single_instance_signal: read_single_instance_signal(),
             layer_names: load_layer_names("default"),
-            update_check: start_update_check(),
+            update_check: UpdateCheckState::Idle,
         })
     }
 
@@ -153,6 +222,7 @@ impl EntropyApp {
             pending_device_connect: None,
             #[cfg(not(target_arch = "wasm32"))]
             headless: false,
+            ak820_demo: false,
             firmware: FirmwareProtocol::Vial,
             #[cfg(not(target_arch = "wasm32"))]
             supported_qmk_settings: Vec::new(),

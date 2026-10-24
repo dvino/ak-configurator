@@ -5336,6 +5336,7 @@ pub(crate) const LAYOUT_TOP_RESERVED_H: f32 = 32.0_f32 + 4.0_f32 + 68.0_f32;
 pub(crate) const LAYOUT_BOTTOM_RESERVED_H: f32 = 76.0_f32;
 
 pub struct EntropyApp {
+    pub(crate) ak820_demo: bool,
     pub(crate) device_manager: DeviceManager,
     pub(crate) selected_device: Option<usize>,
     pub(crate) selected_layer: usize,

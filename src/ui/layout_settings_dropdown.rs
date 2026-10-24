@@ -4,8 +4,8 @@ use super::*;
 
 fn about_entropy_label(lang: crate::i18n::Language) -> &'static str {
     match lang {
-        crate::i18n::Language::Russian => "Об Entropy",
-        crate::i18n::Language::English => "About Entropy",
+        crate::i18n::Language::Russian => "Об AK Configurator",
+        crate::i18n::Language::English => "About AK Configurator",
     }
 }
 

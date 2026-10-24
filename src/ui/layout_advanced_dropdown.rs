@@ -29,7 +29,9 @@ impl EntropyApp {
             let show_application_layouts_item = self.application_layouts_supported();
             let auto_shift_supported =
                 self.auto_shift_timeout.is_some() || self.supported_qmk_settings.contains(&4);
-            let advanced_item_count = 2
+            let show_host_tools = !self.keycode_picker.ak820_profile;
+            let host_item_count = if show_host_tools { 2 } else { 0 };
+            let advanced_item_count = host_item_count
                 + show_application_layouts_item as usize
                 + macro_supported as usize
                 + tap_dance_supported as usize
@@ -41,8 +43,10 @@ impl EntropyApp {
             if show_application_layouts_item {
                 advanced_menu_labels.push(autolayer_label);
             }
-            advanced_menu_labels.push(crate::i18n::tr_catalog(lang, "text_expander.title"));
-            advanced_menu_labels.push(crate::i18n::tr_catalog(lang, "typing_trainer.title"));
+            if show_host_tools {
+                advanced_menu_labels.push(crate::i18n::tr_catalog(lang, "text_expander.title"));
+                advanced_menu_labels.push(crate::i18n::tr_catalog(lang, "typing_trainer.title"));
+            }
             if macro_supported {
                 advanced_menu_labels.push(crate::i18n::tr_catalog(lang, "macro_editor.title"));
             }
@@ -62,8 +66,8 @@ impl EntropyApp {
                 adaptive_top_icon_dropdown_width(ui, advanced_menu_labels, 152.0);
             // Entropy tools share the first group; firmware features follow.
             let dividers = top_menu_dividers([
-                2 + show_application_layouts_item as usize,
-                advanced_item_count - 2 - show_application_layouts_item as usize,
+                host_item_count + show_application_layouts_item as usize,
+                advanced_item_count - host_item_count - show_application_layouts_item as usize,
             ]);
             let dropdown_rect = egui::Rect::from_min_size(
                 egui::pos2(
@@ -115,24 +119,28 @@ impl EntropyApp {
                                     && self.settings_tab == SettingsTab::ApplicationLayouts,
                             )
                         });
-                        let text_expander_resp = top_dropdown_icon_item(
-                            ui,
-                            item_width,
-                            TopMenuIcon::TextExpander,
-                            crate::i18n::tr_catalog(lang, "text_expander.title"),
-                            true,
-                            self.main_menu_tab == MainMenuTab::Advanced
-                                && self.settings_tab == SettingsTab::TextExpander,
-                        );
-                        let typing_trainer_resp = top_dropdown_icon_item(
-                            ui,
-                            item_width,
-                            TopMenuIcon::TypingTrainer,
-                            crate::i18n::tr_catalog(lang, "typing_trainer.title"),
-                            true,
-                            self.main_menu_tab == MainMenuTab::Advanced
-                                && self.settings_tab == SettingsTab::TypingTrainer,
-                        );
+                        let text_expander_resp = show_host_tools.then(|| {
+                            top_dropdown_icon_item(
+                                ui,
+                                item_width,
+                                TopMenuIcon::TextExpander,
+                                crate::i18n::tr_catalog(lang, "text_expander.title"),
+                                true,
+                                self.main_menu_tab == MainMenuTab::Advanced
+                                    && self.settings_tab == SettingsTab::TextExpander,
+                            )
+                        });
+                        let typing_trainer_resp = show_host_tools.then(|| {
+                            top_dropdown_icon_item(
+                                ui,
+                                item_width,
+                                TopMenuIcon::TypingTrainer,
+                                crate::i18n::tr_catalog(lang, "typing_trainer.title"),
+                                true,
+                                self.main_menu_tab == MainMenuTab::Advanced
+                                    && self.settings_tab == SettingsTab::TypingTrainer,
+                            )
+                        });
                         if dividers[0] {
                             top_dropdown_divider(ui, item_width);
                         }
@@ -191,11 +199,11 @@ impl EntropyApp {
                                     && self.settings_tab == SettingsTab::KeyOverrides,
                             )
                         });
-                        if text_expander_resp.clicked() {
+                        if text_expander_resp.as_ref().is_some_and(|r| r.clicked()) {
                             self.close_top_dropdowns(ui.ctx());
                             self.open_text_expander_settings_page();
                         }
-                        if typing_trainer_resp.clicked() {
+                        if typing_trainer_resp.as_ref().is_some_and(|r| r.clicked()) {
                             self.close_top_dropdowns(ui.ctx());
                             self.open_typing_trainer_page();
                         }
@@ -247,8 +255,8 @@ impl EntropyApp {
                             self.open_application_layouts_page();
                         }
                         (
-                            text_expander_resp.hovered(),
-                            typing_trainer_resp.hovered(),
+                            text_expander_resp.as_ref().is_some_and(|r| r.hovered()),
+                            typing_trainer_resp.as_ref().is_some_and(|r| r.hovered()),
                             macro_resp.as_ref().map(|r| r.hovered()).unwrap_or(false),
                             tap_dance_resp
                                 .as_ref()
@@ -266,8 +274,8 @@ impl EntropyApp {
                             application_layouts_resp
                                 .as_ref()
                                 .is_some_and(|response| response.hovered()),
-                            text_expander_resp.clicked()
-                                || typing_trainer_resp.clicked()
+                            text_expander_resp.as_ref().is_some_and(|r| r.clicked())
+                                || typing_trainer_resp.as_ref().is_some_and(|r| r.clicked())
                                 || macro_resp.as_ref().map(|r| r.clicked()).unwrap_or(false)
                                 || tap_dance_resp
                                     .as_ref()

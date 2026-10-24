@@ -1,0 +1,73 @@
+{
+  "format": "ak820-firmware-catalog-1",
+  "devices": [
+    {
+      "id": "ak820-wired-vs11k28a",
+      "name": "AJAZZ AK820 wired",
+      "usb": {
+        "vid": 12815,
+        "pid": 20571
+      },
+      "raw_hid": {
+        "usage_page": 65376,
+        "usage": 97,
+        "report_bytes": 32
+      },
+      "vial_uid": "D315B90190FF7004",
+      "releases": [
+        {
+          "version": "0.6.0-alpha.3",
+          "status": "supported",
+          "permanent_only": true,
+          "manifest": {
+            "offset": 61312,
+            "length": 64,
+            "magic_hex": "414b5631504b4700",
+            "version": 1,
+            "mode": 0,
+            "schema": 532482
+          },
+          "code": {
+            "start": 10240,
+            "end_exclusive": 50944,
+            "sha256": "01f0f7a979d8cfa8217b3bba333758ae3509cf7f3f8e35fbffb1ed034b808e5d"
+          },
+          "ihx_sha256": "d505d4f420f745dbd5e98a0e3638c8f3ae6d7719c8729dad274595b71b641f18",
+          "via_protocol": 9,
+          "vial_protocol": 6,
+          "capabilities": {
+            "layers": 6,
+            "matrix": [
+              16,
+              8
+            ],
+            "physical_keys": 83,
+            "encoders": 1,
+            "macros": 16,
+            "macro_bytes": 8192,
+            "combos": 8,
+            "tap_dances": 0,
+            "key_overrides": 0,
+            "alt_repeat": 0,
+            "qmk_settings": false,
+            "caps_word": true,
+            "rgb_modes": [
+              0,
+              1,
+              2,
+              6,
+              13,
+              14,
+              31
+            ],
+            "rgb_brightness_max": 160,
+            "rgb_leds": 82,
+            "per_led_state_persistent": false
+          },
+          "profile": "full",
+          "source_commit": "8ffa3e6"
+        }
+      ]
+    }
+  ]
+}

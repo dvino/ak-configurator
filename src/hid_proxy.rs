@@ -1178,6 +1178,7 @@ mod tests {
             let hid = HidDevice {
                 unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
                 read_only: None,
+                ak820: None,
                 backend: super::super::HidBackend::Proxy(Arc::new(start("echo", name))),
             };
             let output = hid.shared_output().unwrap();
@@ -1442,6 +1443,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(Arc::new(proxy)),
         };
         let output = hid.shared_output().unwrap();
@@ -1462,6 +1464,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(Arc::new(proxy)),
         };
         let (mut bridge, release_query, query_finished) =
@@ -1520,6 +1523,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(first.clone()),
         };
         let mut automatic = test_start_bridge(
@@ -1551,6 +1555,7 @@ mod tests {
         let keyboard = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(selected.clone()),
         };
         let supported = supports_extended_host_protocol(&keyboard.query_qmk_settings().unwrap());
@@ -1600,6 +1605,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(last.clone()),
         };
         let mut again = test_start_bridge(
@@ -1637,6 +1643,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(proxy.clone()),
         };
         let mut bridge = test_start_bridge(
@@ -1683,6 +1690,7 @@ mod tests {
         let hid = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(proxy.clone()),
         };
         let output = hid.shared_output().unwrap();
@@ -1710,11 +1718,13 @@ mod tests {
         let first = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(proxy.clone()),
         };
         let second = HidDevice {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
             read_only: None,
+            ak820: None,
             backend: super::super::HidBackend::Proxy(proxy.clone()),
         };
         let (entered_tx, entered_rx) = mpsc::channel();

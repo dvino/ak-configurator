@@ -10,7 +10,7 @@
 
 This document sets requirements for AK Configurator, maintained in the separate `dvino/ak-configurator` repository. It reuses Entropy, whose pinned upstream source is [5b222b5d6349fb351f53b36c66169095b3039fc1](https://github.com/ergohaven/entropy/tree/5b222b5d6349fb351f53b36c66169095b3039fc1). AK820 firmware remains in `dvino/ak820`. It does not confirm that these features have been implemented or authorize operations on a physical keyboard. Current source files, built artifacts, and installed firmware are checked separately.
 
-Requirements for the first browser version are marked **Web**. Standalone application requirements are marked **Desktop**. Each acceptance criterion is checked against the exact target image and stated keyboard model.
+The native desktop configurator is the first milestone. Browser requirements marked **Web** apply to a later stage that starts after the desktop editor is reasonably working. Standalone application requirements are marked **Desktop**. Each acceptance criterion is checked against the exact target image and stated keyboard model.
 
 ## 1. Goal and scope
 
@@ -26,7 +26,7 @@ Requirements for the first browser version are marked **Web**. Standalone applic
 
 **Acceptance:** the first version offers the full image by default and does not change its feature set without an explicit choice. Later, the interface may offer only ready-made combinations built and checked as complete images. Capacity is not inferred from estimates for individual features.
 
-**AKW-004 · Foundation.** Reuse Entropy as the foundation in the separate configurator repository. Develop its native Rust application first and its WebAssembly/browser target in parallel. The browser target has a feasibility risk and must be demonstrated before browser flashing is promised. Keep any alternative as a separate future decision if Entropy cannot meet a required need; do not silently switch foundations.
+**AKW-004 · Foundation.** Reuse Entropy as the foundation in the separate configurator repository. Develop and stabilize its native Rust application first. Begin browser/WebAssembly feasibility and implementation only after the desktop editor is reasonably working. Demonstrate browser feasibility before promising browser flashing. Keep any alternative as a separate future decision if Entropy cannot meet a required need; do not silently switch foundations.
 
 **Acceptance:** record the pinned upstream revision, local changes, license, feature coverage, and evidence for native and browser feasibility.
 

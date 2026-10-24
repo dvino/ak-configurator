@@ -716,7 +716,7 @@ impl EntropyApp {
     pub(super) fn run_linux_vial_udev_rules_install(&mut self) {
         let script = "linux/udev/install-vial-rules.sh";
         let Some(script_path) = crate::linux_setup::setup_script_path(script) else {
-            self.status_msg = format!("Could not find {script}; run it from the Entropy folder");
+            self.status_msg = format!("Could not find {script}; run it from the AK Configurator folder");
             return;
         };
 
@@ -730,9 +730,9 @@ impl EntropyApp {
             Ok(output) => {
                 let details = command_output_summary(&output.stderr, &output.stdout);
                 if details.is_empty() {
-                    format!("Vial udev rules install failed: {}", output.status)
+                    format!("AK820 udev rules install failed: {}", output.status)
                 } else {
-                    format!("Vial udev rules install failed: {details}")
+                    format!("AK820 udev rules install failed: {details}")
                 }
             }
             Err(err) => format!("Could not run {}: {err}", script_path.display()),
@@ -786,30 +786,25 @@ fn draw_app_settings_value(
 
 #[cfg(target_os = "linux")]
 pub(super) fn linux_vial_udev_rules_installed() -> bool {
-    const RULE_PATHS: [&str; 4] = [
-        "/etc/udev/rules.d/59-vial.rules",
-        "/run/udev/rules.d/59-vial.rules",
-        "/usr/lib/udev/rules.d/59-vial.rules",
-        "/lib/udev/rules.d/59-vial.rules",
-    ];
-
-    RULE_PATHS.iter().any(|path| {
-        std::fs::read_to_string(path)
-            .map(|contents| vial_udev_rule_is_current(&contents))
-            .unwrap_or(false)
-    })
+    std::fs::read_to_string("/etc/udev/rules.d/59-ak820.rules")
+        .map(|contents| ak820_udev_rule_is_current(&contents))
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "linux")]
-fn vial_udev_rule_is_current(contents: &str) -> bool {
-    const VERSION_MARKER: &str = "# Entropy Vial hidraw access v2";
-    const USB_RULE_MARKER: &str = r#"ATTRS{serial}=="*vial:f64c2b3c*""#;
-    const ERGOHAVEN_BLUETOOTH_RULE_MARKER: &str = r#"KERNELS=="0005:E126:*""#;
+fn ak820_udev_rule_is_current(contents: &str) -> bool {
+    const VERSION_MARKER: &str = "# AK Configurator AK820 hidraw access v1";
+    const KERNEL_MARKER: &str = r#"KERNEL=="hidraw*""#;
+    const VENDOR_MARKER: &str = r#"ATTRS{idVendor}=="320f""#;
+    const PRODUCT_MARKER: &str = r#"ATTRS{idProduct}=="505b""#;
 
     contents.contains(VERSION_MARKER)
-        && contents.contains(USB_RULE_MARKER)
-        && contents.contains(ERGOHAVEN_BLUETOOTH_RULE_MARKER)
+        && contents.contains(KERNEL_MARKER)
+        && contents.contains(VENDOR_MARKER)
+        && contents.contains(PRODUCT_MARKER)
         && contents.contains("SUBSYSTEM==\"hidraw\"")
+        && contents.contains("MODE=\"0660\"")
+        && contents.contains("TAG+=\"uaccess\"")
 }
 
 #[cfg(target_os = "linux")]
@@ -834,35 +829,49 @@ fn command_output_summary(primary: &[u8], fallback: &[u8]) -> String {
 
 #[cfg(all(test, target_os = "linux"))]
 mod linux_udev_tests {
-    use super::vial_udev_rule_is_current;
+    use super::ak820_udev_rule_is_current;
 
-    const OLD_RULE: &str = r#"KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{serial}=="*vial:f64c2b3c*", MODE="0660", GROUP="1000", TAG+="uaccess""#;
-    const CURRENT_RULE: &str = r#"# Entropy Vial hidraw access v2
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{serial}=="*vial:f64c2b3c*", MODE="0660", GROUP="1000", TAG+="uaccess"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:E126:*", MODE="0660", GROUP="1000", TAG+="uaccess""#;
+    const OLD_VIAL_RULE: &str = r#"# Entropy Vial hidraw access v2
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{serial}=="*vial:f64c2b3c*", MODE="0660", TAG+="uaccess""#;
+    const CURRENT_RULE: &str = r#"# AK Configurator AK820 hidraw access v1
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="320f", ATTRS{idProduct}=="505b", MODE="0660", GROUP="1000", TAG+="uaccess""#;
 
     #[test]
-    fn old_usb_only_rule_requires_upgrade() {
-        assert!(!vial_udev_rule_is_current(OLD_RULE));
+    fn inherited_vial_rule_is_not_accepted() {
+        assert!(!ak820_udev_rule_is_current(OLD_VIAL_RULE));
     }
 
     #[test]
-    fn current_rule_covers_usb_and_ergohaven_bluetooth() {
-        assert!(vial_udev_rule_is_current(CURRENT_RULE));
+    fn current_rule_matches_only_ak820_usb_hidraw_access() {
+        assert!(ak820_udev_rule_is_current(CURRENT_RULE));
+        assert!(!ak820_udev_rule_is_current(
+            &CURRENT_RULE.replace("505b", "505c")
+        ));
+        assert!(!ak820_udev_rule_is_current(
+            &CURRENT_RULE.replace("320f", "0000")
+        ));
+        assert!(!ak820_udev_rule_is_current(
+            &CURRENT_RULE.replace("KERNEL==\"hidraw*\", ", "")
+        ));
     }
 
     #[test]
     fn bundled_installer_writes_the_current_rule() {
         let installer = include_str!("../../linux/udev/install-vial-rules.sh");
 
-        assert!(installer.contains("# Entropy Vial hidraw access v2"));
-        assert!(installer.contains(r#"KERNELS==\"0005:E126:*\""#));
+        assert!(installer.contains("/etc/udev/rules.d/59-ak820.rules"));
+        assert!(installer.contains("# AK Configurator AK820 hidraw access v1"));
+        assert!(installer.contains(r#"ATTRS{idVendor}==\"320f\""#));
+        assert!(installer.contains(r#"ATTRS{idProduct}==\"505b\""#));
+        assert!(installer.contains(r#"GROUP=\"$user_gid\""#));
+        assert!(installer.contains("udevadm trigger --subsystem-match=hidraw"));
+        assert!(!installer.contains("udevadm trigger\n"));
     }
 
     #[test]
     fn packaged_udev_rule_is_accepted() {
-        let packaged = include_str!("../../packaging/linux/59-vial.rules");
+        let packaged = include_str!("../../packaging/linux/59-ak820.rules");
 
-        assert!(vial_udev_rule_is_current(packaged));
+        assert!(ak820_udev_rule_is_current(packaged));
     }
 }

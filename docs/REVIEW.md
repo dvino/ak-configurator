@@ -1,66 +1,97 @@
-Русский перевод: [Перенос и ревью](ru/REVIEW.md).
+Русский перевод: [Адаптация и ревью](ru/REVIEW.md).
 
-# Migration and review
+# Desktop adaptation and review
 
-Date: 2026-10-24. The migration moves the requirements and plan from
-`dvino/ak820` commit `e8ba2bcb352cd5c35e9cff4c645f89a463484e10` into
-the separate `dvino/ak-configurator` repository.
+Date: 2026-10-24. Milestone: AK Configurator `0.1.0-alpha.1`, `desktop-dev`.
 
 ## Source and scope
 
-- Entropy base: `ergohaven/entropy` commit
-  `5b222b5d6349fb351f53b36c66169095b3039fc1`. Git history, LICENSE and
-  third-party notices are retained.
-- Firmware reference: `dvino/ak820` commit
-  `5cbc66fbaf22bf5372e76e892207f58d453d9183`.
-- All 42 requirements keep their IDs. The documents now select Entropy,
-  start native work first, keep browser development parallel and place
-  configurator branches in the new repository.
-- README, installation guidance and Status distinguish imported Entropy
-  source from future AK820 adaptation. The BUILD introduction points to
-  the new instructions. Rust, Cargo manifests, lockfiles, assets and
-  workflows are unchanged from the pinned upstream base.
-- Firmware documentation links to the new project. No configurator tree
-  is added to the firmware development branch.
+- Configurator base: `df52020fd39e96776617fbc017d63a3daf7a8da6`.
+- Entropy base: `5b222b5d6349fb351f53b36c66169095b3039fc1`.
+- Firmware reference: `dvino/ak820` main `8ffa3e6`, full permanent v0.6.0-alpha.3.
+- Firmware evidence: `tools/installer/settings_backup.py`,
+  `tools/ak820_device_protocol.py`, `qmk-8051-ak820/util/pack_ak820.py`,
+  `quantum/{via,vial,vialrgb,dynamic_keymap}.c` and the AK820 keyboard sources.
+- The firmware tree and OEM/recovery data are not copied. The small bundled
+  layout and demo base-layer data come from the public keyboard definition and
+  keymap. The demo is an example, not a device backup.
 
-## Publication and branch cleanup
+This milestone adapts the native settings path, selected editors, offline help,
+Linux access and development CI. The browser, flash/restore state machines,
+complete backups, release packaging and OS helper remain later work.
 
-The new repository is prepared locally before publication. Independent review
-and local documentation checks must finish before commits or pushes.
-Configurator `main`, `desktop`, `desktop-dev` and `web-dev` start from the
-same reviewed Entropy-based source; firmware stays separate.
+## Independent findings and closure
 
-The obsolete `web-dev`, `desktop` and `desktop-dev` refs in `dvino/ak820`
-point to `e8ba2bcb352cd5c35e9cff4c645f89a463484e10` at migration start.
-A complete local Git bundle of those refs was created and verified before
-cleanup. Delete only those refs, after publishing the new repository, and
-refuse deletion if a remote ref has advanced. Other firmware branches and
-worktrees are outside this cleanup.
+Independent review was performed separately from implementation, before commit
+and publication. The reviewer inspected firmware source, the contract, transport,
+connection loader, transaction tests, Linux permission flow and CI definition.
 
-## Verification boundary
+1. **CODE hash domain:** an initial catalog entry confused the linker start
+   with the packed hash domain. It now uses `[0x2800, 0xC700)`, matching the
+   packer and installer reference. Raw HID usage fields also use distinct names
+   instead of being presented as vendor/product IDs.
+2. **Combo loading:** an initial reply reconstruction put bytes at the wrong
+   offset. The loader now validates the decoded four inputs and output against
+   the compact two-key contract.
+3. **RGB while off:** wire mode zero hides the selected mode. Connection now
+   reads the selected saved mode from NVM. RGB save compares current settings
+   with persistent RGB bytes, including the disabled case.
+4. **Macro assignment bypass:** bytecode structure alone did not constrain
+   keycode operands. The upload now validates little-endian extended operands
+   and the firmware's low-zero encoding against the assignment policy before
+   querying unlock or sending any setter. Delay operands remain delays.
+5. **Readiness fixture:** the successful loader model originally started with
+   editing enabled. It now starts verified but unloaded, and tests the transition
+   only after every required read succeeds.
+6. **Transaction coverage:** focused cases cover locked uploads, rejected
+   actions before transport, complete logical macro chunks, timeout without
+   retry, exact readback mismatch, persistent RGB mismatch and failure latching.
 
-This package changes project documentation and repository placement only.
-No application build, startup, device command, firmware write or hardware
-test is part of this migration. Source inspection does not prove browser
-permissions, OEM loader access, flash success or background memory use.
+The follow-up independent review found no remaining blocking issue in those
+fixes. This was a scoped source review, not an exhaustive audit of inherited
+Entropy code or a claim of hardware qualification.
 
-The imported release workflow still restricts publication to
-`ergohaven/entropy`; adapting AK Configurator CI is planned work, not a
-completed release gate.
+## Verification results
 
-## Completed checks and independent review
+| Check | Result and boundary |
+| --- | --- |
+| Linux x86_64 build | `cargo build --locked --offline` passed with Rust 1.97.0; development profile, debug info and incremental compilation disabled |
+| Complete host suite | `cargo test --locked --offline --all-targets`: **1530 passed, 0 failed, 14 ignored**, 149.54 s |
+| AK820-specific cases | 26 contract, loader and transaction tests are included in the host result |
+| Firmware identity rejection | Trial/unknown manifests fail before CODE reads; a known manifest paired with synthetic all-zero CODE fails after reading the complete 40,704-byte range |
+| Native UI | Built executable started in isolated Xvfb with `--demo-ak820`; layout, layer navigation and offline help inspected |
+| Linux setup | Shell syntax and narrow VID/PID rule checks passed; no rule was installed during verification |
+| CI definition | YAML and four-target matrix checked; remote execution and platform qualification are separate evidence |
+| Documentation | EN/RU links, requirement IDs and whitespace checked |
 
-- Local link and language checks pass for 15 Markdown documents, including
-  the migrated requirements, plan, Status, installation guidance and agent
-  instructions. All 42 requirement IDs match the old EN source and both
-  new language versions; there are no duplicates or unresolved placeholders.
-- The firmware repository's `python3 tools/check_docs.py` passes for 49
-  public documents. Whitespace checks pass in both migration diffs.
-- Comparison with the pinned Entropy base shows no changes to runtime
-  source, Cargo metadata, lockfiles, assets, workflows or LICENSE.
-- Independent review covered both migration diffs, translations, source
-  references, retained attribution, native/browser ordering, branch roles,
-  release ownership and safety/privacy requirements. No actionable findings
-  remained. This was a migration review, not a full audit of inherited code.
-- Publication and remote-ref deletion occur only after this review. Their
-  actual outcome is verified against remote refs, not inferred from the plan.
+The first full run exposed two backup tests still expecting the old `entropy`
+storage directory; their assertions were updated to the application ID. A
+`/proc`-dependent window-parser test failed in the isolated process namespace
+and passed independently. The complete final suite was rerun with a correct
+host process namespace and passed. No application logic was weakened to make
+that test pass.
+
+The 14 ignored upstream cases require explicit native rendering inputs,
+production C/LVGL harnesses, a supplied replay file, desktop integration or
+subprocess-harness invocation. Their ignored status is retained. Build warnings
+for retained upstream/optional code remain; this is not a warning-free claim.
+
+## What this does not prove
+
+All AK820 transport fixtures use an in-memory responder. The successful loader
+fixture begins after image verification. There is no captured positive
+full-image verification fixture or real USB transaction trace in this milestone.
+The negative full-verification tests and independent source review do not
+establish a successful physical connection.
+
+No physical keyboard command, setting write, unlock, reset, loader transition,
+flash, reconnect or power-cycle retention check was performed. Windows/macOS
+runtime behavior, installers and signing remain unqualified. No test or review
+result here authorizes an automatic hardware write.
+
+## Previous repository migration
+
+The earlier documentation-only migration retained Entropy history and licenses,
+moved configurator planning to its own repository, established branch roles and
+recorded independent review. Its original record is available at
+[the migration commit](https://github.com/dvino/ak-configurator/blob/df52020fd39e96776617fbc017d63a3daf7a8da6/docs/REVIEW.md).

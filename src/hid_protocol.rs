@@ -79,6 +79,11 @@ pub(crate) fn vial_reply_is_uncorrelated(command: &[u8]) -> bool {
 /// everything else, so a new or unknown command fails closed.
 pub(crate) fn is_read_request(command: &[u8]) -> bool {
     match command {
+        [0xFD, 0, hi, lo, count, rest @ ..]
+            if (1..=27).contains(count)
+                && usize::from(u16::from_be_bytes([*hi, *lo])) + usize::from(*count) <= 65536
+                && rest.iter().all(|byte| *byte == 0) => true,
+        [0xFD, 1, rest @ ..] if rest.iter().all(|byte| *byte == 0) => true,
         [CMD_VIA_GET_PROTOCOL_VERSION
         | CMD_VIA_GET_KEYBOARD_VALUE
         | CMD_VIA_GET_KEYCODE

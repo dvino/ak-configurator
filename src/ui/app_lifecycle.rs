@@ -183,16 +183,24 @@ impl EntropyApp {
         main_window_hidden_to_tray: bool,
         selected_device_is_bluetooth: bool,
     ) {
-        self.update_native_background_for_platform(ctx, now, main_window_hidden_to_tray,
-            selected_device_is_bluetooth, std::env::consts::OS);
+        self.update_native_background_for_platform(
+            ctx,
+            now,
+            main_window_hidden_to_tray,
+            selected_device_is_bluetooth,
+            std::env::consts::OS,
+        );
     }
 
     // OS policy is explicit so foreign admission can be exercised through the
     // complete production tick without pretending Linux is a native Mac.
     #[cfg(not(target_arch = "wasm32"))]
     fn update_native_background_for_platform(
-        &mut self, ctx: &egui::Context, now: f64,
-        main_window_hidden_to_tray: bool, selected_device_is_bluetooth: bool,
+        &mut self,
+        ctx: &egui::Context,
+        now: f64,
+        main_window_hidden_to_tray: bool,
+        selected_device_is_bluetooth: bool,
         discovery_platform: &str,
     ) {
         self.poll_vial_hid_task(ctx);
@@ -219,27 +227,46 @@ impl EntropyApp {
             // USB-only metadata enumeration is implemented without Bluetooth
             // device opens on these platforms. Keep the old fail-safe elsewhere.
             let has_discovered_devices = !self.device_manager.devices().is_empty();
-            let full_interval = periodic_device_scan_interval_secs(hid_session_active, has_discovered_devices);
+            let full_interval =
+                periodic_device_scan_interval_secs(hid_session_active, has_discovered_devices);
             // USB hotplug on every supported OS must not wait for global HID
             // refresh even with no Bluetooth keyboards. Keep full discovery for
             // cold startup/new Bluetooth devices, only when every owner allows it.
-            let usb_metadata_supported = matches!(discovery_platform, "linux" | "windows" | "macos");
+            let usb_metadata_supported =
+                matches!(discovery_platform, "linux" | "windows" | "macos");
             let full_due = self.last_full_device_scan_at == 0.0
                 || now - self.last_full_device_scan_at >= full_interval;
             let usb_only = usb_metadata_supported && (bluetooth_busy || !full_due);
-            let interval = if usb_only || usb_metadata_supported { 2.0 } else { full_interval };
-            if usb_only || periodic_device_scan_allowed(bluetooth_busy, hid_session_active || bluetooth_busy) {
+            let interval = if usb_only || usb_metadata_supported {
+                2.0
+            } else {
+                full_interval
+            };
+            if usb_only
+                || periodic_device_scan_allowed(
+                    bluetooth_busy,
+                    hid_session_active || bluetooth_busy,
+                )
+            {
                 if (self.last_device_scan_at == 0.0 || now - self.last_device_scan_at >= interval)
-                    && (!usb_metadata_supported || matches!(self.device_scan_state, DeviceScanState::Idle)) {
+                    && (!usb_metadata_supported
+                        || matches!(self.device_scan_state, DeviceScanState::Idle))
+                {
                     self.scan_frame = self.scan_frame.wrapping_add(1);
                     self.last_device_scan_at = now;
-                    if !usb_only { self.last_full_device_scan_at = now; }
-                    if usb_only { self.start_usb_device_scan(); }
-                    else { self.start_device_scan(); }
+                    if !usb_only {
+                        self.last_full_device_scan_at = now;
+                    }
+                    if usb_only {
+                        self.start_usb_device_scan();
+                    } else {
+                        self.start_device_scan();
+                    }
                 }
                 if usb_only || usb_metadata_supported {
                     ctx.request_repaint_after(std::time::Duration::from_secs_f64(
-                        (interval - (now - self.last_device_scan_at)).clamp(0.025, interval)));
+                        (interval - (now - self.last_device_scan_at)).clamp(0.025, interval),
+                    ));
                 }
             }
         }
@@ -1370,6 +1397,9 @@ impl eframe::App for EntropyApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if self.ak820_demo {
+            return;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if !self.hid_write_task_active() {
             self.flush_pending_tap_hold_numeric_writes();
@@ -1384,6 +1414,9 @@ impl eframe::App for EntropyApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if self.ak820_demo {
+            return;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             #[cfg(target_os = "windows")]
@@ -1543,8 +1576,22 @@ impl eframe::App for EntropyApp {
         #[cfg(target_arch = "wasm32")]
         let is_loading = false;
 
+        #[cfg(not(target_arch = "wasm32"))]
+        egui::TopBottomPanel::top("ak820_session_status")
+            .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(16, 8)))
+            .show_inside(root_ui, |ui| self.draw_ak820_status(ui));
+
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
+            #[cfg(not(target_arch = "wasm32"))]
+            if self
+                .hid_device
+                .as_ref()
+                .and_then(crate::hid::HidDevice::ak820_failure)
+                .is_some()
+            {
+                ui.disable();
+            }
             #[cfg(not(target_arch = "wasm32"))]
             let reconnecting_with_layout =
                 self.bluetooth_reconnect_active() && self.layout.is_some();
@@ -1811,20 +1858,13 @@ impl eframe::App for EntropyApp {
                         let muted = app_muted_text(self.dark_mode);
                         ui.spacing_mut().item_spacing.x = 3.0;
                         ui.label(
-                            RichText::new("tools of the future by")
+                            RichText::new("AK Configurator · based on")
                                 .size(12.0)
                                 .color(muted),
                         );
-                        let (site_label, site_url) =
-                            if matches!(self.app_settings.language, crate::i18n::Language::Russian)
-                            {
-                                ("eh.works", "https://eh.works")
-                            } else {
-                                ("eh.industries", "https://eh.industries")
-                            };
                         ui.add(egui::Hyperlink::from_label_and_url(
-                            RichText::new(site_label).size(12.0),
-                            site_url,
+                            RichText::new("Entropy").size(12.0),
+                            "https://github.com/ergohaven/entropy",
                         ));
                     });
                 });
@@ -2178,5 +2218,8 @@ impl eframe::App for EntropyApp {
     }
 }
 
-#[cfg(all(test, any(target_os="linux",target_os="windows",target_os="macos")))]
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "windows", target_os = "macos")
+))]
 include!("usb_hotplug_tests.rs");
