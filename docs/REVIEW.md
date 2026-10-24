@@ -95,3 +95,23 @@ The earlier documentation-only migration retained Entropy history and licenses,
 moved configurator planning to its own repository, established branch roles and
 recorded independent review. Its original record is available at
 [the migration commit](https://github.com/dvino/ak-configurator/blob/df52020fd39e96776617fbc017d63a3daf7a8da6/docs/REVIEW.md).
+
+## Local acceptance — 2026-10-25
+
+Source commit `fb16c196106881765a44679dec494f2111cb291d` was imported into
+`desktop-dev` by fast-forward. Its tree
+`1307d36f82cec78ba6e1a283c88a1de33dada27c` matches the Linux package's
+`BUILD-INFO.txt`. All 14 entries in the package's SHA256SUMS passed; the bundled
+EN/RU desktop guides and license match the source. These checks establish
+consistency, not a reproducible build.
+
+- Source archive SHA256: `d46dab063cfa98c192ac5f3cff1d934d85d633cce07e68297b2bebed9f24b712`.
+- Linux archive SHA256: `f02615b10a2129b274e09995710f6b47fcda23e117e42f0e378d4aef59db91c8`.
+- Translation checks, Linux setup shell syntax, Git connectivity and diff
+  whitespace checks passed. Rust/Cargo are unavailable on this host; the build
+  and 1530-test result above were not repeated during local acceptance.
+- A new independent source review covered code, EN/RU documentation and the
+  supplied verification record. No blocking findings remained. Acceptance is
+  limited to development source; hardware and release qualification remain open.
+
+No application launch, USB command or device test was performed during acceptance.

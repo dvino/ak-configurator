@@ -71,3 +71,6 @@ The next desktop milestone is a complete versioned settings backup and restore
 model, followed by separately authorized hardware qualification. Browser
 implementation remains deferred. See the [plan](PLAN.md) and
 [desktop guide](DESKTOP.md).
+
+Local source/package acceptance on 2026-10-25 is recorded in [REVIEW.md](REVIEW.md).
+Rust build and host tests were not repeated on the receiving host.
