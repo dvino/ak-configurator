@@ -4,8 +4,10 @@ Linux packaging is driven by [go-task](https://taskfile.dev). `task` with no
 arguments lists every target with its description; this document explains what
 they do and when to reach for each one.
 
-Windows and macOS builds are still the plain `cargo` invocations described in
-[README > Development](README.md#development).
+This document describes the imported Entropy build system. AK820 support has
+not been added or qualified. See [installation and development](docs/INSTALL.md)
+for the current scope. Windows and macOS use the imported platform build scripts;
+AK Configurator package instructions will follow actual package verification.
 
 ## Two ways to build
 
