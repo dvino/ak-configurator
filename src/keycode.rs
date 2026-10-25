@@ -1937,6 +1937,12 @@ fn magic_keycode_label(value: u16) -> Option<String> {
         0x701B => Some(format!("Ctrl/{}\nSwap", gui)),
         0x701C => Some(format!("Ctrl/{}\nRestore", gui)),
         0x701D => Some(format!("Ctrl/{}\nToggle", gui)),
+        0x7C53 => Some("DM\nRec 1".into()),
+        0x7C54 => Some("DM\nRec 2".into()),
+        0x7C55 => Some("DM\nStop".into()),
+        0x7C56 => Some("DM\nPlay 1".into()),
+        0x7C57 => Some("DM\nPlay 2".into()),
+        0x7C58 => Some("Leader".into()),
         _ => None,
     }
 }
@@ -1983,6 +1989,12 @@ fn magic_keycode_tooltip(value: u16) -> Option<String> {
         0x7020 => Some("Swap Caps Lock and Escape".to_string()),
         0x7021 => Some("Unswap Caps Lock and Escape".to_string()),
         0x7022 => Some("Toggle Caps Lock and Escape swap".to_string()),
+        0x7C53 => Some("Start recording temporary Dynamic Macro slot 1".into()),
+        0x7C54 => Some("Start recording temporary Dynamic Macro slot 2".into()),
+        0x7C55 => Some("Stop Dynamic Macro recording".into()),
+        0x7C56 => Some("Play temporary Dynamic Macro slot 1".into()),
+        0x7C57 => Some("Play temporary Dynamic Macro slot 2".into()),
+        0x7C58 => Some("Compact Leader prefix; the next basic key selects a Vial macro".into()),
         _ => None,
     }
 }

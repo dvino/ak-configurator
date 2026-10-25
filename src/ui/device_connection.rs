@@ -292,7 +292,7 @@ impl EntropyApp {
         let adaptive_list_width =
             adaptive_top_dropdown_width(ui, devices.iter().map(|(_, label)| label.as_str()), 220.0);
         let list_size = device_selection_list_size(panel_width, adaptive_list_width, devices.len());
-        let panel_height = 110.0 + status_height + list_size.y;
+        let panel_height = 158.0 + status_height + list_size.y;
         let max_panel_height = (rect.height() - 32.0).max(120.0);
         let panel_rect = egui::Rect::from_center_size(
             rect.center(),
@@ -364,6 +364,9 @@ impl EntropyApp {
                         self.start_connect(idx);
                     }
                 });
+                ui.add_space(10.0);
+                let profile_ctx = ui.ctx().clone();
+                super::ak820_beta1_profiles_ui::button(ui, &profile_ctx, lang);
             });
         });
     }

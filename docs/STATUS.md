@@ -51,10 +51,21 @@ The test and independent-review results are recorded in [REVIEW.md](REVIEW.md).
 No physical keyboard commands, flash, reset, unlock or retention tests were run.
 A successful model or GUI preview is not hardware qualification.
 
-The new `desktop-dev` workflow defines Linux x86_64, Windows x86_64, macOS arm64
-and macOS x86_64 development binaries with SHA-256 manifests. A workflow
-definition is not evidence that those remote builds have passed. Imported
-Entropy release/packaging workflows are not used for this development milestone.
+The `desktop-dev` workflow defines six raw development binaries with SHA-256
+manifests: Linux and Windows x86_64/arm64, and macOS arm64/x86_64. The current
+change's six-platform run has not completed, so these targets are not yet
+accepted build evidence. Imported Entropy release/packaging workflows are not
+used for this development milestone.
+
+The app now bundles the published beta.1 capability catalog and firmware
+compatibility matrix. Its bilingual profile window previews all nine profiles
+and shows module features, image hashes, release approval, test status and
+standalone-installer inclusion. This is catalog browsing only: it does not
+change the editor profile or keyboard, enable beta settings writes, or flash
+firmware. The application still recognizes only the exact alpha.3 image. Beta.1
+marks all profiles hardware-untested and does not authorize settings writes or
+companion flashing; only `work` is included in the firmware's standalone beta.1
+installers.
 
 ## Remaining work
 

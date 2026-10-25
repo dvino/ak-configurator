@@ -50,6 +50,13 @@ fn about_device_label(lang: crate::i18n::Language) -> &'static str {
     }
 }
 
+fn beta1_profiles_label(lang: crate::i18n::Language) -> &'static str {
+    match lang {
+        crate::i18n::Language::Russian => "Профили прошивки beta.1",
+        crate::i18n::Language::English => "beta.1 firmware profiles",
+    }
+}
+
 impl EntropyApp {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn draw_layout_device_dropdown(
@@ -80,7 +87,7 @@ impl EntropyApp {
             #[cfg(target_arch = "wasm32")]
             let (file_rows, file_dividers) = (0, 0);
             let row_count =
-                device_count.max(1) + show_key_legend_switcher as usize + 2 + file_rows + 2;
+                device_count.max(1) + show_key_legend_switcher as usize + 3 + file_rows + 2;
             let divider_count = 2 + file_dividers;
             let mut device_menu_labels: Vec<String> = if self.device_manager.devices().is_empty() {
                 vec![crate::i18n::tr(lang, TrKey::NoDevicesFound).to_owned()]
@@ -106,6 +113,7 @@ impl EntropyApp {
             device_menu_labels.push(crate::i18n::tr_catalog(lang, "layer_actions.menu").to_owned());
             device_menu_labels
                 .push(crate::i18n::tr_catalog(lang, "main_menu.show_hide_keys").to_owned());
+            device_menu_labels.push(beta1_profiles_label(lang).to_owned());
             #[cfg(not(target_arch = "wasm32"))]
             {
                 device_menu_labels.push(entlayout_import_label(lang).to_owned());
@@ -287,6 +295,22 @@ impl EntropyApp {
                     {
                         self.close_top_dropdowns(ctx);
                         self.start_layout_visibility_edit();
+                        ctx.request_repaint();
+                        device_clicked = true;
+                    }
+
+                    if top_dropdown_icon_item(
+                        ui,
+                        dropdown_size.x - 16.0,
+                        TopMenuIcon::Modules,
+                        beta1_profiles_label(lang),
+                        self.layout.is_some() && self.keycode_picker.ak820_profile,
+                        false,
+                    )
+                    .clicked()
+                    {
+                        self.close_top_dropdowns(ctx);
+                        super::ak820_beta1_profiles_ui::open(ctx);
                         ctx.request_repaint();
                         device_clicked = true;
                     }

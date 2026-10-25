@@ -60,8 +60,26 @@ v0.6.0-alpha.3 image. The verified ROM range is 0x2800–0xC700, SHA-256 is
 manifest is at 0xEF80. Unknown, custom and trial images are rejected. Read the
 [desktop guide](DESKTOP.md) before editing settings.
 
-The `desktop-dev` workflow defines raw development-binary builds for Linux
-x86_64, Windows x86_64, and macOS arm64/x86_64. A workflow definition does not
-mean its CI builds have passed. Release installers and release checks remain
-pending. Firmware flashing, OEM recovery and the OS LED helper are not included
-in this alpha.
+The `desktop-dev` workflow defines raw development binaries for Linux and
+Windows x86_64/arm64, and macOS arm64/x86_64. After a successful run, its six
+platform artifacts are available from the [desktop-dev Actions runs](https://github.com/dvino/ak-configurator/actions/workflows/desktop-dev.yml?query=branch%3Adesktop-dev);
+each contains a binary and `SHA256SUMS`. These are unsigned development
+binaries, not installers. Check that every platform job passed before relying
+on its artifact. The bundled beta.1 profile catalog is a local preview; it does
+not enable beta firmware settings writes or flashing. The current application
+still recognizes only the exact alpha.3 device image.
+OEM recovery and the OS LED helper are not included in this desktop milestone.
+
+Choose the artifact matching both your operating system and processor:
+`development-binary-linux-x86_64`, `development-binary-linux-arm64`,
+`development-binary-windows-x86_64`, `development-binary-windows-arm64`,
+`development-binary-macos-arm64`, or `development-binary-macos-x86_64`.
+Download that artifact ZIP from the successful workflow run and extract it.
+Verify the extracted executable against the included `SHA256SUMS` before
+launching it. On Linux, run `sha256sum -c SHA256SUMS`, then
+`chmod +x ak-configurator && ./ak-configurator`. On macOS, run
+`shasum -a 256 -c SHA256SUMS`, then `chmod +x ak-configurator` and
+`./ak-configurator`. On Windows PowerShell, compare
+`(Get-FileHash .\ak-configurator.exe -Algorithm SHA256).Hash.ToLowerInvariant()`
+with the hash on the line in `SHA256SUMS`, then launch
+`Start-Process .\ak-configurator.exe`.

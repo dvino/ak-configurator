@@ -1,5 +1,7 @@
 use crate::device::{Device, DeviceIdentity, DeviceManager};
 use crate::firmware::FirmwareProtocol;
+#[path = "ak820_beta1_profiles.rs"]
+mod ak820_beta1_profiles;
 
 use crate::keyboard::{KeyboardLayout, LayoutOption, PhysicalEncoder, PhysicalKey};
 use crate::keycode::{
@@ -77,6 +79,8 @@ mod onboarding_tour_state;
 use onboarding_tour_state::*;
 #[path = "ui/about_device.rs"]
 mod about_device_ui;
+#[path = "ui/ak820_beta1_profiles.rs"]
+mod ak820_beta1_profiles_ui;
 #[path = "ui/alt_repeat_settings.rs"]
 mod alt_repeat_settings_ui;
 #[path = "ui/app_lifecycle.rs"]

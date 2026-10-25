@@ -61,8 +61,27 @@ SHA-256: `01f0f7a979d8cfa8217b3bba333758ae3509cf7f3f8e35fbffb1ed034b808e5d`,
 манифест находится по адресу 0xEF80. Неизвестные, пользовательские и пробные
 образы отклоняются. Перед настройкой прочитайте [руководство](DESKTOP.md).
 
-Workflow `desktop-dev` описывает сборку файлов разработки для Linux x86_64,
-Windows x86_64 и macOS arm64/x86_64. Наличие workflow не подтверждает успешные
-сборки в CI. Установщики релиза и проверки выпуска пока не готовы. Прошивка
-клавиатуры, восстановление OEM и системный помощник LED не входят в эту
-альфа-версию.
+Workflow `desktop-dev` описывает исполняемые файлы разработки для Linux и
+Windows x86_64/arm64, а также macOS arm64/x86_64. После успешного запуска
+workflow шесть артефактов будут доступны на странице [запусков desktop-dev в
+Actions](https://github.com/dvino/ak-configurator/actions/workflows/desktop-dev.yml?query=branch%3Adesktop-dev);
+каждый содержит исполняемый файл и `SHA256SUMS`. Перед загрузкой проверьте,
+что задание для нужной платформы прошло. Это неподписанные сборки для
+разработки, а не установщики. Каталог профилей beta.1 в приложении пока служит
+предварительным просмотром и не разрешает запись настроек beta-прошивки или её
+установку. Приложение распознаёт только точный образ alpha.3. Восстановление
+OEM и системный помощник LED не входят в этот этап десктопной версии.
+
+Выберите артефакт по операционной системе и процессору:
+`development-binary-linux-x86_64`, `development-binary-linux-arm64`,
+`development-binary-windows-x86_64`, `development-binary-windows-arm64`,
+`development-binary-macos-arm64` или `development-binary-macos-x86_64`.
+Скачайте ZIP выбранного артефакта из успешного запуска workflow и распакуйте
+его. Перед запуском сверьте исполняемый файл с `SHA256SUMS`. В Linux выполните
+`sha256sum -c SHA256SUMS`, затем `chmod +x ak-configurator &&
+./ak-configurator`. В macOS выполните `shasum -a 256 -c SHA256SUMS`, затем
+`chmod +x ak-configurator` и `./ak-configurator`. В Windows PowerShell
+сравните результат команды
+`(Get-FileHash .\ak-configurator.exe -Algorithm SHA256).Hash.ToLowerInvariant()`
+с хешем в файле `SHA256SUMS`, затем запустите
+`Start-Process .\ak-configurator.exe`.

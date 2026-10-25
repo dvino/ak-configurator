@@ -115,3 +115,20 @@ consistency, not a reproducible build.
   limited to development source; hardware and release qualification remain open.
 
 No application launch, USB command or device test was performed during acceptance.
+
+## Companion beta.1 catalog and CI update — 2026-10-25
+
+- Firmware reference: AK820 `v0.6.0-beta.1`; the three bundled JSON files match
+  the verified release archive byte-for-byte. Profile catalog selection is
+  preview-only. Beta settings writes and flashing remain disabled.
+- Independent review found one documentation gap: artifact-specific download,
+  checksum and launch instructions were missing. The six artifact names and
+  Linux/macOS/PowerShell verification and launch commands were added to
+  `INSTALL.md` and `ru/INSTALL.md`.
+- Host verification: `cargo test --locked --all-targets` on Linux x86_64 with
+  Rust 1.97.0: **1531 passed, 0 failed, 14 ignored**. This does not exercise a
+  physical keyboard. `git diff --check`, targeted rustfmt checks and workflow
+  YAML parsing passed.
+- CI defines Linux and Windows x86_64/arm64 and macOS x86_64/arm64 raw binary
+  artifacts with SHA256SUMS. Remote CI execution and artifact availability are
+  pending; they are not claimed by this local record.

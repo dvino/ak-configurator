@@ -155,6 +155,9 @@ pub struct KeycodePicker {
     pub supports_rgb: bool,
     /// Exact AK820 alpha.3 action allowlist, independent of Vial version.
     pub(crate) ak820_profile: bool,
+    /// Beta.1 optional features; only an exact catalog image may enable them.
+    pub supports_compact_leader: bool,
+    pub supports_compact_dynamic_macros: bool,
     pub supports_macro: bool,
     pub supports_tap_dance: bool,
     pub supports_mouse_keys: bool,
@@ -1089,6 +1092,8 @@ impl Default for KeycodePicker {
             custom_keycodes: vec![],
             supports_rgb: true,
             ak820_profile: false,
+            supports_compact_leader: false,
+            supports_compact_dynamic_macros: false,
             supports_macro: true,
             supports_tap_dance: true,
             supports_mouse_keys: true,
@@ -1189,7 +1194,15 @@ impl KeycodePicker {
     }
 
     pub(crate) fn picker_value_supported(&self, value: u16) -> bool {
-        if self.ak820_profile && !crate::ak820::is_assignable_keycode(value) {
+        let profile_keycode = match value {
+            0x7C58 => self.supports_compact_leader,
+            0x7C53..=0x7C57 => self.supports_compact_dynamic_macros,
+            _ => false,
+        };
+        if self.ak820_profile
+            && !profile_keycode
+            && !crate::ak820::is_assignable_keycode(value)
+        {
             return false;
         }
         match self.value_policy {

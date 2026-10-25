@@ -4,9 +4,9 @@
 
 **Status:** agreed requirements for future work
 
-**Version:** 0.3
+**Version:** 0.4
 
-**Date:** 2026-10-24
+**Date:** 2026-10-25
 
 This document sets requirements for AK Configurator, maintained in the separate `dvino/ak-configurator` repository. It reuses Entropy, whose pinned upstream source is [5b222b5d6349fb351f53b36c66169095b3039fc1](https://github.com/ergohaven/entropy/tree/5b222b5d6349fb351f53b36c66169095b3039fc1). AK820 firmware remains in `dvino/ak820`. It does not confirm that these features have been implemented or authorize operations on a physical keyboard. Current source files, built artifacts, and installed firmware are checked separately.
 
@@ -140,7 +140,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 ## 7. Standalone application and system helper
 
-**AKW-060 · Desktop.** Release a native application for Windows and Linux x86_64, and macOS arm64 and x86_64. Begin native adaptation and develop the WebAssembly/browser target in parallel; desktop release does not depend on website readiness. Use Entropy’s native application and shared Rust model. The application includes compatible firmware, the catalog, and help. Configuration, installation of bundled or local firmware, backups, and rollback using a suitable dump work offline.
+**AKW-060 · Desktop.** Release a native application for Windows and Linux x86_64 and arm64, and macOS arm64 and x86_64. Begin native adaptation and develop the WebAssembly/browser target in parallel; desktop release does not depend on website readiness. Use Entropy’s native application and shared Rust model. The application includes compatible firmware, all curated AK820 profiles, the compatibility catalog, and help. Configuration, installation of bundled or local firmware, backups, and rollback using a suitable dump work offline.
 
 **Acceptance:** build, USB connection, memory use, startup speed, and required features are confirmed separately for each target OS; a build on one OS does not confirm the others.
 
@@ -188,7 +188,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** record the source revision, licenses, feature gaps, native and browser feasibility evidence, and untested conditions. A launching interface alone does not prove an operation works.
 
-**AKW-083 · Release.** Before a commit, obtain an independent review of code, documentation, and verification evidence. Close findings and recheck substantive fixes. Public firmware releases, including releases paired with the website, retain the existing standalone Windows and Linux x86_64 firmware installers, SHA256 files and RU/EN instructions. These packages are separate from the shared configurator application. Once that application is released, provide its own Windows/Linux x86_64 installers and macOS arm64/x86_64 builds, SHA256 files and RU/EN instructions. Instructions explain package selection and download, checksum verification, extraction and launch.
+**AKW-083 · Release.** Before a commit, obtain an independent review of code, documentation, and verification evidence. Close findings and recheck substantive fixes. The standalone firmware installer is a temporary path while the companion is being implemented; retire it after the companion can safely select, validate, install and verify all supported profiles. Companion builds target Windows and Linux x86_64 and arm64, and macOS arm64 and x86_64, with SHA256 files and RU/EN instructions. Instructions explain package selection and download, checksum verification, extraction and launch.
 
 **Acceptance:** instructions match the actual packages and commands. The site offers a button to reload an updated version. It does not reload the page during a write, firmware installation, or rollback.
 

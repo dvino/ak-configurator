@@ -228,6 +228,8 @@ impl KeycodePicker {
             self.supports_rgb,
             self.supports_macro,
             self.supports_tap_dance,
+            self.supports_compact_leader,
+            self.supports_compact_dynamic_macros,
             self.supports_mouse_keys,
             self.supports_combo,
             self.supports_auto_shift,

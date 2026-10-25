@@ -1636,7 +1636,7 @@ impl eframe::App for EntropyApp {
                 {
                     let empty_rect = egui::Rect::from_center_size(
                         rect.center(),
-                        egui::vec2(rect.width().min(520.0), 210.0),
+                        egui::vec2(rect.width().min(520.0), 258.0),
                     );
                     crate::ui_style::allocate_ui_at_rect(ui, empty_rect, |ui| {
                         ui.vertical_centered(|ui| {
@@ -1685,6 +1685,12 @@ impl eframe::App for EntropyApp {
                                 self.run_linux_vial_udev_rules_install();
                                 self.start_device_scan();
                             }
+                            ui.add_space(8.0);
+                            super::ak820_beta1_profiles_ui::button(
+                                ui,
+                                ctx,
+                                self.app_settings.language,
+                            );
                         });
                     });
                     return;
@@ -1697,7 +1703,7 @@ impl eframe::App for EntropyApp {
 
                 let empty_rect = egui::Rect::from_center_size(
                     rect.center(),
-                    egui::vec2(rect.width().min(520.0), 150.0),
+                    egui::vec2(rect.width().min(520.0), 242.0),
                 );
                 crate::ui_style::allocate_ui_at_rect(ui, empty_rect, |ui| {
                     ui.vertical_centered(|ui| {
@@ -1743,6 +1749,12 @@ impl eframe::App for EntropyApp {
                                 self.open_application_layouts_page();
                             }
                         }
+                        ui.add_space(8.0);
+                        super::ak820_beta1_profiles_ui::button(
+                            ui,
+                            ctx,
+                            self.app_settings.language,
+                        );
                     });
                 });
                 return;
@@ -1834,6 +1846,10 @@ impl eframe::App for EntropyApp {
                 self.draw_placeholder(ui);
             }
         });
+
+        // Keep the beta catalog available as a preview, without changing the
+        // keyboard canvas or the editor's active firmware model.
+        super::ak820_beta1_profiles_ui::show(ctx, self.app_settings.language);
 
         #[cfg(not(target_arch = "wasm32"))]
         if self.bluetooth_reconnect_active() && self.layout.is_none() {

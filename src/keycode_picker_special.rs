@@ -102,7 +102,7 @@ impl KeycodePicker {
     // The search index reuses these exact strings so everything the user
     // sees on the Special tab is findable by the same words.
     pub(super) fn vial_special_key_entries(&self) -> Vec<(String, u16, String)> {
-        vec![
+        let mut entries = vec![
             (
                 "✕
 None"
@@ -181,7 +181,39 @@ Repeat"
                 0x7C7A,
                 "Alt repeats the last pressed key".into(),
             ),
-        ]
+        ];
+        if self.supports_compact_leader {
+            entries.push((
+                "Leader".into(),
+                0x7C58,
+                match self.language {
+                    crate::i18n::Language::English => "Compact Leader prefix; press one basic selector within 300 ms to run the matching saved macro".into(),
+                    crate::i18n::Language::Russian => "Префикс компактного Leader: в течение 300 мс нажмите одну обычную клавишу выбора, чтобы запустить соответствующий сохранённый макрос".into(),
+                },
+            ));
+        }
+        if self.supports_compact_dynamic_macros {
+            let items = match self.language {
+                crate::i18n::Language::English => [
+                    ("DM Rec 1", "Start recording temporary Dynamic Macro slot 1"),
+                    ("DM Rec 2", "Start recording temporary Dynamic Macro slot 2"),
+                    ("DM Stop", "Stop Dynamic Macro recording"),
+                    ("DM Play 1", "Play temporary Dynamic Macro slot 1"),
+                    ("DM Play 2", "Play temporary Dynamic Macro slot 2"),
+                ],
+                crate::i18n::Language::Russian => [
+                    ("DM Запись 1", "Начать запись временного динамического макроса 1"),
+                    ("DM Запись 2", "Начать запись временного динамического макроса 2"),
+                    ("DM Стоп", "Остановить запись динамического макроса"),
+                    ("DM Пуск 1", "Воспроизвести временный динамический макрос 1"),
+                    ("DM Пуск 2", "Воспроизвести временный динамический макрос 2"),
+                ],
+            };
+            for (index, (label, tip)) in items.into_iter().enumerate() {
+                entries.push((label.into(), 0x7C53 + index as u16, tip.into()));
+            }
+        }
+        entries
     }
 
     /// Every section of the Special tab, in display order.
