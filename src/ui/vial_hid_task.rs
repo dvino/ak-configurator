@@ -17,22 +17,40 @@ pub(super) fn layer_name_write_error(language: crate::i18n::Language, error: &st
     let reason = match error {
         "device changed" => app_layout_text(language, "устройство изменилось", "device changed"),
         "device is busy" => app_layout_text(language, "устройство занято", "device is busy"),
-        "device is disconnected" => app_layout_text(language, "устройство отключено", "device is disconnected"),
-        "layer data is not ready" => app_layout_text(language, "данные слоя не готовы", "layer data is not ready"),
-        "layer name readback mismatch" => app_layout_text(language, "прочитанное имя слоя не совпадает", "layer name readback mismatch"),
+        "device is disconnected" => {
+            app_layout_text(language, "устройство отключено", "device is disconnected")
+        }
+        "layer data is not ready" => {
+            app_layout_text(language, "данные слоя не готовы", "layer data is not ready")
+        }
+        "layer name readback mismatch" => app_layout_text(
+            language,
+            "прочитанное имя слоя не совпадает",
+            "layer name readback mismatch",
+        ),
         _ => error,
     };
-    format!("{}: {reason}", app_layout_text(language, "Имя слоя не сохранено", "Layer name not saved"))
+    format!(
+        "{}: {reason}",
+        app_layout_text(language, "Имя слоя не сохранено", "Layer name not saved")
+    )
 }
 
 impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn selected_layer_names_uncertain(&self) -> bool {
         let key = self.application_layout_device_key();
-        self.uncertain_layer_names.iter().any(|r| key.as_ref() == Some(&r.device_key)
-            && self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                .is_some_and(|d| d.path == r.device.path && d.instance_token == r.device.instance_token
-                    && d.permits_hid_target(&r.device)))
+        self.uncertain_layer_names.iter().any(|r| {
+            key.as_ref() == Some(&r.device_key)
+                && self
+                    .selected_device
+                    .and_then(|i| self.device_manager.devices().get(i))
+                    .is_some_and(|d| {
+                        d.path == r.device.path
+                            && d.instance_token == r.device.instance_token
+                            && d.permits_hid_target(&r.device)
+                    })
+        })
     }
 
     // Explicit consumers may recover uncertainty with GET only. Repaints never
@@ -40,29 +58,69 @@ impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn confirm_uncertain_layer_names(&mut self) -> anyhow::Result<()> {
         let key = self.application_layout_device_key();
-        let requests: Vec<_> = self.uncertain_layer_names.iter()
-            .filter(|r| key.as_ref() == Some(&r.device_key)
-                && self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                    .is_some_and(|d| d.path == r.device.path && d.instance_token == r.device.instance_token
-                        && d.permits_hid_target(&r.device))).cloned().collect();
-        if requests.is_empty() { return Ok(()); }
-        anyhow::ensure!(!self.hid_write_task_active(), layer_name_write_error(self.app_settings.language, "device is busy"));
+        let requests: Vec<_> = self
+            .uncertain_layer_names
+            .iter()
+            .filter(|r| {
+                key.as_ref() == Some(&r.device_key)
+                    && self
+                        .selected_device
+                        .and_then(|i| self.device_manager.devices().get(i))
+                        .is_some_and(|d| {
+                            d.path == r.device.path
+                                && d.instance_token == r.device.instance_token
+                                && d.permits_hid_target(&r.device)
+                        })
+            })
+            .cloned()
+            .collect();
+        if requests.is_empty() {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            !self.hid_write_task_active(),
+            layer_name_write_error(self.app_settings.language, "device is busy")
+        );
         for request in requests {
-            anyhow::ensure!(self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                .is_some_and(|d| d.path == request.device.path
-                    && d.instance_token == request.device.instance_token
-                    && d.permits_hid_target(&request.device)), layer_name_write_error(self.app_settings.language, "device changed"));
-            let hid = self.hid_device.as_ref().ok_or_else(|| anyhow::anyhow!(layer_name_write_error(self.app_settings.language, "device is disconnected")))?;
-            let actual = hid.get_qmk_setting_string(200 + request.layer as u16)
-                .map_err(|error| anyhow::anyhow!(layer_name_write_error(self.app_settings.language, &error.to_string())))?;
-            if let Some(name) = self.layer_names.get_mut(request.layer) { *name = actual.clone(); }
-            if let Some(name) = self.layout.as_mut().and_then(|l| l.layer_names.get_mut(request.layer)) {
+            anyhow::ensure!(
+                self.selected_device
+                    .and_then(|i| self.device_manager.devices().get(i))
+                    .is_some_and(|d| d.path == request.device.path
+                        && d.instance_token == request.device.instance_token
+                        && d.permits_hid_target(&request.device)),
+                layer_name_write_error(self.app_settings.language, "device changed")
+            );
+            let hid = self.hid_device.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(layer_name_write_error(
+                    self.app_settings.language,
+                    "device is disconnected"
+                ))
+            })?;
+            let actual = hid
+                .get_qmk_setting_string(200 + request.layer as u16)
+                .map_err(|error| {
+                    anyhow::anyhow!(layer_name_write_error(
+                        self.app_settings.language,
+                        &error.to_string()
+                    ))
+                })?;
+            if let Some(name) = self.layer_names.get_mut(request.layer) {
+                *name = actual.clone();
+            }
+            if let Some(name) = self
+                .layout
+                .as_mut()
+                .and_then(|l| l.layer_names.get_mut(request.layer))
+            {
                 *name = actual;
             }
-            self.uncertain_layer_names.retain(|r| r.device_key != request.device_key
-                || r.layer != request.layer || r.generation != request.generation
-                || r.device.path != request.device.path
-                || r.device.instance_token != request.device.instance_token);
+            self.uncertain_layer_names.retain(|r| {
+                r.device_key != request.device_key
+                    || r.layer != request.layer
+                    || r.generation != request.generation
+                    || r.device.path != request.device.path
+                    || r.device.instance_token != request.device.instance_token
+            });
         }
         self.keycode_picker.layer_names = self.layer_names.clone();
         Ok(())
@@ -73,17 +131,23 @@ impl EntropyApp {
         while let Some(request) = self.pending_layer_name_writes.front() {
             let target_matches = request.generation == self.connection_generation
                 && self.application_layout_device_key().as_ref() == Some(&request.device_key)
-                && self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                    .is_some_and(|device| device.path == request.device.path
-                        && device.instance_token == request.device.instance_token
-                        && device.permits_hid_target(&request.device));
+                && self
+                    .selected_device
+                    .and_then(|i| self.device_manager.devices().get(i))
+                    .is_some_and(|device| {
+                        device.path == request.device.path
+                            && device.instance_token == request.device.instance_token
+                            && device.permits_hid_target(&request.device)
+                    });
             if !target_matches {
-                self.status_msg = layer_name_write_error(self.app_settings.language, "device changed");
+                self.status_msg =
+                    layer_name_write_error(self.app_settings.language, "device changed");
                 self.pending_layer_name_writes.pop_front();
                 continue;
             }
             if self.hid_device.is_none() && !self.hid_write_task_owner_active() {
-                self.status_msg = layer_name_write_error(self.app_settings.language, "device is disconnected");
+                self.status_msg =
+                    layer_name_write_error(self.app_settings.language, "device is disconnected");
                 self.pending_layer_name_writes.pop_front();
                 continue;
             }
@@ -94,19 +158,32 @@ impl EntropyApp {
                     if let Some(context) = self.deferred_device_load.context.clone() {
                         let layer = request.layer;
                         let operation = VialHidOperation::Deferred(
-                            super::device_deferred_load::DeferredLoadRequest::Layer { layer, context });
-                        if self.start_vial_hid_operation(ctx, operation) == VialHidTaskStart::Started {
-                            self.deferred_device_load.set_layer_status(layer, DeferredLoadStatus::Loading);
+                            super::device_deferred_load::DeferredLoadRequest::Layer {
+                                layer,
+                                context,
+                            },
+                        );
+                        if self.start_vial_hid_operation(ctx, operation)
+                            == VialHidTaskStart::Started
+                        {
+                            self.deferred_device_load
+                                .set_layer_status(layer, DeferredLoadStatus::Loading);
                         }
                         break;
                     }
-                    self.status_msg = layer_name_write_error(self.app_settings.language, "layer data is not ready");
+                    self.status_msg = layer_name_write_error(
+                        self.app_settings.language,
+                        "layer data is not ready",
+                    );
                     self.pending_layer_name_writes.pop_front();
                     continue;
                 }
                 DeferredLoadStatus::Loading => break,
                 DeferredLoadStatus::Failed(_) => {
-                    self.status_msg = layer_name_write_error(self.app_settings.language, "layer data is not ready");
+                    self.status_msg = layer_name_write_error(
+                        self.app_settings.language,
+                        "layer data is not ready",
+                    );
                     self.pending_layer_name_writes.pop_front();
                     continue;
                 }
@@ -288,8 +365,7 @@ fn run_vial_hid_operation_with_progress(
             hid.set_qmk_setting_string(qsid, &request.name)?;
             let actual = hid.get_qmk_setting_string(qsid)?;
             let expected = crate::hid::HidDevice::normalized_qmk_setting_string(&request.name);
-            anyhow::ensure!(actual == expected,
-                "layer name readback mismatch");
+            anyhow::ensure!(actual == expected, "layer name readback mismatch");
             Ok(VialHidOutcome::LayerNameWritten(actual))
         }
         VialHidOperation::UnlockStart => {
@@ -562,9 +638,12 @@ impl EntropyApp {
         // SET can mutate even when its acknowledgement or subsequent GET fails.
         // Invalidate before handing ownership to the worker, not on completion.
         if let VialHidOperation::LayerNameWrite(request) = &operation {
-            self.uncertain_layer_names.retain(|old| old.device_key != request.device_key
-                || old.layer != request.layer || old.device.path != request.device.path
-                || old.device.instance_token != request.device.instance_token);
+            self.uncertain_layer_names.retain(|old| {
+                old.device_key != request.device_key
+                    || old.layer != request.layer
+                    || old.device.path != request.device.path
+                    || old.device.instance_token != request.device.instance_token
+            });
             self.uncertain_layer_names.push(request.clone());
         }
         let generation = self.connection_generation;
@@ -669,6 +748,10 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn maybe_start_macro_write(&mut self, ctx: &egui::Context) {
+        // Offline edits are persisted only through the local project file.
+        if self.ak820_demo {
+            return;
+        }
         if !self.keycode_picker.macros_dirty
             || self.keycode_picker.open
             || self.hid_write_task_active()
@@ -762,10 +845,15 @@ impl EntropyApp {
         match result.outcome {
             Ok(VialHidOutcome::LayerNameWritten(actual)) => {
                 if let VialHidOperation::LayerNameWrite(request) = result.operation {
-                    if !self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                        .is_some_and(|device| device.path == request.device.path
-                            && device.instance_token == request.device.instance_token
-                            && device.permits_hid_target(&request.device)) {
+                    if !self
+                        .selected_device
+                        .and_then(|i| self.device_manager.devices().get(i))
+                        .is_some_and(|device| {
+                            device.path == request.device.path
+                                && device.instance_token == request.device.instance_token
+                                && device.permits_hid_target(&request.device)
+                        })
+                    {
                         return;
                     }
                     // Completion belongs to the captured Default, never the
@@ -778,16 +866,22 @@ impl EntropyApp {
                             *name = actual.clone();
                         }
                     }
-                    self.uncertain_layer_names.retain(|old| old.device_key != request.device_key
-                        || old.layer != request.layer || old.generation != request.generation
-                        || old.device.path != request.device.path
-                        || old.device.instance_token != request.device.instance_token);
+                    self.uncertain_layer_names.retain(|old| {
+                        old.device_key != request.device_key
+                            || old.layer != request.layer
+                            || old.generation != request.generation
+                            || old.device.path != request.device.path
+                            || old.device.instance_token != request.device.instance_token
+                    });
                     if !self.selected_layer_names_uncertain() {
                         save_layer_names(&self.layer_names, &self.current_device_name);
                     }
-                    if let Some(profile) = self.app_settings.application_layouts
+                    if let Some(profile) = self
+                        .app_settings
+                        .application_layouts
                         .get_mut(&request.device_key)
-                        .and_then(|s| s.layouts.get_mut(&request.layout_id)) {
+                        .and_then(|s| s.layouts.get_mut(&request.layout_id))
+                    {
                         if profile.layer_names.get(request.layer) == Some(&request.name) {
                             profile.set_layer_name(request.layer, actual);
                             save_settings(&self.app_settings);

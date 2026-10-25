@@ -215,7 +215,7 @@ impl EntropyApp {
         let hid_ready = {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                self.hid_device.is_some()
+                self.ak820_demo || self.hid_device.is_some()
             }
             #[cfg(target_arch = "wasm32")]
             {
@@ -238,6 +238,17 @@ impl EntropyApp {
                         .color(app_muted_text(dark)),
                 );
                 ui.add_space(24.0);
+
+                if self.ak820_demo {
+                    ui.label(match lang {
+                        crate::i18n::Language::Russian => {
+                            "Изменения сохраняются в памяти офлайн-профиля до закрытия приложения."
+                        }
+                        crate::i18n::Language::English => {
+                            "Changes stay in this offline profile until the application closes."
+                        }
+                    });
+                }
 
                 if !self.rgb_settings.supported {
                     crate::ui_style::modal_empty_state(
@@ -263,6 +274,16 @@ impl EntropyApp {
     }
 
     fn set_rgb_effect(&mut self, effect: u16) {
+        if self.ak820_demo {
+            if self.rgb_settings.supported_effects.contains(&effect) {
+                self.rgb_settings.effect = effect;
+                if effect != 0 {
+                    self.rgb_settings.last_enabled_effect = effect;
+                }
+            }
+            return;
+        }
+
         let Some(hid) = &self.hid_device else {
             return;
         };
@@ -295,6 +316,11 @@ impl EntropyApp {
     }
 
     fn set_rgb_brightness(&mut self, brightness: u8) {
+        if self.ak820_demo {
+            self.rgb_settings.brightness = brightness.min(self.rgb_settings.max_brightness);
+            return;
+        }
+
         let Some(hid) = &self.hid_device else {
             return;
         };
@@ -322,6 +348,12 @@ impl EntropyApp {
     }
 
     fn set_rgb_color(&mut self, hue: u8, saturation: u8) {
+        if self.ak820_demo {
+            self.rgb_settings.hue = hue;
+            self.rgb_settings.saturation = saturation;
+            return;
+        }
+
         let Some(hid) = &self.hid_device else {
             return;
         };
@@ -350,6 +382,11 @@ impl EntropyApp {
     }
 
     fn set_rgb_speed(&mut self, speed: u8) {
+        if self.ak820_demo {
+            self.rgb_settings.speed = speed;
+            return;
+        }
+
         let Some(hid) = &self.hid_device else {
             return;
         };
@@ -377,6 +414,10 @@ impl EntropyApp {
     }
 
     fn autosave_rgb_settings(&mut self) {
+        if self.ak820_demo {
+            return;
+        }
+
         let Some(hid) = &self.hid_device else {
             return;
         };
@@ -735,5 +776,40 @@ impl EntropyApp {
                 },
             );
         });
+    }
+}
+
+#[cfg(test)]
+mod ak820_offline_rgb_tests {
+    use super::*;
+
+    #[test]
+    fn demo_rgb_controls_change_only_local_state_and_enforce_limits() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx);
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        assert!(app.hid_device.is_none());
+        app.set_rgb_effect(6);
+        app.set_rgb_brightness(255);
+        app.set_rgb_color(40, 90);
+        app.set_rgb_speed(70);
+        assert_eq!(
+            (app.rgb_settings.effect, app.rgb_settings.brightness),
+            (6, 160)
+        );
+        assert_eq!(
+            (
+                app.rgb_settings.hue,
+                app.rgb_settings.saturation,
+                app.rgb_settings.speed
+            ),
+            (40, 90, 70)
+        );
+        app.set_rgb_effect(65535);
+        assert_eq!(app.rgb_settings.effect, 6);
+        app.set_rgb_effect(0);
+        assert_eq!(app.rgb_settings.last_enabled_effect, 6);
+        app.autosave_rgb_settings();
+        assert!(app.hid_device.is_none() && app.shared_hid_output.is_none());
     }
 }

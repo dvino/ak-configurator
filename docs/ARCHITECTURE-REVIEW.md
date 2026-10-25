@@ -6,6 +6,10 @@ Date: 2026-10-25. Requirements: version 0.5. Configurator baseline: `42bad4d10a5
 
 This review covers the plan, requirements, current native source, existing AK820 test cases and development workflow. The architecture reviewer inspected source and tests without running a competing build. After the final Auto Shift and Mouse Keys tests and the invalid-input guard were added, the lead ran `cargo test --locked --all-targets`: **1549 passed, 0 failed, 14 ignored**, 260.88 s. Ignored cases are not passes. Prior executions and their boundaries remain recorded in [REVIEW.md](REVIEW.md). No physical keyboard was operated. This is not an exhaustive review of inherited Entropy functionality or independent approval of the documentation authored here.
 
+This snapshot predates the offline-profile and project-file implementation.
+Its source baseline remains recorded above. Current implementation progress and
+verification are tracked in [STATUS.md](STATUS.md) and [REVIEW.md](REVIEW.md).
+
 ## Plan corrections
 
 The plan and requirements now use the nine whole beta.1 profiles and native-first sequence. They explicitly include exact image contracts, source-aware keycodes, schema03 typed editors, complete firmware-compatible backups, migration and transitions, companion installer/OEM operation models, six OS/CPU targets and maximum completion without a keyboard. The former alpha.3 editor milestone remains identified as a limited implementation. No hardware or release approval was added.

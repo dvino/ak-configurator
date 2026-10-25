@@ -2,6 +2,8 @@
 
 # Working on AK Configurator
 
+@/home/danil/.codex/RTK.md
+
 AK Configurator is based on Entropy. Keep upstream history, copyright notices
 and third-party licenses. Firmware remains in `dvino/ak820`; do not copy its
 whole tree into this repository.
@@ -36,9 +38,38 @@ whole tree into this repository.
   Linux and Windows x86_64 and arm64 builds, macOS x86_64 and arm64 builds,
   SHA256 files and matching RU/EN installation instructions. Do not add legacy
   32-bit targets.
-- Use bounded tasks with explicit file ownership. Subagent communication is
-  in English. Use a fresh GPT-6 Luna at medium reasoning for limited tasks;
-  GPT-6.1 Sol at low reasoning for independent review or complex ABI/NVM work.
+- Follow [agent routing](docs/AGENT-ROUTING.md) for delegated work and review.
+  Keep the [plan](docs/PLAN.md) current as work closes or new gaps are found.
 
 Imported workflows, package names and UI branding are not proof of AK820
 support. Keep their actual state clear until adaptation is implemented.
+
+## Code, documentation and evidence
+
+Adapted from firmware `AGENTS.md` at `bef20f89d3da01d770767919bc7c8fc3c3a1a808`.
+Firmware stack and interrupt proof stays in the firmware repository; application
+changes instead check parsers, bounds, operation ordering and supported targets.
+
+- Update matching EN/RU documentation in the same work package as changes to
+  behavior, formats, commands, versions, APIs or limits. Check agreement during
+  independent review. Keep text plain, concise and impersonal; apply the
+  write-like-me skill for substantial documentation without claiming unavailable
+  style retrieval.
+- README introduces the application. INSTALL explains download, checksum,
+  extraction and launch. STATUS and technical reports record verification.
+  Release notes describe user-visible changes and relevant limits.
+- Check hashes, sizes, versions and commands against actual inputs and outputs.
+  Regenerate affected reports. Replace obsolete current-state claims; retain
+  their tracked history in Git and preserve unique uncommitted material before
+  removing it.
+- Prepare all firmware inputs and exact confirmation contents before erase.
+  The intended in-app update requests a fresh three-second Esc + left Control
+  hold, enters the loader, flashes once and verifies. No typed confirmation,
+  separate Vial application or manual Bootloader step replaces that flow.
+  Implementing its offline model does not authorize running it on hardware.
+- Never promote catalog membership, a linked CODE fingerprint, a synthetic
+  fixture or a CI binary to verified packed-image or device acceptance. Preserve
+  exact image policies, explicit transition pairs and blocked unknown identity.
+- Review code, documentation and test evidence together before commit or push.
+  Record findings and closure; substantive fixes need retesting and a fresh
+  independent review. Do not run builds sharing output paths concurrently.

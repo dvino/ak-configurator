@@ -13,6 +13,49 @@ struct AppBootstrap {
 }
 
 impl EntropyApp {
+    pub(crate) fn assign_offline_tap_dance(
+        &mut self,
+        layer: usize,
+        key_index: usize,
+        slot: usize,
+    ) -> bool {
+        use crate::app::ak820_beta1_profiles as beta1;
+        let Some(profile) = self.ak820_demo_profile else {
+            return false;
+        };
+        let matrix = beta1::matrix_profile(profile);
+        let count = matrix.capabilities.dynamic_entries.tap_dance as usize;
+        let Ok(slot_code) = u16::try_from(slot).map(|n| 0x5700 | n) else {
+            return false;
+        };
+        if slot >= count
+            || !beta1::supports_keycode(profile, slot_code, beta1::KeycodeSource::Matrix)
+        {
+            return false;
+        }
+        let Some(layout) = self.layout.as_ref() else {
+            return false;
+        };
+        if layer >= layout.layers.len() || key_index >= layout.keys.len() {
+            return false;
+        }
+        let old_binding = layout.get_key_binding(layer, key_index);
+        self.undo_stack.push(UndoAction::Key {
+            layer,
+            key_idx: key_index,
+            old_binding,
+        });
+        if let Some(layout) = self.layout.as_mut() {
+            layout.set_key_binding(
+                layer,
+                key_index,
+                crate::keyboard::KeyBinding::Vial(slot_code),
+            );
+        }
+        self.refresh_layer_picker_content_flags();
+        true
+    }
+
     /// Offline preview: no discovery, HID handle, typing hook or update worker.
     pub(crate) fn new_ak820_demo(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = AppSettings {
@@ -78,9 +121,245 @@ impl EntropyApp {
         app.combo_synced_entries = app.combo_entries.clone();
         app.combo_term = Some(40);
         app.encoder_visibility = vec![true];
+        app.ak820_demo_seed = Some(layout.clone());
         app.layout = Some(layout);
         app.status_msg = "Демонстрационный режим. Настройки устройства не считывались.".to_owned();
+        app.configure_ak820_offline_profile(crate::app::ak820_beta1_profiles::ProfileId::Work);
         app
+    }
+
+    pub(crate) fn rename_ak820_offline_layer(&mut self, layer: usize, name: &str) -> bool {
+        if !self.ak820_demo || layer >= self.layer_count {
+            return false;
+        }
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 12 {
+            return false;
+        }
+        self.layer_names.resize(self.layer_count, String::new());
+        self.layer_names[layer] = name.to_owned();
+        self.keycode_picker.layer_names = self.layer_names.clone();
+        if let Some(layout) = self.layout.as_mut() {
+            layout.layer_names = self.layer_names.clone();
+        }
+        true
+    }
+
+    pub(crate) fn configure_ak820_offline_profile(
+        &mut self,
+        profile: crate::app::ak820_beta1_profiles::ProfileId,
+    ) {
+        if !self.ak820_demo {
+            return;
+        }
+
+        use crate::app::ak820_beta1_profiles as beta1;
+        use crate::keycode_picker::Ak820Beta1KeycodeSource as PickerSource;
+
+        let image = beta1::profile(profile);
+        let limits = &image.fixed_limits;
+        let matrix = beta1::matrix_profile(profile);
+        let source_pairs = [
+            (beta1::KeycodeSource::Matrix, PickerSource::Matrix),
+            (beta1::KeycodeSource::Encoder, PickerSource::Encoder),
+            (beta1::KeycodeSource::Macro, PickerSource::Macro),
+            (beta1::KeycodeSource::MacroTap, PickerSource::MacroTap),
+            (beta1::KeycodeSource::MacroDown, PickerSource::MacroDown),
+            (beta1::KeycodeSource::MacroUp, PickerSource::MacroUp),
+        ];
+        let allowed: std::collections::BTreeMap<PickerSource, std::collections::BTreeSet<u16>> =
+            source_pairs
+                .into_iter()
+                .map(|(contract_source, picker_source)| {
+                    let codes = (u16::MIN..=u16::MAX)
+                        .filter(|code| beta1::supports_keycode(profile, *code, contract_source))
+                        .collect();
+                    (picker_source, codes)
+                })
+                .collect();
+
+        if self.ak820_demo_profile == Some(profile) {
+            return;
+        }
+        if let (Some(current_profile), Some(layout)) =
+            (self.ak820_demo_profile, self.layout.as_ref())
+        {
+            let snapshot = Ak820OfflineProfileProject {
+                profile: current_profile,
+                layout: layout.clone(),
+                macro_texts: self.keycode_picker.macro_texts.clone(),
+                macro_actions: self.keycode_picker.macro_actions.clone(),
+                macro_names: self.keycode_picker.macro_names.clone(),
+                macro_descriptions: self.keycode_picker.macro_descriptions.clone(),
+                combo_entries: self.combo_entries.clone(),
+                combo_names: self.combo_names.clone(),
+                combo_colors: self.combo_colors.clone(),
+                combo_term: self.combo_term,
+                layer_names: self.layer_names.clone(),
+                rgb_settings: self.rgb_settings.clone(),
+                extensions: self.ak820_offline_extensions.clone(),
+            };
+            if let Some(existing) = self
+                .ak820_demo_projects
+                .iter_mut()
+                .find(|project| project.profile == current_profile)
+            {
+                *existing = snapshot;
+            } else {
+                self.ak820_demo_projects.push(snapshot);
+            }
+        }
+
+        if let Some(project) = self
+            .ak820_demo_projects
+            .iter()
+            .find(|project| project.profile == profile)
+            .cloned()
+        {
+            self.layout = Some(project.layout);
+            self.keycode_picker.macro_texts = project.macro_texts;
+            self.keycode_picker.macro_actions = project.macro_actions;
+            self.keycode_picker.macro_names = project.macro_names;
+            self.keycode_picker.macro_descriptions = project.macro_descriptions;
+            self.combo_entries = project.combo_entries;
+            self.combo_names = project.combo_names;
+            self.combo_colors = project.combo_colors;
+            self.combo_term = project.combo_term;
+            self.layer_names = project.layer_names;
+            self.rgb_settings = project.rgb_settings;
+            self.ak820_offline_extensions = project.extensions;
+        } else {
+            self.layout = self.ak820_demo_seed.clone();
+            self.keycode_picker.macro_texts = vec![Vec::new(); limits.macros as usize];
+            self.keycode_picker.macro_actions = vec![Vec::new(); limits.macros as usize];
+            self.keycode_picker.macro_names = vec![String::new(); limits.macros as usize];
+            self.keycode_picker.macro_descriptions = vec![String::new(); limits.macros as usize];
+            self.combo_entries = vec![ComboEntry::default(); limits.combos as usize];
+            self.combo_names = vec![String::new(); limits.combos as usize];
+            self.combo_colors = vec![0; limits.combos as usize];
+            self.combo_term = Some(40);
+            self.layer_names = (0..limits.layers).map(|index| index.to_string()).collect();
+            self.ak820_offline_extensions =
+                empty_schema03_offline_extensions(image.settings_schema);
+            self.rgb_settings = RgbSettingsState {
+                supported: limits.rgb_leds > 0,
+                kind: if limits.rgb_leds > 0 {
+                    RgbSupportKind::VialRgb
+                } else {
+                    RgbSupportKind::None
+                },
+                effect: 0,
+                brightness: 0,
+                speed: 0,
+                hue: 0,
+                saturation: 0,
+                max_brightness: limits.rgb_maximum_brightness,
+                supported_effects: crate::ak820::CAPABILITIES
+                    .rgb_modes
+                    .iter()
+                    .map(|mode| *mode as u16)
+                    .collect(),
+                last_enabled_effect: 2,
+            };
+        }
+
+        if let Some(layout) = self.layout.as_mut() {
+            let layers = limits.layers as usize;
+            layout.layers.resize_with(layers, Vec::new);
+            let matrix_codes = allowed
+                .get(&PickerSource::Matrix)
+                .expect("matrix allowlist");
+            for layer in &mut layout.layers {
+                layer.resize(layout.keys.len(), 0u16.into());
+                for binding in layer {
+                    let code = binding.vial_keycode();
+                    if !matrix_codes.contains(&code) {
+                        *binding = 0u16.into();
+                    }
+                }
+            }
+            layout.encoder_layers.resize_with(layers, Vec::new);
+            let encoder_codes = allowed
+                .get(&PickerSource::Encoder)
+                .expect("encoder allowlist");
+            for layer in &mut layout.encoder_layers {
+                layer.resize(layout.encoders.len(), 0);
+                for code in layer {
+                    if !encoder_codes.contains(code) {
+                        *code = 0;
+                    }
+                }
+            }
+        }
+
+        self.layer_count = limits.layers as usize;
+        self.keycode_picker.layer_count = self.layer_count;
+        self.keycode_picker.layer_names = self.layer_names.clone();
+        self.keycode_picker.ak820_profile = true;
+        self.keycode_picker.open = false;
+        self.keycode_picker.result = None;
+        self.keycode_picker
+            .set_ak820_beta1_source(PickerSource::Matrix);
+        let enabled = |name: &str| matrix.capabilities.optional_modules.get(name) == Some(&true);
+        self.keycode_picker.supports_compact_leader = enabled("leader");
+        self.keycode_picker.supports_compact_dynamic_macros = enabled("dynamic-macros");
+        self.keycode_picker.supports_mouse_keys = enabled("mouse-keys");
+        self.keycode_picker.supports_auto_shift = enabled("auto-shift");
+        self.keycode_picker.supports_rgb = limits.rgb_leds > 0;
+        self.keycode_picker.supports_macro = limits.macros > 0;
+        self.keycode_picker.macro_count = limits.macros as usize;
+        self.keycode_picker
+            .macro_texts
+            .resize(limits.macros as usize, Vec::new());
+        self.keycode_picker
+            .macro_actions
+            .resize(limits.macros as usize, Vec::new());
+        self.keycode_picker
+            .macro_names
+            .resize(limits.macros as usize, String::new());
+        self.keycode_picker
+            .macro_descriptions
+            .resize(limits.macros as usize, String::new());
+
+        // These schema03 editors need AK820-specific typed codecs and remain closed.
+        self.keycode_picker.supports_tap_dance = false;
+        self.keycode_picker.tap_dance_entries.clear();
+        self.keycode_picker.tap_dance_names.clear();
+        self.combo_entries
+            .resize(limits.combos as usize, ComboEntry::default());
+        self.combo_names
+            .resize(limits.combos as usize, String::new());
+        self.combo_colors.resize(limits.combos as usize, 0);
+        self.combo_synced_entries = self.combo_entries.clone();
+        self.keycode_picker.supports_combo = matrix.capabilities.dynamic_entries.combos > 0;
+        self.keycode_picker.reset_offline_profile_context();
+        self.keycode_picker.ak820_beta1_keycodes = Some(allowed);
+        self.keycode_picker.ak820_beta1_profile_revision = self
+            .keycode_picker
+            .ak820_beta1_profile_revision
+            .wrapping_add(1);
+        self.undo_stack.clear();
+        self.layer_clipboard = None;
+        self.editing_layer = None;
+        self.editing_layer_text.clear();
+        self.editing_layer_layout_id = None;
+        self.editing_layer_device_key = None;
+        self.editing_layer_focus_requested = false;
+        self.selected_layer = 0;
+        self.selected_key = None;
+        self.selected_encoder = None;
+        self.pending_handed_swap = None;
+        self.pending_middle_click_assignments.clear();
+        self.pending_layout_undo = false;
+        self.combo_undo_stack.clear();
+        self.selected_combo = 0;
+        self.combo_pick_target = None;
+        self.key_override_undo_stack.clear();
+        self.key_override_pick_target = None;
+        self.alt_repeat_undo_stack.clear();
+        self.alt_repeat_pick_target = None;
+        self.selected_device = Some(0);
+        self.ak820_demo_profile = Some(profile);
     }
 
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -223,6 +502,11 @@ impl EntropyApp {
             #[cfg(not(target_arch = "wasm32"))]
             headless: false,
             ak820_demo: false,
+            ak820_demo_profile: None,
+            ak820_demo_seed: None,
+            ak820_demo_projects: Vec::new(),
+            ak820_offline_import_undo: None,
+            ak820_offline_extensions: None,
             firmware: FirmwareProtocol::Vial,
             #[cfg(not(target_arch = "wasm32"))]
             supported_qmk_settings: Vec::new(),
@@ -442,7 +726,8 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn is_vial_locked(&self) -> bool {
-        self.firmware == FirmwareProtocol::Vial
+        !self.ak820_demo
+            && self.firmware == FirmwareProtocol::Vial
             && self.layout.is_some()
             && !self.vial_unlock_polling
             && self.vial_unlocked != Some(true)
@@ -479,4 +764,24 @@ impl EntropyApp {
             }
         }
     }
+}
+
+fn empty_schema03_offline_extensions(
+    settings_schema: u32,
+) -> Option<crate::app::ak820_offline_extensions::OfflineExtensions> {
+    if settings_schema != crate::ak820_typed_storage::SCHEMA {
+        return None;
+    }
+    let mut nvm = vec![0xA5; 0x2800];
+    nvm[37..40].copy_from_slice(&[3, 0x20, 8]);
+    let settings = crate::ak820_typed_storage::QmkSettings::default().encode();
+    nvm[0x6A8..0x6A8 + settings.len()].copy_from_slice(&settings);
+    for index in 0..8 {
+        for tap_dance in [true, false] {
+            let offset = crate::ak820_typed_storage::slot_offset(tap_dance, index)
+                .expect("curated schema03 slot is in range");
+            nvm[offset..offset + 10].fill(0);
+        }
+    }
+    crate::app::ak820_offline_extensions::OfflineExtensions::from_nvm(&nvm).ok()
 }

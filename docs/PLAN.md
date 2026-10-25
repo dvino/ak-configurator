@@ -4,9 +4,33 @@
 
 This plan turns the agreed [requirements](REQUIREMENTS.md) into reviewable work for the separate `dvino/ak-configurator` repository. AK820 firmware remains in `dvino/ak820`. See [REVIEW.md](REVIEW.md) for the source reuse findings. It does not authorize a live keyboard operation. Stage completion means the evidence exists; it does not prove installation or device behavior.
 
+
+## Current work — 2026-10-25
+
+Baseline: `desktop-dev`, `7b88d59`, clean at resumption. This is the active
+sequence for reaching the native beta; completed subtasks do not close a whole
+milestone unless its completion conditions below are met.
+
+| Packet | Work | Status |
+| --- | --- | --- |
+| Rules | Adapt firmware agent rules and explicit model routing to this application | Implemented; independently reviewed |
+| 3a contracts | Strict per-profile settings identities, counts, QSIDs, source keycodes and transitions | Implemented; host suite and independent review passed |
+| 3a projects | Select and edit offline example projects for all nine profiles | Implemented; host tests/review and Linux demo launch passed |
+| 3a project files | Preserve complete offline edits across application restarts | Implemented; round-trip tests and Linux Save/Open passed |
+| 3a typed editors | Schema03 codecs, typed editors and per-source controls | Implemented offline; tests/review and Linux panel checks passed |
+| 3b backups | Strict envelope, catalog-bound ROM/NVM decoder, then UI/history and migration/restore model | Codec/model tested/reviewed; directory I/O and restore model are the next packet; UI/history open |
+| Verification | Approved positive full-image fixture, fault cases and exact-tree review | Open |
+| 4a operations | Packer parity and modeled install/OEM recovery | Open |
+| 4b delivery | Six-target packages and usable offline beta artifact | Open |
+
+Only `work` currently has a packed settings identity in the bundled beta matrix;
+the other eight profiles have null identities and no settings transition pairs
+are advertised. Offline development can proceed; live mutation cannot be
+inferred from linked-image hashes. No hardware write is authorized by this plan.
+
 ## Baseline and delivery order
 
-Updated 2026-10-25 for requirements version 0.5. Firmware contracts use `dvino/ak820` tag `v0.6.0-beta.1`, commit `bef20f89d3da01d770767919bc7c8fc3c3a1a808`, especially `docs/BUILD-PROFILES.md`, `docs/MODULE-MATRIX.md`, `docs/MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md`. The existing alpha.3 editor remains an earlier bounded milestone. The beta.1 catalog preview is implemented; nine-profile offline editing, complete backups and companion installation are separate unfinished milestones. See [architecture review](ARCHITECTURE-REVIEW.md) for source and test gaps.
+Updated 2026-10-25 for requirements version 0.5. Firmware contracts use `dvino/ak820` tag `v0.6.0-beta.1`, commit `bef20f89d3da01d770767919bc7c8fc3c3a1a808`, especially `docs/BUILD-PROFILES.md`, `docs/MODULE-MATRIX.md`, `docs/MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md`. The existing alpha.3 editor remains an earlier bounded milestone. Nine-profile offline editing and project files have passed host checks and a Linux demo launch. Per-image live loading, complete backups and companion installation remain unfinished. See [architecture review](ARCHITECTURE-REVIEW.md) for source and test gaps.
 
 Complete the native shared contracts, nine-profile offline editor, backup/restore and modeled installer before native package qualification. Hardware evidence gates live acceptance, not work that can be completed with fixtures. Begin browser feasibility after the native editor and packages are reasonably usable. The OS-layout helper has its own later acceptance; firmware module support does not prove that a helper exists.
 

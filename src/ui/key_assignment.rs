@@ -215,6 +215,13 @@ impl EntropyApp {
         self.selected_key = key_target.map(|ki| (self.selected_layer, ki));
         self.selected_encoder = encoder_target.map(|ei| (self.selected_layer, ei));
         self.keycode_picker.open = true;
+        self.keycode_picker.set_ak820_beta1_source(
+            if encoder_target.is_some() {
+                crate::keycode_picker::Ak820Beta1KeycodeSource::Encoder
+            } else {
+                crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix
+            },
+        );
         self.keycode_picker.result = None;
         self.keycode_picker
             .rmk_native_key_actions_allowed_for_target = key_target.is_some();

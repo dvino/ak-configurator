@@ -123,7 +123,7 @@ impl EntropyApp {
             #[cfg(target_arch = "wasm32")]
             let vial_hid_idle = true;
             let lock_menu_state = vial_lock_menu_state(
-                self.firmware == FirmwareProtocol::Vial,
+                self.firmware == FirmwareProtocol::Vial && !self.ak820_demo,
                 self.layout.is_some(),
                 self.vial_unlock_polling,
                 self.unlock_open,

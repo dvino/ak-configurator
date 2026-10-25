@@ -360,6 +360,8 @@ impl EntropyApp {
                                         &layout_id, selected, new_name,
                                     );
                                 }
+                            } else if self.ak820_demo {
+                                self.rename_ak820_offline_layer(selected, &new_name);
                             } else {
                                 // Recover before applying the explicit edit: GET may replace
                                 // the same layer's cached name with its previous firmware value.

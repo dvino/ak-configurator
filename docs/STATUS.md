@@ -2,7 +2,7 @@
 
 # Project status
 
-Updated 2026-10-24. Native development is on `desktop-dev`, application version
+Updated 2026-10-25. Native development is on `desktop-dev`, application version
 `0.1.0-alpha.1`. Entropy commit `5b222b5d6349fb351f53b36c66169095b3039fc1`
 remains the foundation, with its history and licenses retained. Browser work
 starts after a reasonably usable desktop milestone.
@@ -31,7 +31,7 @@ reads every required setting before enabling writes. The catalog pins are in
 | RGB | Off, Direct, Solid, Breathing, Cycle all, Cycle left/right and Reactive; maximum brightness 160; saved state checked after save |
 | Errors | One attempt per AK820 request; timeout, storage fault or readback mismatch stops the session until explicit reread |
 | Linux access | AK820-only hidraw permission installer for USB `320f:505b` |
-| Offline preview | `--demo-ak820` opens bundled example layout and help without device discovery or HID |
+| Offline projects | `--demo-ak820` opens nine session-local example projects, profile-aware assignments, macros/Combo/RGB and schema03 panels without discovery or HID |
 
 Read-only connection does not start an unlock, rename layers, initialize missing
 settings, or write defaults. Unknown, custom, trial or inconsistent images fail
@@ -52,20 +52,35 @@ No physical keyboard commands, flash, reset, unlock or retention tests were run.
 A successful model or GUI preview is not hardware qualification.
 
 The `desktop-dev` workflow defines six raw development binaries with SHA-256
-manifests: Linux and Windows x86_64/arm64, and macOS arm64/x86_64. The current
-change's six-platform run has not completed, so these targets are not yet
-accepted build evidence. Imported Entropy release/packaging workflows are not
-used for this development milestone.
+manifests: Linux and Windows x86_64/arm64, and macOS arm64/x86_64. Baseline commit
+`7b88d59` passed run `40168550192`; its downloaded artifacts passed checksum
+and binary-architecture checks. This is evidence for that baseline, not later
+uncommitted changes or runtime support on all six targets.
 
-The app now bundles the published beta.1 capability catalog and firmware
-compatibility matrix. Its bilingual profile window previews all nine profiles
-and shows module features, image hashes, release approval, test status and
-standalone-installer inclusion. This is catalog browsing only: it does not
-change the editor profile or keyboard, enable beta settings writes, or flash
-firmware. The application still recognizes only the exact alpha.3 image. Beta.1
-marks all profiles hardware-untested and does not authorize settings writes or
-companion flashing; only `work` is included in the firmware's standalone beta.1
-installers.
+The beta.1 catalog now supplies per-profile counts, active QSIDs, source-aware
+keycode admission and exact settings identities. Only `work` has a packed
+settings identity in the bundled matrix; all other identities remain absent.
+In demo mode, profile selection opens independent editable example projects.
+Session-local edits include layers, both encoder directions, macros, Combo,
+RGB and the active typed schema03 panel. The local-project window saves and opens each profile as an
+`.ak820project.json` file; opening validates the complete file before changing
+state. Undo project import restores the preceding example in the current
+session. Project files are separate from firmware backups. Outside demo mode,
+selection remains catalog preview. Beta device settings and flashing stay
+blocked; the live path still recognizes only the exact alpha.3 image.
+
+New local backup modules validate strict archive envelopes, derive settings
+from schema02/03 NVM and check ROM against the qualified beta catalog identity.
+Typed codecs preserve inactive storage and neighboring bytes. These modules
+are foundations: full backup capture/history, migration, restore execution and
+UI are unfinished. Schema01 full derivation requires explicit migration and
+is rejected. Protected ROM hashes identify a hardware revision; they do not
+establish ownership of a physical keyboard. Positive full-ROM acceptance
+coverage remains missing.
+
+The offline packet passed the complete host suite (1593 passed, 0 failed,
+14 ignored), independent integration review and the Linux demo checks described
+in [REVIEW.md](REVIEW.md). No hardware qualification is implied.
 
 ## Remaining work
 
@@ -74,15 +89,16 @@ and macOS execution, installers, signing, resource measurements, device
 read/write behavior and retention still need evidence. Full backup/restore,
 firmware updates, OEM recovery, per-LED palette editing and the optional OS
 helper are not implemented here. `.entlayout` export remains a partial editor
-snapshot; AK820 import is blocked until preservation and compatibility checks
-exist. Direct-mode colors are volatile and cannot be read back through this
+snapshot; its device-settings import remains blocked until preservation and
+compatibility checks exist. Local offline project import is a separate format. Direct-mode colors are volatile and cannot be read back through this
 firmware API.
 
-The next desktop milestone is to complete beta.1 profile contracts and offline
-editing (plan 3a), then complete versioned settings backups, migration and
-guarded restore (plan 3b), followed by separately authorized hardware
+The next desktop milestone is per-image live loading and typed transaction
+models (the remaining part of plan 3a), complete settings backup/history,
+migration and guarded restore (plan 3b), then separately authorized hardware
 qualification. Browser implementation remains deferred. See the [plan](PLAN.md) and
 [desktop guide](DESKTOP.md).
 
 Local source/package acceptance on 2026-10-25 is recorded in [REVIEW.md](REVIEW.md).
-Rust build and host tests were not repeated on the receiving host.
+That historical import did not repeat Rust checks; current development uses an
+isolated Rust 1.97.0 build container, with results recorded separately.

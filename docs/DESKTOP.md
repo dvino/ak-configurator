@@ -4,6 +4,32 @@ This alpha supports a wired AK820 with the verified full permanent firmware
 v0.6.0-alpha.3 only. The application checks firmware compatibility when
 connecting. Unknown, custom, trial or mismatched firmware is rejected.
 
+## Offline beta profiles
+
+Start `ak-configurator --demo-ak820` to work with bundled examples without USB
+access. Choose a profile in the **Local example project** window.
+The detailed catalog remains under **Layout → beta.1 firmware profiles**. Each profile keeps its edits while switching profiles in the same
+session. These examples are not settings read from a keyboard. Use **Save project** in the local-project window to save the current profile
+to an `.ak820project.json` file. **Open project** validates the complete file
+before replacing its profile. Save each profile separately before closing
+the application. **Undo project import** restores the example that was active
+before the last successful import, including a same-profile replacement. Invalid module drafts must be corrected or discarded before
+saving. These local project files preserve example edits; they cannot restore
+keyboard settings or OEM firmware.
+
+The key picker follows the selected profile and assignment source. The three
+schema03 profiles have a separate offline panel: Tap Dance has eight rows,
+Key Overrides has eight rows, and Settings exposes active QMK setting IDs only. Reopen a closed panel with
+**Module settings** in the local-project window.
+Invalid values leave the last valid settings unchanged. Other profiles do not
+expose reserved extension storage. Dynamic Macros and runtime modes remain
+volatile firmware features; changing a key assignment does not emulate their
+physical behavior on the computer.
+
+Selecting an offline profile neither changes a connected keyboard nor enables
+beta firmware installation. The live connection still accepts the exact
+alpha.3 image described below.
+
 ## Read before editing
 
 Connect the keyboard and read its current settings. The editor supports six

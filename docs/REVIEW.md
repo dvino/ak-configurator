@@ -161,3 +161,49 @@ No application launch, USB command or device test was performed during acceptanc
   the ELF, Mach-O, and PE binaries with their expected 64-bit architectures.
   These are raw development binaries; CI does not qualify runtime behavior on
   each operating system or physical USB behavior.
+
+## Offline beta implementation — 2026-10-25 (in progress)
+
+The packet adds per-profile settings contracts, source-aware offline projects,
+schema03 typed codecs and panels, local RGB controls, and backup envelope and
+NVM/settings models. It does not enable beta device writes or flashing. Eight
+packed identities and the transition list remain incomplete; schema01 settings
+derivation remains blocked pending an explicit migration. The unregistered
+`src/ak820_restore_plan.rs` belongs to a later packet; it was reviewed but not
+tested and is not included in these results.
+
+Independent reviews found and closed backup manifest/identity/schema admission
+issues and UI state, picker, TD assignment, window reopening and layer-name
+synchronization defects. The latest GPT-6.1 Sol Low review found no blocking
+issue, including in the subtitle handling. These are source and UI findings;
+they do not qualify a physical keyboard.
+
+The earlier full host run passed **1590, failed 0, ignored 14** in 233.69 s;
+it preceded the final demo lock fix. The latest focused run passed **60, failed
+0** in 5.67 s. The final full suite passed **1593, failed 0, ignored 14**
+in 250.55 s (`cargo test --locked --offline`, Rust 1.97.0). The ignored tests
+remain skipped. Source fingerprint over the 24 changed/new source paths
+(excluding the unregistered next packet) is
+`d9794cbe25171f5bf2a840762b638cf1572a3168fe5fc078f83568569c47d39a`.
+Final independent integration and EN/RU review found no blocking finding.
+The native development build passed in 21.35 s with 139 compiler warnings;
+it was started again successfully in the isolated demo display.
+
+The application was launched on Debian 12 x86_64 under Xvfb with software X11.
+That run exposed a missing `libxkbcommon-x11-0` dependency and horizontal
+catalog card overflow; the dependency was added and catalog cards now scroll
+vertically with bounded windows. Live GUI use also exposed a footer window
+intercepting clicks; moving the footer to the background fixed the regression.
+Profile selection, expanded and scrolled typed panels, panel reopening, macro
+creation and typing `OfflineTest` were exercised. The macro demo lock/menu and
+scheduler early-return defects were fixed. No unlock was requested or sent.
+
+The minimal container initially had neither an XDG desktop portal nor `zenity`,
+so the first dialog request produced no visible dialog. After installing `zenity`,
+the native Save dialog wrote a 13,332-byte `.ak820project.json` file and the
+Open dialog imported it successfully and enabled Undo. No USB or hardware was
+used.
+
+Complete backups/history, migration,
+guarded restore, installer/OEM models and runtime qualification across target
+platforms remain open.

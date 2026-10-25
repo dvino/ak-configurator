@@ -7,6 +7,17 @@ use crate::keycode::{
 };
 use crate::popup_state::{PopupKey, PopupState};
 use egui::{Color32, Key, RichText, Vec2};
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum Ak820Beta1KeycodeSource {
+    Matrix,
+    Encoder,
+    Macro,
+    MacroTap,
+    MacroDown,
+    MacroUp,
+}
 
 #[path = "keycode_picker_keyboard.rs"]
 mod keycode_picker_keyboard;
@@ -155,6 +166,10 @@ pub struct KeycodePicker {
     pub supports_rgb: bool,
     /// Exact AK820 alpha.3 action allowlist, independent of Vial version.
     pub(crate) ak820_profile: bool,
+    /// Exact source-specific beta.1 allowlists for the current offline demo profile.
+    pub(crate) ak820_beta1_keycodes: Option<BTreeMap<Ak820Beta1KeycodeSource, BTreeSet<u16>>>,
+    pub(crate) ak820_beta1_source: Ak820Beta1KeycodeSource,
+    pub(crate) ak820_beta1_profile_revision: u64,
     /// Beta.1 optional features; only an exact catalog image may enable them.
     pub supports_compact_leader: bool,
     pub supports_compact_dynamic_macros: bool,
@@ -855,6 +870,29 @@ mod tests {
     }
 
     #[test]
+    fn beta1_offline_picker_uses_profile_and_assignment_source_allowlists() {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let mut picker = KeycodePicker {
+            ak820_profile: true,
+            ak820_beta1_keycodes: Some(BTreeMap::from([
+                (
+                    Ak820Beta1KeycodeSource::Matrix,
+                    BTreeSet::from([0x00CD, 0x0004]),
+                ),
+                (Ak820Beta1KeycodeSource::Encoder, BTreeSet::from([0x0004])),
+            ])),
+            ..Default::default()
+        };
+
+        assert!(picker.picker_value_supported(0x00CD));
+        picker.set_ak820_beta1_source(Ak820Beta1KeycodeSource::Encoder);
+        assert!(!picker.picker_value_supported(0x00CD));
+        assert!(picker.picker_value_supported(0x0004));
+        assert!(!picker.picker_value_supported(0x7C58));
+    }
+
+    #[test]
     fn key_override_trigger_picker_accepts_qmk_and_rmk_fork_dual_role_values() {
         let mut picker = KeycodePicker {
             supports_rmk_native_key_actions: true,
@@ -1092,6 +1130,9 @@ impl Default for KeycodePicker {
             custom_keycodes: vec![],
             supports_rgb: true,
             ak820_profile: false,
+            ak820_beta1_keycodes: None,
+            ak820_beta1_source: Ak820Beta1KeycodeSource::Matrix,
+            ak820_beta1_profile_revision: 0,
             supports_compact_leader: false,
             supports_compact_dynamic_macros: false,
             supports_macro: true,
@@ -1199,7 +1240,11 @@ impl KeycodePicker {
             0x7C53..=0x7C57 => self.supports_compact_dynamic_macros,
             _ => false,
         };
-        if self.ak820_profile
+        if !self.ak820_beta1_source_supports(value, self.ak820_beta1_source) {
+            return false;
+        }
+        if self.ak820_beta1_keycodes.is_none()
+            && self.ak820_profile
             && !profile_keycode
             && !crate::ak820::is_assignable_keycode(value)
         {
@@ -1211,8 +1256,20 @@ impl KeycodePicker {
                 !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7)
             }
             PickerValuePolicy::Ak820ComboTrigger => value == 0 || (4..=0xA4).contains(&value),
-            PickerValuePolicy::Ak820ComboOutput => value == 0 || crate::ak820::valid_combo([4, 5, 0, 0], value),
+            PickerValuePolicy::Ak820ComboOutput => {
+                value == 0 || crate::ak820::valid_combo([4, 5, 0, 0], value)
+            }
         }
+    }
+
+    fn ak820_beta1_source_supports(&self, value: u16, source: Ak820Beta1KeycodeSource) -> bool {
+        self.ak820_beta1_keycodes
+            .as_ref()
+            .map_or(true, |allowlists| {
+                allowlists
+                    .get(&source)
+                    .is_some_and(|allowed| allowed.contains(&value))
+            })
     }
 
     fn assign_keycode_value(&mut self, value: u16) {
@@ -1236,6 +1293,16 @@ impl KeycodePicker {
     }
 
     fn set_macro_key_pick_value(&mut self, macro_idx: usize, action_idx: usize, value: u16) {
+        let Some(source) = self
+            .macro_key_pick_kind(macro_idx, action_idx)
+            .map(|kind| match kind {
+                MacroKeyPickKind::Tap => Ak820Beta1KeycodeSource::MacroTap,
+                MacroKeyPickKind::Down => Ak820Beta1KeycodeSource::MacroDown,
+                MacroKeyPickKind::Up => Ak820Beta1KeycodeSource::MacroUp,
+            })
+        else {
+            return;
+        };
         let value = if let Some(base) = self.macro_mod_key_pick {
             if !KEYCODES
                 .iter()
@@ -1247,6 +1314,9 @@ impl KeycodePicker {
         } else {
             value
         };
+        if !self.ak820_beta1_source_supports(value, source) {
+            return;
+        }
         if !self.supports_macro_ext_keycodes && value >= 0x0100 {
             return;
         }
@@ -1307,6 +1377,11 @@ impl KeycodePicker {
         };
 
         let count = self.layer_count.max(1);
+        let source = match kind {
+            MacroKeyPickKind::Tap => Ak820Beta1KeycodeSource::MacroTap,
+            MacroKeyPickKind::Down => Ak820Beta1KeycodeSource::MacroDown,
+            MacroKeyPickKind::Up => Ak820Beta1KeycodeSource::MacroUp,
+        };
         ops.into_iter()
             .flat_map(|(base, op)| {
                 (0..count).map(move |layer| {
@@ -1316,6 +1391,7 @@ impl KeycodePicker {
                     (value, label, tooltip)
                 })
             })
+            .filter(|(value, _, _)| self.ak820_beta1_source_supports(*value, source))
             .collect()
     }
 
@@ -1329,6 +1405,12 @@ impl KeycodePicker {
     }
 
     fn finish_quantum_pending_key(&mut self, base: u16, key_value: u16, is_mt: bool) {
+        let composed = base | key_value;
+        if !self.ak820_beta1_source_supports(composed, Ak820Beta1KeycodeSource::Matrix) {
+            self.vial_quantum_pending_mod = None;
+            self.vial_quantum_pending_mt = None;
+            return;
+        }
         let binding = if is_mt
             && (0x0100..0x2000).contains(&key_value)
             && self.supports_rmk_native_key_actions
@@ -1350,7 +1432,7 @@ impl KeycodePicker {
             )
             .into()
         } else {
-            crate::keyboard::KeyBinding::Vial(base | key_value)
+            crate::keyboard::KeyBinding::Vial(composed)
         };
         self.result = Some(binding);
         self.vial_quantum_pending_mod = None;
@@ -1414,6 +1496,7 @@ impl KeycodePicker {
         self.vial_layer_pending = None;
         self.rmk_native_key_actions_allowed_for_target = false;
         self.value_policy = PickerValuePolicy::Any;
+        self.ak820_beta1_source = Ak820Beta1KeycodeSource::Matrix;
         self.macro_inline_selected = None;
         self.tap_dance_editor_open = None;
         self.td_key_pick = None;
@@ -1434,9 +1517,36 @@ impl KeycodePicker {
         }
     }
 
+    pub(crate) fn set_ak820_beta1_source(&mut self, source: Ak820Beta1KeycodeSource) {
+        self.ak820_beta1_source = source;
+    }
+
+    pub(crate) fn reset_offline_profile_context(&mut self) {
+        self.close_from_backdrop();
+        self.result = None;
+        self.selected_tab = KeycodeTab::Basic;
+        self.macro_inline_selected = None;
+        self.macro_undo_stack.clear();
+        self.macro_key_pick = None;
+        self.macro_mod_key_pick = None;
+        self.advanced_slot_picker = None;
+        self.tap_dance_editor_open = None;
+        self.tap_dance_undo_stack.clear();
+        self.td_key_pick = None;
+        self.td_mod_key_pick = None;
+        self.row_cache = RowCache::default();
+        self.search.reset();
+        self.popup_state = PopupState::default();
+        self.ak820_beta1_source = Ak820Beta1KeycodeSource::Matrix;
+    }
+
     pub(crate) fn constrain_ak820_combo_picker(&mut self, output: bool) {
         if self.ak820_profile {
-            self.value_policy = if output { PickerValuePolicy::Ak820ComboOutput } else { PickerValuePolicy::Ak820ComboTrigger };
+            self.value_policy = if output {
+                PickerValuePolicy::Ak820ComboOutput
+            } else {
+                PickerValuePolicy::Ak820ComboTrigger
+            };
         }
     }
 

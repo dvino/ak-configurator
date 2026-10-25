@@ -220,6 +220,8 @@ impl KeycodePicker {
         self.value_policy.hash(&mut hasher);
         self.layer_names.hash(&mut hasher);
         self.custom_keycodes.hash(&mut hasher);
+        self.ak820_beta1_source.hash(&mut hasher);
+        self.ak820_beta1_profile_revision.hash(&mut hasher);
         self.macro_count.hash(&mut hasher);
         self.macro_names.hash(&mut hasher);
         self.tap_dance_entries.len().hash(&mut hasher);

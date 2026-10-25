@@ -23,6 +23,7 @@ const OPTIONAL_MODULE_LABELS: &[(&str, &str, &str)] = &[
 struct SelectorState {
     open: bool,
     selected: catalog::ProfileId,
+    applied_to_offline_project: catalog::ProfileId,
 }
 
 impl Default for SelectorState {
@@ -30,6 +31,7 @@ impl Default for SelectorState {
         Self {
             open: false,
             selected: catalog::ProfileId::Work,
+            applied_to_offline_project: catalog::ProfileId::Work,
         }
     }
 }
@@ -49,7 +51,25 @@ fn select_preview_profile(model: &mut SelectorState, profile: catalog::ProfileId
     model.selected = profile;
 }
 
-/// Open the catalog window. Call this from the app's profile navigation action.
+fn apply_selected_profile(
+    model: &mut SelectorState,
+    offline_demo: bool,
+) -> Option<catalog::ProfileId> {
+    if !offline_demo || model.applied_to_offline_project == model.selected {
+        return None;
+    }
+    model.applied_to_offline_project = model.selected;
+    Some(model.selected)
+}
+
+/// Keep the current project label in sync after a file import.
+pub(crate) fn sync_offline_project(ctx: &egui::Context, profile: catalog::ProfileId) {
+    let mut model = state(ctx);
+    model.applied_to_offline_project = profile;
+    store(ctx, model);
+}
+
+/// Open the catalog window from profile navigation.
 pub(crate) fn open(ctx: &egui::Context) {
     let mut current = state(ctx);
     current.open = true;
@@ -70,13 +90,18 @@ pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language)
 }
 
 /// Draw the beta.1 catalog and return a profile ID when the local selection changes.
-pub(crate) fn show(ctx: &egui::Context, language: Language) {
+pub(crate) fn show(
+    ctx: &egui::Context,
+    language: Language,
+    offline_demo: bool,
+) -> Option<catalog::ProfileId> {
     let mut model = state(ctx);
     if !model.open {
-        return;
+        return None;
     }
 
     let russian = language == Language::Russian;
+    let mut apply_profile = None;
     let mut keep_open = model.open;
     egui::Window::new(if russian {
         "Профили AK820 · beta.1"
@@ -87,6 +112,10 @@ pub(crate) fn show(ctx: &egui::Context, language: Language) {
     .open(&mut keep_open)
     .default_size(egui::vec2(820.0, 660.0))
     .min_size(egui::vec2(540.0, 420.0))
+    .max_size(egui::vec2(
+        (ctx.content_rect().width() - 32.0).max(540.0),
+        (ctx.content_rect().height() - 64.0).max(100.0),
+    ))
     .show(ctx, |ui| {
         ui.label(if russian {
             "Выберите профиль, чтобы просмотреть его возможности и точную идентичность образа."
@@ -122,8 +151,8 @@ pub(crate) fn show(ctx: &egui::Context, language: Language) {
                                 } else {
                                     ui.visuals().faint_bg_color
                                 })
-                                .show(ui, |ui| {
-                                    ui.set_min_width(330.0);
+                                .show(ui, |ui| ui.vertical(|ui| {
+                                    ui.set_width(330.0);
                                     let response = ui.selectable_label(is_selected, title);
                                     ui.label(RichText::new(id.as_str()).monospace().weak());
                                     ui.label(profile_description.summary.for_language(russian));
@@ -168,7 +197,7 @@ pub(crate) fn show(ctx: &egui::Context, language: Language) {
                                         }
                                     });
                                     response
-                                });
+                                }).inner);
                             if card.inner.clicked() && model.selected != id {
                                 select_preview_profile(&mut model, id);
                             }
@@ -313,14 +342,39 @@ pub(crate) fn show(ctx: &egui::Context, language: Language) {
                     "No profile has been tested on hardware. The companion cannot install these images yet. Only work is included in the separate beta.1 installers; this does not enable flashing from the companion."
                 }).color(Color32::YELLOW));
                 ui.label(RichText::new(if russian {
-                    "Это только просмотр каталога. Выбор не меняет профиль клавиатуры или локального редактора и не запускает прошивку."
+                    "Выбор в списке показывает возможности. В деморежиме кнопка ниже открывает офлайн-проект; клавиатура и её прошивка не изменяются."
                 } else {
-                    "This is a catalog preview only. Selection does not change the keyboard or local editor profile and does not start flashing."
+                    "The list previews capabilities. In demo mode, the button below opens the selected offline project; it does not change the keyboard or flash firmware."
                 }).weak());
+                if offline_demo {
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(if russian {
+                        format!("Офлайн-проект: {}", model.applied_to_offline_project.as_str())
+                    } else {
+                        format!("Offline project: {}", model.applied_to_offline_project.as_str())
+                    });
+                    ui.label(if russian {
+                        "Офлайн доступны назначения клавиш и энкодеров, макросы, Combo, RGB и модули schema03 по выбранному профилю. Правки хранятся в памяти до закрытия приложения. Устройство не подключается."
+                    } else {
+                        "Offline controls include profile-supported key and encoder assignments, macros, Combo, RGB and schema03 modules. Edits stay in memory until the application closes. No device is connected."
+                    });
+                    if ui.button(if russian { "Применить к офлайн-проекту" } else { "Use in offline project" }).clicked() {
+                        apply_profile = apply_selected_profile(&mut model, offline_demo);
+                    }
+                    if model.applied_to_offline_project == catalog::ProfileId::TapDance {
+                        let is_schema03 = catalog::matrix_profile(model.applied_to_offline_project)
+                            .identity.nvm_schema == crate::ak820_typed_storage::SCHEMA;
+                        if is_schema03 && ui.button(if russian { "Открыть модули офлайн" } else { "Open offline modules" }).clicked() {
+                            ctx.data_mut(|data| data.insert_temp(egui::Id::new("ak820_offline_extensions_open"), true));
+                        }
+                    }
+                }
             });
     });
     model.open = keep_open;
     store(ctx, model);
+    apply_profile
 }
 
 fn hash_row(ui: &mut egui::Ui, label: &str, value: &str) {
@@ -430,11 +484,29 @@ mod tests {
         }
 
         let no_modules = catalog::MatrixProfile {
+            identity: catalog::BuildIdentity {
+                nvm_schema: 0,
+                compiler_sha256: String::new(),
+                profile: "work".into(),
+                configuration_sha256: String::new(),
+                source_manifest_sha256: String::new(),
+                ihx_sha256: String::new(),
+                map_sha256: String::new(),
+                mem_sha256: String::new(),
+                build_report_sha256: String::new(),
+            },
+            configuration: serde_json::Value::Null,
             profile: catalog::ProfileId::Work,
             installable: false,
             release_approved: false,
             optional_features: Vec::new(),
             capabilities: catalog::MatrixCapabilities {
+                dynamic_entries: catalog::DynamicEntries {
+                    combos: 0,
+                    tap_dance: 0,
+                    key_overrides: 0,
+                },
+                runtime_qmk_settings_ids: Vec::new(),
                 optional_modules: Default::default(),
             },
             measurement_status: String::new(),
@@ -466,7 +538,9 @@ mod tests {
                     )),
                     ..Default::default()
                 },
-                |ctx| show(ctx, language),
+                |ctx| {
+                    let _ = show(ctx, language, false);
+                },
             );
             let rendered = state(&ctx);
             assert!(rendered.open);
@@ -526,6 +600,64 @@ mod tests {
             assert!(selected.open);
             assert_eq!(selected.selected, image.profile);
             assert_eq!(selected.selected.as_str(), image.profile.as_str());
+            assert_eq!(
+                selected.applied_to_offline_project,
+                catalog::ProfileId::Work
+            );
+        }
+    }
+
+    #[test]
+    fn selected_profile_applies_only_to_the_explicit_offline_demo_project() {
+        let mut model = SelectorState::default();
+        select_preview_profile(&mut model, catalog::ProfileId::Mouse);
+
+        assert_eq!(apply_selected_profile(&mut model, false), None);
+        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Work);
+        assert_eq!(
+            apply_selected_profile(&mut model, true),
+            Some(catalog::ProfileId::Mouse)
+        );
+        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Mouse);
+        assert_eq!(apply_selected_profile(&mut model, true), None);
+    }
+}
+
+#[cfg(test)]
+mod catalog_geometry_tests {
+    use super::*;
+    #[test]
+    fn catalog_cards_wrap_and_window_stays_inside_desktop_viewport() {
+        for viewport in [egui::vec2(1200.0, 700.0), egui::vec2(800.0, 500.0)] {
+            for language in [Language::English, Language::Russian] {
+                let ctx = egui::Context::default();
+                open(&ctx);
+                for _ in 0..4 {
+                    let _ = ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                viewport,
+                            )),
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            let _ = show(ctx, language, true);
+                        },
+                    );
+                }
+                let rect = ctx
+                    .memory(|memory| memory.area_rect(egui::Id::new("ak820_beta1_profile_window")))
+                    .unwrap();
+                assert!(
+                    rect.width() <= viewport.x,
+                    "catalog overflows horizontally: {rect:?}"
+                );
+                assert!(
+                    rect.height() <= viewport.y,
+                    "catalog overflows vertically: {rect:?}"
+                );
+            }
         }
     }
 }

@@ -1,7 +1,14 @@
 use crate::device::{Device, DeviceIdentity, DeviceManager};
 use crate::firmware::FirmwareProtocol;
 #[path = "ak820_beta1_profiles.rs"]
-mod ak820_beta1_profiles;
+pub(crate) mod ak820_beta1_profiles;
+#[path = "ui/ak820_offline_extensions.rs"]
+pub(crate) mod ak820_offline_extensions;
+#[path = "ui/ak820_offline_files.rs"]
+mod ak820_offline_files;
+#[cfg(test)]
+#[path = "ui/ak820_offline_project_tests.rs"]
+mod ak820_offline_project_tests;
 
 use crate::keyboard::{KeyboardLayout, LayoutOption, PhysicalEncoder, PhysicalKey};
 use crate::keycode::{

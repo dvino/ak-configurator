@@ -57,6 +57,10 @@ pub(crate) struct CapabilityCatalog {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ProfileImage {
+    pub(crate) fixed_limits: FixedLimits,
+    pub(crate) runtime_qmk_settings: Vec<serde_json::Value>,
+    pub(crate) module_storage: serde_json::Value,
+    pub(crate) compatible_transitions: Vec<serde_json::Value>,
     pub(crate) profile: ProfileId,
     pub(crate) model: String,
     pub(crate) status: String,
@@ -72,6 +76,8 @@ pub(crate) struct ProfileImage {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct BuildIdentity {
+    pub(crate) nvm_schema: u32,
+    pub(crate) compiler_sha256: String,
     pub(crate) profile: String,
     pub(crate) configuration_sha256: String,
     pub(crate) source_manifest_sha256: String,
@@ -83,6 +89,8 @@ pub(crate) struct BuildIdentity {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct CodeIdentity {
+    pub(crate) fill_byte: u8,
+    pub(crate) ranges: Vec<CodeRange>,
     pub(crate) algorithm: String,
     pub(crate) sha256: String,
     pub(crate) covered_bytes: u32,
@@ -90,6 +98,7 @@ pub(crate) struct CodeIdentity {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FirmwareMatrix {
+    pub(crate) settings_transitions: Vec<SettingsTransition>,
     pub(crate) format: String,
     pub(crate) default_profile: String,
     pub(crate) base_features: Vec<String>,
@@ -106,6 +115,8 @@ pub(crate) struct MatrixModule {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MatrixProfile {
+    pub(crate) identity: BuildIdentity,
+    pub(crate) configuration: serde_json::Value,
     pub(crate) profile: ProfileId,
     pub(crate) installable: bool,
     pub(crate) release_approved: bool,
@@ -119,15 +130,156 @@ pub(crate) struct MatrixProfile {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MatrixCapabilities {
+    pub(crate) dynamic_entries: DynamicEntries,
+    pub(crate) runtime_qmk_settings_ids: Vec<u16>,
     pub(crate) optional_modules: std::collections::BTreeMap<String, bool>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SettingsIdentity {
+    pub(crate) profile: ProfileId,
+    pub(crate) definition_sha256: String,
+    pub(crate) features: Vec<String>,
+    pub(crate) supported_keycodes: Vec<u16>,
+    pub(crate) combos_version: u8,
+    pub(crate) extensions_version: Option<u8>,
     pub(crate) code_sha256: String,
     pub(crate) ihx_sha256: String,
     pub(crate) nvm_schema: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DynamicEntries {
+    pub(crate) combos: u8,
+    pub(crate) tap_dance: u8,
+    pub(crate) key_overrides: u8,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FixedLimits {
+    pub(crate) layers: u8,
+    pub(crate) encoders: u8,
+    pub(crate) macros: u8,
+    pub(crate) macro_bytes: u16,
+    pub(crate) combos: u8,
+    pub(crate) tap_dance: u8,
+    pub(crate) key_overrides: u8,
+    pub(crate) rgb_leds: u8,
+    pub(crate) rgb_maximum_brightness: u8,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CodeRange {
+    pub(crate) start: u32,
+    pub(crate) end_exclusive: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SettingsTransition {
+    pub(crate) source: String,
+    pub(crate) target: String,
+}
+
+/// Source admission follows pinned settings_backup.image_keycode_supported.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum KeycodeSource {
+    Matrix,
+    Encoder,
+    Macro,
+    MacroTap,
+    MacroDown,
+    MacroUp,
+}
+
+pub(crate) fn supports_keycode(id: ProfileId, code: u16, source: KeycodeSource) -> bool {
+    let row = matrix_profile(id);
+    let enabled = |feature: &str| row.capabilities.optional_modules.get(feature) == Some(&true);
+    if !keycode_supported(code, enabled) {
+        return false;
+    }
+    if let Some(identity) = &row.settings_identity {
+        if identity.supported_keycodes.binary_search(&code).is_err() {
+            return false;
+        }
+    }
+    if source != KeycodeSource::Matrix
+        && ((0x5700..=0x5707).contains(&code)
+            || (0x7c53..=0x7c58).contains(&code)
+            || (0x7c13..=0x7c15).contains(&code))
+    {
+        return false;
+    }
+    let is_macro = matches!(
+        source,
+        KeycodeSource::Macro
+            | KeycodeSource::MacroTap
+            | KeycodeSource::MacroDown
+            | KeycodeSource::MacroUp
+    );
+    !(is_macro
+        && ((0x7c5d..=0x7c5f).contains(&code) && source != KeycodeSource::MacroTap
+            || matches!(code, 0x7c1a | 0x7c1b | 0x7c1e)))
+}
+
+fn keycode_supported(code: u16, enabled: impl Fn(&str) -> bool) -> bool {
+    let optional = match code {
+        0x7011..=0x7013 => Some("nkro-control"),
+        0x7c1a | 0x7c1b | 0x7c1e => Some("space-cadet"),
+        0x7009..=0x700b => Some("gui-lock"),
+        0x701b..=0x701d => Some("ctrl-gui-swap"),
+        0x7014..=0x7016 => Some("mac-pc"),
+        0x7c13..=0x7c15 => Some("auto-shift"),
+        0x7c53..=0x7c57 => Some("dynamic-macros"),
+        0x7c58 => Some("leader"),
+        0x5700..=0x5707 => Some("tap-dance"),
+        0x7c5d..=0x7c5f => Some("key-overrides"),
+        _ => None,
+    };
+    if optional.is_some_and(&enabled) {
+        return true;
+    }
+    let basic = |value: u16| {
+        matches!(value, 0 | 1 | 4..=0xc2 | 0xe0..=0xe7)
+            || (enabled("mouse-keys") && matches!(value, 0xcd..=0xd5 | 0xd9..=0xdc))
+    };
+    match code {
+        0..=255 => basic(code),
+        256..=0x3fff => basic(code & 255),
+        0x4000..=0x4fff => ((code >> 8) & 15) < 6 && basic(code & 255),
+        0x5000..=0x51ff => ((code - 0x5000) >> 5) < 6,
+        0x5200..=0x527f | 0x52c0..=0x52df => (code & 31) < 6,
+        0x52a0..=0x52bf | 0x7700..=0x770f | 0x7820..=0x782a => true,
+        0x7c00 | 0x7c01 | 0x7c02 | 0x7c03 | 0x7c16 | 0x7c73 | 0x7c77 | 0x7c78 | 0x7c79 | 0x7c7a => {
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Explicit transitions use exact IHX pairs; a shared schema grants nothing.
+pub(crate) fn settings_transition_allowed(source: &str, target: &str) -> bool {
+    let matrix = firmware_matrix();
+    let known = |hash: &str| {
+        matrix.profiles.iter().any(|row| {
+            row.settings_identity
+                .as_ref()
+                .is_some_and(|identity| identity.ihx_sha256 == hash)
+        })
+    };
+    known(source)
+        && known(target)
+        && (source == target
+            || matrix
+                .settings_transitions
+                .iter()
+                .any(|pair| pair.source == source && pair.target == target))
 }
 
 #[derive(Debug, Deserialize)]
@@ -165,11 +317,7 @@ pub(crate) struct LocalizedText {
 
 impl LocalizedText {
     pub(crate) fn for_language(&self, russian: bool) -> &str {
-        if russian {
-            &self.ru
-        } else {
-            &self.en
-        }
+        if russian { &self.ru } else { &self.en }
     }
 }
 
@@ -213,13 +361,177 @@ pub(crate) fn firmware_matrix() -> &'static FirmwareMatrix {
     FIRMWARE_MATRIX.get_or_init(|| {
         let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
         assert_sha256(source, SOURCE_MATRIX_SHA256, "beta.1 firmware matrix");
-        let matrix: FirmwareMatrix = serde_json::from_str(source)
-            .expect("bundled beta.1 firmware matrix must be valid JSON");
+        let matrix = parse_trusted_matrix(source)
+            .expect("bundled beta.1 firmware matrix must be valid and pinned");
         assert_eq!(matrix.format, "ak820-firmware-matrix-1");
         assert_eq!(matrix.default_profile, "work");
         assert_eq!(matrix.profiles.len(), 9, "beta.1 matrix has nine profiles");
+        validate_contracts(&matrix).expect("bundled beta.1 contracts must agree");
         matrix
     })
+}
+
+/// The bundled bytes are the trust root. This parser rejects every byte change,
+/// including duplicate/unknown fields, before deserialization can discard data.
+pub(crate) fn parse_trusted_matrix(source: &str) -> Result<FirmwareMatrix, String> {
+    if format!("{:x}", Sha256::digest(source.as_bytes())) != SOURCE_MATRIX_SHA256 {
+        return Err("matrix differs from the pinned beta.1 source".into());
+    }
+    let matrix = serde_json::from_str(source).map_err(|error| format!("{error}"))?;
+    validate_contracts(&matrix)?;
+    Ok(matrix)
+}
+
+fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
+    use std::collections::BTreeSet;
+    let fail = || "beta.1 contract mismatch".to_string();
+    let ids: BTreeSet<_> = matrix
+        .profiles
+        .iter()
+        .map(|row| row.profile.as_str())
+        .collect();
+    let expected: BTreeSet<_> = catalog()
+        .images
+        .iter()
+        .map(|row| row.profile.as_str())
+        .collect();
+    if ids != expected || ids.len() != matrix.profiles.len() {
+        return Err(fail());
+    }
+    let mut packed = BTreeSet::new();
+    for row in &matrix.profiles {
+        let image = profile(row.profile);
+        let schema03 = matches!(
+            row.profile,
+            ProfileId::TapDance | ProfileId::KeyOverrides | ProfileId::Settings
+        );
+        let schema = if schema03 { 0x082003 } else { 0x082002 };
+        let flags = &row.capabilities.optional_modules;
+        let flag = |id: &str| flags.get(id) == Some(&true);
+        let features: BTreeSet<_> = row.optional_features.iter().map(String::as_str).collect();
+        let enabled: BTreeSet<_> = flags
+            .iter()
+            .filter_map(|(id, &on)| on.then_some(id.as_str()))
+            .collect();
+        let all_modules: BTreeSet<_> = matrix.modules.iter().map(|m| m.feature.as_str()).collect();
+        if features != enabled
+            || features.len() != row.optional_features.len()
+            || flags.keys().map(String::as_str).collect::<BTreeSet<_>>() != all_modules
+            || row.identity.ihx_sha256 != image.build_identity.ihx_sha256
+            || row.identity.configuration_sha256 != image.build_identity.configuration_sha256
+            || row.identity.profile != row.profile.as_str()
+            || row.identity.nvm_schema != schema
+            || image.settings_schema != schema
+            || image.build_identity.nvm_schema != schema
+            || image.model != "ajazz/ak820"
+            || row.configuration["profile"].as_str() != Some(row.profile.as_str())
+            || row.configuration["nvm_schema"].as_u64() != Some(schema as u64)
+            || row.configuration["optional_features"]
+                .as_array()
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<BTreeSet<_>>()
+                })
+                != Some(features.clone())
+        {
+            return Err(fail());
+        }
+        let counts = &row.capabilities.dynamic_entries;
+        if counts.combos != 8
+            || counts.tap_dance != if flag("tap-dance") { 8 } else { 0 }
+            || counts.key_overrides != if flag("key-overrides") { 8 } else { 0 }
+            || row.capabilities.runtime_qmk_settings_ids
+                != if flag("qmk-settings") {
+                    vec![1, 2, 7, 18, 19]
+                } else {
+                    vec![]
+                }
+        {
+            return Err(fail());
+        }
+        let limits = &image.fixed_limits;
+        if (
+            limits.layers,
+            limits.encoders,
+            limits.macros,
+            limits.macro_bytes,
+            limits.combos,
+            limits.tap_dance,
+            limits.key_overrides,
+            limits.rgb_leds,
+            limits.rgb_maximum_brightness,
+        ) != (6, 1, 16, 8192, 8, 8, 8, 82, 160)
+            || image.code_identity.algorithm != "sha256-code-windows-zero-v1"
+            || image.code_identity.fill_byte != 0
+            || image.code_identity.covered_bytes != 40505
+            || image
+                .code_identity
+                .ranges
+                .iter()
+                .map(|r| (r.start, r.end_exclusive))
+                .collect::<Vec<_>>()
+                != vec![(10400, 12288), (12327, 50944)]
+            || !image.compatible_transitions.is_empty()
+        {
+            return Err(fail());
+        }
+        for (module, count) in [
+            ("tap_dance", counts.tap_dance),
+            ("key_overrides", counts.key_overrides),
+        ] {
+            let storage = &image.module_storage["modules"][module];
+            if storage["enabled_entries"].as_u64() != Some(count as u64)
+                || storage["stored_entries"].as_u64() != Some(if schema03 { 8 } else { 0 })
+            {
+                return Err(fail());
+            }
+        }
+        if let Some(identity) = &row.settings_identity {
+            if identity.profile != row.profile
+                || identity.ihx_sha256 != row.identity.ihx_sha256
+                || identity.nvm_schema != schema
+                || identity.combos_version != 1
+                || identity.extensions_version != if schema03 { Some(1) } else { None }
+                || identity.definition_sha256.len() != 64
+                || identity.code_sha256.len() != 64
+                || identity.code_sha256 == image.code_identity.sha256
+                || !packed.insert(identity.code_sha256.as_str())
+                || identity
+                    .features
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<BTreeSet<_>>()
+                    != features
+                || identity.features.len() != features.len()
+                || identity.supported_keycodes
+                    != (0..=u16::MAX)
+                        .filter(|&code| keycode_supported(code, flag))
+                        .collect::<Vec<_>>()
+            {
+                return Err(fail());
+            }
+        }
+    }
+    let mut pairs = BTreeSet::new();
+    let known = |hash: &str| {
+        matrix.profiles.iter().any(|row| {
+            row.settings_identity
+                .as_ref()
+                .is_some_and(|id| id.ihx_sha256 == hash)
+        })
+    };
+    for pair in &matrix.settings_transitions {
+        if !known(&pair.source)
+            || !known(&pair.target)
+            || pair.source == pair.target
+            || !pairs.insert((&pair.source, &pair.target))
+        {
+            return Err(fail());
+        }
+    }
+    Ok(())
 }
 
 fn assert_sha256(source: &str, expected: &str, name: &str) {
@@ -615,6 +927,114 @@ mod tests {
                     image.profile.as_str()
                 );
             }
+        }
+    }
+    #[test]
+    fn pinned_matrix_rejects_duplicate_unknown_and_changed_fields() {
+        let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
+        assert!(parse_trusted_matrix(source).is_ok());
+        for changed in [
+            source.replacen("{", "{\"unknown\":true,", 1),
+            source.replacen("{", "{\"format\":\"ak820-firmware-matrix-1\",", 1),
+            source.replacen("532482", "532483", 1),
+        ] {
+            assert!(parse_trusted_matrix(&changed).is_err());
+        }
+    }
+
+    #[test]
+    fn counts_qsids_and_packed_identity_remain_separate() {
+        for row in &firmware_matrix().profiles {
+            assert_eq!(
+                row.capabilities.dynamic_entries.tap_dance,
+                if row.profile == ProfileId::TapDance {
+                    8
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                row.capabilities.dynamic_entries.key_overrides,
+                if row.profile == ProfileId::KeyOverrides {
+                    8
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                row.capabilities.runtime_qmk_settings_ids,
+                if row.profile == ProfileId::Settings {
+                    vec![1, 2, 7, 18, 19]
+                } else {
+                    vec![]
+                }
+            );
+            assert_eq!(
+                row.settings_identity.is_some(),
+                row.profile == ProfileId::Work
+            );
+            let ihx = &row.identity.ihx_sha256;
+            assert_eq!(
+                settings_transition_allowed(ihx, ihx),
+                row.profile == ProfileId::Work
+            );
+            assert!(!settings_transition_allowed(ihx, "unknown"));
+        }
+    }
+
+    #[test]
+    fn source_admission_matches_compact_processor_boundaries() {
+        use KeycodeSource::*;
+        for source in [Encoder, Macro, MacroTap, MacroDown, MacroUp] {
+            assert!(!supports_keycode(ProfileId::TapDance, 0x5700, source));
+            assert!(!supports_keycode(ProfileId::Typing, 0x7c13, source));
+            assert!(!supports_keycode(ProfileId::Work, 0x7c53, source));
+            assert!(!supports_keycode(ProfileId::Work, 0x7c58, source));
+        }
+        assert!(supports_keycode(ProfileId::TapDance, 0x5707, Matrix));
+        assert!(!supports_keycode(ProfileId::TapDance, 0x5708, Matrix));
+        assert!(!supports_keycode(ProfileId::Work, 0x5700, Matrix));
+        assert!(supports_keycode(ProfileId::Mouse, 0xcd, Encoder));
+        assert!(!supports_keycode(ProfileId::Essential, 0xcd, Matrix));
+        assert!(supports_keycode(ProfileId::KeyOverrides, 0x7c5d, MacroTap));
+        for source in [Macro, MacroDown, MacroUp] {
+            assert!(!supports_keycode(ProfileId::KeyOverrides, 0x7c5d, source));
+        }
+        assert!(supports_keycode(ProfileId::Work, 0x7c1a, Encoder));
+        assert!(!supports_keycode(ProfileId::Work, 0x7c1a, MacroTap));
+        for id in [ProfileId::Work, ProfileId::Settings] {
+            assert!(!supports_keycode(id, 0x4604, Matrix));
+            assert!(!supports_keycode(id, 0x52c6, Matrix));
+            assert!(!supports_keycode(id, 0xffff, Matrix));
+        }
+    }
+
+    #[test]
+    fn semantic_validation_rejects_bad_counts_qsids_identity_and_transitions() {
+        let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
+        let mutations: [fn(&mut FirmwareMatrix); 5] = [
+            |m| m.profiles[0].capabilities.dynamic_entries.tap_dance = 8,
+            |m| m.profiles[0].capabilities.runtime_qmk_settings_ids.push(4),
+            |m| {
+                m.profiles[0]
+                    .settings_identity
+                    .as_mut()
+                    .unwrap()
+                    .supported_keycodes
+                    .push(65535)
+            },
+            |m| m.profiles[0].identity.ihx_sha256 = "0".repeat(64),
+            |m| {
+                m.settings_transitions.push(SettingsTransition {
+                    source: "unknown".into(),
+                    target: "unknown".into(),
+                })
+            },
+        ];
+        for mutate in mutations {
+            let mut matrix: FirmwareMatrix = serde_json::from_str(source).unwrap();
+            mutate(&mut matrix);
+            assert!(validate_contracts(&matrix).is_err());
         }
     }
 }

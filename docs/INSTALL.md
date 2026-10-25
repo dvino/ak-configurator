@@ -16,8 +16,13 @@ sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   build-essential pkg-config libdbus-1-dev libgtk-3-dev libudev-dev \
   libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-  libxkbcommon-dev libgl1-mesa-dev
+  libxkbcommon-dev libxkbcommon-x11-0 libgl1-mesa-dev zenity
 ```
+
+On Linux, Save/Open dialogs use an available XDG desktop portal or the `zenity`
+fallback. Minimal desktop/container environments may provide neither; install
+`zenity` or the desktop portal implementation for the session before using
+file dialogs.
 
 From the repository root, build the release executable and run host tests with:
 
@@ -65,8 +70,9 @@ Windows x86_64/arm64, and macOS arm64/x86_64. After a successful run, its six
 platform artifacts are available from the [desktop-dev Actions runs](https://github.com/dvino/ak-configurator/actions/workflows/desktop-dev.yml?query=branch%3Adesktop-dev);
 each contains a binary and `SHA256SUMS`. These are unsigned development
 binaries, not installers. Check that every platform job passed before relying
-on its artifact. The bundled beta.1 profile catalog is a local preview; it does
-not enable beta firmware settings writes or flashing. The current application
+on its artifact. With `--demo-ak820`, the bundled beta.1 profiles open editable local example
+projects with Save/Open/Undo. Outside demo mode the catalog remains a preview;
+beta firmware settings writes and flashing stay disabled. The current application
 still recognizes only the exact alpha.3 device image.
 OEM recovery and the OS LED helper are not included in this desktop milestone.
 

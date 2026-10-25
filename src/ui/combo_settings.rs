@@ -28,6 +28,20 @@ fn combo_layer_labels(
 }
 
 impl EntropyApp {
+    fn ak820_offline_qmk_combo_term(&self) -> Option<u16> {
+        if !self.ak820_demo
+            || self.ak820_demo_profile != Some(super::ak820_beta1_profiles::ProfileId::Settings)
+        {
+            return None;
+        }
+        let state = self.ak820_offline_extensions.as_ref()?;
+        crate::ak820_typed_storage::Extensions::decode_nvm(state.nvm())
+            .ok()?
+            .settings
+            .get(2)
+            .ok()
+    }
+
     pub(super) fn draw_combo_settings_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -81,6 +95,8 @@ impl EntropyApp {
             .flatten();
         self.combo_pick_target = Some((combo_idx, field));
         self.keycode_picker.layer_names = self.layer_names.clone();
+        self.keycode_picker
+            .set_ak820_beta1_source(crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix);
         self.keycode_picker
             .open_full_key_picker(crate::keycode_picker::KeycodeTab::Basic);
         self.keycode_picker
@@ -679,7 +695,16 @@ impl EntropyApp {
                     }
                 }
 
-                if self.keycode_picker.ak820_profile {
+                if let Some(term) = self.ak820_offline_qmk_combo_term() {
+                    ui.label(match self.app_settings.language {
+                        crate::i18n::Language::Russian => format!(
+                            "Две клавиши, интервал {term} мс. Изменяется в панели QMK Settings."
+                        ),
+                        crate::i18n::Language::English => format!(
+                            "Two keys, {term} ms interval. Change it in the QMK Settings panel."
+                        ),
+                    });
+                } else if self.keycode_picker.ak820_profile {
                     ui.label(match self.app_settings.language {
                         crate::i18n::Language::Russian => {
                             "Две клавиши, интервал 40 мс (фиксирован в прошивке)"
@@ -996,5 +1021,30 @@ mod tests {
             ),
             vec!["All layers", "0: Base", "Layer 1", "2: Nav"]
         );
+    }
+}
+
+#[cfg(test)]
+mod ak820_profile_combo_term_tests {
+    use super::*;
+    #[test]
+    fn settings_profile_combo_description_uses_validated_qsid_two() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        assert_eq!(app.ak820_offline_qmk_combo_term(), None);
+        let profile = super::super::ak820_beta1_profiles::ProfileId::Settings;
+        app.configure_ak820_offline_profile(profile);
+        let nvm = app.ak820_offline_extensions.as_ref().unwrap().nvm();
+        let mut model = crate::ak820_typed_storage::Extensions::decode_nvm(nvm).unwrap();
+        model.settings.set(2, 73).unwrap();
+        let candidate = model.apply_to_nvm(nvm, profile).unwrap();
+        app.ak820_offline_extensions = Some(
+            super::super::ak820_offline_extensions::OfflineExtensions::from_nvm(&candidate)
+                .unwrap(),
+        );
+        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(73));
+        app.configure_ak820_offline_profile(super::super::ak820_beta1_profiles::ProfileId::Work);
+        assert_eq!(app.ak820_offline_qmk_combo_term(), None);
+        assert!(app.hid_device.is_none());
     }
 }

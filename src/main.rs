@@ -2,6 +2,10 @@
 
 mod action_icons;
 mod ak820;
+mod ak820_offline_project;
+mod ak820_settings_backup;
+mod ak820_settings_model;
+mod ak820_typed_storage;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod app_discovery;

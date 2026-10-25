@@ -1359,6 +1359,23 @@ pub(crate) struct ComboEntry {
     pub(crate) layer: Option<u8>,
 }
 
+#[derive(Clone)]
+pub(crate) struct Ak820OfflineProfileProject {
+    pub(crate) profile: super::ak820_beta1_profiles::ProfileId,
+    pub(crate) layout: crate::keyboard::KeyboardLayout,
+    pub(crate) macro_texts: Vec<Vec<u8>>,
+    pub(crate) macro_actions: Vec<Vec<crate::keycode_picker::MacroAction>>,
+    pub(crate) macro_names: Vec<String>,
+    pub(crate) macro_descriptions: Vec<String>,
+    pub(crate) combo_entries: Vec<ComboEntry>,
+    pub(crate) combo_names: Vec<String>,
+    pub(crate) combo_colors: Vec<u32>,
+    pub(crate) combo_term: Option<u16>,
+    pub(crate) layer_names: Vec<String>,
+    pub(crate) rgb_settings: RgbSettingsState,
+    pub(crate) extensions: Option<crate::app::ak820_offline_extensions::OfflineExtensions>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) enum StickyLayoutTapDanceState {
     #[default]
@@ -5337,6 +5354,12 @@ pub(crate) const LAYOUT_BOTTOM_RESERVED_H: f32 = 76.0_f32;
 
 pub struct EntropyApp {
     pub(crate) ak820_demo: bool,
+    pub(crate) ak820_demo_profile: Option<super::ak820_beta1_profiles::ProfileId>,
+    pub(crate) ak820_demo_seed: Option<crate::keyboard::KeyboardLayout>,
+    pub(crate) ak820_demo_projects: Vec<Ak820OfflineProfileProject>,
+    pub(crate) ak820_offline_import_undo: Option<Ak820OfflineProfileProject>,
+    pub(crate) ak820_offline_extensions:
+        Option<crate::app::ak820_offline_extensions::OfflineExtensions>,
     pub(crate) device_manager: DeviceManager,
     pub(crate) selected_device: Option<usize>,
     pub(crate) selected_layer: usize,

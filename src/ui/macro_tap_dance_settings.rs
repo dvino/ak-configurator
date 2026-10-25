@@ -9,7 +9,14 @@ impl EntropyApp {
             ui,
             content_rect,
             crate::i18n::tr_catalog(lang, "macro_editor.title"),
-            crate::i18n::tr_catalog(lang, "macro_editor.description"),
+            if self.ak820_demo {
+                match lang {
+                    crate::i18n::Language::Russian => "Макросы локального проекта примера",
+                    _ => "Macros in the local example project",
+                }
+            } else {
+                crate::i18n::tr_catalog(lang, "macro_editor.description")
+            },
             |app, ui| {
                 let selected = app.keycode_picker.macro_inline_selected.unwrap_or(0);
                 let selected = app.keycode_picker.show_macro_settings_editor(

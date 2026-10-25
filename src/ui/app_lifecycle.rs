@@ -1391,6 +1391,61 @@ mod tests {
     }
 }
 
+impl EntropyApp {
+    // Footer controls belong to the main canvas layer. Floating windows and
+    // menus must own pointer input above them, regardless of creation order.
+    fn draw_canvas_footer(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let opacity = self.typing_trainer_chrome_opacity(ctx);
+        if opacity <= 0.01 {
+            return;
+        }
+        if opacity < 1.0 {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        }
+        let rect = ui.max_rect();
+        if self.app_settings.show_made_by_signature {
+            let signature = egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 16.0, rect.bottom() - 28.0),
+                egui::vec2(300.0, 20.0),
+            );
+            crate::ui_style::allocate_ui_at_rect(ui, signature, |ui| {
+                ui.set_opacity(opacity);
+                if opacity <= 0.96 {
+                    ui.disable();
+                }
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 3.0;
+                    ui.label(
+                        RichText::new("AK Configurator · based on")
+                            .size(12.0)
+                            .color(app_muted_text(self.dark_mode)),
+                    );
+                    ui.add(egui::Hyperlink::from_label_and_url(
+                        RichText::new("Entropy").size(12.0),
+                        "https://github.com/ergohaven/entropy",
+                    ));
+                });
+            });
+        }
+        let theme = egui::Rect::from_min_size(
+            egui::pos2(rect.right() - 220.0, rect.bottom() - 28.0),
+            egui::vec2(204.0, 20.0),
+        );
+        crate::ui_style::allocate_ui_at_rect(ui, theme, |ui| {
+            ui.set_opacity(opacity);
+            if opacity <= 0.96 {
+                ui.disable();
+            }
+            let previous = self.dark_mode;
+            draw_theme_selector_labels(ui, self.app_settings.language, &mut self.dark_mode, false);
+            if self.dark_mode != previous {
+                self.app_settings.dark_mode = self.dark_mode;
+                save_app_settings(&self.app_settings);
+            }
+        });
+    }
+}
+
 impl eframe::App for EntropyApp {
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
         app_panel_fill(visuals.dark_mode).to_normalized_gamma_f32()
@@ -1583,6 +1638,7 @@ impl eframe::App for EntropyApp {
 
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
+            self.draw_canvas_footer(ui, ctx);
             #[cfg(not(target_arch = "wasm32"))]
             if self
                 .hid_device
@@ -1750,11 +1806,7 @@ impl eframe::App for EntropyApp {
                             }
                         }
                         ui.add_space(8.0);
-                        super::ak820_beta1_profiles_ui::button(
-                            ui,
-                            ctx,
-                            self.app_settings.language,
-                        );
+                        super::ak820_beta1_profiles_ui::button(ui, ctx, self.app_settings.language);
                     });
                 });
                 return;
@@ -1847,66 +1899,186 @@ impl eframe::App for EntropyApp {
             }
         });
 
-        // Keep the beta catalog available as a preview, without changing the
-        // keyboard canvas or the editor's active firmware model.
-        super::ak820_beta1_profiles_ui::show(ctx, self.app_settings.language);
+        super::ak820_offline_files::show(self, ctx);
+        if self.ak820_demo {
+            if let Some(profile) = self.ak820_demo_profile {
+                super::ak820_beta1_profiles_ui::sync_offline_project(ctx, profile);
+            }
+        }
+
+        // Catalog browsing is read-only; demo projects use a separate explicit action.
+        if let Some(profile) =
+            super::ak820_beta1_profiles_ui::show(ctx, self.app_settings.language, self.ak820_demo)
+        {
+            self.configure_ak820_offline_profile(profile);
+            self.status_msg = match self.app_settings.language {
+                crate::i18n::Language::English => {
+                    format!("Offline project profile: {}", profile.as_str())
+                }
+                crate::i18n::Language::Russian => {
+                    format!("Профиль офлайн-проекта: {}", profile.as_str())
+                }
+            };
+        }
+        if self.ak820_demo {
+            if let (Some(profile), Some(extensions)) = (
+                self.ak820_demo_profile,
+                self.ak820_offline_extensions.as_mut(),
+            ) {
+                let is_schema03 = super::ak820_beta1_profiles::matrix_profile(profile)
+                    .identity
+                    .nvm_schema
+                    == crate::ak820_typed_storage::SCHEMA;
+                if is_schema03 {
+                    let open_id = egui::Id::new("ak820_offline_extensions_open");
+                    let mut open = ctx
+                        .data(|data| data.get_temp::<bool>(open_id))
+                        .unwrap_or(true);
+                    if open {
+                        let mut changed = false;
+                        let mut td_assignment = None;
+                        let language = self.app_settings.language;
+                        let layer_count = self.layer_count;
+                        let key_coords = self
+                            .layout
+                            .as_ref()
+                            .map(|layout| {
+                                layout
+                                    .keys
+                                    .iter()
+                                    .map(|key| (key.row, key.col))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        egui::Window::new(match self.app_settings.language {
+                            crate::i18n::Language::English => "Offline profile modules",
+                            crate::i18n::Language::Russian => "Модули офлайн-профиля",
+                        })
+                        .id(egui::Id::new("ak820_offline_extensions_window"))
+                        .open(&mut open)
+                        .default_size(egui::vec2(580.0, 480.0))
+                        .max_height((ctx.content_rect().height() - 64.0).max(100.0))
+                        .vscroll(true)
+                        .show(ctx, |ui| {
+                            if profile == super::ak820_beta1_profiles::ProfileId::TapDance {
+                                let tap_count = super::ak820_beta1_profiles::matrix_profile(profile)
+                                    .capabilities
+                                    .dynamic_entries
+                                    .tap_dance
+                                    as usize;
+                                ui.heading(match self.app_settings.language {
+                                    crate::i18n::Language::English => {
+                                        "Offline Tap Dance assignments"
+                                    }
+                                    crate::i18n::Language::Russian => "Назначения Tap Dance офлайн",
+                                });
+                                let target_id = egui::Id::new("ak820_offline_td_target");
+                                let mut target = ctx
+                                    .data(|data| data.get_temp::<(usize, usize)>(target_id))
+                                    .unwrap_or((0, 0));
+                                egui::ComboBox::from_id_salt("ak820_offline_td_layer")
+                                    .selected_text(format!(
+                                        "{} {}",
+                                        if language == crate::i18n::Language::Russian {
+                                            "Слой"
+                                        } else {
+                                            "Layer"
+                                        },
+                                        target.0 + 1
+                                    ))
+                                    .show_ui(ui, |ui| {
+                                        for layer in 0..layer_count {
+                                            ui.selectable_value(
+                                                &mut target.0,
+                                                layer,
+                                                format!(
+                                                    "{} {}",
+                                                    if language == crate::i18n::Language::Russian {
+                                                        "Слой"
+                                                    } else {
+                                                        "Layer"
+                                                    },
+                                                    layer + 1
+                                                ),
+                                            );
+                                        }
+                                    });
+                                egui::ComboBox::from_id_salt("ak820_offline_td_key")
+                                    .selected_text(format!(
+                                        "{} {}",
+                                        if language == crate::i18n::Language::Russian {
+                                            "Клавиша"
+                                        } else {
+                                            "Key"
+                                        },
+                                        target.1 + 1
+                                    ))
+                                    .show_ui(ui, |ui| {
+                                        for (index, (row, col)) in key_coords.iter().enumerate() {
+                                            ui.selectable_value(
+                                                &mut target.1,
+                                                index,
+                                                format!(
+                                                    "{} {} ({}, {})",
+                                                    if language == crate::i18n::Language::Russian {
+                                                        "Клавиша"
+                                                    } else {
+                                                        "Key"
+                                                    },
+                                                    index + 1,
+                                                    row,
+                                                    col
+                                                ),
+                                            );
+                                        }
+                                    });
+                                ctx.data_mut(|data| data.insert_temp(target_id, target));
+                                ui.horizontal_wrapped(|ui| {
+                                    for slot in 0..tap_count {
+                                        if ui
+                                            .button(format!(
+                                                "{} TD({slot})",
+                                                if language == crate::i18n::Language::Russian {
+                                                    "Назначить"
+                                                } else {
+                                                    "Assign"
+                                                }
+                                            ))
+                                            .clicked()
+                                        {
+                                            td_assignment = Some((target.0, target.1, slot));
+                                        }
+                                    }
+                                });
+                                ui.separator();
+                            }
+                            changed |= super::ak820_offline_extensions::show(
+                                ui, language, profile, extensions,
+                            );
+                        });
+                        if let Some((layer, key, slot)) = td_assignment {
+                            changed |= self.assign_offline_tap_dance(layer, key, slot);
+                        }
+                        // Preserve edits from the Tap Dance controls above as well.
+                        if changed {
+                            self.status_msg = match self.app_settings.language {
+                                crate::i18n::Language::English => {
+                                    "Offline module candidate updated in memory".into()
+                                }
+                                crate::i18n::Language::Russian => {
+                                    "Офлайн-вариант модуля обновлён в памяти".into()
+                                }
+                            };
+                        }
+                    }
+                    ctx.data_mut(|data| data.insert_temp(open_id, open));
+                }
+            }
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         if self.bluetooth_reconnect_active() && self.layout.is_none() {
             self.draw_bluetooth_reconnect_status(ctx);
-        }
-
-        let chrome_opacity = self.typing_trainer_chrome_opacity(ctx);
-        if chrome_opacity > 0.0 && chrome_opacity < 1.0 {
-            ctx.request_repaint_after(std::time::Duration::from_millis(16));
-        }
-
-        if self.app_settings.show_made_by_signature && chrome_opacity > 0.01 {
-            egui::Area::new(egui::Id::new("made_by_signature"))
-                .anchor(egui::Align2::LEFT_BOTTOM, [16.0, -12.0])
-                .order(egui::Order::Foreground)
-                .show(ctx, |ui| {
-                    ui.set_opacity(chrome_opacity);
-                    if chrome_opacity <= 0.96 {
-                        ui.disable();
-                    }
-                    ui.horizontal(|ui| {
-                        let muted = app_muted_text(self.dark_mode);
-                        ui.spacing_mut().item_spacing.x = 3.0;
-                        ui.label(
-                            RichText::new("AK Configurator · based on")
-                                .size(12.0)
-                                .color(muted),
-                        );
-                        ui.add(egui::Hyperlink::from_label_and_url(
-                            RichText::new("Entropy").size(12.0),
-                            "https://github.com/ergohaven/entropy",
-                        ));
-                    });
-                });
-        }
-
-        if chrome_opacity > 0.01 {
-            egui::Area::new(egui::Id::new("theme_selector"))
-                .anchor(egui::Align2::RIGHT_BOTTOM, [-16.0, -12.0])
-                .order(egui::Order::Foreground)
-                .show(ctx, |ui| {
-                    ui.set_opacity(chrome_opacity);
-                    if chrome_opacity <= 0.96 {
-                        ui.disable();
-                    }
-                    let previous_dark_mode = self.dark_mode;
-                    draw_theme_selector_labels(
-                        ui,
-                        self.app_settings.language,
-                        &mut self.dark_mode,
-                        false,
-                    );
-                    if self.dark_mode != previous_dark_mode {
-                        self.app_settings.dark_mode = self.dark_mode;
-                        save_app_settings(&self.app_settings);
-                    }
-                });
         }
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -2239,3 +2411,75 @@ impl eframe::App for EntropyApp {
     any(target_os = "linux", target_os = "windows", target_os = "macos")
 ))]
 include!("usb_hotplug_tests.rs");
+
+#[cfg(test)]
+mod ak820_footer_window_tests {
+    use super::*;
+    use egui_kittest::{kittest::Queryable, Harness};
+
+    #[test]
+    fn demo_macro_editor_never_requests_physical_unlock() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.keycode_picker.open_full_key_picker(KeycodeTab::Macro);
+        app.maybe_open_macro_unlock_preflight();
+        assert!(!app.is_vial_locked());
+        assert!(!app.unlock_open && !app.vial_unlock_polling);
+        app.keycode_picker.open = false;
+        app.keycode_picker.macros_dirty = true;
+        let status = app.status_msg.clone();
+        app.maybe_start_macro_write(&cc.egui_ctx);
+        assert_eq!(
+            app.status_msg, status,
+            "offline edit must not report a missing device"
+        );
+        assert!(app.keycode_picker.macros_dirty);
+        assert!(app.keycode_picker.macro_attempted_revision.is_none());
+        assert!(app.hid_device.is_none() && app.shared_hid_output.is_none());
+    }
+
+    #[test]
+    fn floating_window_owns_clicks_over_main_canvas_footer() {
+        struct State {
+            app: EntropyApp,
+            clicked: bool,
+        }
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let app = EntropyApp::new_ak820_demo(&cc);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(
+                |ui, state: &mut State| {
+                    eframe::App::ui(&mut state.app, ui, &mut eframe::Frame::_new_kittest());
+                    egui::Window::new("Footer overlap regression")
+                        .fixed_pos(egui::pos2(0.0, 440.0))
+                        .fixed_size(egui::vec2(350.0, 50.0))
+                        .title_bar(false)
+                        .resizable(false)
+                        .show(ui.ctx(), |ui| {
+                            if ui
+                                .put(
+                                    egui::Rect::from_min_size(
+                                        egui::pos2(16.0, 465.0),
+                                        egui::vec2(280.0, 22.0),
+                                    ),
+                                    egui::Button::new("Apply floating example"),
+                                )
+                                .clicked()
+                            {
+                                state.clicked = true;
+                            }
+                        });
+                },
+                State {
+                    app,
+                    clicked: false,
+                },
+            );
+        harness.run();
+        harness.get_by_label("Apply floating example").click();
+        harness.run();
+        assert!(harness.state().clicked);
+        assert!(harness.state().app.hid_device.is_none());
+    }
+}

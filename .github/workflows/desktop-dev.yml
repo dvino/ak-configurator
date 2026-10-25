@@ -84,7 +84,9 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
-            libgl1-mesa-dev
+            libxkbcommon-x11-0 \
+            libgl1-mesa-dev \
+            zenity
 
       - name: Test all targets
         if: startsWith(matrix.platform, 'linux-')
