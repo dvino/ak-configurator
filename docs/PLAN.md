@@ -19,9 +19,9 @@ milestone unless its completion conditions below are met.
 | 3a project files | Preserve complete offline edits across application restarts | Implemented; round-trip tests and Linux Save/Open passed |
 | 3a typed editors | Schema03 codecs, typed editors and per-source controls | Implemented offline; tests/review and Linux panel checks passed |
 | 3b backups | Strict envelope, catalog-bound ROM/NVM, migration/restore plan, directory I/O and inspection | Models tested and reviewed; Linux-only directory I/O; full capture/history/restore UI and executor remain open |
-| Verification | Approved positive full-image fixture, fault cases and exact-tree review | Open |
+| Verification | Approved positive full-image fixture, fault cases and exact-tree review | Fault cases and review passed; positive qualified full-image fixture remains open |
 | 4a operations | Packer parity and modeled install/OEM recovery | Offline packer and simulation tested/reviewed; installer UI, executor and ownership qualification remain open |
-| 4b delivery | Six-target packages and usable offline beta artifact | Open |
+| 4b delivery | Six-target packages and usable offline beta artifact | Six-target trial builds passed CI; Debian 12 GUI checked; complete platform/release qualification remains open |
 
 Only `work` currently has a packed settings identity in the bundled beta matrix;
 the other eight profiles have null identities and no settings transition pairs

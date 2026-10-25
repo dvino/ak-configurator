@@ -91,8 +91,9 @@ local example projects are unaffected.
 The full host suite passed 1625 tests (0 failed, 14 ignored). After wording-only
 cleanup, 92 AK820 tests and the native build passed again. Linux/Xvfb backup
 window/picker and negative-directory handling were checked; positive full-ROM
-archive acceptance is still unverified. Six-target CI passed for earlier offline
-packet `709cde6`; its downloaded hashes and architectures were checked. Exact
+archive acceptance is still unverified. Six-target CI also passed for final source `1afd0f1` in run `40174635838`;
+downloaded hashes and architectures were checked. Trial packaging includes
+a separately tested Debian 12 x86_64 build and offline launch instructions. Exact
 results and limits are recorded in [REVIEW.md](REVIEW.md).
 
 ## Remaining work
@@ -106,8 +107,8 @@ snapshot; its device-settings import remains blocked until preservation and
 compatibility checks exist. Local offline project import is a separate format. Direct-mode colors are volatile and cannot be read back through this
 firmware API.
 
-The current target is to finish the first point with a tested offline trial
-build, prepare its handoff, and stop. Full backup, restore and installation execution
+The current work ends with the tested offline trial build and its manual
+handoff. Full backup, restore and installation execution
 is deferred to a later source packet and manual owner transfer. The next agent
 must first request a detailed plan from the Sol High architect; no such review
 has been requested for this packet. Hardware qualification remains separate and

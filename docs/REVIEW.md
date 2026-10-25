@@ -238,7 +238,7 @@ proved. Full capture/history, restore/installer UI and execution remain open.
 `cargo test --locked --offline` passed **1625 tests, 0 failed, 14 ignored** in
 240.28 s; its native build passed in 22.51 s. After wording-only UI labels and
 source comments changed, all **92 AK820 tests passed** in 5.96 s and the native
-build passed in 21.63 s. Both builds emitted 183 warnings. Filesystem umask tests
+build passed in 21.63 s. Both native builds emitted 183 warnings. Filesystem umask tests
 ran in non-root subprocesses. Native Debian 12/Xvfb checks opened the backup
 window and Zenity picker, rejected a non-backup directory with a Russian message,
 and closed/reopened the window without retaining that error. Positive production
@@ -261,3 +261,20 @@ A separate runtime check of the `709cde6` Linux x86_64 CI binary on Debian 12
 failed before startup: GLIBC_2.38 and GLIBC_2.39 were missing. Its symbol table
 requires glibc 2.39. The local Debian 12 build remains the tested fallback;
 CI success alone does not establish compatibility with that older runtime.
+
+## Offline trial delivery checkpoint
+
+All six jobs in CI [40174635838](https://github.com/dvino/ak-configurator/actions/runs/40174635838)
+passed for source `1afd0f17b91dbac6cc75ea859b979abaa01c5624`. Downloaded artifact
+ZIP digests, included SHA256SUMS and binary architectures were checked. The
+separate Debian 12 x86_64 development binary comes from the same source and
+retains its tested bytes (SHA256
+`47abf519c08859db808b0ebc5d6bcf44cdbb0793fdaff2f87606da2224d5dc4e`).
+Both final CI Linux files reference glibc 2.39; the separate Debian build remains
+the locally tested alternative. Windows/macOS/arm64 execution remains unverified.
+
+The trial supplies offline launch scripts, matching EN/RU instructions, license
+notices and checksums. It keeps version 0.1.0-alpha.1 and does not claim a full
+beta release. Source, platform builds, Linux GUI checks and physical keyboard
+qualification remain separate. Work now stops for manual handoff; the next
+agent must first obtain the requested detailed Sol High architecture plan.
