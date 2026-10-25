@@ -130,8 +130,8 @@ No application launch, USB command or device test was performed during acceptanc
   physical keyboard. `git diff --check`, targeted rustfmt checks and workflow
   YAML parsing passed.
 - CI defines Linux and Windows x86_64/arm64 and macOS x86_64/arm64 raw binary
-  artifacts with SHA256SUMS. Remote CI execution and artifact availability are
-  pending; they are not claimed by this local record.
+  artifacts with SHA256SUMS. At the time of this initial note the remote run
+  was pending; its completed result is recorded below.
 
 ## Final implementation review — 2026-10-25
 
@@ -153,5 +153,11 @@ No application launch, USB command or device test was performed during acceptanc
 - The new cases exercise generic Auto Shift and Mouse Keys editor paths with an
   in-memory HID recorder. They do not establish those settings as supported by
   beta.1. Beta profile selection still only changes local preview state.
-- Remote CI and its six artifact downloads refer to the earlier source state
-  until a fresh run is completed for this final tree. They remain pending here.
+- GitHub Actions run [`40167663036`](https://github.com/dvino/ak-configurator/actions/runs/40167663036)
+  completed successfully for commit `86f2bbf0fd26ce55b6ecadd2c0a79485e8fe195a`.
+  Linux x86_64 and arm64, Windows x86_64 and arm64, and macOS x86_64 and arm64
+  jobs all succeeded. All six artifacts were downloaded to the local handoff
+  directory and each included SHA256SUMS passed verification. `file` identified
+  the ELF, Mach-O, and PE binaries with their expected 64-bit architectures.
+  These are raw development binaries; CI does not qualify runtime behavior on
+  each operating system or physical USB behavior.
