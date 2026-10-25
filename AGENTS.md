@@ -33,8 +33,9 @@ whole tree into this repository.
 - Coordinate firmware, configurator and help release checks by exact version
   and image identity across repositories. CI without hardware does not prove
   flashing, retention or physical input. Each configurator release includes
-  Windows/Linux x86_64 packages, macOS arm64/x86_64 builds, SHA256 files and
-  matching RU/EN installation instructions.
+  Linux and Windows x86_64 and arm64 builds, macOS x86_64 and arm64 builds,
+  SHA256 files and matching RU/EN installation instructions. Do not add legacy
+  32-bit targets.
 - Use bounded tasks with explicit file ownership. Subagent communication is
   in English. Use a fresh GPT-6 Luna at medium reasoning for limited tasks;
   GPT-6.1 Sol at low reasoning for independent review or complex ABI/NVM work.

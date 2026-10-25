@@ -92,7 +92,16 @@ pub(crate) struct CodeIdentity {
 pub(crate) struct FirmwareMatrix {
     pub(crate) format: String,
     pub(crate) default_profile: String,
+    pub(crate) base_features: Vec<String>,
+    pub(crate) modules: Vec<MatrixModule>,
     pub(crate) profiles: Vec<MatrixProfile>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct MatrixModule {
+    pub(crate) feature: String,
+    pub(crate) make_switch: String,
+    pub(crate) profiles: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +143,7 @@ pub(crate) struct FeatureDescription {
     pub(crate) kind: String,
     pub(crate) title: LocalizedText,
     pub(crate) summary: LocalizedText,
+    pub(crate) guide: LocalizedText,
     pub(crate) limits: LocalizedText,
 }
 
@@ -285,34 +295,326 @@ pub(crate) fn display_name(id: ProfileId) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
+    const PROFILE_IDS: [&str; 9] = [
+        "work",
+        "essential",
+        "typing",
+        "mouse",
+        "mouse-typing",
+        "system",
+        "tap-dance",
+        "key-overrides",
+        "settings",
+    ];
+    const BASE_FEATURE_IDS: [&str; 14] = [
+        "six-layers",
+        "sixteen-vial-macros",
+        "eight-two-key-combos",
+        "compact-tap-hold",
+        "encoder-map",
+        "media-keys",
+        "nkro-reports",
+        "caps-word",
+        "repeat",
+        "alternate-repeat",
+        "grave-escape",
+        "tri-layer",
+        "rgb-effects",
+        "vialrgb-direct-ram",
+    ];
+    const OPTIONAL_MODULE_IDS: [&str; 14] = [
+        "nkro-control",
+        "one-shot",
+        "space-cadet",
+        "leader",
+        "mouse-keys",
+        "auto-shift",
+        "dynamic-macros",
+        "gui-lock",
+        "ctrl-gui-swap",
+        "os-indicators",
+        "mac-pc",
+        "tap-dance",
+        "key-overrides",
+        "qmk-settings",
+    ];
+
+    fn exact_unique_ids<'a>(
+        ids: impl IntoIterator<Item = &'a str>,
+        expected: &[&str],
+        label: &str,
+    ) {
+        let ids: Vec<_> = ids.into_iter().collect();
+        let unique: BTreeSet<_> = ids.iter().copied().collect();
+        assert_eq!(ids.len(), unique.len(), "duplicate {label} IDs");
+        assert_eq!(
+            unique,
+            expected.iter().copied().collect(),
+            "unexpected {label} IDs"
+        );
+    }
+
+    fn assert_localized_help(text: &LocalizedText, label: &str) {
+        assert!(!text.en.trim().is_empty(), "missing English {label}");
+        assert!(!text.ru.trim().is_empty(), "missing Russian {label}");
+    }
 
     #[test]
-    fn pinned_catalog_describes_all_nine_profiles_without_authorizing_writes() {
+    fn all_beta1_profile_sources_have_the_same_exact_unique_id_set() {
         assert_eq!(SOURCE_ARCHIVE_SHA256.len(), 64);
-        let mut ids = Vec::new();
-        for image in profiles() {
-            assert!(!ids.contains(&image.profile.as_str()));
-            ids.push(image.profile.as_str());
-            assert!(!image.hardware_validated);
-            assert!(!image.flashing_authorized);
-            assert!(!image.settings_writes_authorized);
-            let matrix = matrix_profile(image.profile);
-            assert_eq!(matrix.installable, image.profile == ProfileId::Work);
-            assert_eq!(matrix.release_approved, image.profile == ProfileId::Work);
+        exact_unique_ids(
+            profiles().iter().map(|image| image.profile.as_str()),
+            &PROFILE_IDS,
+            "catalog profile",
+        );
+        exact_unique_ids(
+            firmware_matrix()
+                .profiles
+                .iter()
+                .map(|profile| profile.profile.as_str()),
+            &PROFILE_IDS,
+            "matrix profile",
+        );
+        exact_unique_ids(
+            module_descriptions()
+                .profiles
+                .iter()
+                .map(|profile| profile.id.as_str()),
+            &PROFILE_IDS,
+            "description profile",
+        );
+    }
+
+    #[test]
+    fn profile_default_approval_and_installability_are_exactly_work_only() {
+        assert_eq!(firmware_matrix().default_profile, "work");
+        for id in PROFILE_IDS {
+            let profile_id: ProfileId = serde_json::from_str(&format!("\"{id}\""))
+                .unwrap_or_else(|_| panic!("profile ID {id} must deserialize"));
+            let image = profile(profile_id);
+            let matrix = matrix_profile(profile_id);
+            let description = profile_description(profile_id);
+            let is_work = id == "work";
+            assert_eq!(description.default, is_work, "{id} default flag");
+            assert_eq!(image.release_approved, is_work, "{id} catalog approval");
+            assert_eq!(matrix.release_approved, is_work, "{id} matrix approval");
+            assert_eq!(matrix.installable, is_work, "{id} installability");
+        }
+    }
+
+    #[test]
+    fn optional_features_match_module_flags_and_profile_help_exactly() {
+        let matrix = firmware_matrix();
+        let descriptions = module_descriptions();
+        exact_unique_ids(
+            matrix.base_features.iter().map(String::as_str),
+            &BASE_FEATURE_IDS,
+            "base feature",
+        );
+        let module_ids: BTreeSet<_> = matrix
+            .modules
+            .iter()
+            .map(|module| module.feature.as_str())
+            .collect();
+        assert_eq!(
+            module_ids.len(),
+            matrix.modules.len(),
+            "duplicate optional module IDs"
+        );
+        exact_unique_ids(
+            matrix.modules.iter().map(|module| module.feature.as_str()),
+            &OPTIONAL_MODULE_IDS,
+            "optional module",
+        );
+
+        for profile in &matrix.profiles {
+            let id = profile.profile.as_str();
+            let description = descriptions
+                .profiles
+                .iter()
+                .find(|candidate| candidate.id == id)
+                .unwrap_or_else(|| panic!("missing profile description for {id}"));
+            let feature_set: BTreeSet<_> = profile
+                .optional_features
+                .iter()
+                .map(String::as_str)
+                .collect();
+            let description_set: BTreeSet<_> = description
+                .optional_features
+                .iter()
+                .map(String::as_str)
+                .collect();
             assert_eq!(
-                profile_description(image.profile).id,
-                image.profile.as_str()
+                feature_set.len(),
+                profile.optional_features.len(),
+                "duplicate matrix feature for {id}"
             );
-            for feature in &image.features {
+            assert_eq!(
+                description_set.len(),
+                description.optional_features.len(),
+                "duplicate help feature for {id}"
+            );
+            assert_eq!(
+                feature_set, description_set,
+                "matrix/help features differ for {id}"
+            );
+
+            let flags = &profile.capabilities.optional_modules;
+            exact_unique_ids(
+                flags.keys().map(String::as_str),
+                &module_ids.iter().copied().collect::<Vec<_>>(),
+                "profile module flag",
+            );
+            let enabled: BTreeSet<_> = flags
+                .iter()
+                .filter_map(|(module, enabled)| enabled.then_some(module.as_str()))
+                .collect();
+            assert_eq!(
+                enabled, feature_set,
+                "enabled module flags differ from optional_features for {id}"
+            );
+            for module in &module_ids {
+                assert_eq!(
+                    flags.get(*module).copied(),
+                    Some(feature_set.contains(module)),
+                    "module presence flag {module} for {id}"
+                );
+            }
+            for module in &matrix.modules {
+                let declared_profiles: BTreeSet<_> =
+                    module.profiles.iter().map(String::as_str).collect();
+                assert_eq!(
+                    declared_profiles.len(),
+                    module.profiles.len(),
+                    "duplicate profile in {} module membership",
+                    module.feature
+                );
+                assert_eq!(
+                    declared_profiles.contains(id),
+                    feature_set.contains(module.feature.as_str()),
+                    "{} module membership disagrees for {id}",
+                    module.feature
+                );
                 assert!(
-                    feature_description(feature).is_some(),
-                    "missing published module help for {feature}"
+                    !module.make_switch.trim().is_empty(),
+                    "{} module has no build switch",
+                    module.feature
                 );
             }
         }
-        assert_eq!(ids.len(), 9);
-        assert!(!catalog().hardware_validated);
-        assert!(!catalog().flashing_authorized);
-        assert!(!catalog().settings_writes_authorized);
+        for module in &matrix.modules {
+            let declared: BTreeSet<_> = module.profiles.iter().map(String::as_str).collect();
+            let expected: BTreeSet<_> = matrix
+                .profiles
+                .iter()
+                .filter(|profile| {
+                    profile
+                        .capabilities
+                        .optional_modules
+                        .get(&module.feature)
+                        .copied()
+                        .unwrap_or_else(|| panic!("missing {} module flag", module.feature))
+                })
+                .map(|profile| profile.profile.as_str())
+                .collect();
+            assert_eq!(
+                declared, expected,
+                "{} module profile membership is not exact",
+                module.feature
+            );
+        }
+    }
+
+    #[test]
+    fn every_optional_module_and_base_feature_has_bilingual_help_and_guides() {
+        let matrix = firmware_matrix();
+        let catalog = module_descriptions();
+        exact_unique_ids(
+            catalog.features.iter().map(|feature| feature.id.as_str()),
+            &catalog
+                .features
+                .iter()
+                .map(|feature| feature.id.as_str())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>(),
+            "feature description",
+        );
+        let described: BTreeSet<_> = catalog
+            .features
+            .iter()
+            .map(|feature| feature.id.as_str())
+            .collect();
+        let required: BTreeSet<_> = matrix
+            .base_features
+            .iter()
+            .map(String::as_str)
+            .chain(matrix.modules.iter().map(|module| module.feature.as_str()))
+            .collect();
+        assert_eq!(
+            required, described,
+            "feature help must exactly cover base features and optional modules"
+        );
+        for feature in &catalog.features {
+            assert_eq!(
+                feature.kind,
+                if BASE_FEATURE_IDS.contains(&feature.id.as_str()) {
+                    "base"
+                } else {
+                    "optional"
+                },
+                "incorrect help classification for {}",
+                feature.id
+            );
+            for (kind, text) in [
+                ("title", &feature.title),
+                ("summary", &feature.summary),
+                ("guide", &feature.guide),
+                ("limits", &feature.limits),
+            ] {
+                assert_localized_help(text, &format!("{} {kind}", feature.id));
+            }
+        }
+    }
+
+    #[test]
+    fn catalog_image_features_must_resolve_to_described_features() {
+        let matrix = firmware_matrix();
+        let described: BTreeSet<_> = module_descriptions()
+            .features
+            .iter()
+            .map(|feature| feature.id.as_str())
+            .collect();
+        for image in profiles() {
+            let features: BTreeSet<_> = image.features.iter().map(String::as_str).collect();
+            assert_eq!(
+                features.len(),
+                image.features.len(),
+                "duplicate feature in {} image",
+                image.profile.as_str()
+            );
+            let matrix_profile = matrix_profile(image.profile);
+            let expected: BTreeSet<_> = matrix
+                .base_features
+                .iter()
+                .map(String::as_str)
+                .chain(matrix_profile.optional_features.iter().map(String::as_str))
+                .collect();
+            assert_eq!(
+                features,
+                expected,
+                "{} image feature list differs from base plus optional features",
+                image.profile.as_str()
+            );
+            for feature in features {
+                assert!(
+                    described.contains(feature),
+                    "{} image references undocumented feature {feature}",
+                    image.profile.as_str()
+                );
+            }
+        }
     }
 }

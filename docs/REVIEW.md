@@ -132,3 +132,26 @@ No application launch, USB command or device test was performed during acceptanc
 - CI defines Linux and Windows x86_64/arm64 and macOS x86_64/arm64 raw binary
   artifacts with SHA256SUMS. Remote CI execution and artifact availability are
   pending; they are not claimed by this local record.
+
+## Final implementation review — 2026-10-25
+
+- A fresh GPT-6.1 Sol Low reviewer checked the full change from `19df497`
+  through commit `42bad4d` and the working tree, including source, tests,
+  firmware assets, workflow, and EN/RU documentation. No new confirmed blocking
+  defect was found. The reviewer independently verified catalog JSON against
+  the published firmware archive and confirmed beta.1 remains preview-only;
+  no hardware behavior was claimed.
+- The architect rechecked the finished implementation against the revised plan
+  and requirements. The bounded catalog preview, six-target CI preparation and
+  generic editor regression coverage were accepted. Full beta.1 companion
+  acceptance remains incomplete; the blockers are listed in
+  `ARCHITECTURE-REVIEW.md`.
+- After adding module coverage and guarding Mouse Keys against empty or invalid
+  numeric input, the full host suite passed with Rust 1.97.0:
+  `cargo test --locked --all-targets` — **1549 passed, 0 failed, 14 ignored**,
+  260.88 s. The 14 ignored tests remain skipped; no physical keyboard was used.
+- The new cases exercise generic Auto Shift and Mouse Keys editor paths with an
+  in-memory HID recorder. They do not establish those settings as supported by
+  beta.1. Beta profile selection still only changes local preview state.
+- Remote CI and its six artifact downloads refer to the earlier source state
+  until a fresh run is completed for this final tree. They remain pending here.

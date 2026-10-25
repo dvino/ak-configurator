@@ -2,6 +2,23 @@ use super::ak820_beta1_profiles as catalog;
 use crate::i18n::Language;
 use egui::{Color32, RichText};
 
+const OPTIONAL_MODULE_LABELS: &[(&str, &str, &str)] = &[
+    ("auto-shift", "Auto Shift", "Auto Shift"),
+    ("ctrl-gui-swap", "Ctrl/GUI swap", "Обмен Ctrl/GUI"),
+    ("dynamic-macros", "Dynamic Macros", "Динамические макросы"),
+    ("gui-lock", "GUI lock", "Блокировка GUI"),
+    ("key-overrides", "Key Overrides", "Замены клавиш"),
+    ("leader", "Leader", "Leader"),
+    ("mac-pc", "Mac/PC mode", "Режим Mac/PC"),
+    ("mouse-keys", "Mouse Keys", "Управление мышью"),
+    ("nkro-control", "NKRO control", "Управление NKRO"),
+    ("one-shot", "One Shot", "Одноразовые модификаторы"),
+    ("os-indicators", "OS indicators", "Индикаторы ОС"),
+    ("qmk-settings", "QMK Settings", "Настройки QMK"),
+    ("space-cadet", "Space Cadet", "Space Cadet"),
+    ("tap-dance", "Tap Dance", "Tap Dance"),
+];
+
 #[derive(Clone)]
 struct SelectorState {
     open: bool,
@@ -28,6 +45,10 @@ fn store(ctx: &egui::Context, state: SelectorState) {
     ctx.data_mut(|data| data.insert_temp(egui::Id::new("ak820_beta1_profile_selector"), state));
 }
 
+fn select_preview_profile(model: &mut SelectorState, profile: catalog::ProfileId) {
+    model.selected = profile;
+}
+
 /// Open the catalog window. Call this from the app's profile navigation action.
 pub(crate) fn open(ctx: &egui::Context) {
     let mut current = state(ctx);
@@ -35,15 +56,17 @@ pub(crate) fn open(ctx: &egui::Context) {
     store(ctx, current);
 }
 
-pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language) {
+pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language) -> egui::Response {
     let label = if language == Language::Russian {
         "Профили прошивки beta.1"
     } else {
         "beta.1 firmware profiles"
     };
-    if crate::ui_style::modern_button(ui, label, egui::vec2(228.0, 34.0), true).clicked() {
+    let response = crate::ui_style::modern_button(ui, label, egui::vec2(228.0, 34.0), true);
+    if response.clicked() {
         open(ctx);
     }
+    response
 }
 
 /// Draw the beta.1 catalog and return a profile ID when the local selection changes.
@@ -147,7 +170,7 @@ pub(crate) fn show(ctx: &egui::Context, language: Language) {
                                     response
                                 });
                             if card.inner.clicked() && model.selected != id {
-                                model.selected = id;
+                                select_preview_profile(&mut model, id);
                             }
                             if index % 2 == 1 {
                                 ui.end_row();
@@ -308,23 +331,7 @@ fn hash_row(ui: &mut egui::Ui, label: &str, value: &str) {
 }
 
 fn profile_modules(profile: &catalog::MatrixProfile, russian: bool) -> String {
-    const NAMES: &[(&str, &str, &str)] = &[
-        ("auto-shift", "Auto Shift", "Auto Shift"),
-        ("ctrl-gui-swap", "Ctrl/GUI swap", "Обмен Ctrl/GUI"),
-        ("dynamic-macros", "Dynamic Macros", "Динамические макросы"),
-        ("gui-lock", "GUI lock", "Блокировка GUI"),
-        ("key-overrides", "Key Overrides", "Замены клавиш"),
-        ("leader", "Leader", "Leader"),
-        ("mac-pc", "Mac/PC mode", "Режим Mac/PC"),
-        ("mouse-keys", "Mouse Keys", "Управление мышью"),
-        ("nkro-control", "NKRO control", "Управление NKRO"),
-        ("one-shot", "One Shot", "Одноразовые модификаторы"),
-        ("os-indicators", "OS indicators", "Индикаторы ОС"),
-        ("qmk-settings", "QMK Settings", "Настройки QMK"),
-        ("space-cadet", "Space Cadet", "Space Cadet"),
-        ("tap-dance", "Tap Dance", "Tap Dance"),
-    ];
-    NAMES
+    OPTIONAL_MODULE_LABELS
         .iter()
         .filter(|(key, _, _)| {
             profile
@@ -337,4 +344,188 @@ fn profile_modules(profile: &catalog::MatrixProfile, russian: bool) -> String {
         .map(|(_, en, ru)| if russian { *ru } else { *en })
         .collect::<Vec<_>>()
         .join(" · ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn optional_module_labels_cover_every_catalog_module_once() {
+        let labels: Vec<_> = OPTIONAL_MODULE_LABELS
+            .iter()
+            .map(|(id, _, _)| *id)
+            .collect();
+        let unique: BTreeSet<_> = labels.iter().copied().collect();
+        let catalog: BTreeSet<_> = catalog::module_descriptions()
+            .features
+            .iter()
+            .filter(|feature| feature.kind == "optional")
+            .map(|feature| feature.id.as_str())
+            .collect();
+
+        assert_eq!(labels.len(), unique.len(), "module labels must be unique");
+        assert_eq!(unique, catalog, "every optional module needs one UI label");
+    }
+
+    #[test]
+    fn every_profile_summary_lists_exactly_its_enabled_modules_in_both_languages() {
+        let expected = [
+            (
+                "work",
+                "Dynamic Macros · Leader · NKRO control · One Shot · OS indicators · Space Cadet",
+                "Динамические макросы · Leader · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "essential",
+                "NKRO control · One Shot · OS indicators · Space Cadet",
+                "Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "typing",
+                "Auto Shift · NKRO control · One Shot · OS indicators · Space Cadet",
+                "Auto Shift · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "mouse",
+                "Mouse Keys · NKRO control · One Shot · OS indicators · Space Cadet",
+                "Управление мышью · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "mouse-typing",
+                "Auto Shift · GUI lock · Mouse Keys · NKRO control · One Shot · OS indicators · Space Cadet",
+                "Auto Shift · Блокировка GUI · Управление мышью · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "system",
+                "Ctrl/GUI swap · GUI lock · Mac/PC mode · NKRO control · One Shot · OS indicators · Space Cadet",
+                "Обмен Ctrl/GUI · Блокировка GUI · Режим Mac/PC · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
+            ),
+            (
+                "tap-dance",
+                "NKRO control · One Shot · Space Cadet · Tap Dance",
+                "Управление NKRO · Одноразовые модификаторы · Space Cadet · Tap Dance",
+            ),
+            (
+                "key-overrides",
+                "Key Overrides · NKRO control · One Shot · Space Cadet",
+                "Замены клавиш · Управление NKRO · Одноразовые модификаторы · Space Cadet",
+            ),
+            (
+                "settings",
+                "NKRO control · One Shot · QMK Settings · Space Cadet",
+                "Управление NKRO · Одноразовые модификаторы · Настройки QMK · Space Cadet",
+            ),
+        ];
+        let profiles = &catalog::firmware_matrix().profiles;
+        assert_eq!(profiles.len(), expected.len());
+        for (id, expected_en, expected_ru) in expected {
+            let profile = profiles
+                .iter()
+                .find(|profile| profile.profile.as_str() == id)
+                .unwrap_or_else(|| panic!("missing profile {id}"));
+            assert_eq!(profile_modules(profile, false), expected_en, "{id} EN");
+            assert_eq!(profile_modules(profile, true), expected_ru, "{id} RU");
+        }
+
+        let no_modules = catalog::MatrixProfile {
+            profile: catalog::ProfileId::Work,
+            installable: false,
+            release_approved: false,
+            optional_features: Vec::new(),
+            capabilities: catalog::MatrixCapabilities {
+                optional_modules: Default::default(),
+            },
+            measurement_status: String::new(),
+            offline_tests_status: String::new(),
+            runtime_status: String::new(),
+            settings_status: None,
+            settings_identity: None,
+        };
+        assert!(profile_modules(&no_modules, false).is_empty());
+        assert!(profile_modules(&no_modules, true).is_empty());
+    }
+
+    #[test]
+    fn opening_and_rendering_catalog_only_changes_its_preview_window_state() {
+        let ctx = egui::Context::default();
+        assert!(!state(&ctx).open);
+
+        open(&ctx);
+        let opened = state(&ctx);
+        assert!(opened.open);
+        assert_eq!(opened.selected.as_str(), "work");
+
+        for language in [Language::English, Language::Russian] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1440.0, 1000.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| show(ctx, language),
+            );
+            let rendered = state(&ctx);
+            assert!(rendered.open);
+            assert_eq!(rendered.selected.as_str(), "work");
+        }
+    }
+
+    #[test]
+    fn localized_navigation_buttons_open_the_catalog_window() {
+        #[derive(Default)]
+        struct NavigationState {
+            open: bool,
+            button_rect: Option<egui::Rect>,
+        }
+
+        for (language, label) in [
+            (Language::English, "beta.1 firmware profiles"),
+            (Language::Russian, "Профили прошивки beta.1"),
+        ] {
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                move |ctx, nav_state: &mut NavigationState| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        nav_state.button_rect = Some(button(ui, ctx, language).rect);
+                    });
+                    nav_state.open = state(ctx).open;
+                },
+                NavigationState::default(),
+            );
+            harness.run();
+            assert!(!harness.state().open);
+
+            let button_center = harness.state().button_rect.unwrap().center();
+            harness.hover_at(button_center);
+            harness.run();
+            harness.drag_at(button_center);
+            harness.run();
+            harness.drop_at(button_center);
+            harness.run();
+            assert!(
+                harness.state().open,
+                "{label} should open the profile catalog"
+            );
+        }
+    }
+
+    #[test]
+    fn selecting_any_catalog_profile_only_updates_the_local_preview_selection() {
+        let ctx = egui::Context::default();
+        open(&ctx);
+
+        for image in catalog::profiles() {
+            let mut preview = state(&ctx);
+            select_preview_profile(&mut preview, image.profile);
+            store(&ctx, preview.clone());
+
+            let selected = state(&ctx);
+            assert!(selected.open);
+            assert_eq!(selected.selected, image.profile);
+            assert_eq!(selected.selected.as_str(), image.profile.as_str());
+        }
+    }
 }

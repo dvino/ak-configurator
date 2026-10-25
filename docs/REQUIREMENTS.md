@@ -4,7 +4,7 @@
 
 **Status:** agreed requirements for future work
 
-**Version:** 0.4
+**Version:** 0.5
 
 **Date:** 2026-10-25
 
@@ -18,13 +18,13 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** all user settings and mappings for supported features are available in the editor. Actions that cannot be configured and relevant limits are described in the help. A build or release is blocked if a user-facing feature implemented in the firmware is missing from the editor and help.
 
-**AKW-002 · Web.** The current target is the wired AK820 keyboard with the VS11K28A controller in explicitly confirmed revisions. Other project-owned models may be added later after separate checks. A general Vial/QMK editor, bootloader replacement, and writes to protected areas outside the permitted image are out of scope.
+**AKW-002 · Web/Desktop.** The current target is the wired AK820 keyboard with the VS11K28A controller in explicitly confirmed revisions. Other project-owned models may be added later after separate checks. A general Vial/QMK editor, bootloader replacement, and writes to protected areas outside the permitted image are out of scope.
 
 **Acceptance:** flashing is available only for the listed model and a confirmed revision. An unknown device or protected area blocks the write and explains why.
 
-**AKW-003 · Web.** The first version offers the latest approved full-featured image. Module selection and other ready-made compatible variants belong to a later stage; users cannot compile an image on demand.
+**AKW-003 · Web/Desktop.** The companion uses the `v0.6.0-beta.1` nine-profile catalog: `work`, `essential`, `typing`, `mouse`, `mouse-typing`, `system`, `tap-dance`, `key-overrides`, and `settings`. `work` is the default. Profiles are selected as complete images; there is no all-module image, arbitrary module switching, or compilation on demand. The companion replaces the standalone installer only after safe installation and verification are qualified for every supported profile.
 
-**Acceptance:** the first version offers the full image by default and does not change its feature set without an explicit choice. Later, the interface may offer only ready-made combinations built and checked as complete images. Capacity is not inferred from estimates for individual features.
+**Acceptance:** profile membership, limits and measured resources agree with the firmware matrix and module descriptions. Catalog availability, release approval, standalone-installer inclusion, settings support and companion installation support are shown separately. Beta.1 includes only `work` in standalone installers; the other eight profiles remain catalog candidates. A profile name or a successful offline test does not enable writes.
 
 **AKW-004 · Foundation.** Reuse Entropy as the foundation in the separate configurator repository. Develop and stabilize its native Rust application first. Begin browser/WebAssembly feasibility and implementation only after the desktop editor is reasonably working. Demonstrate browser feasibility before promising browser flashing. Keep any alternative as a separate future decision if Entropy cannot meet a required need; do not silently switch foundations.
 
@@ -32,7 +32,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **AKW-005 · Interface.** Keep the selected foundation's interface and prioritize feature completeness. Redesign the interface separately. All features and help are available in Russian and English.
 
-**Acceptance:** switching RU/EN changes all user-facing labels and help, and the selection is remembered. On first launch, the browser language sets the language.
+**Acceptance:** switching RU/EN changes all user-facing labels and help, and the selection is remembered. On first launch, the browser or operating-system language selects the language for its target.
 
 ## 2. Connection and firmware capabilities
 
@@ -40,21 +40,25 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** the supported browser, missing WebHID, and access denial are checked. None of these failures starts a write.
 
-**AKW-011 · Web.** The user selects a device. Reconnection is automatic only when permission is saved and the match is unambiguous; otherwise, the site asks the user to select a device. Selecting again after entering the bootloader is allowed. An ambiguous device receives no write commands.
+**AKW-011 · Web/Desktop.** The user selects a device. Reconnection is automatic only when permission is saved and the match is unambiguous; otherwise, the configurator asks the user to select a device. Selecting again after entering the bootloader is allowed. An ambiguous device receives no write commands.
 
 **Acceptance:** identity and permission are checked before each write operation. If there is any doubt, the operation is blocked.
 
-**AKW-012 · Web.** Capabilities are determined from the exact installed image. Features for missing modules are hidden. A new feature in an already enabled module is marked “Available after update” and has an update button. A release's capabilities are not attributed to an older or custom build.
+**AKW-012 · Web/Desktop.** Capabilities are determined from the exact installed image. Features for missing modules are hidden. A new feature in an already enabled module is marked “Available after update” and has an update button. A release's capabilities are not attributed to an older or custom build.
 
 **Acceptance:** the interface, help, and available actions match the catalog entry for the current image. Unknown firmware blocks setting changes; unknown capabilities in a custom build also block the editor.
 
-**AKW-013 · Web.** Only one configurator tab can use the device at a time. Other tabs say that it is busy. If Vial or another application blocks the connection, the site explains why and suggests closing it; the user retries the connection with a button.
+**AKW-013 · Web/Desktop.** Only one configurator instance, browser tab or helper can own an operation on the device at a time. Other instances say that it is busy. If Vial or another application blocks the connection, the configurator explains why and suggests closing it; the user retries the connection with a button.
 
 **Acceptance:** a busy device receives no parallel commands, and retries do not happen automatically.
 
 **AKW-014 · Web/Desktop.** A disconnect during an operation stops it. After reconnection, the state is checked again. Erase, write, and flash operations are never retried automatically.
 
 **Acceptance:** after a disconnect, the interface does not show success or continue without a new check and confirmation.
+
+**AKW-015 · Image contract.** Join the beta.1 capability catalog, firmware matrix and RU/EN module descriptions by stable IDs and exact IHX identity. Preserve configuration, schema, enabled modules, table counts, active QMK Settings IDs, keycode source restrictions, settings identity and allowed transitions. Distinguish the linked CODE-window fingerprint from permanent packed CODE SHA256 over `[0x2800, 0xC700)`. Only a separately trusted exact packed identity can authorize settings matching; missing identity blocks mutation while leaving catalog preview available.
+
+**Acceptance:** fixtures reject mismatched catalogs, duplicate or unknown contract fields, missing/changed image identity, unsupported modules and invalid transitions. Runtime data is not inferred from a profile title. All nine profiles can be selected in the offline editor without selecting a device or changing its active image.
 
 ## 3. Settings and help
 
@@ -73,6 +77,10 @@ The native desktop configurator is the first milestone. Browser requirements mar
 **AKW-023 · Web.** After the first load, the site can use settings, local backups, and saved help offline. New releases are downloaded from the network; firmware can be selected from a local file.
 
 **Acceptance:** after caching, the editor and help open offline. Availability of a new release offline is not promised.
+
+**AKW-024 · Profile editors.** Expose the common layer, matrix, encoder, macro, Combo and RGB controls and all actions supported by the selected exact image. Preserve source restrictions: physical matrix, encoder, Combo and macro tap/down/up are distinct contexts. Optional modules are controlled by the image contract, including NKRO control, One Shot, Space Cadet, Leader, Dynamic Macros, Mouse Keys, Auto Shift, GUI lock, modifier swaps and OS indicators. Tap Dance and Key Overrides each have eight typed entries only in their matching schema03 profiles. QMK Settings exposes only active advertised IDs in `settings`; reserved storage never enables a control.
+
+**Acceptance:** match the firmware's `BUILD-PROFILES.md`, `MODULE-MATRIX.md`, `MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md` at the pinned beta.1 source. Validate ranges, reserved bytes, CRC, defaults and per-entry terms before writing. Typed setters verify ACK, getter and complete NVM readback including adjacent bytes. Unchanged effective defaults preserve blank storage. Temporary Dynamic Macros, session modes and VialRGB Direct colors are identified as volatile. Unsupported controls remain unavailable in both the editor and key picker.
 
 ## 4. Releases and image compatibility
 
@@ -118,6 +126,10 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** all required device-specific data and protected areas are checked before writing; an archived file does not replace these checks.
 
+**AKW-045 · Backup compatibility.** Port `ak820-settings-backup-1` for schema02 and `ak820-settings-backup-2` for schema03 from the firmware reference into shared Rust code; Python is not a runtime dependency. Preserve complete typed extension storage, including inactive values. Same-image restore requires exact reviewed identity. A different image requires an explicit source/target IHX pair in `settings_transitions` and all schema/module/value checks; a shared schema or profile name is insufficient.
+
+**Acceptance:** golden fixtures agree with the Python reference on bytes, defaults, errors and compatibility. Reject duplicate, unknown or missing fields; schema03-to-schema02 restore; nonempty inaccessible tables; and unsupported stored settings before the first write. Schema01/02-to-schema03 migration requires an explicit target and preserves supported settings, including Combos. A partial `.entlayout` snapshot does not satisfy complete backup or undo-import requirements.
+
 ## 6. Firmware installation and OEM rollback
 
 **AKW-050 · Web.** The complete first-version workflow runs on the website. A separate installer does not satisfy this requirement. Browser flashing is not considered ready unless a safe path through the factory bootloader has been confirmed.
@@ -140,9 +152,9 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 ## 7. Standalone application and system helper
 
-**AKW-060 · Desktop.** Release a native application for Windows and Linux x86_64 and arm64, and macOS arm64 and x86_64. Begin native adaptation and develop the WebAssembly/browser target in parallel; desktop release does not depend on website readiness. Use Entropy’s native application and shared Rust model. The application includes compatible firmware, all curated AK820 profiles, the compatibility catalog, and help. Configuration, installation of bundled or local firmware, backups, and rollback using a suitable dump work offline.
+**AKW-060 · Desktop.** Release a native application for Windows and Linux x86_64 and arm64, and macOS arm64 and x86_64. Stabilize the native editor first, then begin the WebAssembly/browser stage; desktop release does not depend on website readiness. Use Entropy’s native application and shared Rust model. The application includes compatible firmware, all curated AK820 profiles, the compatibility catalog, and help. Configuration, installation of bundled or local firmware, backups, and rollback using a suitable dump work offline.
 
-**Acceptance:** build, USB connection, memory use, startup speed, and required features are confirmed separately for each target OS; a build on one OS does not confirm the others.
+**Acceptance:** record minimum supported OS versions, Linux package/runtime dependencies and X11/Wayland limits before release. Build, USB connection, memory use, startup speed, and required features are confirmed separately for each OS/CPU pair; a build on one target does not confirm another. A CI runner label alone does not define OS compatibility.
 
 **AKW-061 · Desktop.** Application updates are offered separately and started only by the user; they do not start firmware flashing and preserve helper settings. If new firmware needs a newer configurator, offer the application update first. A compatible bundled firmware remains available offline.
 
@@ -195,5 +207,9 @@ The native desktop configurator is the first milestone. Browser requirements mar
 **AKW-084 · Hosting and branches.** AK Configurator source lives in the separate `dvino/ak-configurator` repository, with Rust sources under `src/` and browser platform adapters alongside the native platform code. `main` is the shared baseline, `desktop-dev` carries native development, `desktop` prepares native releases, and `web-dev` carries browser work in the configurator repository. The `dvino/ak820` repository remains the firmware source.
 
 **Acceptance:** CI checks shared model, protocol, format, help, and exact firmware compatibility across both targets. A coordinated release uses common metadata and compatibility identifiers and tests both targets; hardware qualification remains separate. Native releases are not blocked by website readiness.
+
+**AKW-085 · Offline completion.** Complete every development and acceptance step that does not need a keyboard: nine-profile offline editors, typed codecs, backups/migration, release and revocation rules, packer parity, operation state machines, localized help, negative fixtures, and six-target builds/packages. Use fake transports and approved non-sensitive fixtures; unavailable OEM inputs must not be replaced with invented acceptance evidence.
+
+**Acceptance:** the report maps every applicable requirement to code and tests with passed, failed, missing, skipped or hardware-gated status. Cover complete successful image verification through full settings loading, both encoder mappings, every capability/source context and failure at every mutation stage. Hardware-only gates name the exact remaining operation: identity/USB behavior, fresh unlock, flash/readback, physical input or persistence. Offline preparation is not blocked merely because hardware qualification remains open.
 
 Readiness for a specific release is determined by the requirements above and the work plan in [PLAN.md](PLAN.md). Acceptance covers successful scenarios and safe stops for a damaged file, wrong device, incompatible backup, revocation, timeout, and readback mismatch. Firmware update checks separately cover continuing with default settings after a full-backup read failure and explicit warning, installation without a factory backup with a warning, and blocking rollback with an unsuitable dump. The site and application show only capabilities confirmed for the exact model and image.

@@ -221,7 +221,12 @@ impl EntropyApp {
                     if resp.changed() {
                         let filtered: String =
                             text.chars().filter(|c: &char| c.is_ascii_digit()).collect();
-                        let parsed = filtered.parse::<u32>().unwrap_or(0).min(max);
+                        let Ok(parsed) = filtered.parse::<u32>() else {
+                            text = filtered;
+                            ui.ctx().data_mut(|d| d.insert_temp(edit_id, text));
+                            return;
+                        };
+                        let parsed = parsed.min(max);
                         let new_value = parsed as u16;
                         if new_value != current {
                             match qsid {
@@ -244,5 +249,127 @@ impl EntropyApp {
                 },
             );
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn test_app() -> (EntropyApp, egui::Context, crate::hid::TestHidRecorder) {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new(&cc);
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        app.hid_device = Some(hid);
+        (app, ctx, recorder)
+    }
+
+    fn draw_page(
+        app: &mut EntropyApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 900.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.max_rect();
+                    app.draw_mouse_keys_settings_page(ui, rect);
+                });
+            },
+        )
+    }
+
+    fn replace_mouse_delay_text(app: &mut EntropyApp, ctx: &egui::Context, text: &str) {
+        let output = draw_page(app, ctx, vec![]);
+        let pos = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Text(galley) if galley.galley.job.text == app.mouse_keys_settings.delay.to_string() => {
+                Some(galley.pos + galley.galley.size() / 2.0)
+            }
+            _ => None,
+        }).expect("Mouse Keys delay field text is visible");
+        draw_page(app, ctx, vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
+        ]);
+        let edit_id = egui::Id::new(("mouse_keys_edit", 9u16));
+        ctx.memory_mut(|memory| memory.request_focus(edit_id));
+        draw_page(app, ctx, vec![
+            egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers { ctrl: true, mac_cmd: true, command: true, ..Default::default() },
+            },
+            egui::Event::Text(text.into()),
+        ]);
+    }
+
+    fn qmk_set_requests(recorder: &crate::hid::TestHidRecorder) -> Vec<[u8; 32]> {
+        recorder
+            .requests()
+            .into_iter()
+            .filter(|request| request[0] == 0xFE && request[1] == 0x0B)
+            .collect()
+    }
+
+    #[test]
+    fn unsupported_mouse_keys_page_and_unchanged_render_emit_no_writes() {
+        let (mut app, ctx, recorder) = test_app();
+        let unsupported = draw_page(&mut app, &ctx, vec![]);
+        let unavailable = crate::i18n::tr(
+            app.app_settings.language,
+            crate::i18n::Key::MouseKeysUnavailable,
+        );
+        assert!(unsupported.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text == unavailable
+        )));
+        assert!(recorder.requests().is_empty());
+
+        app.mouse_keys_settings.supported = true;
+        app.mouse_keys_settings.delay = 20;
+        app.mouse_keys_settings.loaded_qsids.mark(9);
+        draw_page(&mut app, &ctx, vec![]);
+        draw_page(&mut app, &ctx, vec![]);
+        assert!(recorder.requests().is_empty(), "rendering editable values must not write");
+    }
+
+    #[test]
+    fn editing_mouse_key_delay_updates_model_and_writes_only_its_qsid() {
+        let (mut app, ctx, recorder) = test_app();
+        app.mouse_keys_settings.supported = true;
+        app.mouse_keys_settings.delay = 20;
+        app.mouse_keys_settings.loaded_qsids.mark(9);
+        replace_mouse_delay_text(&mut app, &ctx, "123");
+
+        assert_eq!(app.mouse_keys_settings.delay, 123);
+        let writes = qmk_set_requests(&recorder);
+        assert_eq!(writes.len(), 1);
+        assert_eq!(u16::from_le_bytes([writes[0][2], writes[0][3]]), 9);
+        assert_eq!(writes[0][4], 123);
+        assert_eq!(app.mouse_keys_settings.loaded_qsids.contains(9), true);
+    }
+
+    #[test]
+    fn malformed_mouse_key_delay_input_does_not_change_state_or_write() {
+        let (mut app, ctx, recorder) = test_app();
+        app.mouse_keys_settings.supported = true;
+        app.mouse_keys_settings.delay = 20;
+        app.mouse_keys_settings.loaded_qsids.mark(9);
+        replace_mouse_delay_text(&mut app, &ctx, "x");
+
+        assert_eq!(app.mouse_keys_settings.delay, 20);
+        assert!(qmk_set_requests(&recorder).is_empty(), "invalid text must fail closed");
     }
 }

@@ -202,8 +202,14 @@ Repeat"
                     ("DM Play 2", "Play temporary Dynamic Macro slot 2"),
                 ],
                 crate::i18n::Language::Russian => [
-                    ("DM Запись 1", "Начать запись временного динамического макроса 1"),
-                    ("DM Запись 2", "Начать запись временного динамического макроса 2"),
+                    (
+                        "DM Запись 1",
+                        "Начать запись временного динамического макроса 1",
+                    ),
+                    (
+                        "DM Запись 2",
+                        "Начать запись временного динамического макроса 2",
+                    ),
                     ("DM Стоп", "Остановить запись динамического макроса"),
                     ("DM Пуск 1", "Воспроизвести временный динамический макрос 1"),
                     ("DM Пуск 2", "Воспроизвести временный динамический макрос 2"),
@@ -419,6 +425,122 @@ mod layout_tests {
             },
         );
         assert_eq!(widths[0], widths[1]);
+    }
+}
+
+#[cfg(test)]
+mod compact_beta_keycode_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    const LEADER: u16 = 0x7C58;
+    const DYNAMIC_MACROS: [u16; 5] = [0x7C53, 0x7C54, 0x7C55, 0x7C56, 0x7C57];
+
+    fn picker_with_beta_capabilities(
+        language: crate::i18n::Language,
+        leader: bool,
+        dynamic_macros: bool,
+    ) -> KeycodePicker {
+        KeycodePicker {
+            ak820_profile: true,
+            supports_compact_leader: leader,
+            supports_compact_dynamic_macros: dynamic_macros,
+            language,
+            ..Default::default()
+        }
+    }
+
+    fn beta_rows(picker: &KeycodePicker) -> Vec<PickerRow> {
+        picker
+            .special_rows()
+            .into_iter()
+            .filter(|row| {
+                matches!(
+                    row.action,
+                    PickerAction::Assign(crate::keyboard::KeyBinding::Vial(value))
+                        if value == LEADER || DYNAMIC_MACROS.contains(&value)
+                )
+            })
+            .collect()
+    }
+
+    fn beta_codes(rows: &[PickerRow]) -> BTreeSet<u16> {
+        rows.iter()
+            .filter_map(|row| match row.action {
+                PickerAction::Assign(crate::keyboard::KeyBinding::Vial(value)) => Some(value),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn beta_keycodes_stay_hidden_and_unassignable_by_default() {
+        let picker = KeycodePicker {
+            ak820_profile: true,
+            language: crate::i18n::Language::English,
+            ..Default::default()
+        };
+        let expected: BTreeSet<_> = [LEADER].into_iter().chain(DYNAMIC_MACROS).collect();
+
+        assert!(!picker.supports_compact_leader);
+        assert!(!picker.supports_compact_dynamic_macros);
+        assert_eq!(beta_codes(&beta_rows(&picker)), BTreeSet::new());
+        for value in expected {
+            assert!(!picker.picker_value_supported(value));
+        }
+    }
+
+    #[test]
+    fn beta_leader_and_dynamic_macro_keycodes_are_gated_independently() {
+        let leader_only =
+            picker_with_beta_capabilities(crate::i18n::Language::English, true, false);
+        assert_eq!(
+            beta_codes(&beta_rows(&leader_only)),
+            [LEADER].into_iter().collect()
+        );
+
+        let dynamic_only =
+            picker_with_beta_capabilities(crate::i18n::Language::English, false, true);
+        assert_eq!(
+            beta_codes(&beta_rows(&dynamic_only)),
+            DYNAMIC_MACROS.into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn all_beta_special_keycodes_have_localized_captions_and_tooltips() {
+        let cases = [
+            (LEADER, "Leader", "Leader"),
+            (0x7C53, "DM Rec 1", "DM Запись 1"),
+            (0x7C54, "DM Rec 2", "DM Запись 2"),
+            (0x7C55, "DM Stop", "DM Стоп"),
+            (0x7C56, "DM Play 1", "DM Пуск 1"),
+            (0x7C57, "DM Play 2", "DM Пуск 2"),
+        ];
+
+        for (language, label_index) in [
+            (crate::i18n::Language::English, 1),
+            (crate::i18n::Language::Russian, 2),
+        ] {
+            let picker = picker_with_beta_capabilities(language, true, true);
+            let rows = beta_rows(&picker);
+            assert_eq!(beta_codes(&rows).len(), cases.len());
+            for (code, english, russian) in cases {
+                let expected_label = ["", english, russian][label_index];
+                let row = rows
+                    .iter()
+                    .find(|row| {
+                        matches!(row.action,
+                            PickerAction::Assign(crate::keyboard::KeyBinding::Vial(value)) if value == code)
+                    })
+                    .unwrap_or_else(|| panic!("missing beta keycode {code:#06x}"));
+                assert_eq!(row.accessible_name(), expected_label);
+                assert!(
+                    !row.tooltip.trim().is_empty(),
+                    "missing tooltip for {expected_label}"
+                );
+            }
+        }
     }
 }
 

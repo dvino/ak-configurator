@@ -313,3 +313,224 @@ impl EntropyApp {
         }
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn test_app() -> (EntropyApp, egui::Context, crate::hid::TestHidRecorder) {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new(&cc);
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        app.hid_device = Some(hid);
+        app.auto_shift_timeout = Some(175);
+        app.auto_shift_timeout_text = "175".into();
+        (app, ctx, recorder)
+    }
+
+    fn draw_page(app: &mut EntropyApp, ctx: &egui::Context) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 900.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.max_rect();
+                    app.draw_auto_shift_settings_page(ui, rect, true);
+                });
+            },
+        )
+    }
+
+    fn draw_enable_row(app: &mut EntropyApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(640.0, 180.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let origin = ui.cursor().min;
+                    let list = AdaptiveSettingsListViewport {
+                        viewport: ui.max_rect(),
+                        content_rect: ui.max_rect(),
+                        track_rect: egui::Rect::NOTHING,
+                        handle_height: 0.0,
+                        scroll_ratio: 0.0,
+                        track_hovered: false,
+                        suppress_tooltips: true,
+                        first_visible_row: 0,
+                        last_visible_row: 1,
+                        row_content_width: 520.0,
+                        row_height: 54.0,
+                        has_scrollbar: false,
+                        scroll_offset: 0.0,
+                        content_height: 54.0,
+                    };
+                    app.draw_auto_shift_row(ui, 0, &list, 86.0, true);
+                    ctx.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("auto_shift_test_switch_center"), egui::pos2(origin.x + 520.0 - 23.0, origin.y + 27.0));
+                    });
+                });
+            },
+        );
+    }
+
+    fn enter_timeout_text(app: &mut EntropyApp, ctx: &egui::Context, value: &str) {
+        let visible = app.auto_shift_timeout_text.clone();
+        let output = draw_page(app, ctx);
+        let pos = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == visible => {
+                    Some(text.pos + text.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .expect("Auto Shift timeout field text is visible");
+        let events = vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
+        ];
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 900.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.max_rect();
+                    app.draw_auto_shift_settings_page(ui, rect, true);
+                });
+            },
+        );
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("auto_shift_timeout")));
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 900.0),
+                )),
+                events: vec![
+                    egui::Event::Key {
+                        key: egui::Key::A,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers { ctrl: true, command: true, ..Default::default() },
+                    },
+                    egui::Event::Text(value.into()),
+                ],
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.max_rect();
+                    app.draw_auto_shift_settings_page(ui, rect, true);
+                });
+            },
+        );
+    }
+
+    #[test]
+    fn auto_shift_enable_switch_changes_model_and_sends_only_flags_qsid() {
+        let (mut app, ctx, recorder) = test_app();
+        draw_enable_row(&mut app, &ctx, vec![]);
+        let center = ctx.data(|data| {
+            data.get_temp::<egui::Pos2>(egui::Id::new("auto_shift_test_switch_center"))
+                .unwrap()
+        });
+        draw_enable_row(
+            &mut app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(center),
+                egui::Event::PointerButton {
+                    pos: center,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        draw_enable_row(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerButton {
+                pos: center,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            }],
+        );
+
+        assert!(app.auto_shift_options.enabled);
+        let writes: Vec<_> = recorder
+            .requests()
+            .into_iter()
+            .filter(|request| request[0] == 0xFE && request[1] == 0x0B)
+            .collect();
+        assert_eq!(writes.len(), 1);
+        assert_eq!(u16::from_le_bytes([writes[0][2], writes[0][3]]), 3);
+        assert_eq!(writes[0][4], 1);
+    }
+
+    #[test]
+    fn auto_shift_render_is_read_only_and_missing_timeout_fails_closed() {
+        let (mut app, ctx, recorder) = test_app();
+        draw_page(&mut app, &ctx);
+        draw_page(&mut app, &ctx);
+        assert!(recorder.requests().is_empty(), "painting controls must not write");
+
+        app.auto_shift_timeout = None;
+        app.auto_shift_timeout_text.clear();
+        let output = draw_page(&mut app, &ctx);
+        let unavailable = crate::i18n::tr(
+            app.app_settings.language,
+            crate::i18n::Key::AutoShiftUnavailable,
+        );
+        assert!(output.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text == unavailable
+        )));
+        assert!(recorder.requests().is_empty());
+    }
+
+    #[test]
+    fn auto_shift_timeout_edit_clamps_valid_input_and_rejects_non_numeric_input() {
+        let (mut app, ctx, recorder) = test_app();
+        // The timeout editor is intentionally disabled while Auto Shift itself is off.
+        app.auto_shift_options.enabled = true;
+        enter_timeout_text(&mut app, &ctx, "2500");
+        assert_eq!(app.auto_shift_timeout, Some(1000));
+        let writes: Vec<_> = recorder
+            .requests()
+            .into_iter()
+            .filter(|request| request[0] == 0xFE && request[1] == 0x0B)
+            .collect();
+        assert_eq!(writes.len(), 1);
+        assert_eq!(u16::from_le_bytes([writes[0][2], writes[0][3]]), 4);
+        assert_eq!(u16::from_le_bytes([writes[0][4], writes[0][5]]), 1000);
+
+        // A malformed edit is filtered to an empty field, which is not a value.
+        let before = recorder.requests().len();
+        enter_timeout_text(&mut app, &ctx, "x");
+        assert_eq!(app.auto_shift_timeout, Some(1000));
+        assert_eq!(recorder.requests().len(), before, "invalid input must not write");
+    }
+}
