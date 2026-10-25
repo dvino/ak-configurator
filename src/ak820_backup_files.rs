@@ -1,0 +1,616 @@
+//! Bounded local directory I/O for the firmware settings backup format.
+//!
+//! Layout and publication order are adapted from `tools/installer/settings_backup.py`
+//! at firmware revision `bef20f89d3da01d770767919bc7c8fc3c3a1a808`. This module
+//! handles local bytes only: it does not capture a device or perform HID I/O.
+use crate::ak820_settings_backup::{
+    canonical, sha256, BackupResult, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
+};
+use crate::ak820_settings_model::validate_profile_archive;
+use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+#[cfg(test)]
+use std::fs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
+
+const MANIFEST: &str = "manifest.json";
+const MANIFEST_LIMIT: usize = 65_536;
+const ENTRY_COUNT: usize = FILES.len() + 1;
+
+fn invalid() -> String {
+    "Invalid or inaccessible backup directory".into()
+}
+
+fn allowed_name(name: &std::ffi::OsStr) -> bool {
+    name == MANIFEST || FILES.iter().any(|(entry, _)| name == *entry)
+}
+
+#[cfg(target_os = "linux")]
+mod anchored {
+    use super::*;
+    use std::ffi::{CStr, CString, OsStr};
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::Component;
+
+    fn name(value: &OsStr) -> BackupResult<CString> {
+        CString::new(value.as_bytes()).map_err(|_| invalid())
+    }
+    pub(super) fn open_at(dir: &File, entry: &OsStr, flags: i32, mode: u32) -> BackupResult<File> {
+        let entry = name(entry)?;
+        let fd = unsafe {
+            libc::openat(
+                dir.as_raw_fd(),
+                entry.as_ptr(),
+                flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                mode as libc::mode_t,
+            )
+        };
+        if fd < 0 {
+            Err(invalid())
+        } else {
+            Ok(unsafe { File::from_raw_fd(fd) })
+        }
+    }
+    pub(super) fn directory(path: &Path) -> BackupResult<File> {
+        // Traverse every component from an already opened root/cwd. Never follow
+        // a symlink in an ancestor, and never re-resolve an anchored directory.
+        let mut dir =
+            File::open(if path.is_absolute() { "/" } else { "." }).map_err(|_| invalid())?;
+        for component in path.components() {
+            match component {
+                Component::RootDir | Component::CurDir => {}
+                Component::Normal(part) => {
+                    dir = open_at(&dir, part, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+                }
+                _ => return Err(invalid()),
+            }
+        }
+        Ok(dir)
+    }
+    pub(super) fn regular(dir: &File, entry: &str, maximum: usize) -> BackupResult<Vec<u8>> {
+        // NONBLOCK prevents a swapped FIFO from hanging before fstat rejects it.
+        let file = open_at(dir, OsStr::new(entry), libc::O_RDONLY, 0)?;
+        let metadata = file.metadata().map_err(|_| invalid())?;
+        if !metadata.is_file() || metadata.len() > maximum as u64 {
+            return Err(invalid());
+        }
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        file.take(maximum as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| invalid())?;
+        if bytes.len() > maximum || bytes.len() as u64 != metadata.len() {
+            return Err(invalid());
+        }
+        Ok(bytes)
+    }
+    pub(super) fn read(dir: &File) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+        // A distinct open description resets the directory offset on each read.
+        let scan = open_at(dir, OsStr::new("."), libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+        use std::os::fd::IntoRawFd;
+        let fd = scan.into_raw_fd();
+        let stream = unsafe { libc::fdopendir(fd) };
+        if stream.is_null() {
+            unsafe {
+                libc::close(fd);
+            }
+            return Err(invalid());
+        }
+        struct Stream(*mut libc::DIR);
+        impl Drop for Stream {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::closedir(self.0);
+                }
+            }
+        }
+        let stream = Stream(stream);
+        let mut names = std::collections::BTreeSet::new();
+        loop {
+            // readdir signals both EOF and failure with null; preserve failures.
+            #[cfg(target_os = "linux")]
+            let errno = unsafe { libc::__errno_location() };
+            #[cfg(target_os = "macos")]
+            let errno = unsafe { libc::__error() };
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            unsafe {
+                *errno = 0;
+            }
+            let item = unsafe { libc::readdir(stream.0) };
+            if item.is_null() {
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
+                if unsafe { *errno } != 0 {
+                    return Err(invalid());
+                }
+                break;
+            }
+            let raw = unsafe { CStr::from_ptr((*item).d_name.as_ptr()) }.to_bytes();
+            if raw == b"." || raw == b".." {
+                continue;
+            }
+            let entry = OsStr::from_bytes(raw);
+            if !allowed_name(entry) || !names.insert(raw.to_vec()) || names.len() > ENTRY_COUNT {
+                return Err(invalid());
+            }
+        }
+        if names.len() != ENTRY_COUNT {
+            return Err(invalid());
+        }
+        let manifest = regular(dir, MANIFEST, MANIFEST_LIMIT)?;
+        let mut files = BTreeMap::new();
+        for (entry, maximum) in FILES {
+            files.insert(entry.to_owned(), regular(dir, entry, maximum)?);
+        }
+        if regular(dir, MANIFEST, MANIFEST_LIMIT)? != manifest {
+            return Err("Backup manifest changed during read".into());
+        }
+        Ok((manifest, files))
+    }
+    pub(super) struct Stage {
+        pub parent: File,
+        pub dir: File,
+        pub name: CString,
+        published: bool,
+    }
+    impl Stage {
+        pub(super) fn new(parent: File) -> BackupResult<Self> {
+            use std::os::unix::fs::MetadataExt;
+            use std::sync::atomic::{AtomicU64, Ordering};
+            // A directory writable by another user could substitute the stage
+            // name before publication. Require an owner-controlled parent.
+            let metadata = parent.metadata().map_err(|_| invalid())?;
+            if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
+                return Err("Backup destination parent must be owned by the current user and not writable by group or others".into());
+            }
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            for _ in 0..128 {
+                let entry = CString::new(format!(
+                    ".ak820-pending-{}-{}-{}",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_err(|_| invalid())?
+                        .as_nanos(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ))
+                .unwrap();
+                if unsafe { libc::mkdirat(parent.as_raw_fd(), entry.as_ptr(), 0o700) } != 0 {
+                    continue;
+                }
+                // Install cleanup immediately: a restrictive umask can make the
+                // newly created directory impossible to open even for its owner.
+                struct Pending<'a> {
+                    parent: &'a File,
+                    name: &'a CStr,
+                    armed: bool,
+                }
+                impl Drop for Pending<'_> {
+                    fn drop(&mut self) {
+                        if self.armed {
+                            unsafe {
+                                libc::unlinkat(
+                                    self.parent.as_raw_fd(),
+                                    self.name.as_ptr(),
+                                    libc::AT_REMOVEDIR,
+                                );
+                            }
+                        }
+                    }
+                }
+                let mut pending = Pending {
+                    parent: &parent,
+                    name: &entry,
+                    armed: true,
+                };
+                let dir = open_at(
+                    &parent,
+                    OsStr::from_bytes(entry.to_bytes()),
+                    libc::O_RDONLY | libc::O_DIRECTORY,
+                    0,
+                ).map_err(|_| "Backup staging directory cannot be opened; restrictive owner-bit umasks are unsupported".to_owned())?;
+                // Explicitly set permissions even under unusual process umasks.
+                if unsafe { libc::fchmod(dir.as_raw_fd(), 0o700) } != 0 {
+                    return Err(invalid());
+                }
+                pending.armed = false;
+                drop(pending);
+                return Ok(Self {
+                    parent,
+                    dir,
+                    name: entry,
+                    published: false,
+                });
+            }
+            Err(invalid())
+        }
+        pub(super) fn write(&self, entry: &str, bytes: &[u8]) -> BackupResult<()> {
+            let mut file = open_at(
+                &self.dir,
+                OsStr::new(entry),
+                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+                0o600,
+            )?;
+            // Creation permissions are filtered by umask. Normalize through the
+            // already-open exclusive file handle before writing private bytes.
+            if unsafe { libc::fchmod(file.as_raw_fd(), 0o600) } != 0 {
+                return Err(invalid());
+            }
+            file.write_all(bytes).map_err(|_| invalid())?;
+            file.sync_all().map_err(|_| invalid())
+        }
+        pub(super) fn publish(&mut self, target: &OsStr) -> BackupResult<()> {
+            let target = name(target)?;
+            #[cfg(target_os = "linux")]
+            let result = unsafe {
+                libc::syscall(
+                    libc::SYS_renameat2,
+                    self.parent.as_raw_fd(),
+                    self.name.as_ptr(),
+                    self.parent.as_raw_fd(),
+                    target.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            #[cfg(target_os = "macos")]
+            let result = unsafe {
+                libc::renameatx_np(
+                    self.parent.as_raw_fd(),
+                    self.name.as_ptr(),
+                    self.parent.as_raw_fd(),
+                    target.as_ptr(),
+                    0x4,
+                )
+            };
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+            let result = -1;
+            if result != 0 {
+                return Err(invalid());
+            }
+            self.published = true;
+            Ok(())
+        }
+    }
+    impl Drop for Stage {
+        fn drop(&mut self) {
+            if self.published {
+                return;
+            }
+            for entry in std::iter::once(MANIFEST).chain(FILES.iter().map(|(entry, _)| *entry)) {
+                if let Ok(entry) = CString::new(entry) {
+                    unsafe {
+                        libc::unlinkat(self.dir.as_raw_fd(), entry.as_ptr(), 0);
+                    }
+                }
+            }
+            unsafe {
+                libc::unlinkat(
+                    self.parent.as_raw_fd(),
+                    self.name.as_ptr(),
+                    libc::AT_REMOVEDIR,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_directory(path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+    anchored::read(&anchored::directory(path)?)
+}
+#[cfg(not(target_os = "linux"))]
+fn read_directory(_path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+    Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+}
+
+/// Read and validate an exact firmware-compatible backup directory.
+/// All file names and lengths are bounded before allocation; errors omit paths
+/// and file contents because ROM and macro bytes are private.
+pub fn read_validated_archive(path: &Path, profile: ProfileId) -> BackupResult<ValidatedArchive> {
+    let (manifest, files) = read_directory(path)?;
+    validate_profile_archive(&manifest, &files, profile, None)
+        .map_err(|_| "Backup validation failed".to_owned())
+}
+
+fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> BackupResult<Vec<u8>> {
+    let identity = matrix_profile(profile)
+        .settings_identity
+        .as_ref()
+        .ok_or_else(|| "Profile has no qualified settings identity".to_owned())?;
+    let schema = identity.nvm_schema;
+    let records: serde_json::Map<String, Value> = files
+        .iter()
+        .map(|(name, bytes)| {
+            (
+                name.clone(),
+                json!({"size": bytes.len(), "sha256": sha256(bytes)}),
+            )
+        })
+        .collect();
+    let manifest = json!({
+        "format": if schema == 0x082003 { FORMAT_V2 } else { FORMAT },
+        "created_utc": chrono::Utc::now().to_rfc3339(),
+        "device": {"vid": 0x320f, "pid": 0x505b, "vial_uid": "0470ff9001b915d3"},
+        "definition_sha256": identity.definition_sha256,
+        "nvm_schema": schema,
+        "source_build_id": schema,
+        "source_ihx_sha256": identity.ihx_sha256,
+        "code_sha256": identity.code_sha256,
+        "counts": {"layers": 6, "physical_keys": 83, "assignments": 498,
+            "encoder_assignments": 12, "macros": 16, "macro_capacity": 8192},
+        "scope": "saved supported settings and exposed RGB values; not all current RAM",
+        "files": records,
+    });
+    canonical(&manifest)
+}
+
+fn check_map(files: &BTreeMap<String, Vec<u8>>) -> BackupResult<()> {
+    if files.len() != FILES.len() {
+        return Err("Unexpected backup files".into());
+    }
+    for (name, limit) in FILES {
+        let data = files.get(name).ok_or("Missing backup file")?;
+        if data.len() > limit {
+            return Err("Oversized backup file".into());
+        }
+    }
+    Ok(())
+}
+
+/// Publish only a complete, catalog-validated map to a previously absent path.
+/// The entire directory appears in one no-replace rename; failures clean the
+/// private staging directory and leave an existing destination untouched.
+pub fn publish_validated_archive(
+    path: &Path,
+    profile: ProfileId,
+    files: &BTreeMap<String, Vec<u8>>,
+) -> BackupResult<ValidatedArchive> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (path, profile, files);
+        Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        check_map(files)?;
+        let manifest = make_manifest(profile, files)?;
+        validate_profile_archive(&manifest, files, profile, None)
+            .map_err(|_| "Backup validation failed".to_owned())?;
+        let target = path.file_name().ok_or_else(invalid)?;
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        // The destination parent must exist; creating ancestor paths would require
+        // a separate anchored creation contract.
+        let mut stage = anchored::Stage::new(anchored::directory(parent)?)?;
+        for (entry, bytes) in files {
+            stage.write(entry, bytes)?;
+        }
+        stage.write(MANIFEST, &manifest)?;
+        let (stored_manifest, stored_files) = anchored::read(&stage.dir)?;
+        let verified = validate_profile_archive(&stored_manifest, &stored_files, profile, None)
+            .map_err(|_| "Backup validation failed".to_owned())?;
+        stage.dir.sync_all().map_err(|_| invalid())?;
+        stage.publish(target)?;
+        Ok(verified)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    fn envelope(dir: &Path) {
+        fs::write(dir.join(MANIFEST), b"{}").unwrap();
+        for (name, _) in FILES {
+            fs::write(dir.join(name), b"x").unwrap();
+        }
+    }
+    #[test]
+    fn bounded_reader_rejects_extra_symlink_fifo_and_oversized_members() {
+        let temp = tempfile::tempdir().unwrap();
+        envelope(temp.path());
+        assert!(read_directory(temp.path()).is_ok());
+        fs::write(temp.path().join("extra"), b"x").unwrap();
+        assert!(read_directory(temp.path()).is_err());
+        fs::remove_file(temp.path().join("extra")).unwrap();
+        let (entry, limit) = FILES[0];
+        fs::write(temp.path().join(entry), vec![0; limit + 1]).unwrap();
+        assert!(read_directory(temp.path()).is_err());
+        fs::remove_file(temp.path().join(entry)).unwrap();
+        symlink(MANIFEST, temp.path().join(entry)).unwrap();
+        assert!(read_directory(temp.path()).is_err());
+        fs::remove_file(temp.path().join(entry)).unwrap();
+        use std::os::unix::ffi::OsStrExt;
+        let fifo = std::ffi::CString::new(temp.path().join(entry).as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert!(read_directory(temp.path()).is_err());
+    }
+    #[test]
+    fn rejects_symlink_ancestors_and_keeps_open_directory_after_rename() {
+        let temp = tempfile::tempdir().unwrap();
+        let original = temp.path().join("original");
+        fs::create_dir(&original).unwrap();
+        envelope(&original);
+        symlink(&original, temp.path().join("link")).unwrap();
+        assert!(read_directory(&temp.path().join("link")).is_err());
+        let dir = anchored::directory(&original).unwrap();
+        fs::rename(&original, temp.path().join("moved")).unwrap();
+        fs::create_dir(&original).unwrap();
+        assert!(anchored::read(&dir).is_ok());
+        assert!(read_directory(&original).is_err());
+    }
+    #[test]
+    fn staging_permissions_and_reread_are_explicit() {
+        let temp = tempfile::tempdir().unwrap();
+        let stage = anchored::Stage::new(anchored::directory(temp.path()).unwrap()).unwrap();
+        assert_eq!(
+            stage.dir.metadata().unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        stage.write(MANIFEST, b"first").unwrap();
+        assert_eq!(
+            anchored::regular(&stage.dir, MANIFEST, MANIFEST_LIMIT).unwrap(),
+            b"first"
+        );
+        let file = anchored::open_at(
+            &stage.dir,
+            std::ffi::OsStr::new(MANIFEST),
+            libc::O_RDONLY,
+            0,
+        )
+        .unwrap();
+        assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(stage.write(MANIFEST, b"overwrite").is_err());
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn restrictive_umasks_are_isolated_and_leave_no_stage_leaks() {
+        const CHILD: &str = "AK820_BACKUP_UMASK_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            use std::os::unix::process::CommandExt;
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args([
+                "--exact",
+                "ak820_backup_files::tests::restrictive_umasks_are_isolated_and_leave_no_stage_leaks",
+                "--nocapture",
+            ]).env(CHILD, "1");
+            // A privileged test process would hide missing owner permissions.
+            if unsafe { libc::geteuid() } == 0 {
+                command.gid(65534).uid(65534);
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+            return;
+        }
+        assert_ne!(unsafe { libc::geteuid() }, 0);
+        for mask in [0o000, 0o200, 0o400, 0o700] {
+            let temp = tempfile::tempdir().unwrap();
+            let parent = anchored::directory(temp.path()).unwrap();
+            let old_mask = unsafe { libc::umask(mask) };
+            let result = anchored::Stage::new(parent);
+            unsafe {
+                libc::umask(old_mask);
+            }
+            if mask & 0o400 != 0 {
+                let error = match result {
+                    Err(error) => error,
+                    Ok(_) => panic!("Owner-read masked stage unexpectedly opened"),
+                };
+                assert!(error.contains("restrictive owner-bit umasks are unsupported"));
+                assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+                continue;
+            }
+            let mut stage = result.unwrap();
+            assert_eq!(
+                stage.dir.metadata().unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+            // Keep owner-write masked during file creation, independently of
+            // directory initialization, and check mandatory local reread.
+            let old_mask = unsafe { libc::umask(0o600) };
+            stage.write(MANIFEST, b"manifest").unwrap();
+            for (name, _) in FILES {
+                stage
+                    .write(
+                        name,
+                        if name == ".gitignore" {
+                            b"*\n"
+                        } else {
+                            b"private"
+                        },
+                    )
+                    .unwrap();
+            }
+            unsafe {
+                libc::umask(old_mask);
+            }
+            for name in std::iter::once(MANIFEST).chain(FILES.iter().map(|(name, _)| *name)) {
+                let file =
+                    anchored::open_at(&stage.dir, std::ffi::OsStr::new(name), libc::O_RDONLY, 0)
+                        .unwrap();
+                assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+            }
+            let (manifest, files) = anchored::read(&stage.dir).unwrap();
+            assert_eq!(manifest, b"manifest");
+            assert!(files.iter().all(|(name, bytes)| bytes.as_slice()
+                == if name == ".gitignore" {
+                    &b"*\n"[..]
+                } else {
+                    &b"private"[..]
+                }));
+            let target = temp.path().join("published");
+            assert!(!target.exists());
+            stage.publish(target.file_name().unwrap()).unwrap();
+            drop(stage);
+            assert_eq!(read_directory(&target).unwrap(), (manifest, files));
+            assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+        }
+    }
+    #[test]
+    fn failed_staging_removes_only_its_private_files() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("sentinel"), b"keep").unwrap();
+        {
+            let stage = anchored::Stage::new(anchored::directory(temp.path()).unwrap()).unwrap();
+            stage.write(MANIFEST, b"first").unwrap();
+            let mut changed = anchored::open_at(
+                &stage.dir,
+                std::ffi::OsStr::new(MANIFEST),
+                libc::O_WRONLY | libc::O_TRUNC,
+                0,
+            )
+            .unwrap();
+            changed.write_all(b"changed").unwrap();
+            assert_eq!(
+                anchored::regular(&stage.dir, MANIFEST, MANIFEST_LIMIT).unwrap(),
+                b"changed"
+            );
+        }
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+        assert_eq!(fs::read(temp.path().join("sentinel")).unwrap(), b"keep");
+    }
+    #[test]
+    fn staging_rejects_a_parent_writable_by_other_users() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(anchored::Stage::new(anchored::directory(temp.path()).unwrap()).is_err());
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn publication_never_replaces_empty_nonempty_file_or_link_targets() {
+        let temp = tempfile::tempdir().unwrap();
+        for kind in 0..4 {
+            let target = temp.path().join(format!("target-{kind}"));
+            match kind {
+                0 => fs::create_dir(&target).unwrap(),
+                1 => {
+                    fs::create_dir(&target).unwrap();
+                    fs::write(target.join("sentinel"), b"keep").unwrap();
+                }
+                2 => fs::write(&target, b"keep").unwrap(),
+                _ => symlink("missing", &target).unwrap(),
+            }
+            let mut stage =
+                anchored::Stage::new(anchored::directory(temp.path()).unwrap()).unwrap();
+            stage.write(MANIFEST, b"stage").unwrap();
+            assert!(stage.publish(target.file_name().unwrap()).is_err());
+            match kind {
+                0 => assert_eq!(fs::read_dir(&target).unwrap().count(), 0),
+                1 => assert_eq!(fs::read(target.join("sentinel")).unwrap(), b"keep"),
+                2 => assert_eq!(fs::read(&target).unwrap(), b"keep"),
+                _ => assert_eq!(fs::read_link(&target).unwrap(), Path::new("missing")),
+            }
+        }
+    }
+}

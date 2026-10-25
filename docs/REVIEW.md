@@ -162,15 +162,14 @@ No application launch, USB command or device test was performed during acceptanc
   These are raw development binaries; CI does not qualify runtime behavior on
   each operating system or physical USB behavior.
 
-## Offline beta implementation — 2026-10-25 (in progress)
+## Offline project packet — 2026-10-25
 
 The packet adds per-profile settings contracts, source-aware offline projects,
 schema03 typed codecs and panels, local RGB controls, and backup envelope and
 NVM/settings models. It does not enable beta device writes or flashing. Eight
 packed identities and the transition list remain incomplete; schema01 settings
-derivation remains blocked pending an explicit migration. The unregistered
-`src/ak820_restore_plan.rs` belongs to a later packet; it was reviewed but not
-tested and is not included in these results.
+derivation remains blocked pending an explicit migration. At that checkpoint, `src/ak820_restore_plan.rs` was unregistered and excluded
+from those results. Its subsequent integration is recorded below.
 
 Independent reviews found and closed backup manifest/identity/schema admission
 issues and UI state, picker, TD assignment, window reopening and layer-name
@@ -204,6 +203,61 @@ the native Save dialog wrote a 13,332-byte `.ak820project.json` file and the
 Open dialog imported it successfully and enabled Undo. No USB or hardware was
 used.
 
-Complete backups/history, migration,
-guarded restore, installer/OEM models and runtime qualification across target
-platforms remain open.
+At that stage, complete backup capture/history, migration, guarded restore
+execution, installer/OEM execution and runtime qualification across target
+platforms remained open.
+
+## Restore, image and backup-directory models — 2026-10-25
+
+The follow-up registers `ak820_restore_plan`, `ak820_image_pack`,
+`ak820_install_plan`, `ak820_backup_files` and a read-only backup inspection
+window opened from the status bar. It enables no beta device write or flash.
+
+The restore plan is catalog-bound, with exact schema02-to-schema03 migration
+and declarative per-setter preconditions. Schema01 is rejected. The image packer
+matches pinned Python permanent/trial output hashes on public synthetic inputs;
+its Intel HEX record separators match Python. The install simulation preserves
+all nine unmet hardware gates, requires a fresh three-second hold for project
+firmware, permits button confirmation only for OEM, rejects cancellation after
+erase without changing state, allows one flash attempt and separates settings
+and firmware outcomes. These are models, not device executors.
+
+Backup-directory I/O is Linux-only: anchored no-follow traversal, nonblocking
+regular-file reads, bounded sizes, private 0700/0600 staging, reread validation
+and atomic no-replace publication. Restrictive owner-read umasks fail closed
+with cleanup. macOS/Windows directory I/O is explicitly disabled pending private
+ACL/handle qualification; local example projects are unaffected. The inspection
+window has localized path-free errors, scrolling and stale-result guards.
+
+Independent reviews found and closed parser newline parity, confirmation bypass,
+post-erase cancellation, file/link/permission/reread and UI bounds/localization
+issues. Fresh reviews accepted the bounded models and integration. No positive
+catalog-valid full-ROM export, physical-unit ownership or device operation was
+proved. Full capture/history, restore/installer UI and execution remain open.
+
+`cargo test --locked --offline` passed **1625 tests, 0 failed, 14 ignored** in
+240.28 s; its native build passed in 22.51 s. After wording-only UI labels and
+source comments changed, all **92 AK820 tests passed** in 5.96 s and the native
+build passed in 21.63 s. Both builds emitted 183 warnings. Filesystem umask tests
+ran in non-root subprocesses. Native Debian 12/Xvfb checks opened the backup
+window and Zenity picker, rejected a non-backup directory with a Russian message,
+and closed/reopened the window without retaining that error. Positive production
+archive acceptance remains unverified. No USB or hardware operation was sent.
+
+CI run [40173262047](https://github.com/dvino/ak-configurator/actions/runs/40173262047)
+passed all six targets for `709cde6`. Downloaded artifact ZIP hashes matched
+GitHub metadata, included SHA256SUMS passed and all six binary headers matched
+the expected architecture. This is evidence for that earlier source packet,
+not the models above or execution on every OS.
+
+The current work stops after a tested offline trial build and handoff. Further
+backup/restore and installer work is deferred for manual transfer. The next
+agent must first obtain a detailed plan from a GPT-6.1 Sol high architect;
+no such architect has been invoked here. The exceptional architecture and complex
+planning route was added to both projects after independent EN/RU review;
+firmware main contains the documentation-only commit `dc0e7cb`.
+
+A separate runtime check of the `709cde6` Linux x86_64 CI binary on Debian 12
+failed before startup: GLIBC_2.38 and GLIBC_2.39 were missing. Its symbol table
+requires glibc 2.39. The local Debian 12 build remains the tested fallback;
+CI success alone does not establish compatibility with that older runtime.

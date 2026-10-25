@@ -1900,6 +1900,7 @@ impl eframe::App for EntropyApp {
         });
 
         super::ak820_offline_files::show(self, ctx);
+        super::ak820_backup_inspection::show(self, ctx);
         if self.ak820_demo {
             if let Some(profile) = self.ak820_demo_profile {
                 super::ak820_beta1_profiles_ui::sync_offline_project(ctx, profile);

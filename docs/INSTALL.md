@@ -43,6 +43,13 @@ backup of settings from a physical keyboard. The release executable is
 `target/release/ak-configurator.exe` on Windows. Builds and host tests do not
 prove behavior with a physical keyboard.
 
+
+Linux CI binaries are built on Ubuntu 24.04. The checked x86_64 binary requires
+glibc 2.39; its actual launch on Debian 12 was rejected for missing GLIBC_2.38/2.39. The separately
+provided Debian 12 x86_64 trial build was built and launched there; select it
+for that environment. Neither Linux build is a native Alpine/musl executable.
+Both need the desktop runtime libraries and a portal or Zenity for file dialogs.
+
 ## Linux device access
 
 If Linux denies access to the keyboard's HID interface, explicitly install the

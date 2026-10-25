@@ -18,15 +18,36 @@ milestone unless its completion conditions below are met.
 | 3a projects | Select and edit offline example projects for all nine profiles | Implemented; host tests/review and Linux demo launch passed |
 | 3a project files | Preserve complete offline edits across application restarts | Implemented; round-trip tests and Linux Save/Open passed |
 | 3a typed editors | Schema03 codecs, typed editors and per-source controls | Implemented offline; tests/review and Linux panel checks passed |
-| 3b backups | Strict envelope, catalog-bound ROM/NVM decoder, then UI/history and migration/restore model | Codec/model tested/reviewed; directory I/O and restore model are the next packet; UI/history open |
+| 3b backups | Strict envelope, catalog-bound ROM/NVM, migration/restore plan, directory I/O and inspection | Models tested and reviewed; Linux-only directory I/O; full capture/history/restore UI and executor remain open |
 | Verification | Approved positive full-image fixture, fault cases and exact-tree review | Open |
-| 4a operations | Packer parity and modeled install/OEM recovery | Open |
+| 4a operations | Packer parity and modeled install/OEM recovery | Offline packer and simulation tested/reviewed; installer UI, executor and ownership qualification remain open |
 | 4b delivery | Six-target packages and usable offline beta artifact | Open |
 
 Only `work` currently has a packed settings identity in the bundled beta matrix;
 the other eight profiles have null identities and no settings transition pairs
 are advertised. Offline development can proceed; live mutation cannot be
 inferred from linked-image hashes. No hardware write is authorized by this plan.
+
+Offline project packet committed as `709cde6` after independent review and
+1593 passing tests (14 ignored). The next packet compiles and checks the
+reviewed pure restore/migration plan, bounded private backup-directory I/O
+and image packer parity. These models do not execute device operations.
+
+Platform availability: no additional real OS hosts are available to the agent.
+Continue Docker/Linux GUI checks and six-target CI without waiting for them.
+The owner can try Linux after the test build is ready and Windows the next day.
+Record other-platform execution as unverified; it does not block preparing
+clearly labeled trial binaries, but does limit platform support claims.
+
+## Current stopping point and handoff
+
+The current authorized finish is a tested offline trial build and a complete
+handoff. Further backup/restore and installer implementation is deferred.
+The owner will transfer the work manually. The next agent must first use a
+GPT-6.1 Sol high architect to prepare a detailed plan for the remaining work.
+This is the explicit complex-planning escalation requested for the handoff;
+no architect is being started during packaging. Keep the full requirements
+and open gates intact rather than treating the offline build as full beta.
 
 ## Baseline and delivery order
 

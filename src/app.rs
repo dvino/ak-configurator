@@ -6,6 +6,8 @@ pub(crate) mod ak820_beta1_profiles;
 pub(crate) mod ak820_offline_extensions;
 #[path = "ui/ak820_offline_files.rs"]
 mod ak820_offline_files;
+#[path = "ui/ak820_backup_inspection.rs"]
+mod ak820_backup_inspection;
 #[cfg(test)]
 #[path = "ui/ak820_offline_project_tests.rs"]
 mod ak820_offline_project_tests;

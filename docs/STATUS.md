@@ -69,35 +69,50 @@ session. Project files are separate from firmware backups. Outside demo mode,
 selection remains catalog preview. Beta device settings and flashing stay
 blocked; the live path still recognizes only the exact alpha.3 image.
 
-New local backup modules validate strict archive envelopes, derive settings
-from schema02/03 NVM and check ROM against the qualified beta catalog identity.
-Typed codecs preserve inactive storage and neighboring bytes. These modules
-are foundations: full backup capture/history, migration, restore execution and
-UI are unfinished. Schema01 full derivation requires explicit migration and
-is rejected. Protected ROM hashes identify a hardware revision; they do not
-establish ownership of a physical keyboard. Positive full-ROM acceptance
-coverage remains missing.
+The committed offline packet at `709cde6` validates backup envelopes, derives
+settings from schema02/03 NVM and checks ROM against the qualified beta catalog
+identity. Typed codecs preserve inactive storage and neighboring bytes. Full
+backup capture/history, migration and restore execution remain unfinished.
+Schema01 full derivation requires explicit migration and is rejected. Protected
+ROM hashes identify a hardware revision; they do not establish ownership of a
+physical keyboard. Positive full-ROM acceptance coverage remains missing.
 
-The offline packet passed the complete host suite (1593 passed, 0 failed,
-14 ignored), independent integration review and the Linux demo checks described
-in [REVIEW.md](REVIEW.md). No hardware qualification is implied.
+The committed offline packet at `709cde6` passed the complete host suite
+(1593 passed, 0 failed, 14 ignored), independent integration review and the
+Linux demo checks described in [REVIEW.md](REVIEW.md). No hardware qualification
+is implied.
+
+The follow-up adds catalog-bound restore/migration planning, a synthetic
+reference-tested image packer, an install simulation and Linux-only private
+backup-directory I/O with a read-only inspection window. They do not execute
+installation or restoration. macOS/Windows backup-directory I/O is disabled;
+local example projects are unaffected.
+
+The full host suite passed 1625 tests (0 failed, 14 ignored). After wording-only
+cleanup, 92 AK820 tests and the native build passed again. Linux/Xvfb backup
+window/picker and negative-directory handling were checked; positive full-ROM
+archive acceptance is still unverified. Six-target CI passed for earlier offline
+packet `709cde6`; its downloaded hashes and architectures were checked. Exact
+results and limits are recorded in [REVIEW.md](REVIEW.md).
 
 ## Remaining work
 
 The Linux development binary is not a packaged or qualified release. Windows
 and macOS execution, installers, signing, resource measurements, device
-read/write behavior and retention still need evidence. Full backup/restore,
-firmware updates, OEM recovery, per-LED palette editing and the optional OS
-helper are not implemented here. `.entlayout` export remains a partial editor
+read/write behavior and retention still need evidence. Full backup capture and
+history, restore and installation execution, firmware updates, OEM recovery,
+per-LED palette editing and the optional OS helper are not implemented here. `.entlayout` export remains a partial editor
 snapshot; its device-settings import remains blocked until preservation and
 compatibility checks exist. Local offline project import is a separate format. Direct-mode colors are volatile and cannot be read back through this
 firmware API.
 
-The next desktop milestone is per-image live loading and typed transaction
-models (the remaining part of plan 3a), complete settings backup/history,
-migration and guarded restore (plan 3b), then separately authorized hardware
-qualification. Browser implementation remains deferred. See the [plan](PLAN.md) and
-[desktop guide](DESKTOP.md).
+The current target is to finish the first point with a tested offline trial
+build, prepare its handoff, and stop. Full backup, restore and installation execution
+is deferred to a later source packet and manual owner transfer. The next agent
+must first request a detailed plan from the Sol High architect; no such review
+has been requested for this packet. Hardware qualification remains separate and
+is not implied. Browser implementation remains deferred. See the [plan](PLAN.md)
+and [desktop guide](DESKTOP.md).
 
 Local source/package acceptance on 2026-10-25 is recorded in [REVIEW.md](REVIEW.md).
 That historical import did not repeat Rust checks; current development uses an

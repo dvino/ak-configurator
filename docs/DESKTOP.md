@@ -67,6 +67,12 @@ firmware.
 
 ## Backups and firmware operations
 
+The local-project **Save project** action writes an `.ak820project.json` file
+with offline example edits. It is separate from the local backup directory
+opened by the status-bar backup button. That button provides read-only
+inspection of a local directory; it does not capture, keep history, export or
+restore backups. Directory I/O is currently supported only on Linux.
+
 The existing `.entlayout` export is a partial editor snapshot. It is not a
 complete settings backup, a recovery archive, or an OEM firmware backup. Import
 for AK820 remains unavailable until compatibility and mandatory pre-backup
@@ -74,5 +80,5 @@ checks are implemented. Do not rely on `.entlayout` to recover the keyboard.
 
 This alpha does not flash firmware, restore OEM firmware, or run an operating
 system LED helper. Firmware installation and recovery are separate operations
-and are not enabled by this configurator milestone. Browser support is planned
-after the desktop path is reasonably working.
+and are not enabled by the inspection button. Browser support is planned after
+the desktop path is reasonably working.
