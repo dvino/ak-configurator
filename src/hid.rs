@@ -195,6 +195,7 @@ mod hid_vial;
 #[path = "hid_ak820.rs"]
 mod hid_ak820;
 use hid_ak820::Ak820Session;
+pub(crate) use hid_ak820::{Ak820RgbStream, Ak820RgbStreamResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct HidDevice {

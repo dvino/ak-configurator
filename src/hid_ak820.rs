@@ -5,6 +5,21 @@ use crate::ak820::ImageContract;
 use crate::app::ak820_beta1_profiles::KeycodeSource;
 use anyhow::{bail, ensure, Context, Result};
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// An ownership observation, valid only with the same live HID handle. It is
+/// never serialized and cannot restore a previous Direct palette.
+#[derive(Clone, Debug)]
+pub(crate) struct Ak820RgbStream {
+    mode: [u8; MSG_LEN],
+}
+
+#[derive(Debug)]
+pub(crate) enum Ak820RgbStreamResult {
+    Applied(Ak820RgbStream),
+    Cancelled,
+    OwnershipLost,
+}
 
 #[derive(Default)]
 pub(super) struct Ak820Session {
@@ -317,7 +332,26 @@ impl HidDevice {
         &self,
         frame: &[[u8; 3]; crate::ak820_rgb::LED_COUNT],
     ) -> Result<()> {
+        match self.ak820_stream_rgb_frame(frame, None, &AtomicBool::new(false))? {
+            Ak820RgbStreamResult::Applied(_) => Ok(()),
+            _ => bail!("AK820 palette was not applied"),
+        }
+    }
+
+    /// Send one bounded frame through the existing session owner. Only an
+    /// explicit start enters Direct. Later frames never select a mode, and
+    /// yield when a physical lighting control changes it. Cancellation is
+    /// checked between packets; already acknowledged RAM writes remain.
+    pub(crate) fn ak820_stream_rgb_frame(
+        &self,
+        frame: &[[u8; 3]; crate::ak820_rgb::LED_COUNT],
+        owned: Option<&Ak820RgbStream>,
+        cancel: &AtomicBool,
+    ) -> Result<Ak820RgbStreamResult> {
         let packets = crate::ak820_rgb::frame_packets(frame).map_err(anyhow::Error::msg)?;
+        if let Some(read_only) = &self.read_only {
+            return Err(read_only.refuse(&packets[0]));
+        }
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
         let image = state.image.context("AK820 image is not verified")?;
@@ -330,6 +364,9 @@ impl HidDevice {
             "Read complete AK820 settings before applying RGB"
         );
         let result = (|| {
+            if cancel.load(Ordering::Acquire) {
+                return Ok(Ak820RgbStreamResult::Cancelled);
+            }
             storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
             let previous = self.usb_send_traced(&[8, 0x41])?;
             ensure!(
@@ -339,7 +376,13 @@ impl HidDevice {
                     && previous[7] <= 160,
                 "AK820 current RGB mode is invalid"
             );
+            if owned.is_some_and(|stream| previous[2..8] != stream.mode[2..8]) {
+                return Ok(Ak820RgbStreamResult::OwnershipLost);
+            }
             for packet in packets {
+                if cancel.load(Ordering::Acquire) {
+                    return Ok(Ak820RgbStreamResult::Cancelled);
+                }
                 let reply = self.usb_send_traced(&packet)?;
                 ensure!(
                     reply == padded_request(&packet),
@@ -347,13 +390,27 @@ impl HidDevice {
                 );
             }
             let mut mode = previous;
-            mode[0] = 7;
             mode[2] = 1;
             mode[8..].fill(0);
-            let reply = self.usb_send_traced(&mode)?;
-            self.ak820_verify_write(&mode, &reply, image)?;
+            if owned.is_none() {
+                if cancel.load(Ordering::Acquire) {
+                    return Ok(Ak820RgbStreamResult::Cancelled);
+                }
+                let mut setter = mode;
+                setter[0] = 7;
+                let reply = self.usb_send_traced(&setter)?;
+                self.ak820_verify_write(&setter, &reply, image)?;
+            } else {
+                let current = self.usb_send_traced(&[8, 0x41])?;
+                ensure!(current[..2] == [8, 0x41] && current[3] == 0
+                    && image.rgb_modes().contains(&current[2]) && current[7] <= 160,
+                    "AK820 current RGB mode is invalid");
+                if current[2..8] != mode[2..8] {
+                    return Ok(Ak820RgbStreamResult::OwnershipLost);
+                }
+            }
             storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
-            Ok(())
+            Ok(Ak820RgbStreamResult::Applied(Ak820RgbStream { mode }))
         })();
         if let Err(error) = &result {
             state.failure = Some(format!("{error:#}"));

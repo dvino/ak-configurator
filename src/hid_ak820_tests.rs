@@ -66,6 +66,95 @@ fn palette_rejects_unavailable_profiles_partial_reads_and_invalid_values_before_
     assert!(log.requests().is_empty());
 }
 
+#[test]
+fn rgb_stream_enters_direct_once_and_never_saves_frames() {
+    let (hid, log) = palette_device(None);
+    let cancel = AtomicBool::new(false);
+    let Ak820RgbStreamResult::Applied(owned) = hid.ak820_stream_rgb_frame(&[[160, 0, 0]; 82], None, &cancel).unwrap()
+        else { panic!("first frame must enter Direct"); };
+    let before = log.requests().len();
+    assert!(matches!(hid.ak820_stream_rgb_frame(&[[0, 160, 0]; 82], Some(&owned), &cancel).unwrap(),
+        Ak820RgbStreamResult::Applied(_)));
+    let sent = log.requests();
+    let next = &sent[before..];
+    assert_eq!(next.iter().filter(|p| p[..2] == [7, 0x42]).count(), 10);
+    assert_eq!(next.iter().filter(|p| p[..2] == [8, 0x41]).count(), 2);
+    assert!(!next.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
+}
+
+#[test]
+fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
+    for packet in 0..10 {
+        let (hid, log) = palette_device(Some(packet * 9));
+        let cancel = AtomicBool::new(false);
+        assert!(hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel).is_err());
+        let sent = log.requests();
+        assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x42]).count(), packet as usize + 1);
+        assert!(!sent.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
+        assert!(!hid.ak820_editing_ready());
+        assert!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel).is_err());
+        assert_eq!(sent.len(), log.requests().len());
+    }
+}
+
+#[test]
+fn rgb_stream_cancellation_is_checked_before_io_and_between_packets() {
+    let (hid, log) = palette_device(None);
+    assert!(matches!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(true)).unwrap(),
+        Ak820RgbStreamResult::Cancelled));
+    assert!(log.requests().is_empty());
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let worker_cancel = cancel.clone();
+    log.respond_by(move |p| {
+        let mut reply = *p;
+        match (p[0], p[1]) {
+            (0xFD, 1) => reply[..4].copy_from_slice(&[0xFD, 1, 1, 0xA8]),
+            (8, 0x41) => reply[2..8].copy_from_slice(&[2, 0, 0, 0, 0, 100]),
+            (7, 0x42) => worker_cancel.store(true, Ordering::Release),
+            _ => return Some(Err("unexpected command after cancellation".into())),
+        }
+        Some(Ok(reply))
+    });
+    assert!(matches!(hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel).unwrap(),
+        Ak820RgbStreamResult::Cancelled));
+    assert_eq!(log.requests().iter().filter(|p| p[..2] == [7, 0x42]).count(), 1);
+    assert!(hid.ak820_editing_ready());
+}
+
+#[test]
+fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_settings() {
+    for changed_field in [2, 4, 5, 6, 7] {
+        let (hid, log) = palette_device(None);
+        let cancel = AtomicBool::new(false);
+        let Ak820RgbStreamResult::Applied(owned) = hid.ak820_stream_rgb_frame(&[[100; 3]; 82], None, &cancel).unwrap()
+            else { panic!("first frame"); };
+        let mut changed = owned.mode;
+        changed[changed_field] = if changed_field == 2 { 2 } else { changed[changed_field].saturating_sub(1) };
+        log.respond_by(move |p| {
+            let mut r = [0; 32];
+            match (p[0], p[1]) {
+                (0xFD, 1) => r[..4].copy_from_slice(&[0xFD, 1, 1, 0xA8]),
+                (8, 0x41) => r = changed,
+                _ => return Some(Err("stream must not override physical control".into())),
+            }
+            Some(Ok(r))
+        });
+        let before = log.requests().len();
+        assert!(matches!(hid.ak820_stream_rgb_frame(&[[50; 3]; 82], Some(&owned), &cancel).unwrap(),
+            Ak820RgbStreamResult::OwnershipLost));
+        assert_eq!(log.requests().len() - before, 2);
+        assert!(hid.ak820_editing_ready());
+    }
+}
+
+#[test]
+fn rgb_stream_rejects_read_only_sessions_before_transport() {
+    let (mut hid, log) = palette_device(None);
+    hid.read_only = Some(super::super::ReadOnlyHidSession::default());
+    assert!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false)).is_err());
+    assert!(log.requests().is_empty());
+}
+
 fn stream(first: &[u8]) -> Vec<u8> {
     let mut bytes = first.to_vec();
     bytes.extend([0; 16]);

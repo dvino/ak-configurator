@@ -74,7 +74,8 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn hid_write_task_owner_active(&self) -> bool {
-        self.layer_write_task.is_some()
+        self.ak820_rgb_scene_owns_hid()
+            || self.layer_write_task.is_some()
             || self.combo_write_task.is_some()
             || self.settings_write_task.is_some()
             || self.vial_hid_task_active()

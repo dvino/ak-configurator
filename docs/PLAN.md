@@ -6,13 +6,13 @@ This plan turns the agreed [requirements](REQUIREMENTS.md) into reviewable work 
 
 ## Active release preparation — 2026-10-26
 
-Baseline: source commit `c207ad13f3529bebccdbb8df15a7c38cfd96c1eb`. The current source targets AK820 v0.6.0-beta.2, published 2026-10-26T04:52:40Z at `2e0b28b384872c482e0e358a4b353f00ddd976a7`. Ten profiles are supported by exact packed CODE/settings identities, schema03 contracts, and explicit directional transition pairs. Application version is `0.1.0-beta.2`.
+Baseline: source commit `588aeed`. The current source targets AK820 v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled firmware commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`). Ten profiles are supported by exact packed CODE/settings identities, schema03 contracts, and explicit directional transition pairs. Application version remains `0.1.0-beta.2`; this work does not complete or publish a release.
 
 | Workstream | Current state | Remaining evidence or work |
 | --- | --- | --- |
 | Profile contracts and live settings loader | Implemented for ten exact beta2 images; alpha3 retained as a separate exact path | Positive released packed-image/full-ROM fixture and physical connection qualification remain unavailable |
 | Offline projects and typed modules | Project v2 pins target release/catalog/IHX; schema03 typed editors and all ten profile examples | Beta1 v1 requires manual migration; complete backup import/export/history remains open |
-| RGB | Built-in effects per profile; Direct palette editor for Main/Game/Mmo/Creative | Palette is volatile RAM-only; device persistence/readback and physical behavior remain unqualified |
+| RGB | Built-in effects per profile; Direct palette editor and additive scene editor/compositor/HID playback implemented | 35 focused RGB host tests pass; Linux demo preview and exact scene JSON save/reload round trip cover 82 colors and two layers. Hardware timing, resource and platform qualification remain open; no persistent frame writes, palette getter or atomic frame commit |
 | Backup and restore | Catalog-bound models; private backup-directory I/O on Linux | Full capture/history, complete UI/executor and exact device ownership |
 | Install and OEM recovery | Offline packer and install models | Installer UI/executor; full-image source and physical qualification; OEM-private helper bytes unavailable and excluded |
 | Delivery | Versioned six-target candidate ZIP/provenance/SHA256 pipeline implemented; local/current-platform evidence is recorded in [REVIEW.md](REVIEW.md) | Six-target execution, installers, signing, and per-target runtime/function qualification |
@@ -27,7 +27,7 @@ Current build/test/review details are maintained in [REVIEW.md](REVIEW.md), and 
 2. Complete and qualify full backup capture, history, migration and guarded restore. Preserve all durable/inactive settings; reject unsupported schemas and cross-image operations.
 3. Complete installer and OEM workflows only when image preparation, ownership, cancellation boundary, one-attempt behavior, installed-image verification and settings outcome separation are evidenced. Public HEX or synthetic models do not replace unavailable OEM bytes or physical evidence.
 4. Prepare all six platform packages with matching SHA256 manifests and EN/RU install guidance. Run and verify current-tree CI, then record platform runtime, HID, function, resource, signing and installer evidence separately. Prior CI runs are historical unless their source matches the current tree.
-5. Continue the RGB plan phases with source-model tests first, then device/HID and persistence qualification when authorized and available. Direct palettes remain explicitly volatile unless firmware gains a verified getter and persistence path.
+5. Continue RGB qualification from the implemented native scene editor/compositor and bounded HID playback. Focused source/host validation is complete; next gates are platform timing/resource checks and device/HID qualification when authorized and available. Direct palettes and scene frames remain volatile; firmware provides no verified palette getter, persistence path or atomic frame commit.
 6. Begin browser feasibility after the native editor and package milestone is reasonably usable. WebHID and static-host success do not replace physical qualification.
 
 ## Acceptance boundaries

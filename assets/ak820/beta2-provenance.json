@@ -1,7 +1,8 @@
 {
   "format": "ak820-firmware-release-provenance-1",
   "release": "v0.6.0-beta.2",
-  "tag_commit": "2e0b28b384872c482e0e358a4b353f00ddd976a7",
+  "tag_object": "2e0b28b384872c482e0e358a4b353f00ddd976a7",
+  "tag_commit": "2990ef877c5c6c54013b8821450c5a91878b8c3a",
   "published_at": "2026-10-26T04:52:40Z",
   "release_url": "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2",
   "retrieved_on": "2026-10-26",

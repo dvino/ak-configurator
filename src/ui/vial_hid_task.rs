@@ -590,7 +590,8 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn another_hid_owner_or_write_is_pending(&self) -> bool {
-        self.layer_write_task.is_some()
+        self.ak820_rgb_scene_owns_hid()
+            || self.layer_write_task.is_some()
             || self.combo_write_task.is_some()
             || self.settings_write_task.is_some()
             || self.qmk_settings_write_busy()

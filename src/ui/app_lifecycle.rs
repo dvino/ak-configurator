@@ -203,6 +203,7 @@ impl EntropyApp {
         selected_device_is_bluetooth: bool,
         discovery_platform: &str,
     ) {
+        self.poll_ak820_rgb_task();
         self.poll_vial_hid_task(ctx);
         self.poll_sticky_layout_background(ctx);
         self.poll_settings_write(ctx);
@@ -290,6 +291,8 @@ impl EntropyApp {
         self.maybe_start_periodic_battery_refresh(ctx, main_window_hidden_to_tray);
         self.maybe_start_deferred_device_load(ctx, main_window_hidden_to_tray);
         self.update_application_layout_runtime();
+        if main_window_hidden_to_tray { self.ak820_rgb_scene_stop(); }
+        self.tick_ak820_rgb_scene(ctx);
         // Foreground application changes happen while Entropy itself is not
         // focused. Keep a lightweight runtime tick alive so auto-switching is
         // not accidentally tied to egui input/repaint events.
@@ -1452,6 +1455,8 @@ impl eframe::App for EntropyApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if self.ak820_demo {
             return;
         }
@@ -1470,6 +1475,8 @@ impl eframe::App for EntropyApp {
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.ak820_demo {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.tick_ak820_rgb_scene(ctx);
             return;
         }
         #[cfg(not(target_arch = "wasm32"))]

@@ -215,7 +215,7 @@ impl EntropyApp {
         let hid_ready = {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                self.ak820_demo || self.hid_device.is_some()
+                self.ak820_demo || self.hid_device.is_some() || self.ak820_rgb_scene_owns_hid()
             }
             #[cfg(target_arch = "wasm32")]
             {
@@ -277,6 +277,7 @@ impl EntropyApp {
                 });
                 #[cfg(not(target_arch = "wasm32"))]
                 if self.ak820_demo_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "vialrgb-direct"))
+                    || self.ak820_rgb_scene_running() || self.ak820_rgb_scene_owns_hid()
                     || self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image)
                         .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1)) {
                     ui.separator();
@@ -288,6 +289,8 @@ impl EntropyApp {
     }
 
     fn set_rgb_effect(&mut self, effect: u16) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if self.ak820_demo {
             if self.rgb_settings.supported_effects.contains(&effect) {
                 self.rgb_settings.effect = effect;
@@ -330,6 +333,8 @@ impl EntropyApp {
     }
 
     fn set_rgb_brightness(&mut self, brightness: u8) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if self.ak820_demo {
             self.rgb_settings.brightness = brightness.min(self.rgb_settings.max_brightness);
             return;
@@ -362,6 +367,8 @@ impl EntropyApp {
     }
 
     fn set_rgb_color(&mut self, hue: u8, saturation: u8) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if self.ak820_demo {
             self.rgb_settings.hue = hue;
             self.rgb_settings.saturation = saturation;
@@ -396,6 +403,8 @@ impl EntropyApp {
     }
 
     fn set_rgb_speed(&mut self, speed: u8) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if self.ak820_demo {
             self.rgb_settings.speed = speed;
             return;

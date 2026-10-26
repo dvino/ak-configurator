@@ -192,6 +192,8 @@ impl EntropyApp {
 
     pub(super) fn clear_connected_keyboard_state(&mut self, status_msg: impl Into<String>) {
         #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
+        #[cfg(not(target_arch = "wasm32"))]
         {
             // Capture the actual loading owner before retire_connect_worker
             // clears that state; selected_device may already name a queued B.

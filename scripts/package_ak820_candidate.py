@@ -82,6 +82,7 @@ def build_package(binary, platform, output, allow_dirty=False):
         "status": "unsigned desktop trial; hardware and platform qualification remain separate",
         "firmware_release": firmware["release"],
         "firmware_commit": firmware["tag_commit"],
+        "firmware_tag_object": firmware["tag_object"],
         "firmware_provenance_sha256": digest(provenance),
         "binary_sha256": digest(data),
     }

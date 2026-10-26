@@ -2,9 +2,54 @@
 
 # Desktop adaptation and review
 
+## Native RGB scenes — 2026-10-26
+
+This continuation starts at `588aeed963884de8ba8b673c037d1cd27639cfcb` on `desktop-dev`. Application version remains `0.1.0-beta.2`; firmware target remains `v0.6.0-beta.2`. The firmware tag is annotated: its object is `2e0b28b384872c482e0e358a4b353f00ddd976a7`, and its peeled commit is `2990ef877c5c6c54013b8821450c5a91878b8c3a`. Provenance, packaging and current documentation now distinguish those identities. Published catalog bytes are unchanged. No firmware code is changed.
+
+Scene format v2 adds up to 16 ordered/enabled layers over the existing 82-color base palette, LED masks, Solid/Gradient/Wave/Breathing/Rain, horizontal/vertical axes, opacity, 250–60000 ms periods and a local-time quiet-hours brightness cap. Static palette v1 remains compatible. The editor provides bounded 32-state undo/redo, explicit scene save/load and animated offline preview. Selection remains click/Ctrl/Cmd/Shift based; drag selection, audio, OpenRGB and game/screen inputs are future work.
+
+Playback uses the existing HID owner, one pending frame and at least 100 ms between completion and the next dispatch. The 10 frames/s ceiling is an application bound, not a measured device rate. Settings, backup, connection and modal work take priority. Cancellation is checked between packets. Generation/profile changes, disconnect, failure, monotonic or wall-clock gaps over two seconds, and backward wall-clock jumps stop playback without automatic restart. A pending Off request expires across the same gaps. Mode/speed/HSV changes relinquish ownership. Explicit Off sends a black frame only on an intact session. There is no automatic effect restoration or per-frame NVM save.
+
+### Independent findings and closure
+
+Separate GPT-6.1 Sol reviewers inspected the compositor/editor, transport/lifecycle, and EN/RU documentation. They did not author the changes or operate a keyboard. Corrected and re-reviewed findings include:
+
+- Import or undo could leave the active layer outside the current layer list. Selection is normalized, and reorder actions are bounds-checked.
+- Offline scenes had no working playback control. Demo now uses the same renderer without opening HID; new effect, axis and validation labels are localized.
+- A short priority pause could erase the post-frame dispatch deadline. Resume now preserves the deadline, with a deterministic regression.
+- A queued Off request could survive a long suspension. Monotonic and wall-clock expiry are checked before creating playback, with independent regressions for each clock.
+- Modal-pause documentation initially exceeded the implementation. The runtime now checks the shared modal/popup state; a key-picker regression checks no requests while open and a fresh frame after closing.
+- The Russian release-boundary section was empty. It now matches the English boundary and clock/Off semantics.
+- Visual inspection found the layer settings clipped in a narrow window. Controls and selection guidance now wrap; the minimum supported width is checked in the offline UI.
+
+The Off completion test was corrected to advance its injected clock beyond the retained cooldown. No production deadline was relaxed to satisfy the test.
+
+### Host and Linux offline verification
+
+| Check | Result and scope |
+| --- | --- |
+| Full default offline suite, sequential | **1683 passed, 0 failed, 14 ignored**, 621.79 s. This executable precedes only the final control-wrapping changes in the scene editor. No device/manual checks were enabled. |
+| Latest focused RGB tests | **35 passed, 0 failed**, 0.29 s, after the final wrapping changes. Compositor validation and boundaries, time-dependent effects, quiet hours, queue replacement, cooldown, pause/resume, modal priority, cancellation, stale sessions, Off and ownership are covered. |
+| Transport fault models | Included in the full suite: all ten Direct packet fault boundaries stop without retry; read-only sessions reject writes; ownership changes and cancellation before/between packets are covered. Echo ACK is not palette readback. |
+| Private-directory umask test | Passed in the full suite. The identical test executable was copied to a traversable temporary directory with its digest checked, then run outside the restricted execution sandbox so its UID-changing child could execute. Assertions and ignores were unchanged. |
+| Firmware geometry | All **82** compositor LED coordinates match `ak820_led_points[]` at the peeled firmware commit. The encoder press remains excluded. |
+| Python candidate packager | **2 passed**, including separate annotated-tag and peeled-commit provenance. Synthetic binary headers establish packaging rules, not target execution. |
+| Existing workflow policy tests | **45 passed**. |
+| Localization and whitespace | `python scripts/check_i18n.py` and `git diff --check` passed. |
+| Native build | `cargo build --locked --offline` passed with Rust 1.97.0 on Linux x86_64 in 16.92 s; development profile with debug information and incremental compilation disabled. This is not a new optimized release build. The build reports 194 warnings. |
+| Native offline UI | Launched with `--demo-ak820` in isolated Xvfb/software rendering. Before the final layout-only correction, animated preview, two-layer scene import, explicit save, and exact parsed-JSON round trip were checked: **82 colors, two layers, 1364-byte saved file**. The final binary was relaunched; all layer controls and the complete selection guidance were inspected at **800-pixel** width. No physical HID session was opened. |
+
+The full-suite executable SHA256 is `d5634df8f7589ff10272e01a3c8560e6c98a627199d8fd9195c6101cae3eb2ae`. The latest focused-test executable is `3870b6cf71353ac33a6d5d97f08bdf858b6b2cad8795ba64dc4c313888acd9bd`; the final native binary is `4643e3e3743f18a73776dbd6aae4b760c54546bde266455de597023564ad6d49`. These distinguish the broad run from the final visual correction.
+
+### Remaining qualification
+
+Source/model tests do not establish physical HID timing, visible smoothness, tearing, partial-frame behavior, RAM state after disconnect, or NVM behavior under physical hotkeys. The firmware has no Direct palette getter, atomic frame commit, lease/watchdog or persistence. Stop can leave already-sent colors or a partial frame in RAM. No physical keyboard commands, settings writes, reset, loader transition or flashing were performed.
+
+Current-source Linux offline launch is the only platform launch in this continuation. CPU/memory and complete HID-cycle measurements, Windows/macOS/arm64 runtime checks, current-tree six-target CI, installers, signing and the remaining backup/install gates stay open. No release tag, GitHub publication or fully qualified first release is claimed. Final independent integration review approved this local commit and the incremental bundle from `c207ad1`; reviewed staged patch SHA256: `c383e11b9c629f0bb0681af5574611a7de16946fbb0ed3eabca9c686a5dad975`. Replacing the pending-review sentence in EN/RU was the only permitted closure edit after that review.
+
 ## Beta2 desktop candidate — 2026-10-26
 
-The reviewed work starts at `c207ad13f3529bebccdbb8df15a7c38cfd96c1eb` on `desktop-dev` and prepares application `0.1.0-beta.2` for firmware [v0.6.0-beta.2](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2), commit `2e0b28b384872c482e0e358a4b353f00ddd976a7`, published at 04:52:40 UTC. The five bundled JSON catalogs are byte-identical to the published release assets. Their sizes, hashes and URLs are recorded in `assets/ak820/beta2-provenance.json`; the prequalification catalogs in the firmware tag are not substituted for those assets.
+The reviewed work starts at `c207ad13f3529bebccdbb8df15a7c38cfd96c1eb` on `desktop-dev` and prepares application `0.1.0-beta.2` for firmware [v0.6.0-beta.2](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2), peeled commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`; identity terminology corrected in the RGB continuation), published at 04:52:40 UTC. The five bundled JSON catalogs are byte-identical to the published release assets. Their sizes, hashes and URLs are recorded in `assets/ak820/beta2-provenance.json`; the prequalification catalogs in the firmware tag are not substituted for those assets.
 
 The packet adds ten exact schema03 profile contracts, complete read-only connection/reconciliation, profile-aware typed writes and keycode choices, project v2, exact historical backup sources and RGB-mode migration, the static 82-LED palette editor, bilingual help/research/requirements, and versioned six-platform candidate packaging. The exceptional architecture handoff requested in the prior checkpoint was completed before this packet; it is no longer a prerequisite for the next agent. Earlier handoff instructions below describe historical checkpoints.
 

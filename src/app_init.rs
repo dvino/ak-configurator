@@ -181,6 +181,8 @@ impl EntropyApp {
         if self.ak820_demo_profile == Some(profile) {
             return;
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ak820_rgb_scene_stop();
         if let (Some(current_profile), Some(layout)) =
             (self.ak820_demo_profile, self.layout.as_ref())
         {
@@ -446,6 +448,8 @@ impl EntropyApp {
         Self {
             #[cfg(not(target_arch = "wasm32"))]
             hid_device: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            ak820_rgb_runtime: super::ak820_rgb_runtime::Runtime::default(),
             #[cfg(not(target_arch = "wasm32"))]
             shared_hid_output: None,
             #[cfg(not(target_arch = "wasm32"))]

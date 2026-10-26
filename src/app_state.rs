@@ -5353,6 +5353,8 @@ pub(crate) const LAYOUT_TOP_RESERVED_H: f32 = 32.0_f32 + 4.0_f32 + 68.0_f32;
 pub(crate) const LAYOUT_BOTTOM_RESERVED_H: f32 = 76.0_f32;
 
 pub struct EntropyApp {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) ak820_rgb_runtime: super::ak820_rgb_runtime::Runtime,
     pub(crate) ak820_demo: bool,
     pub(crate) ak820_demo_profile: Option<super::ak820_beta1_profiles::ProfileId>,
     pub(crate) ak820_demo_seed: Option<crate::keyboard::KeyboardLayout>,

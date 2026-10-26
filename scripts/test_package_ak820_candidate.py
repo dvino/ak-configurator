@@ -52,6 +52,11 @@ class CandidateTests(unittest.TestCase):
                 self.assertEqual(contents["LICENSE"], (candidate.ROOT / "LICENSE").read_bytes())
                 manifest = json.loads(contents["manifest.json"])
                 self.assertEqual(manifest["firmware_release"], "v0.6.0-beta.2")
+                provenance = json.loads(contents["firmware-provenance.json"])
+                self.assertEqual(provenance["tag_object"], "2e0b28b384872c482e0e358a4b353f00ddd976a7")
+                self.assertEqual(provenance["tag_commit"], "2990ef877c5c6c54013b8821450c5a91878b8c3a")
+                self.assertEqual(manifest["firmware_commit"], provenance["tag_commit"])
+                self.assertEqual(manifest["firmware_tag_object"], provenance["tag_object"])
                 self.assertEqual(manifest["binary_sha256"], hashlib.sha256(binary.read_bytes()).hexdigest())
                 for line in contents["SHA256SUMS"].decode().splitlines():
                     expected, name = line.split("  ")

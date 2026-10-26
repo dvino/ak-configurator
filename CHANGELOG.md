@@ -1,9 +1,7 @@
 # Changelog
 
-All notable public changes to Entropy are tracked here.
-
-Entropy uses public release versions for GitHub releases and internal build versions
-for development history. The first public beta is `v0.1.0-beta.1`.
+AK Configurator changes are recorded here. The inherited Entropy release history
+is retained below. Russian candidate notes: [Изменения](docs/ru/CHANGELOG.md).
 
 ## v0.1.0-beta.2 — Unreleased desktop candidate
 
@@ -14,11 +12,22 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Add exact beta2 contracts for ten AK820 firmware profiles, full-image/settings checks, and guarded profile-specific settings editing
 - Add version 2 offline projects pinned to the target release, catalog, and Intel HEX image; reject beta1 version 1 projects pending explicit manual migration
 - Add typed schema03 module controls and Direct RGB palette editing for Main, Game, Mmo, and Creative, with volatile RAM-only behavior documented
+- Add local RGB scenes with up to 16 ordered layers, LED masks, Solid/Gradient/Wave/Breathing/Rain effects, axes, opacity, periods, and a quiet-hours brightness cap
+- Add animated offline previews, bounded scene undo/redo, and explicit scene v2 save/load while retaining static palette v1 files
+- Add playback through the existing HID owner with a one-frame queue, a conservative 10 frames/s application ceiling, cancellation, priority pauses, and stop-on-error or lost mode ownership
 - Add a separate unsigned desktop-candidate ZIP and SHA-256 artifact for each of six platform targets, including localized installation/RGB guides and firmware provenance
+
+### Corrections
+
+- Preserve the dispatch cooldown across short pauses and expire pending Off commands after sleep or clock discontinuities
+- Keep scene selection valid after import/undo and make layer controls accessible at the minimum 800-pixel window width
+- Record the peeled firmware commit separately from its annotated tag object in provenance and candidate manifests
 
 ### Candidate Notes
 
 - Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification
+- RGB scenes require explicit playback; frames remain in device RAM, have no palette readback or atomic commit, and are not saved to NVM or restored automatically
+- Source/host tests and Linux offline UI checks pass; physical RGB timing, safe frame rate, resource measurements, and Windows/macOS/arm64 runtime qualification remain open
 - Full backup capture/history/restoration, installer execution, OEM ownership, platform qualification, and signing remain open
 - Existing Entropy release history below is retained unchanged
 
