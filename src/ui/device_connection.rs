@@ -210,7 +210,9 @@ impl EntropyApp {
         self.pending_layer_write = None;
         self.combo_write_task = None;
         self.settings_write_task = None;
-        self.vial_hid_task = None;
+        if !self.cancel_active_ak820_backup_capture() {
+            self.vial_hid_task = None;
+        }
         self.pending_layout_undo = false;
         self.deferred_device_load = DeferredDeviceLoadState::default();
         self.deferred_full_layout_action = None;

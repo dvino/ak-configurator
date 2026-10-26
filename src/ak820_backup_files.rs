@@ -4,10 +4,10 @@
 //! at firmware revision `bef20f89d3da01d770767919bc7c8fc3c3a1a808`. This module
 //! handles local bytes only: it does not capture a device or perform HID I/O.
 use crate::ak820_settings_backup::{
-    canonical, sha256, BackupResult, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
+    canonical, sha256, BackupResult, ImageIdentity, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
 };
-use crate::ak820_settings_model::validate_profile_archive;
-use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use crate::ak820_settings_model::{validate_historical_archive, validate_profile_archive};
+use crate::app::ak820_beta1_profiles::{historical_settings_identity, matrix_profile, ProfileId};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 #[cfg(test)]
@@ -15,10 +15,56 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::Arc;
 
 const MANIFEST: &str = "manifest.json";
 const MANIFEST_LIMIT: usize = 65_536;
 const ENTRY_COUNT: usize = FILES.len() + 1;
+const HISTORY_LIMIT: usize = 128;
+const HISTORY_ENTRY_LIMIT: usize = 1024;
+
+/// A fully validated immutable backup. The underlying archive and file bytes
+/// are shared by clones and cannot be modified through this API.
+#[derive(Clone)]
+pub(crate) struct LoadedBackup {
+    archive: Arc<ValidatedArchive>,
+    manifest_raw: Arc<Vec<u8>>,
+    files: Arc<BTreeMap<String, Vec<u8>>>,
+    source_profile: Option<ProfileId>,
+}
+impl LoadedBackup {
+    pub(crate) fn archive(&self) -> &ValidatedArchive {
+        &self.archive
+    }
+    pub(crate) fn files(&self) -> &BTreeMap<String, Vec<u8>> {
+        &self.files
+    }
+    pub(crate) fn source_profile(&self) -> Option<ProfileId> {
+        self.source_profile
+    }
+    pub(crate) fn nvm(&self) -> &[u8] {
+        &self.files["saved-nvm.bin"]
+    }
+    pub(crate) fn manifest_raw(&self) -> &[u8] {
+        &self.manifest_raw
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct BackupHistoryEntry {
+    pub(crate) name: String,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) created_utc: String,
+    pub(crate) source_profile: Option<ProfileId>,
+    pub(crate) schema: u32,
+    pub(crate) manifest_sha256: String,
+}
+#[derive(Clone, Debug)]
+pub(crate) struct BackupHistory {
+    pub(crate) entries: Vec<BackupHistoryEntry>,
+    pub(crate) invalid_skipped: usize,
+    pub(crate) warning: Option<String>,
+}
 
 fn invalid() -> String {
     "Invalid or inaccessible backup directory".into()
@@ -31,7 +77,7 @@ fn allowed_name(name: &std::ffi::OsStr) -> bool {
 #[cfg(target_os = "linux")]
 mod anchored {
     use super::*;
-    use std::ffi::{CStr, CString, OsStr};
+    use std::ffi::{CStr, CString, OsStr, OsString};
     use std::os::fd::{AsRawFd, FromRawFd};
     use std::os::unix::ffi::OsStrExt;
     use std::path::Component;
@@ -148,6 +194,51 @@ mod anchored {
             return Err("Backup manifest changed during read".into());
         }
         Ok((manifest, files))
+    }
+    pub(super) fn children(dir: &File) -> BackupResult<Vec<(OsString, bool)>> {
+        let scan = open_at(dir, OsStr::new("."), libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+        use std::os::fd::IntoRawFd;
+        let fd = scan.into_raw_fd();
+        let stream = unsafe { libc::fdopendir(fd) };
+        if stream.is_null() {
+            unsafe {
+                libc::close(fd);
+            }
+            return Err(invalid());
+        }
+        struct Stream(*mut libc::DIR);
+        impl Drop for Stream {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::closedir(self.0);
+                }
+            }
+        }
+        let stream = Stream(stream);
+        let mut out = Vec::new();
+        loop {
+            unsafe {
+                *libc::__errno_location() = 0;
+            }
+            let item = unsafe { libc::readdir(stream.0) };
+            if item.is_null() {
+                if unsafe { *libc::__errno_location() } != 0 {
+                    return Err(invalid());
+                }
+                break;
+            }
+            let raw = unsafe { CStr::from_ptr((*item).d_name.as_ptr()) }.to_bytes();
+            if raw == b"." || raw == b".." {
+                continue;
+            }
+            if out.len() >= HISTORY_ENTRY_LIMIT {
+                return Err("Backup history contains too many entries".into());
+            }
+            let name = OsStr::from_bytes(raw).to_os_string();
+            let is_dir = open_at(dir, &name, libc::O_RDONLY | libc::O_DIRECTORY, 0).is_ok();
+            out.push((name, is_dir));
+        }
+        Ok(out)
     }
     pub(super) struct Stage {
         pub parent: File,
@@ -314,6 +405,143 @@ pub fn read_validated_archive(path: &Path, profile: ProfileId) -> BackupResult<V
         .map_err(|_| "Backup validation failed".to_owned())
 }
 
+const PROFILES: [ProfileId; 10] = [
+    ProfileId::Main,
+    ProfileId::Game,
+    ProfileId::Mmo,
+    ProfileId::Typing,
+    ProfileId::Code,
+    ProfileId::Pointer,
+    ProfileId::Onehand,
+    ProfileId::Creative,
+    ProfileId::Shortcuts,
+    ProfileId::Multios,
+];
+
+/// Reopen and fully validate a current-profile or exact historical backup.
+/// The optional digest pins the manifest across catalog listing and use.
+pub(crate) fn read_backup_auto(
+    path: &Path,
+    expected_manifest: Option<&str>,
+) -> BackupResult<LoadedBackup> {
+    let (raw, files) = read_directory(path)?;
+    validate_loaded_bytes(raw, files, expected_manifest)
+}
+
+fn validate_loaded_bytes(
+    raw: Vec<u8>,
+    files: BTreeMap<String, Vec<u8>>,
+    expected_manifest: Option<&str>,
+) -> BackupResult<LoadedBackup> {
+    let manifest: Value = serde_json::from_slice(&raw).map_err(|_| invalid())?;
+    let fields = manifest.as_object().ok_or_else(invalid)?;
+    let text_field = |key: &str| fields.get(key).and_then(Value::as_str).ok_or_else(invalid);
+    let schema = fields
+        .get("nvm_schema")
+        .and_then(Value::as_u64)
+        .and_then(|v| u32::try_from(v).ok())
+        .ok_or_else(invalid)?;
+    let ihx = text_field("source_ihx_sha256")?;
+    let code = text_field("code_sha256")?;
+    let definition = text_field("definition_sha256")?;
+    let mut found: Option<(ValidatedArchive, Option<ProfileId>)> = None;
+    for profile in PROFILES {
+        let Some(id) = matrix_profile(profile).settings_identity.as_ref() else {
+            continue;
+        };
+        if id.ihx_sha256 == ihx
+            && id.code_sha256 == code
+            && id.definition_sha256 == definition
+            && id.nvm_schema == schema
+        {
+            let archive = validate_profile_archive(&raw, &files, profile, expected_manifest)
+                .map_err(|_| "Backup validation failed".to_owned())?;
+            found = Some((archive, Some(profile)));
+            break;
+        }
+    }
+    if found.is_none() {
+        let historical = historical_settings_identity(ihx, code, schema)
+            .ok_or_else(|| "Backup validation failed".to_owned())?;
+        let identity = ImageIdentity {
+            ihx_sha256: historical.ihx_sha256.into(),
+            code_sha256: historical.code_sha256.into(),
+            definition_sha256: definition.into(),
+            schema,
+        };
+        let archive = validate_historical_archive(&raw, &files, &identity, expected_manifest)
+            .map_err(|_| "Backup validation failed".to_owned())?;
+        found = Some((archive, None));
+    }
+    let (archive, source_profile) = found.expect("validated branch sets result");
+    Ok(LoadedBackup {
+        archive: Arc::new(archive),
+        manifest_raw: Arc::new(raw),
+        files: Arc::new(files),
+        source_profile,
+    })
+}
+
+/// Scan immediate child directories only. Every advertised candidate has
+/// passed complete archive validation; malformed entries are counted.
+#[cfg(target_os = "linux")]
+pub(crate) fn scan_backup_history(root: &Path) -> BackupResult<BackupHistory> {
+    let root_dir = anchored::directory(root)?;
+    scan_open_history(root, &root_dir)
+}
+#[cfg(target_os = "linux")]
+fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory> {
+    let children = anchored::children(root_dir)?;
+    let mut entries = Vec::new();
+    let mut invalid_skipped = 0usize;
+    let mut backups_seen = 0usize;
+    for (name, is_dir) in children {
+        if !is_dir {
+            continue;
+        }
+        backups_seen += 1;
+        if backups_seen > HISTORY_LIMIT {
+            return Err("Backup history exceeds the 128 backup limit".into());
+        }
+        let path = root.join(&name);
+        let loaded = anchored::open_at(&root_dir, &name, libc::O_RDONLY | libc::O_DIRECTORY, 0)
+            .and_then(|child| anchored::read(&child))
+            .and_then(|(raw, files)| validate_loaded_bytes(raw, files, None));
+        match loaded {
+            Ok(loaded) => {
+                let name = name.to_string_lossy().into_owned();
+                let created_utc = loaded.archive().manifest["created_utc"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_owned();
+                entries.push(BackupHistoryEntry {
+                    name,
+                    path,
+                    created_utc,
+                    source_profile: loaded.source_profile(),
+                    schema: loaded.archive().source.schema,
+                    manifest_sha256: loaded.archive().manifest_sha256.clone(),
+                });
+            }
+            Err(_) => invalid_skipped += 1,
+        }
+    }
+    Ok(BackupHistory {
+        entries,
+        invalid_skipped,
+        warning: (invalid_skipped > 0).then(|| {
+            format!(
+                "Skipped {invalid_skipped} invalid backup entr{}",
+                if invalid_skipped == 1 { "y" } else { "ies" }
+            )
+        }),
+    })
+}
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn scan_backup_history(_root: &Path) -> BackupResult<BackupHistory> {
+    Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+}
+
 fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> BackupResult<Vec<u8>> {
     let identity = matrix_profile(profile)
         .settings_identity
@@ -395,6 +623,7 @@ pub fn publish_validated_archive(
             .map_err(|_| "Backup validation failed".to_owned())?;
         stage.dir.sync_all().map_err(|_| invalid())?;
         stage.publish(target)?;
+        stage.parent.sync_all().map_err(|_| invalid())?;
         Ok(verified)
     }
 }
@@ -428,6 +657,73 @@ mod tests {
         let fifo = std::ffi::CString::new(temp.path().join(entry).as_os_str().as_bytes()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
         assert!(read_directory(temp.path()).is_err());
+    }
+    #[test]
+    fn history_is_immediate_bounded_and_skips_invalid_archives() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("history");
+        fs::create_dir(&root).unwrap();
+        let candidate = root.join("candidate");
+        fs::create_dir(&candidate).unwrap();
+        envelope(&candidate);
+        let nested = candidate.join("nested");
+        fs::create_dir(&nested).unwrap();
+        envelope(&nested);
+        fs::write(root.join("ordinary-file"), b"x").unwrap();
+        let history = scan_backup_history(&root).unwrap();
+        assert!(history.entries.is_empty());
+        assert_eq!(history.invalid_skipped, 1);
+        assert_eq!(
+            history.warning.as_deref(),
+            Some("Skipped 1 invalid backup entry")
+        );
+        fs::remove_dir_all(&candidate).unwrap();
+        for i in 0..=HISTORY_LIMIT {
+            fs::create_dir(root.join(format!("d{i}"))).unwrap();
+        }
+        assert!(scan_backup_history(&root)
+            .unwrap_err()
+            .contains("128 backup limit"));
+    }
+    #[test]
+    fn history_scan_stays_anchored_after_root_rename_and_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("history");
+        fs::create_dir(&root).unwrap();
+        let original_entry = root.join("original-candidate");
+        fs::create_dir(&original_entry).unwrap();
+        envelope(&original_entry);
+        let anchored_root = anchored::directory(&root).unwrap();
+        let moved = temp.path().join("moved-history");
+        fs::rename(&root, &moved).unwrap();
+        fs::create_dir(&root).unwrap();
+        let replacement_entry = root.join("replacement-candidate");
+        fs::create_dir(&replacement_entry).unwrap();
+        envelope(&replacement_entry);
+        fs::write(replacement_entry.join(MANIFEST), b"{\"replacement\":true}").unwrap();
+        let original_child = anchored::open_at(
+            &anchored_root,
+            std::ffi::OsStr::new("original-candidate"),
+            libc::O_RDONLY | libc::O_DIRECTORY,
+            0,
+        )
+        .unwrap();
+        let (anchored_manifest, _) = anchored::read(&original_child).unwrap();
+        let (replacement_manifest, _) = read_directory(&replacement_entry).unwrap();
+        assert_eq!(anchored_manifest, b"{}");
+        assert_eq!(replacement_manifest, b"{\"replacement\":true}");
+        assert_ne!(anchored_manifest, replacement_manifest);
+        let history = scan_open_history(&root, &anchored_root).unwrap();
+        assert_eq!(history.invalid_skipped, 1);
+        assert!(history.entries.is_empty());
+    }
+    #[test]
+    fn automatic_loader_rejects_malformed_and_pinned_manifest_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        envelope(temp.path());
+        let pinned = "00".repeat(32);
+        assert!(read_backup_auto(temp.path(), Some(&pinned)).is_err());
+        assert!(read_backup_auto(temp.path(), None).is_err());
     }
     #[test]
     fn rejects_symlink_ancestors_and_keeps_open_directory_after_rename() {

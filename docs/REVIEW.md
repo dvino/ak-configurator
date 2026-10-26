@@ -2,6 +2,45 @@
 
 # Desktop adaptation and review
 
+## Complete backup capture and restore preview — 2026-10-26
+
+This continuation starts at `06425024a28a4e32c4b41300e4b4199c6b6b9b0b` on `desktop-dev`. Application version remains `0.1.0-beta.2`, targeting the existing exact AK820 `v0.6.0-beta.2` catalog. Firmware, released image identities and the archive formats are unchanged.
+
+The Backups window now connects read-only capture to the existing sole HID owner. A loaded beta2 session reads the complete 64 KiB ROM, runs the production protected-region/CODE/manifest validator, reconciles supported getters against saved settings, and repeats all 10 KiB of NVM, the manifest and storage status. Inactive durable bytes remain in the complete snapshot. Live RGB is validated separately and never substituted for saved RGB. The read log contains fixed metadata, not packet contents, macros or device paths. Cancellation is checked before each request; transport or validation failures stop without retry and latch session failure.
+
+An accepted snapshot remains in memory until explicit save. Linux publication uses the existing private staged directory, reread validation, no-replace rename and parent-directory sync, followed by a pinned reopen. Auto-detection admits only the ten current exact sources or the three historical schema02 source identities. History is bounded to 128 immediate directories and 1024 root entries; invalid candidates are counted, and selected entries are validated again against their listed manifest digest. The restore view invokes the existing immutable planner and reports proposed changes against the captured target snapshot. No restore setter, unlock, reset, loader transition or installer is connected.
+
+### Independent findings and closure
+
+A separate GPT-6.1 Sol reviewer inspected capture, filesystem I/O, UI ownership, cancellation, and matching EN/RU documentation without authoring the changes or operating a keyboard. Corrected and re-reviewed findings include:
+
+- History originally enumerated through an open directory but reopened candidates by pathname. It now reads each child relative to the retained root handle. A structural rename/replacement test distinguishes original and replacement bytes without admitting synthetic firmware.
+- A borrowed digest in a new test had the wrong type; the compile error was corrected.
+- Cancellation arriving beside a real read failure could suppress the failure latch. Only a typed cancellation outcome now bypasses the latch; a transport/cancel race regression checks that genuine failure remains visible.
+- Retiring a connection originally discarded the worker receiver without cancelling capture. Retirement now signals cancellation and retains ownership until the worker finishes. Late completions cannot restore the old handle or snapshot; a queued connection resumes afterward.
+- New native-only helpers initially lacked two Wasm cfg guards. Both are guarded; this is source review, not a Wasm build claim.
+- The initial zero-ROM tests stopped before getter reconciliation. A private helper now has synthetic matching and mismatch tests for keys, both encoder directions, multiple macro chunks, runtime counts/QSIDs, typed entries, Combos and RGB. Production still validates real ROM before calling it; no production trust substitution was added.
+
+### Verification
+
+| Check | Result and scope |
+| --- | --- |
+| Full default offline suite, sequential | **1697 passed, 1 failed, 14 ignored, 1 filtered out**, 668.93 s. The existing umask test was run separately as described below. The single failure was the existing `/proc`-dependent window-parser test; the same executable passed that exact test outside the mismatched PID namespace. This is not a zero-failure full-suite run. This executable precedes only the final native cfg guards and UI/help text changes. |
+| Final focused AK820 suite | **142 passed, 0 failed**, 12.17 s, after the final source changes; the umask case was filtered from this restricted-sandbox run. Coverage includes fixed read-only requests, cancellation before/between packets, transport/cancel failure latching, untrusted full-ROM rejection, synthetic getter reconciliation, history bounds/anchored reads, stale completions, connection retirement and RU/EN window bounds. |
+| Private-directory umask test | The initial targeted run could not create its UID-changing subprocess in the restricted sandbox. The identical full-suite executable was copied to a traversable temporary directory and verified by SHA256; the exact test then **passed, 0 failures**, 0.02 s, outside that sandbox with its unprivileged child. Assertions and source-level ignores were unchanged. |
+| Window-parser environment check | The sandbox process saw its inner PID while mounted `/proc` exposed the outer namespace; numeric `/proc/<own-pid>` lookups failed. `app_discovery.rs` is unchanged. The exact `app_discovery::tests::parses_wmctrl_process_and_title` test **passed, 0 failures**, 0.00 s, from the same full-suite executable outside that namespace. |
+| Localization and whitespace | `python3 scripts/check_i18n.py` and `git diff --check` passed. |
+| Native build | Final `cargo build --locked --offline` passed with Rust 1.97.0 on Linux x86_64 in **19.52 s**; development profile with debug information and incremental compilation both disabled. The build reports **176 warnings**. This is not a new optimized release build. |
+| Native offline UI | Final binary launched with `--demo-ak820` in isolated Xvfb/software rendering. The Russian Backups window shows the selected folder, counts one intentionally incomplete directory, refreshes to zero after its removal, and fits at **800 × 500**. Folder selection, close/reopen and the disabled device-capture control in demo were inspected. The existing system-dialog fallback worked without an XDG portal. No physical HID session or successful complete-backup save was exercised. |
+
+The full-suite executable SHA256 is `29ed603be7463c9a1a9978e37dae8a3bd49863c3842102c53f562821ec338483`; both environment-dependent exact reruns used its verified copy. The final focused-test executable is `f5b2115b5abede869ec2a1ced4db8dd954539228d65f1926fde248b74640c9a7`; the final native binary is `5ebe7583ab328264b168cf193f3bc74e82b2c9c9cf6b3a3d655eed4c6b9c93d3`. These distinguish the broad run from the final text/cfg corrections. No test assertion was weakened and no new source-level ignore was added.
+
+### Remaining boundaries
+
+No positive released full-ROM fixture is available because protected OEM bytes are unavailable. Synthetic getter tests establish parsing and ordering, not successful admission of a released keyboard ROM. No physical device was connected or operated. Archive file I/O remains Linux-only. Windows/macOS/arm64 runtime, current-source six-target CI, fresh physical restore confirmation, pre-restore safety backups, execution/undo, installer/OEM ownership and release qualification remain open. No release tag or GitHub publication is made.
+
+Final independent integration acceptance: approved for local commit and an incremental Git bundle from `c207ad1`; reviewed staged patch SHA256 `55ec4a7ec17b832466fce70121a8c286fcf38558e4d0cb0c128e2fac8b00f2cd`. No blocking findings remain. This acceptance does not authorize hardware operations, GitHub publication or release qualification.
+
 ## Native RGB scenes — 2026-10-26
 
 This continuation starts at `588aeed963884de8ba8b673c037d1cd27639cfcb` on `desktop-dev`. Application version remains `0.1.0-beta.2`; firmware target remains `v0.6.0-beta.2`. The firmware tag is annotated: its object is `2e0b28b384872c482e0e358a4b353f00ddd976a7`, and its peeled commit is `2990ef877c5c6c54013b8821450c5a91878b8c3a`. Provenance, packaging and current documentation now distinguish those identities. Published catalog bytes are unchanged. No firmware code is changed.

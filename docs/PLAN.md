@@ -6,14 +6,14 @@ This plan turns the agreed [requirements](REQUIREMENTS.md) into reviewable work 
 
 ## Active release preparation — 2026-10-26
 
-Baseline: source commit `588aeed`. The current source targets AK820 v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled firmware commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`). Ten profiles are supported by exact packed CODE/settings identities, schema03 contracts, and explicit directional transition pairs. Application version remains `0.1.0-beta.2`; this work does not complete or publish a release.
+Baseline: source commit `0642502`. The current source targets AK820 v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled firmware commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`). Ten profiles are supported by exact packed CODE/settings identities, schema03 contracts, and explicit directional transition pairs. Application version remains `0.1.0-beta.2`; this work does not complete or publish a release.
 
 | Workstream | Current state | Remaining evidence or work |
 | --- | --- | --- |
 | Profile contracts and live settings loader | Implemented for ten exact beta2 images; alpha3 retained as a separate exact path | Positive released packed-image/full-ROM fixture and physical connection qualification remain unavailable |
-| Offline projects and typed modules | Project v2 pins target release/catalog/IHX; schema03 typed editors and all ten profile examples | Beta1 v1 requires manual migration; complete backup import/export/history remains open |
+| Offline projects and typed modules | Project v2 pins target release/catalog/IHX; schema03 typed editors and all ten profile examples | Beta1 v1 requires manual migration; project and `.entlayout` files remain distinct from complete device backups |
 | RGB | Built-in effects per profile; Direct palette editor and additive scene editor/compositor/HID playback implemented | 35 focused RGB host tests pass; Linux demo preview and exact scene JSON save/reload round trip cover 82 colors and two layers. Hardware timing, resource and platform qualification remain open; no persistent frame writes, palette getter or atomic frame commit |
-| Backup and restore | Catalog-bound models; private backup-directory I/O on Linux | Full capture/history, complete UI/executor and exact device ownership |
+| Backup and restore | Read-only beta2 capture through one HID session; complete NVM capture with supported-getter reconciliation; repeated NVM, manifest and status checks; private staged Linux save with reread and parent sync; bounded, fully validated history with pinned reopen; immutable restore preview | No live restore executor or safety-backup flow; Linux-only backup file I/O; no positive released full-ROM fixture or hardware qualification |
 | Install and OEM recovery | Offline packer and install models | Installer UI/executor; full-image source and physical qualification; OEM-private helper bytes unavailable and excluded |
 | Delivery | Versioned six-target candidate ZIP/provenance/SHA256 pipeline implemented; local/current-platform evidence is recorded in [REVIEW.md](REVIEW.md) | Six-target execution, installers, signing, and per-target runtime/function qualification |
 
@@ -24,7 +24,7 @@ Current build/test/review details are maintained in [REVIEW.md](REVIEW.md), and 
 ## Delivery order
 
 1. Maintain the exact firmware/image contract and fail-closed settings loader for every supported profile. Any new profile or transition requires exact packed identity and explicit directed evidence.
-2. Complete and qualify full backup capture, history, migration and guarded restore. Preserve all durable/inactive settings; reject unsupported schemas and cross-image operations.
+2. Implement a guarded restore executor with a fresh physical hold, safety backup and verified stop behavior. Then qualify capture, restore and cross-image handling. Current capture is read-only; no restore setter is connected. Native filesystem portability and full release qualification remain open.
 3. Complete installer and OEM workflows only when image preparation, ownership, cancellation boundary, one-attempt behavior, installed-image verification and settings outcome separation are evidenced. Public HEX or synthetic models do not replace unavailable OEM bytes or physical evidence.
 4. Prepare all six platform packages with matching SHA256 manifests and EN/RU install guidance. Run and verify current-tree CI, then record platform runtime, HID, function, resource, signing and installer evidence separately. Prior CI runs are historical unless their source matches the current tree.
 5. Continue RGB qualification from the implemented native scene editor/compositor and bounded HID playback. Focused source/host validation is complete; next gates are platform timing/resource checks and device/HID qualification when authorized and available. Direct palettes and scene frames remain volatile; firmware provides no verified palette getter, persistence path or atomic frame commit.

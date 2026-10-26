@@ -619,6 +619,7 @@ impl EntropyApp {
             return;
         }
         if self.hid_write_task_active() {
+            self.cancel_active_ak820_backup_capture();
             if let Some(reconnect) = reconnect {
                 self.schedule_bluetooth_reconnect_retry(reconnect, "HID write still active");
             } else {

@@ -2,6 +2,7 @@
 
 mod action_icons;
 mod ak820;
+mod ak820_backup_capture;
 mod ak820_backup_files;
 mod ak820_image_pack;
 mod ak820_install_plan;

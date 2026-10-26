@@ -219,6 +219,9 @@ fn battery_refresh_delay(battery: Option<crate::hid::BatteryHalves>) -> std::tim
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub(super) enum VialHidOperation {
+    Ak820BackupCapture {
+        request_id: u64,
+    },
     LayerNameWrite(LayerNameWrite),
     UnlockStart,
     UnlockPoll,
@@ -297,6 +300,7 @@ impl VialHidOperation {
 
 #[cfg(not(target_arch = "wasm32"))]
 enum VialHidOutcome {
+    Ak820BackupCaptured(crate::ak820_backup_capture::CapturedBackup),
     LayerNameWritten(String),
     UnlockStarted {
         unlocked: bool,
@@ -360,6 +364,9 @@ fn run_vial_hid_operation_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
 ) -> anyhow::Result<VialHidOutcome> {
     match operation {
+        VialHidOperation::Ak820BackupCapture { .. } => hid
+            .ak820_capture_backup(cancel, progress)
+            .map(VialHidOutcome::Ak820BackupCaptured),
         VialHidOperation::LayerNameWrite(request) => {
             let qsid = 200 + request.layer as u16;
             hid.set_qmk_setting_string(qsid, &request.name)?;
@@ -612,6 +619,74 @@ impl EntropyApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn can_capture_ak820_backup(&self) -> bool {
+        !self.ak820_demo
+            && !self.headless
+            && matches!(self.connect_state, ConnectState::Idle)
+            && !self.hid_write_lifecycle_busy()
+            && self.pending_layer_write.is_none()
+            && !self.pending_layout_undo
+            && !self.combo_dirty
+            && !self.keycode_picker.macros_dirty
+            && !self.import_pending()
+            && self.pending_file_dialog.is_none()
+            && self.pending_device_connect.is_none()
+            && !self.unlock_open
+            && !self.exit_after_hid_write
+            && self.hid_device.as_ref().is_some_and(|hid| {
+                hid.ak820_editing_ready()
+                    && hid
+                        .ak820_image()
+                        .is_some_and(|image| image.profile().is_some())
+            })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn start_ak820_backup_capture(
+        &mut self,
+        ctx: &egui::Context,
+        request_id: u64,
+    ) -> VialHidTaskStart {
+        if !self.can_capture_ak820_backup() {
+            return VialHidTaskStart::Busy;
+        }
+        self.start_vial_hid_operation(ctx, VialHidOperation::Ak820BackupCapture { request_id })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn ak820_backup_capture_progress(&self, request_id: u64) -> Option<f32> {
+        self.vial_hid_task.as_ref().and_then(|task| {
+            matches!(task.operation, VialHidOperation::Ak820BackupCapture { request_id: id } if id == request_id)
+            .then(|| (task.progress.load(std::sync::atomic::Ordering::Relaxed) as f32 / 100.0).clamp(0.0, 1.0))
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn cancel_ak820_backup_capture(&self, request_id: u64) {
+        if let Some(task) = self.vial_hid_task.as_ref().filter(|task| {
+            matches!(task.operation, VialHidOperation::Ak820BackupCapture { request_id: id } if id == request_id)
+        }) {
+            task.cancel.store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
+
+    // Retain the owner until the cancelled worker returns its handle. Dropping
+    // the receiver alone would let an old read overlap the next connection.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn cancel_active_ak820_backup_capture(&self) -> bool {
+        if let Some(task) = self
+            .vial_hid_task
+            .as_ref()
+            .filter(|task| matches!(task.operation, VialHidOperation::Ak820BackupCapture { .. }))
+        {
+            task.cancel
+                .store(true, std::sync::atomic::Ordering::Release);
+            return true;
+        }
+        false
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_vial_hid_operation_with_runner(
         &mut self,
         ctx: &egui::Context,
@@ -826,6 +901,14 @@ impl EntropyApp {
                     .expect("Vial HID task checked above");
                 if task.generation == self.connection_generation {
                     self.hid_device = None;
+                    if let VialHidOperation::Ak820BackupCapture { request_id } = &task.operation {
+                        super::ak820_backup_inspection::capture_finished(
+                            ctx,
+                            *request_id,
+                            task.generation,
+                            Err(()),
+                        );
+                    }
                     self.finish_vial_hid_error(
                         task.operation,
                         "Vial HID worker stopped".to_owned(),
@@ -839,11 +922,22 @@ impl EntropyApp {
 
         self.vial_hid_task = None;
         if result.generation != self.connection_generation {
+            self.resume_pending_device_connect();
             return;
         }
 
         self.hid_device = result.hid_device;
         match result.outcome {
+            Ok(VialHidOutcome::Ak820BackupCaptured(snapshot)) => {
+                if let VialHidOperation::Ak820BackupCapture { request_id } = result.operation {
+                    super::ak820_backup_inspection::capture_finished(
+                        ctx,
+                        request_id,
+                        result.generation,
+                        Ok(snapshot),
+                    );
+                }
+            }
             Ok(VialHidOutcome::LayerNameWritten(actual)) => {
                 if let VialHidOperation::LayerNameWrite(request) = result.operation {
                     if !self
@@ -1117,6 +1211,14 @@ impl EntropyApp {
                 self.finish_deferred_device_load(payload);
             }
             Err(error) => {
+                if let VialHidOperation::Ak820BackupCapture { request_id } = &result.operation {
+                    super::ak820_backup_inspection::capture_finished(
+                        ctx,
+                        *request_id,
+                        result.generation,
+                        Err(()),
+                    );
+                }
                 self.finish_vial_hid_error(result.operation, error, result.disconnected);
             }
         }
@@ -1258,6 +1360,20 @@ impl EntropyApp {
         error: String,
         disconnected: bool,
     ) {
+        // A capture has no setter or reconnect continuation. Keep transport
+        // diagnostics, paths and potentially private bytes out of presentation.
+        if matches!(operation, VialHidOperation::Ak820BackupCapture { .. }) {
+            let text = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Чтение резервной копии остановлено. Новая копия не сохранена."
+            } else {
+                "Backup reading stopped. No new backup was saved."
+            };
+            if disconnected {
+                self.clear_connected_keyboard_state(text);
+            }
+            self.status_msg = text.into();
+            return;
+        }
         match &operation {
             VialHidOperation::PictogramLoad { .. } => {
                 self.display_settings.pictograms.loading = false;
@@ -1352,6 +1468,7 @@ impl EntropyApp {
         }
 
         match operation {
+            VialHidOperation::Ak820BackupCapture { .. } => unreachable!("capture handled above"),
             VialHidOperation::UnlockStart => self.fail_vial_unlock_start(error),
             VialHidOperation::LayerNameWrite(_) => {
                 self.status_msg = layer_name_write_error(self.app_settings.language, &error);
@@ -2563,5 +2680,91 @@ mod tests {
         assert!(app.undo_stack.is_empty());
         assert!(app.status_msg.starts_with("Write error:"));
         assert!(app.hid_device.is_some());
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod ak820_backup_task_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    fn ready_app() -> EntropyApp {
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, _) = crate::hid::HidDevice::test_beta2_ak820_device(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        app.hid_device = Some(hid);
+        app.connect_state = ConnectState::Idle;
+        app
+    }
+
+    #[test]
+    fn backup_capture_admission_blocks_queued_edits_demo_and_failed_session() {
+        let mut app = ready_app();
+        assert!(app.can_capture_ak820_backup());
+        app.combo_dirty = true;
+        assert!(!app.can_capture_ak820_backup());
+        app.combo_dirty = false;
+        app.keycode_picker.macros_dirty = true;
+        assert!(!app.can_capture_ak820_backup());
+        app.keycode_picker.macros_dirty = false;
+        app.pending_layout_undo = true;
+        assert!(!app.can_capture_ak820_backup());
+        app.pending_layout_undo = false;
+        app.ak820_demo = true;
+        assert!(!app.can_capture_ak820_backup());
+        app.ak820_demo = false;
+        app.hid_device
+            .as_ref()
+            .unwrap()
+            .ak820_fail(&anyhow::anyhow!("modeled fault"));
+        assert!(!app.can_capture_ak820_backup());
+    }
+
+    #[test]
+    fn backup_connection_retirement_cancels_and_retains_owner_until_worker_finishes() {
+        let mut app = ready_app();
+        let ctx = egui::Context::default();
+        let (release, gate) = std::sync::mpsc::channel();
+        let generation = app.connection_generation;
+        assert_eq!(
+            app.start_vial_hid_operation_with_runner(
+                &ctx,
+                VialHidOperation::Ak820BackupCapture { request_id: 17 },
+                move |_, _, _, cancel| {
+                    gate.recv_timeout(std::time::Duration::from_secs(5))
+                        .unwrap();
+                    assert!(cancel.load(Ordering::Acquire));
+                    Err(anyhow::anyhow!("synthetic cancellation"))
+                },
+            ),
+            VialHidTaskStart::Started
+        );
+        let flag = app.vial_hid_task.as_ref().unwrap().cancel.clone();
+        app.vial_hid_task
+            .as_ref()
+            .unwrap()
+            .progress
+            .store(50, Ordering::Release);
+        assert_eq!(app.ak820_backup_capture_progress(17), Some(0.5));
+        assert_eq!(app.ak820_backup_capture_progress(18), None);
+        assert!(app.hid_write_task_owner_active());
+        app.clear_connected_keyboard_state("retired");
+        assert!(flag.load(Ordering::Acquire));
+        assert!(app.hid_write_task_owner_active());
+        assert_ne!(app.connection_generation, generation);
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while app.vial_hid_task_active() && std::time::Instant::now() < deadline {
+            app.poll_vial_hid_task(&ctx);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert!(!app.vial_hid_task_active());
+        assert!(
+            app.hid_device.is_none(),
+            "retired worker cannot restore the old handle"
+        );
+        assert_eq!(app.status_msg, "retired");
     }
 }

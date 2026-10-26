@@ -1,310 +1,525 @@
-//! Read-only local inspection of complete firmware settings backup directories.
-//! This is distinct from the editable `.ak820project` demo format.
-
-use crate::ak820_settings_backup::ValidatedArchive;
+//! Complete local backups, read-only capture and immutable restore previews.
+//! No restore setter is connected to this window.
+use crate::ak820_backup_capture::CapturedBackup;
+use crate::ak820_backup_files::{self as files, BackupHistory, LoadedBackup};
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use crate::app::EntropyApp;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::{mpsc, Arc, Mutex};
 
 pub(crate) const OPEN_ID: &str = "ak820_backup_inspection_open";
 const STATE_ID: &str = "ak820_backup_inspection_state";
 
-// Dependency diagnostics never become presentation text: retain neither paths
-// nor untranslated implementation details in the displayed error.
-fn display_error(ru: bool, _diagnostic: &str) -> &'static str {
-    if !cfg!(target_os = "linux") {
-        if ru {
-            "Работа с каталогами копий в macOS/Windows пока недоступна: приватный доступ к файлам не проверен."
-        } else {
-            "Backup directories are unavailable on macOS/Windows: private file access is not qualified."
-        }
-    } else if ru {
-        "Копия не прошла проверку. Проверьте формат, состав файлов и выбранный профиль."
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Problem {
+    File,
+    Capture,
+    Changed,
+    Incompatible,
+}
+fn problem_text(problem: Problem, ru: bool) -> &'static str {
+    match (problem, ru) {
+        (Problem::File, true) => "Не удалось проверить или сохранить копию. Нужна доступная папка с полным составом файлов и поддерживаемой прошивкой. Существующие копии не заменяются.",
+        (Problem::File, false) => "Could not validate or save the backup. Select an accessible folder with a complete supported backup. Existing backups are never replaced.",
+        (Problem::Capture, true) => "Чтение остановлено. Проверьте подключение и прочитайте настройки снова. Новая копия не сохранена.",
+        (Problem::Capture, false) => "Reading stopped. Check the connection and read settings again. No new backup was saved.",
+        (Problem::Changed, true) => "Подключение изменилось. Для сравнения нужна новая копия текущих настроек.",
+        (Problem::Changed, false) => "The connection changed. Read a new snapshot of the current settings before comparing.",
+        (Problem::Incompatible, true) => "Восстановление в выбранную прошивку недоступно: переход или сохранённые значения не поддерживаются. Настройки не изменены.",
+        (Problem::Incompatible, false) => "Restore to the selected firmware is unavailable: the transition or stored values are unsupported. Settings have not changed.",
+    }
+}
+fn tr<'a>(ru: bool, en: &'a str, russian: &'a str) -> &'a str {
+    if ru {
+        russian
     } else {
-        "Backup validation failed. Check the format, complete file set and selected profile."
+        en
     }
 }
+fn profile_label(profile: Option<ProfileId>, ru: bool) -> String {
+    profile
+        .map(|p| {
+            beta::profile_description(p)
+                .title
+                .for_language(ru)
+                .to_owned()
+        })
+        .unwrap_or_else(|| tr(ru, "Historical image", "Предыдущая прошивка").into())
+}
+// Folder names and manifest timestamps are untrusted local text. Do not render
+// control characters or unbounded strings, and never display full private paths.
+fn short_text(value: &str) -> String {
+    value.chars().filter(|c| !c.is_control()).take(96).collect()
+}
 
+#[derive(Clone)]
+struct TargetSnapshot {
+    data: Arc<CapturedBackup>,
+    generation: u64,
+    read_at: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Summary {
-    profile: ProfileId,
-    format: String,
-    source_build_id: String,
-    source_ihx_sha256: String,
-    code_sha256: String,
-    definition_sha256: String,
-    schema: u32,
-    manifest_sha256: String,
-    dimensions: Vec<(String, u64)>,
+struct Preview {
+    source_profile: Option<ProfileId>,
+    target_profile: ProfileId,
+    groups: Vec<(&'static str, usize)>,
+    changed_bytes: usize,
+    commands: usize,
 }
-
-impl Summary {
-    fn from_archive(profile: ProfileId, archive: &ValidatedArchive) -> Self {
-        let manifest = &archive.manifest;
-        let dimensions = manifest
-            .get("counts")
-            .and_then(serde_json::Value::as_object)
-            .map(|counts| {
-                counts
-                    .iter()
-                    .filter_map(|(key, value)| value.as_u64().map(|n| (key.clone(), n)))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Self {
-            profile,
-            format: manifest["format"].as_str().unwrap_or("unknown").to_owned(),
-            source_build_id: manifest["source_build_id"]
-                .as_u64()
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "unknown".into()),
-            source_ihx_sha256: archive.source.ihx_sha256.clone(),
-            code_sha256: archive.source.code_sha256.clone(),
-            definition_sha256: archive.source.definition_sha256.clone(),
-            schema: archive.source.schema,
-            manifest_sha256: archive.manifest_sha256.clone(),
-            dimensions,
-        }
+fn preview(source: &LoadedBackup, target: &CapturedBackup) -> Result<Preview, Problem> {
+    let plan = crate::ak820_restore_plan::plan_restore(
+        source.archive(),
+        source.nvm(),
+        target.profile(),
+        target.identity(),
+        target.nvm(),
+    )
+    .map_err(|_| Problem::Incompatible)?;
+    let mut counts = std::collections::BTreeMap::new();
+    for step in plan.steps() {
+        *counts.entry(step.command()).or_insert(0) += 1;
     }
+    Ok(Preview {
+        source_profile: source.source_profile(),
+        target_profile: target.profile(),
+        groups: counts.into_iter().collect(),
+        commands: plan.steps().len(),
+        changed_bytes: plan
+            .before_nvm()
+            .iter()
+            .zip(plan.expected_nvm())
+            .filter(|(a, b)| a != b)
+            .count(),
+    })
 }
 
 #[derive(Clone)]
-struct ResultMessage {
-    request_id: u64,
-    profile: ProfileId,
-    result: Option<Result<Summary, String>>,
+enum FilePayload {
+    History {
+        root: PathBuf,
+        history: BackupHistory,
+    },
+    Source(LoadedBackup),
+    Saved {
+        name: String,
+        source: LoadedBackup,
+    },
 }
-
 #[derive(Clone)]
-struct PendingRead {
-    request_id: u64,
-    profile: ProfileId,
-    receiver: std::sync::Arc<std::sync::Mutex<Receiver<ResultMessage>>>,
+struct FileMessage {
+    id: u64,
+    result: Result<Option<FilePayload>, Problem>,
 }
-
+#[derive(Clone)]
+struct PendingFile {
+    id: u64,
+    receiver: Arc<Mutex<mpsc::Receiver<FileMessage>>>,
+}
 #[derive(Clone, Default)]
 struct WindowState {
-    request_id: u64,
-    profile: Option<ProfileId>,
-    pending: Option<PendingRead>,
-    summary: Option<Summary>,
-    error: Option<String>,
+    next_id: u64,
+    root: Option<PathBuf>,
+    history: Option<Arc<BackupHistory>>,
+    pending: Option<PendingFile>,
+    capture_pending: Option<(u64, u64)>,
+    source: Option<LoadedBackup>,
+    target: Option<TargetSnapshot>,
+    preview: Option<Preview>,
+    saved_name: Option<String>,
+    error: Option<Problem>,
 }
-
 impl WindowState {
-    fn invalidate(&mut self) {
-        self.request_id = self.request_id.wrapping_add(1);
-        self.pending = None;
-        self.summary = None;
-        self.error = None;
+    fn id(&mut self) -> u64 {
+        self.next_id = self.next_id.wrapping_add(1);
+        self.next_id
     }
-
-    fn accept(&mut self, message: ResultMessage) -> bool {
-        if message.request_id != self.request_id || self.profile != Some(message.profile) {
+    fn accept(&mut self, message: FileMessage) -> bool {
+        if self.pending.as_ref().map(|p| p.id) != Some(message.id) {
             return false;
         }
         self.pending = None;
-        let Some(result) = message.result else {
-            self.pending = None;
-            return true;
-        };
-        match result {
-            Ok(summary) => {
-                self.summary = Some(summary);
-                self.error = None;
+        match message.result {
+            Ok(Some(FilePayload::History { root, history })) => {
+                self.root = Some(root);
+                self.history = Some(Arc::new(history));
             }
-            Err(error) => {
-                self.summary = None;
-                self.error = Some(error);
+            Ok(Some(FilePayload::Source(source))) => {
+                self.source = Some(source);
+                self.preview = None;
             }
+            Ok(Some(FilePayload::Saved { name, source })) => {
+                self.saved_name = Some(name);
+                self.source = Some(source);
+                self.preview = None;
+                self.history = None; // explicit refresh revalidates the complete directory list
+            }
+            Ok(None) => {}
+            Err(error) => self.error = Some(error),
         }
         true
     }
+    fn invalidate_target(&mut self, generation: u64) {
+        if self
+            .target
+            .as_ref()
+            .is_some_and(|t| t.generation != generation)
+            || self.capture_pending.is_some_and(|(_, g)| g != generation)
+        {
+            self.target = None;
+            self.capture_pending = None;
+            self.preview = None;
+            self.error = Some(Problem::Changed);
+        }
+    }
+    fn close(&mut self) {
+        self.id();
+        self.pending = None;
+        self.capture_pending = None;
+        self.source = None;
+        self.target = None;
+        self.preview = None;
+        self.saved_name = None;
+        self.error = None;
+    }
 }
 
-/// Render the inspection window. Root should call this from its normal UI frame.
-pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
-    let open = ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false));
-    if !open {
+/// Vial workers already fence connection generations. The window token also
+/// rejects completion after cancel, close/reopen or a replacement request.
+pub(super) fn capture_finished(
+    ctx: &egui::Context,
+    id: u64,
+    generation: u64,
+    result: Result<CapturedBackup, ()>,
+) {
+    ctx.data_mut(|d| {
+        if !d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false) {
+            return;
+        }
+        let Some(mut state) = d.get_temp::<WindowState>(egui::Id::new(STATE_ID)) else {
+            return;
+        };
+        if state.capture_pending != Some((id, generation)) {
+            return;
+        }
+        state.capture_pending = None;
+        state.preview = None;
+        match result {
+            Ok(snapshot) => {
+                state.target = Some(TargetSnapshot {
+                    data: Arc::new(snapshot),
+                    generation,
+                    read_at: chrono::Local::now().format("%H:%M:%S").to_string(),
+                });
+                state.saved_name = None;
+                state.error = None;
+            }
+            Err(()) => {
+                state.target = None;
+                state.error = Some(Problem::Capture);
+            }
+        }
+        d.insert_temp(egui::Id::new(STATE_ID), state);
+    });
+    ctx.request_repaint();
+}
+
+enum FileAction {
+    Open(Option<(PathBuf, String)>),
+    History(Option<PathBuf>),
+    Save {
+        root: PathBuf,
+        snapshot: Arc<CapturedBackup>,
+    },
+}
+#[cfg(not(target_arch = "wasm32"))]
+fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) {
+    let id = state.id();
+    state.error = None;
+    if matches!(action, FileAction::Open(_)) {
+        state.source = None;
+        state.preview = None;
+    }
+    if matches!(action, FileAction::History(_)) {
+        state.history = None;
+    }
+    let (tx, rx) = mpsc::channel();
+    state.pending = Some(PendingFile {
+        id,
+        receiver: Arc::new(Mutex::new(rx)),
+    });
+    let repaint = ctx.clone();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<Option<FilePayload>, Problem> {
+            match action {
+                FileAction::Open(selected) => {
+                    let (path, pin) = match selected {
+                        Some((path, pin)) => (path, Some(pin)),
+                        None => match rfd::FileDialog::new().pick_folder() {
+                            Some(path) => (path, None),
+                            None => return Ok(None),
+                        },
+                    };
+                    files::read_backup_auto(&path, pin.as_deref())
+                        .map(|v| Some(FilePayload::Source(v)))
+                        .map_err(|_| Problem::File)
+                }
+                FileAction::History(selected) => {
+                    let root = match selected.or_else(|| rfd::FileDialog::new().pick_folder()) {
+                        Some(path) => path,
+                        None => return Ok(None),
+                    };
+                    let history = files::scan_backup_history(&root).map_err(|_| Problem::File)?;
+                    Ok(Some(FilePayload::History { root, history }))
+                }
+                FileAction::Save { root, snapshot } => {
+                    let name = format!(
+                        "ak820-{}-{}",
+                        snapshot.profile().as_str(),
+                        chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ")
+                    );
+                    let path = root.join(&name);
+                    let archive = files::publish_validated_archive(
+                        &path,
+                        snapshot.profile(),
+                        snapshot.files(),
+                    )
+                    .map_err(|_| Problem::File)?;
+                    // Reopen the published destination and pin its exact manifest.
+                    let source = files::read_backup_auto(&path, Some(&archive.manifest_sha256))
+                        .map_err(|_| Problem::File)?;
+                    Ok(Some(FilePayload::Saved { name, source }))
+                }
+            }
+        })();
+        let _ = tx.send(FileMessage { id, result });
+        repaint.request_repaint();
+    });
+}
+
+fn draw_source(ui: &mut egui::Ui, source: &LoadedBackup, ru: bool) {
+    let archive = source.archive();
+    ui.strong(tr(ru, "Validated backup", "Проверенная резервная копия"));
+    ui.label(format!(
+        "{} · {}",
+        profile_label(source.source_profile(), ru),
+        short_text(archive.manifest["created_utc"].as_str().unwrap_or(""))
+    ));
+    ui.label(tr(
+        ru,
+        "6 layers · 83 keys · 12 encoder assignments · 16 macros",
+        "6 слоёв · 83 клавиши · 12 назначений энкодера · 16 макросов",
+    ));
+    ui.label(tr(ru, "Includes durable Combo, QMK Settings and typed storage, including inactive values. Direct colors and host scenes are separate local presets.", "Содержит сохранённые Combo, QMK Settings и таблицы модулей, включая неактивные значения. Цвета Direct и сцены компьютера — отдельные локальные пресеты."));
+    ui.collapsing(
+        tr(ru, "Image and integrity", "Прошивка и целостность"),
+        |ui| {
+            ui.label(format!(
+                "{}: {}",
+                tr(ru, "Schema", "Схема"),
+                archive.source.schema
+            ));
+            ui.label(format!("IHX SHA-256: {}", archive.source.ihx_sha256));
+            ui.label(format!("CODE SHA-256: {}", archive.source.code_sha256));
+            ui.label(format!(
+                "{} SHA-256: {}",
+                tr(ru, "Manifest", "Манифест"),
+                archive.manifest_sha256
+            ));
+        },
+    );
+}
+fn draw_preview(ui: &mut egui::Ui, value: &Preview, ru: bool) {
+    ui.label(format!(
+        "{} → {}",
+        profile_label(value.source_profile, ru),
+        profile_label(Some(value.target_profile), ru)
+    ));
+    if value.commands == 0 {
+        ui.label(tr(
+            ru,
+            "Durable settings already match this snapshot.",
+            "Сохранённые настройки уже совпадают с этим снимком.",
+        ));
+    } else {
+        for (kind, count) in &value.groups {
+            let label = match *kind {
+                "set_key" => tr(ru, "Key assignments", "Назначения клавиш"),
+                "set_encoder" => tr(ru, "Encoder assignments", "Назначения энкодера"),
+                "set_layout_options" => tr(ru, "Layout options", "Параметры раскладки"),
+                "upload_macro_chunk" => tr(ru, "Macro data chunks", "Блоки данных макросов"),
+                "set_rgb_mode" => tr(ru, "Lighting operations", "Операции подсветки"),
+                "set_combo" => "Combo",
+                "set_setting" => "QMK Settings",
+                "set_extension" => tr(ru, "Typed module entries", "Записи таблиц модулей"),
+                _ => tr(ru, "Other operations", "Другие операции"),
+            };
+            ui.label(format!("{label}: {count}"));
+        }
+        ui.label(format!(
+            "{}: {}",
+            tr(ru, "Changed saved bytes", "Изменяемых сохранённых байтов"),
+            value.changed_bytes
+        ));
+    }
+    ui.label(tr(ru, "Restoring settings to the keyboard is not available yet. This preview checks compatibility and lists the proposed changes.", "Запись настроек из копии пока недоступна. Здесь можно проверить совместимость и перечень изменений."));
+}
+
+pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
+    if !ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false)) {
         return;
     }
-    let ru = _app.app_settings.language == crate::i18n::Language::Russian;
-    let tr = |en: &'static str, ru_text: &'static str| if ru { ru_text } else { en };
-
+    let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let mut state = ctx
         .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
         .unwrap_or_default();
-
+    #[cfg(not(target_arch = "wasm32"))]
+    state.invalidate_target(app.connection_generation);
     if let Some(pending) = &state.pending {
-        if pending.request_id != state.request_id || state.profile != Some(pending.profile) {
-            state.pending = None;
-        } else {
-            let outcome = pending.receiver.lock().unwrap().try_recv();
-            match outcome {
-                Ok(message) => {
-                    state.accept(message);
-                    ctx.request_repaint();
+        let outcome = pending
+            .receiver
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_recv();
+        match outcome {
+            Ok(message) => {
+                state.accept(message);
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100))
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                state.pending = None;
+                state.error = Some(Problem::File);
+            }
+        }
+    }
+    let busy = state.pending.is_some() || state.capture_pending.is_some();
+    let mut file_action = None;
+    let mut capture = false;
+    let mut cancel = false;
+    let mut compare = false;
+    let mut close = false;
+    let mut open = true;
+    egui::Window::new(tr(ru, "AK820 backups", "Резервные копии AK820"))
+        .id(egui::Id::new("ak820_backup_inspection_window"))
+        .open(&mut open).resizable(true).default_width(610.0)
+        .max_width((ctx.content_rect().width() - 32.0).max(260.0))
+        .max_height((ctx.content_rect().height() - 64.0).max(100.0)).vscroll(true)
+        .show(ctx, |ui| {
+            ui.label(tr(ru, "Complete saved settings and firmware evidence. ROM and macros stay in the chosen local folder.", "Полные сохранённые настройки и данные для проверки прошивки. ROM и макросы остаются в выбранной локальной папке."));
+            if !cfg!(target_os = "linux") {
+                ui.label(tr(ru, "Backup folder access is currently available on Linux. Windows/macOS file protection is not yet qualified; reading a snapshot does not save a file.", "Работа с папками копий пока доступна в Linux. Защита файлов в Windows/macOS ещё не проверена; чтение снимка не сохраняет файл."));
+            }
+            ui.horizontal_wrapped(|ui| {
+                if ui.add_enabled(!busy && cfg!(target_os = "linux"), egui::Button::new(tr(ru, "Open backup…", "Открыть копию…"))).clicked() { file_action = Some(FileAction::Open(None)); }
+                if ui.add_enabled(!busy && cfg!(target_os = "linux"), egui::Button::new(tr(ru, "Choose backup folder…", "Папка для копий…"))).clicked() { file_action = Some(FileAction::History(None)); }
+            });
+            if let Some(root) = &state.root {
+                let name = root.file_name().unwrap_or_else(|| root.as_os_str()).to_string_lossy();
+                ui.label(format!("{}: {}", tr(ru, "Folder", "Папка"), short_text(&name)));
+                ui.label(tr(ru, "Backup folder selected. New copies are saved to separate dated folders.", "Папка выбрана. Новые копии сохраняются в отдельных папках с датой."));
+                if ui.add_enabled(!busy, egui::Button::new(tr(ru, "Refresh list", "Обновить список"))).clicked() { file_action = Some(FileAction::History(state.root.clone())); }
+            }
+            if let Some(history) = &state.history {
+                ui.collapsing(format!("{} ({})", tr(ru, "Saved backups", "Сохранённые копии"), history.entries.len()), |ui| {
+                    if history.entries.is_empty() { ui.label(tr(ru, "No validated backups in this folder.", "В этой папке нет проверенных копий.")); }
+                    for entry in &history.entries {
+                        let label = format!("{} · {} · {}", short_text(&entry.created_utc), profile_label(entry.source_profile, ru), short_text(&entry.name));
+                        if ui.add_enabled(!busy, egui::Button::new(label).wrap()).clicked() {
+                            file_action = Some(FileAction::Open(Some((entry.path.clone(), entry.manifest_sha256.clone()))));
+                        }
+                    }
+                });
+                if history.invalid_skipped > 0 {
+                    ui.label(format!("{}: {}", tr(ru, "Folders skipped because validation failed", "Папок не прошли проверку"), history.invalid_skipped));
                 }
-                Err(TryRecvError::Empty) => {
-                    ctx.request_repaint_after(std::time::Duration::from_millis(100))
+            }
+            ui.separator();
+            ui.strong(tr(ru, "Current keyboard", "Текущая клавиатура"));
+            #[cfg(not(target_arch = "wasm32"))]
+            let can_capture = app.can_capture_ak820_backup();
+            #[cfg(target_arch = "wasm32")]
+            let can_capture = false;
+            if ui.add_enabled(!busy && can_capture, egui::Button::new(tr(ru, "Read complete snapshot", "Прочитать полный снимок"))).clicked() { capture = true; }
+            if app.ak820_demo {
+                ui.label(tr(ru, "Demo has no physical settings snapshot. Connect a supported keyboard to create a complete backup.", "В деморежиме нет снимка физической клавиатуры. Для полной копии подключите поддерживаемую клавиатуру."));
+            } else if !can_capture && state.capture_pending.is_none() {
+                ui.label(tr(ru, "A verified beta.2 connection with no pending edits is required.", "Нужно проверенное подключение beta.2 без ожидающих изменений."));
+            }
+            if let Some((id, _)) = state.capture_pending {
+                #[cfg(not(target_arch = "wasm32"))]
+                let progress = app.ak820_backup_capture_progress(id).unwrap_or(0.0);
+                #[cfg(target_arch = "wasm32")]
+                let progress = 0.0;
+                ui.add(egui::ProgressBar::new(progress).show_percentage().text(tr(ru, "Reading and checking…", "Чтение и проверка…")));
+                if ui.button(tr(ru, "Cancel reading", "Отменить чтение")).clicked() { cancel = true; }
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+            if let Some(target) = &state.target {
+                ui.label(format!("{} · {}", profile_label(Some(target.data.profile()), ru), target.read_at));
+                ui.label(tr(ru, "64 KiB ROM and 10 KiB saved settings checked. This snapshot reflects the time it was read.", "Проверены 64 КиБ ROM и 10 КиБ сохранённых настроек. Снимок соответствует моменту чтения."));
+                if let Some(name) = &state.saved_name { ui.label(format!("{}: {}", tr(ru, "Saved and rechecked", "Сохранено и проверено повторно"), short_text(name))); }
+                else { ui.label(tr(ru, "Snapshot is in memory; no backup file has been saved yet.", "Снимок в памяти; файл резервной копии ещё не сохранён.")); }
+                if ui.add_enabled(!busy && state.root.is_some() && cfg!(target_os = "linux"), egui::Button::new(tr(ru, "Save new backup", "Сохранить новую копию"))).clicked() {
+                    file_action = Some(FileAction::Save { root: state.root.clone().unwrap(), snapshot: target.data.clone() });
                 }
-                Err(TryRecvError::Disconnected) => {
-                    state.pending = None;
-                    state.error = Some(
-                        tr(
-                            "Backup validation failed",
-                            "Проверка резервной копии не пройдена",
-                        )
-                        .into(),
-                    );
+            }
+            if let Some(source) = &state.source {
+                ui.separator(); draw_source(ui, source, ru);
+                if ui.add_enabled(!busy && state.target.is_some(), egui::Button::new(tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"))).clicked() { compare = true; }
+            }
+            if let Some(value) = &state.preview { ui.separator(); draw_preview(ui, value, ru); }
+            if let Some(error) = state.error { ui.colored_label(egui::Color32::LIGHT_RED, problem_text(error, ru)); }
+            if state.pending.is_some() { ui.spinner(); ui.label(tr(ru, "Checking local files…", "Проверка локальных файлов…")); }
+            if ui.button(tr(ru, "Close", "Закрыть")).clicked() { close = true; }
+        });
+    if compare {
+        if let (Some(source), Some(target)) = (&state.source, &state.target) {
+            match preview(source, &target.data) {
+                Ok(value) => {
+                    state.preview = Some(value);
+                    state.error = None;
+                }
+                Err(error) => {
+                    state.preview = None;
+                    state.error = Some(error);
                 }
             }
         }
     }
-
-    let mut choose_directory = false;
-    let mut changed_profile = None;
-    let mut close = false;
-    let mut window_open = true;
-    egui::Window::new(tr("Firmware backup inspection", "Просмотр резервной копии прошивки"))
-        .id(egui::Id::new("ak820_backup_inspection_window"))
-        .open(&mut window_open)
-        .resizable(true)
-        .default_width(540.0)
-        .max_width((ctx.content_rect().width() - 32.0).max(260.0))
-        .max_height((ctx.content_rect().height() - 64.0).max(100.0))
-        .vscroll(true)
-        .show(ctx, |ui| {
-            ui.label(tr(
-                "Complete firmware backup · read-only · local directory",
-                "Полная резервная копия прошивки · только чтение · локальная папка",
-            ));
-            ui.label(tr(
-                "This is separate from an editable .ak820project.json file. No device operation is performed.",
-                "Это отдельный формат от редактируемого файла .ak820project.json. Операции с устройством не выполняются.",
-            ));
-
-            let selected = state.profile.unwrap_or(ProfileId::Main);
-            egui::ComboBox::from_id_salt("ak820_backup_inspection_profile")
-                .selected_text(format!("{}: {}", tr("Profile", "Профиль"), selected.as_str()))
-                .show_ui(ui, |ui| {
-                    for entry in beta::profiles() {
-                        let description = beta::profile_description(entry.profile);
-                        if ui.selectable_label(
-                            selected == entry.profile,
-                            description.title.for_language(ru),
-                        ).clicked() {
-                            changed_profile = Some(entry.profile);
-                        }
-                    }
-                });
-
-            let identity_available = beta::matrix_profile(selected).settings_identity.is_some();
-            if !identity_available {
-                ui.colored_label(egui::Color32::YELLOW, tr(
-                    "This profile has no qualified source identity; validation is blocked.",
-                    "Для этого профиля нет подтверждённой идентичности источника; проверка заблокирована.",
-                ));
-            }
-            if !cfg!(target_os = "linux") {
-                ui.label(display_error(ru, ""));
-            }
-            ui.add_enabled_ui(state.pending.is_none() && identity_available && cfg!(target_os = "linux"), |ui| {
-                if ui.button(tr("Choose backup directory…", "Выбрать папку резервной копии…")).clicked() {
-                    choose_directory = true;
-                }
-            });
-            if state.pending.is_some() {
-                ui.spinner();
-                ui.label(tr("Validating local backup…", "Проверка локальной копии…"));
-            }
-            if let Some(error) = &state.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, display_error(ru, error));
-            }
-            if let Some(summary) = &state.summary {
-                ui.separator();
-                ui.label(tr("Validated firmware backup", "Проверенная резервная копия прошивки"));
-                ui.label(format!("{}: {}", tr("Format", "Формат"), summary.format));
-                ui.label(format!("{}: {}", tr("Profile", "Профиль"), summary.profile.as_str()));
-                ui.label(format!("{}: {}", tr("Source build", "Сборка источника"), summary.source_build_id));
-                ui.label(format!("{}: {}", tr("Manifest SHA-256", "SHA-256 манифеста"), summary.manifest_sha256));
-                ui.label(format!("IHX SHA-256: {}", summary.source_ihx_sha256));
-                ui.label(format!("CODE SHA-256: {}", summary.code_sha256));
-                ui.label(format!("{}: {}", tr("Definition SHA-256", "SHA-256 описания"), summary.definition_sha256));
-                ui.label(format!("{}: {}", tr("Settings schema", "Схема настроек"), summary.schema));
-                ui.label(tr("Manifest dimensions", "Параметры манифеста"));
-                for (name, value) in &summary.dimensions {
-                    let label = match name.as_str() {
-                        "layers" => tr("Layers", "Слои"),
-                        "physical_keys" => tr("Physical keys", "Физические клавиши"),
-                        "assignments" => tr("Assignments", "Назначения"),
-                        "encoder_assignments" => tr("Encoder assignments", "Назначения энкодера"),
-                        "macros" => tr("Macro slots", "Слоты макросов"),
-                        "macro_capacity" => tr("Macro capacity (bytes)", "Объём макросов (байты)"),
-                        _ => tr("Count", "Количество"),
-                    };
-                    ui.label(format!("{label}: {value}"));
-                }
-                ui.label(tr(
-                    "ROM contents and read logs are intentionally not shown.",
-                    "Содержимое ROM и журнал чтения намеренно не отображаются.",
-                ));
-            }
-            if ui.button(tr("Close", "Закрыть")).clicked() { close = true; }
-        });
-
-    if let Some(profile) = changed_profile {
-        state.invalidate();
-        state.profile = Some(profile);
+    #[cfg(not(target_arch = "wasm32"))]
+    if capture {
+        let id = state.id();
+        state.target = None;
+        state.preview = None;
+        state.saved_name = None;
+        state.error = None;
+        if app.start_ak820_backup_capture(ctx, id)
+            == super::vial_hid_task::VialHidTaskStart::Started
+        {
+            state.capture_pending = Some((id, app.connection_generation));
+        } else {
+            state.error = Some(Problem::Capture);
+        }
     }
-    if !window_open {
-        close = true;
+    if cancel || close || !open {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((id, _)) = state.capture_pending {
+            app.cancel_ak820_backup_capture(id);
+        }
+        state.capture_pending = None;
+        state.target = None;
+        state.preview = None;
     }
     #[cfg(not(target_arch = "wasm32"))]
-    if choose_directory {
-        let profile = state.profile.unwrap_or(ProfileId::Main);
-        let id = state.request_id.wrapping_add(1);
-        state.invalidate();
-        state.request_id = id;
-        state.profile = Some(profile);
-        let (tx, rx) = mpsc::channel();
-        state.pending = Some(PendingRead {
-            request_id: id,
-            profile,
-            receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
-        });
-        let repaint = ctx.clone();
-        std::thread::spawn(move || {
-            let picked: Option<PathBuf> = rfd::FileDialog::new().pick_folder();
-            if let Some(path) = picked {
-                let result = crate::ak820_backup_files::read_validated_archive(&path, profile)
-                    .map(|archive| Summary::from_archive(profile, &archive));
-                let _ = tx.send(ResultMessage {
-                    request_id: id,
-                    profile,
-                    // read_validated_archive returns path-free, redacted errors.
-                    result: Some(result),
-                });
-            } else {
-                // A canceled picker returns a neutral local result.
-                let _ = tx.send(ResultMessage {
-                    request_id: id,
-                    profile,
-                    result: None,
-                });
-            }
-            repaint.request_repaint();
-        });
+    if let Some(action) = file_action {
+        start_file(ctx, &mut state, action);
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = choose_directory;
-
-    if close {
-        ctx.data_mut(|d| {
-            d.insert_temp(egui::Id::new(OPEN_ID), false);
-            state.invalidate();
-        });
+    let _ = (file_action, capture);
+    if close || !open {
+        state.close();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
     }
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
 }
@@ -312,129 +527,105 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn fake_summary(profile: ProfileId) -> Summary {
-        Summary {
-            profile,
-            format: "synthetic-test-only".into(),
-            source_build_id: "test-only".into(),
-            source_ihx_sha256: "0".repeat(64),
-            code_sha256: "1".repeat(64),
-            definition_sha256: "2".repeat(64),
-            schema: 0,
-            manifest_sha256: "3".repeat(64),
-            dimensions: vec![],
-        }
-    }
-
-    #[test]
-    fn accepts_only_current_request_and_profile() {
-        let mut state = WindowState {
-            request_id: 5,
-            profile: Some(ProfileId::Main),
-            ..Default::default()
-        };
-        let stale = ResultMessage {
-            request_id: 4,
-            profile: ProfileId::Main,
-            result: Some(Ok(fake_summary(ProfileId::Main))),
-        };
-        assert!(!state.accept(stale));
-        assert!(state.summary.is_none());
-        let wrong_profile = ResultMessage {
-            request_id: 5,
-            profile: ProfileId::Creative,
-            result: Some(Ok(fake_summary(ProfileId::Creative))),
-        };
-        assert!(!state.accept(wrong_profile));
-        let success = ResultMessage {
-            request_id: 5,
-            profile: ProfileId::Main,
-            result: Some(Ok(fake_summary(ProfileId::Main))),
-        };
-        assert!(state.accept(success));
-        assert_eq!(
-            state.summary.as_ref().unwrap().format,
-            "synthetic-test-only"
-        );
-        let failure = ResultMessage {
-            request_id: 5,
-            profile: ProfileId::Main,
-            result: Some(Err("Backup validation failed".into())),
-        };
-        assert!(state.accept(failure));
-        assert_eq!(state.error.as_deref(), Some("Backup validation failed"));
-    }
-
-    #[test]
-    fn cancellation_close_and_replacement_drop_actual_pending_receivers() {
+    fn pending(state: &mut WindowState) -> mpsc::Sender<FileMessage> {
+        let id = state.id();
         let (tx, rx) = mpsc::channel();
+        state.pending = Some(PendingFile {
+            id,
+            receiver: Arc::new(Mutex::new(rx)),
+        });
+        tx
+    }
+    #[test]
+    fn stale_file_completion_and_closed_window_cannot_replace_current_state() {
+        let mut state = WindowState::default();
+        let tx = pending(&mut state);
+        assert!(!state.accept(FileMessage {
+            id: 0,
+            result: Err(Problem::File)
+        }));
+        assert!(state.error.is_none());
+        state.close();
+        assert!(tx
+            .send(FileMessage {
+                id: 1,
+                result: Err(Problem::File)
+            })
+            .is_err());
+        assert!(!state.accept(FileMessage {
+            id: 1,
+            result: Err(Problem::File)
+        }));
+        let _new = pending(&mut state);
+        assert!(state.accept(FileMessage {
+            id: 3,
+            result: Ok(None)
+        }));
+        assert!(state.pending.is_none());
+        assert!(state.error.is_none());
+    }
+    #[test]
+    fn capture_results_require_open_window_request_and_connection_generation() {
+        let ctx = egui::Context::default();
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new(OPEN_ID), true);
+            d.insert_temp(
+                egui::Id::new(STATE_ID),
+                WindowState {
+                    capture_pending: Some((7, 5)),
+                    ..Default::default()
+                },
+            );
+        });
+        for (id, generation) in [(6, 5), (7, 4)] {
+            capture_finished(&ctx, id, generation, Err(()));
+        }
+        let state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert_eq!(state.capture_pending, Some((7, 5)));
+        assert!(state.error.is_none());
+        capture_finished(&ctx, 7, 5, Err(()));
+        let state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert_eq!(state.error, Some(Problem::Capture));
+        assert!(state.capture_pending.is_none());
+    }
+    #[test]
+    fn reconnect_invalidates_inflight_capture_and_restore_preview() {
         let mut state = WindowState {
-            request_id: 1,
-            profile: Some(ProfileId::Main),
-            pending: Some(PendingRead {
-                request_id: 1,
-                profile: ProfileId::Main,
-                receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+            capture_pending: Some((9, 3)),
+            preview: Some(Preview {
+                source_profile: Some(ProfileId::Main),
+                target_profile: ProfileId::Main,
+                groups: vec![],
+                changed_bytes: 0,
+                commands: 0,
             }),
             ..Default::default()
         };
-        assert!(state.accept(ResultMessage {
-            request_id: 1,
-            profile: ProfileId::Main,
-            result: None
-        }));
-        assert!(state.pending.is_none());
-        assert!(state.summary.is_none());
-        assert!(tx
-            .send(ResultMessage {
-                request_id: 1,
-                profile: ProfileId::Main,
-                result: None
-            })
-            .is_err());
-        let (tx, rx) = mpsc::channel();
-        state.pending = Some(PendingRead {
-            request_id: 1,
-            profile: ProfileId::Main,
-            receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
-        });
-        state.invalidate(); // same operation used by close and profile replacement
-        assert!(tx
-            .send(ResultMessage {
-                request_id: 1,
-                profile: ProfileId::Main,
-                result: None
-            })
-            .is_err());
-        assert!(!state.accept(ResultMessage {
-            request_id: 1,
-            profile: ProfileId::Main,
-            result: Some(Ok(fake_summary(ProfileId::Main)))
-        }));
-        assert!(state.accept(ResultMessage {
-            request_id: 2,
-            profile: ProfileId::Main,
-            result: Some(Ok(fake_summary(ProfileId::Main)))
-        }));
+        state.invalidate_target(4);
+        assert!(state.capture_pending.is_none());
+        assert!(state.preview.is_none());
+        assert_eq!(state.error, Some(Problem::Changed));
     }
-
     #[test]
-    fn displayed_errors_are_localized_and_never_echo_diagnostic_paths() {
-        let diagnostic = "/home/private/ROM.bin contains secret";
-        for ru in [true, false] {
-            let text = display_error(ru, diagnostic);
-            assert!(!text.contains("private") || !text.contains("ROM.bin"));
-            assert!(!text.contains("/home/") && !text.contains("secret"));
+    fn local_errors_and_folder_labels_do_not_echo_private_diagnostics() {
+        for p in [
+            Problem::File,
+            Problem::Capture,
+            Problem::Changed,
+            Problem::Incompatible,
+        ] {
+            assert_ne!(problem_text(p, true), problem_text(p, false));
+            assert!(!problem_text(p, true).contains("/home/"));
         }
-        assert_ne!(
-            display_error(true, diagnostic),
-            display_error(false, diagnostic)
-        );
+        assert_eq!(short_text("a\n\t\u{0}b"), "ab");
+        assert_eq!(short_text(&"x".repeat(10000)).len(), 96);
     }
-
     #[test]
-    fn summary_window_fits_small_viewport_without_hid() {
+    fn backup_window_fits_small_viewport_without_hid_in_both_languages() {
         for language in [
             crate::i18n::Language::Russian,
             crate::i18n::Language::English,
@@ -443,15 +634,12 @@ mod tests {
             let cc = eframe::CreationContext::_new_kittest(ctx.clone());
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
-            let mut summary = fake_summary(ProfileId::Main);
-            summary.dimensions = (0..12).map(|i| (format!("synthetic-{i}"), 498)).collect();
             ctx.data_mut(|d| {
                 d.insert_temp(egui::Id::new(OPEN_ID), true);
                 d.insert_temp(
                     egui::Id::new(STATE_ID),
                     WindowState {
-                        profile: Some(ProfileId::Main),
-                        summary: Some(summary),
+                        error: Some(Problem::Capture),
                         ..Default::default()
                     },
                 );
@@ -471,28 +659,8 @@ mod tests {
             let rect = ctx
                 .memory(|m| m.area_rect(egui::Id::new("ak820_backup_inspection_window")))
                 .unwrap();
-            assert!(rect.height() <= 500.0 && rect.width() <= 800.0, "{rect:?}");
+            assert!(rect.width() <= 800.0 && rect.height() <= 500.0, "{rect:?}");
             assert!(app.hid_device.is_none());
         }
-    }
-
-    #[test]
-    fn profile_invalidation_clears_prior_result_and_pending_request() {
-        let mut state = WindowState {
-            request_id: 8,
-            profile: Some(ProfileId::Main),
-            summary: Some(fake_summary(ProfileId::Main)),
-            ..Default::default()
-        };
-        state.invalidate();
-        state.profile = Some(ProfileId::Pointer);
-        assert_eq!(state.request_id, 9);
-        assert!(state.summary.is_none());
-        assert!(state.pending.is_none());
-        assert!(!state.accept(ResultMessage {
-            request_id: 8,
-            profile: ProfileId::Main,
-            result: Some(Ok(fake_summary(ProfileId::Main)))
-        }));
     }
 }

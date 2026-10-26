@@ -294,7 +294,261 @@ fn typed_candidate(p: &[u8; MSG_LEN], image: ImageContract, before: &[u8]) -> Re
         .map_err(anyhow::Error::msg)
 }
 
+#[derive(Debug)]
+struct CaptureCancelled;
+impl std::fmt::Display for CaptureCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Backup capture cancelled")
+    }
+}
+impl std::error::Error for CaptureCancelled {}
+fn capture_check_cancel(cancel: &AtomicBool) -> Result<()> {
+    if cancel.load(Ordering::Acquire) {
+        return Err(CaptureCancelled.into());
+    }
+    Ok(())
+}
+
+// Private reconciliation seam: tests model getters without manufacturing a
+// trusted full ROM. Production always calls decode_trusted_rom first.
+fn capture_reconcile_getters(
+    profile: crate::app::ak820_beta1_profiles::ProfileId,
+    image: ImageContract,
+    nvm: &[u8],
+    settings: &serde_json::Value,
+    send: &mut impl FnMut(&[u8]) -> Result<[u8; MSG_LEN]>,
+) -> Result<bool> {
+    let contract = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+    for key in settings["keys"]
+        .as_array()
+        .context("Missing captured keys")?
+    {
+        let request = [
+            4,
+            key["layer"].as_u64().unwrap() as u8,
+            key["row"].as_u64().unwrap() as u8,
+            key["column"].as_u64().unwrap() as u8,
+        ];
+        let reply = send(&request)?;
+        ensure!(
+            reply[..4] == request
+                && u16::from_be_bytes([reply[4], reply[5]]) as u64
+                    == key["keycode"].as_u64().unwrap(),
+            "Captured key getter differs"
+        );
+    }
+    for layer in 0..6 {
+        let reply = send(&[0xfe, 3, layer as u8, 0])?;
+        ensure!(
+            reply[..4] == nvm[0x640 + layer * 4..0x644 + layer * 4],
+            "Captured encoder getter differs"
+        );
+    }
+    let layout = send(&[2, 2])?;
+    ensure!(
+        layout[..2] == [2, 2]
+            && u32::from_be_bytes(layout[2..6].try_into().unwrap()) == nvm[40] as u32,
+        "Captured layout getter differs"
+    );
+    let counts = send(&[0xfe, 13, 0])?;
+    ensure!(
+        counts[0] == contract.capabilities.dynamic_entries.tap_dance
+            && counts[1] == contract.capabilities.dynamic_entries.combos
+            && counts[2] == contract.capabilities.dynamic_entries.key_overrides,
+        "Captured dynamic capability counts differ"
+    );
+    let qsid_reply = send(&[0xfe, 9, 0, 0])?;
+    let ids: Vec<u16> = qsid_reply
+        .chunks_exact(2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .collect();
+    let end = ids
+        .iter()
+        .position(|&id| id == 0xffff)
+        .context("Captured QSID query lacks terminator")?;
+    ensure!(
+        ids[..end] == contract.capabilities.runtime_qmk_settings_ids
+            && ids[end..].iter().all(|&id| id == 0xffff),
+        "Captured QSID capabilities differ"
+    );
+    let macro_count = send(&[0x0c])?;
+    let macro_size = send(&[0x0d])?;
+    ensure!(
+        macro_count[1] == 16 && macro_size[1..3] == [0x20, 0],
+        "Captured macro capabilities differ"
+    );
+    let length = u16::from_le_bytes([nvm[0x7f1], nvm[0x7f2]]) as usize;
+    for offset in (0..length).step_by(28) {
+        let count = (length - offset).min(28);
+        let request = [0x0e, (offset >> 8) as u8, offset as u8, count as u8];
+        let reply = send(&request)?;
+        ensure!(
+            reply[..4] == request
+                && reply[4..4 + count] == nvm[0x800 + offset..0x800 + offset + count],
+            "Captured macro getter differs"
+        );
+    }
+    let extensions =
+        crate::ak820_typed_storage::Extensions::decode_nvm(nvm).map_err(anyhow::Error::msg)?;
+    for &id in &contract.capabilities.runtime_qmk_settings_ids {
+        let reply = send(&[0xfe, 10, id as u8, (id >> 8) as u8])?;
+        let actual = if id == 1 {
+            reply[1] as u16
+        } else {
+            u16::from_le_bytes([reply[1], reply[2]])
+        };
+        ensure!(
+            reply[0] == 0 && actual == extensions.settings.get(id).map_err(anyhow::Error::msg)?,
+            "Captured QMK getter differs"
+        );
+    }
+    for (op, count) in [
+        (1, contract.capabilities.dynamic_entries.tap_dance),
+        (5, contract.capabilities.dynamic_entries.key_overrides),
+    ] {
+        for index in 0..count {
+            let reply = send(&[0xfe, 13, op, index as u8])?;
+            let expected = if op == 1 {
+                extensions.tap_dance[index as usize].encode()
+            } else {
+                extensions.key_overrides[index as usize].encode()
+            }
+            .map_err(anyhow::Error::msg)?;
+            ensure!(
+                reply[0] == 0 && reply[1..11] == expected,
+                "Captured extension getter differs"
+            );
+        }
+    }
+    if let Some(entries) = settings["combos"]["entries_hex"].as_array() {
+        for (index, entry) in entries.iter().enumerate() {
+            let reply = send(&[0xfe, 13, 3, index as u8])?;
+            let hex: String = reply[1..11].iter().map(|b| format!("{b:02x}")).collect();
+            ensure!(
+                reply[0] == 0 && Some(hex.as_str()) == entry.as_str(),
+                "Captured Combo getter differs"
+            );
+        }
+    }
+    let rgb = send(&[8, 0x41])?;
+    ensure!(
+        rgb[..2] == [8, 0x41]
+            && rgb[3] == 0
+            && image.rgb_modes().contains(&rgb[2])
+            && rgb[7] <= 160,
+        "Captured live RGB is invalid"
+    );
+    let saved_rgb =
+        crate::ak820_settings_backup::rgb_wire_for_profile(&nvm[24..32], false, profile)
+            .map_err(anyhow::Error::msg)?;
+    Ok(rgb[2..8] == saved_rgb)
+}
+
 impl HidDevice {
+    /// Capture on the existing owner only. No unlock, setter or retry is issued.
+    pub(crate) fn ak820_capture_backup(
+        &self,
+        cancel: &AtomicBool,
+        progress: &std::sync::atomic::AtomicU32,
+    ) -> Result<crate::ak820_backup_capture::CapturedBackup> {
+        progress.store(0, Ordering::Release);
+        let state = self.ak820.as_ref().context("Not an AK820 session")?;
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        ensure!(
+            state.loaded && state.failure.is_none(),
+            "Read complete AK820 settings before backup"
+        );
+        let image = state.image.context("AK820 image is not verified")?;
+        let profile = image
+            .profile()
+            .context("Complete backup requires an exact beta2 profile")?;
+        let result = (|| {
+            let mut packets = 0u32;
+            let mut send = |request: &[u8]| -> Result<[u8; MSG_LEN]> {
+                capture_check_cancel(cancel)?;
+                // Only fixed read-only requests are constructed below. Keep the
+                // session lock across the whole snapshot to exclude setters.
+                let reply = self
+                    .usb_send_traced(request)
+                    .map_err(|_| anyhow::anyhow!("Backup capture read failed"))?;
+                ensure!(
+                    super::response_matches_command(request, &reply),
+                    "Backup capture reply differs"
+                );
+                packets += 1;
+                progress.store((packets * 99 / 4000).min(99), Ordering::Release);
+                Ok(reply)
+            };
+            let initial_storage = send(&[0xfd, 1])?;
+            storage_ready(&initial_storage)?;
+            let protocol = send(&[1])?;
+            ensure!(protocol[1..3] == [0, 9], "Backup VIA protocol differs");
+            let uid = send(&[0xfe, 0])?;
+            ensure!(
+                u32::from_le_bytes(uid[..4].try_into().unwrap()) == 6
+                    && u64::from_le_bytes(uid[4..12].try_into().unwrap()) == crate::ak820::VIAL_UID,
+                "Backup Vial identity differs"
+            );
+            fn read(
+                send: &mut impl FnMut(&[u8]) -> Result<[u8; MSG_LEN]>,
+                start: usize,
+                len: usize,
+            ) -> Result<Vec<u8>> {
+                let mut bytes = Vec::with_capacity(len);
+                while bytes.len() < len {
+                    let at = start + bytes.len();
+                    let count = (len - bytes.len()).min(27);
+                    let request = [0xfd, 0, (at >> 8) as u8, at as u8, count as u8];
+                    let reply = send(&request)?;
+                    ensure!(reply[..5] == request, "Backup ROM reply range differs");
+                    bytes.extend_from_slice(&reply[5..5 + count]);
+                }
+                Ok(bytes)
+            }
+            let rom = read(&mut send, 0, 65536)?;
+            let nvm = &rom[0xc700..0xef00];
+            let contract = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+            let exact = contract
+                .settings_identity
+                .as_ref()
+                .context("Image lacks qualified settings identity")?;
+            let identity = crate::ak820_settings_backup::ImageIdentity {
+                ihx_sha256: exact.ihx_sha256.clone(),
+                code_sha256: exact.code_sha256.clone(),
+                definition_sha256: exact.definition_sha256.clone(),
+                schema: exact.nvm_schema,
+            };
+            // Production decoder is mandatory before interpreting offsets or
+            // accepting any live getter reconciliation.
+            let settings =
+                crate::ak820_settings_model::decode_trusted_rom(&rom, nvm, &identity, profile)
+                    .map_err(|_| anyhow::anyhow!("Captured ROM failed exact archive validation"))?;
+            let rgb_matches_saved =
+                capture_reconcile_getters(profile, image, nvm, &settings, &mut send)?;
+            let repeated_nvm = read(&mut send, 0xc700, 0x2800)?;
+            let repeated_manifest = read(&mut send, 0xef80, 64)?;
+            crate::ak820_backup_capture::check_stability(&rom, &repeated_nvm, &repeated_manifest)
+                .map_err(anyhow::Error::msg)?;
+            let final_storage = send(&[0xfd, 1])?;
+            storage_ready(&final_storage)?;
+            ensure!(
+                final_storage == initial_storage,
+                "Storage changed during backup capture"
+            );
+            capture_check_cancel(cancel)?;
+            crate::ak820_backup_capture::CapturedBackup::from_rom(profile, rom, rgb_matches_saved)
+                .map_err(|_| anyhow::anyhow!("Captured backup validation failed"))
+        })();
+        if let Err(error) = &result {
+            if error.downcast_ref::<CaptureCancelled>().is_none() {
+                state.failure = Some(format!("{error:#}"));
+            }
+        } else {
+            progress.store(100, Ordering::Release);
+        }
+        result
+    }
+
     pub(crate) fn ak820_validate_macro_snapshot(&self, data: &[u8]) -> Result<()> {
         let image = self.ak820_image().context("AK820 image is not verified")?;
         validate_macro_actions(data, image, false)?;
@@ -402,9 +656,13 @@ impl HidDevice {
                 self.ak820_verify_write(&setter, &reply, image)?;
             } else {
                 let current = self.usb_send_traced(&[8, 0x41])?;
-                ensure!(current[..2] == [8, 0x41] && current[3] == 0
-                    && image.rgb_modes().contains(&current[2]) && current[7] <= 160,
-                    "AK820 current RGB mode is invalid");
+                ensure!(
+                    current[..2] == [8, 0x41]
+                        && current[3] == 0
+                        && image.rgb_modes().contains(&current[2])
+                        && current[7] <= 160,
+                    "AK820 current RGB mode is invalid"
+                );
                 if current[2..8] != mode[2..8] {
                     return Ok(Ak820RgbStreamResult::OwnershipLost);
                 }
@@ -880,3 +1138,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "hid_ak820_backup_tests.rs"]
+mod backup_tests;

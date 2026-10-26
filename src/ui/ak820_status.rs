@@ -45,7 +45,7 @@ impl EntropyApp {
             if ui.button(text("Справка", "Help")).clicked() {
                 help_open = !help_open;
             }
-            if ui.button(text("Локальная копия", "Local backup")).clicked() {
+            if ui.button(text("Резервные копии", "Backups")).clicked() {
                 ui.ctx().data_mut(|d| {
                     d.insert_temp(egui::Id::new(super::ak820_backup_inspection::OPEN_ID), true)
                 });
