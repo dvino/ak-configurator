@@ -1997,6 +1997,19 @@ fn layout_code_index(raw: &str) -> Option<u8> {
         .map(|idx| idx as u8)
 }
 
+/// Read-only detector reused by AK820's independent FD02 client. Unknown
+/// compositor/layout support is preserved as None, never guessed as English.
+pub(crate) struct Ak820LayoutDetector(Option<LayoutTracker>);
+
+impl Ak820LayoutDetector {
+    pub(crate) fn new() -> Self { Self(LayoutTracker::new()) }
+    pub(crate) fn current(&mut self) -> Option<&'static str> {
+        if self.0.is_none() { self.0 = LayoutTracker::new(); }
+        self.0.as_mut().and_then(LayoutTracker::current_layout_index)
+            .and_then(|index| DEFAULT_LAYOUT_CODES.get(index as usize).copied())
+    }
+}
+
 fn normalize_layout_code(raw: &str) -> Option<&'static str> {
     let normalized = raw
         .trim()

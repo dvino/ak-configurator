@@ -10,20 +10,12 @@ fn key(device: &crate::device::Device) -> Result<String> {
     if !device.is_ak820() || device.path.is_empty() {
         bail!("Cannot establish AK820 device ownership");
     }
-    let endpoint = if device.serial_number.trim().is_empty() {
-        if cfg!(target_os = "windows") {
-            device.path.to_ascii_lowercase()
-        } else {
-            device.path.clone()
-        }
-    } else {
-        device.serial_number.trim().to_owned()
-    };
-    let identity = format!(
-        "{:04x}:{:04x}:{endpoint}",
-        device.vendor_id, device.product_id
-    );
-    Ok(format!("{:x}", Sha256::digest(identity.as_bytes())))
+    let path = std::ffi::CString::new(device.path.as_bytes())?;
+    let port = crate::hid::hid_ak820::usb_port(&path)?;
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(format!("ak820-usb-port:{}", port.display()).as_bytes())
+    ))
 }
 
 #[cfg(unix)]

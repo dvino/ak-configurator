@@ -75,6 +75,8 @@ impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn hid_write_task_owner_active(&self) -> bool {
         self.ak820_rgb_scene_owns_hid()
+            || self.ak820_os_indicator_owns_hid()
+            || self.ak820_install_runtime.owns_hid()
             || self.layer_write_task.is_some()
             || self.combo_write_task.is_some()
             || self.settings_write_task.is_some()
@@ -88,13 +90,15 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn hid_write_lifecycle_busy(&self) -> bool {
-        self.hid_write_task_active() || self.qmk_settings_write_pending()
+        self.hid_write_task_active()
+            || self.qmk_settings_write_pending()
             || !self.pending_layer_name_writes.is_empty()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn hid_user_action_busy(&self) -> bool {
-        self.layer_write_task.is_some()
+        self.ak820_install_runtime.owns_hid()
+            || self.layer_write_task.is_some()
             || self.combo_write_task.is_some()
             || self.settings_write_task.is_some()
             || self.vial_hid_task_blocks_user_action()

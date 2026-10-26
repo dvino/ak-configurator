@@ -1,6 +1,7 @@
-const ENTROPY_LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/ergohaven/entropy/releases/latest";
-const ENTROPY_LATEST_RELEASE_PAGE: &str = "https://github.com/ergohaven/entropy/releases/latest";
+const AK_CONFIGURATOR_LATEST_RELEASE_API: &str =
+    "https://api.github.com/repos/dvino/ak-configurator/releases/latest";
+const AK_CONFIGURATOR_LATEST_RELEASE_PAGE: &str =
+    "https://github.com/dvino/ak-configurator/releases/latest";
 const RMK_RELEASES_API: &str = "https://api.github.com/repos/ergohaven/rmk/releases?per_page=30";
 const ERGOHAVEN_VENDOR_ID: u16 = 0xE126;
 
@@ -131,15 +132,15 @@ struct GitHubAsset {
     browser_download_url: String,
 }
 
-enum EntropyReleaseAssets {
+enum AkConfiguratorReleaseAssets {
     Known(Vec<GitHubAsset>),
     Unavailable,
 }
 
-struct LatestEntropyRelease {
+struct LatestAkConfiguratorRelease {
     tag_name: String,
     html_url: String,
-    assets: EntropyReleaseAssets,
+    assets: AkConfiguratorReleaseAssets,
 }
 
 pub(crate) fn current_platform_label() -> String {
@@ -147,8 +148,23 @@ pub(crate) fn current_platform_label() -> String {
 }
 
 pub(crate) fn start_update_check() -> UpdateCheckState {
-    // Upstream Entropy packages are not compatible updates for this application.
-    UpdateCheckState::Failed("AK Configurator update packages are not available yet".to_owned())
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = match fetch_latest_release() {
+                Ok(release) => UpdateCheckOutcome::Success(build_update_result(release)),
+                Err(error) => UpdateCheckOutcome::Failed(error),
+            };
+            let _ = sender.send(outcome);
+        });
+        UpdateCheckState::Checking { receiver }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        UpdateCheckState::Failed("Update checks are unavailable in the web build".to_owned())
+    }
 }
 
 pub(crate) fn start_firmware_update_check(
@@ -464,11 +480,11 @@ fn is_trusted_release_url(url: &str) -> bool {
         return false;
     };
     match segments.collect::<Vec<_>>().as_slice() {
-        ["ergohaven", repository @ ("entropy" | "rmk"), "releases", "tag", tag] => {
-            !repository.is_empty() && !tag.is_empty()
-        }
-        ["ergohaven", repository @ ("entropy" | "rmk"), "releases", "download", tag, asset] => {
-            !repository.is_empty() && !tag.is_empty() && !asset.is_empty()
+        ["dvino", "ak-configurator", "releases", "tag", tag]
+        | ["ergohaven", "rmk", "releases", "tag", tag] => !tag.is_empty(),
+        ["dvino", "ak-configurator", "releases", "download", tag, asset]
+        | ["ergohaven", "rmk", "releases", "download", tag, asset] => {
+            !tag.is_empty() && !asset.is_empty()
         }
         _ => false,
     }
@@ -485,17 +501,20 @@ fn is_trusted_github_release_url(url: &url::Url) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn fetch_latest_release() -> Result<LatestEntropyRelease, String> {
+fn fetch_latest_release() -> Result<LatestAkConfiguratorRelease, String> {
     fetch_latest_release_with_fallback(
-        || fetch_github_json(ENTROPY_LATEST_RELEASE_API).and_then(latest_entropy_release_from_api),
+        || {
+            fetch_github_json(AK_CONFIGURATOR_LATEST_RELEASE_API)
+                .and_then(latest_ak_configurator_release_from_api)
+        },
         fetch_latest_release_from_redirect,
     )
 }
 
 fn fetch_latest_release_with_fallback(
-    fetch_from_api: impl FnOnce() -> Result<LatestEntropyRelease, String>,
-    fetch_from_redirect: impl FnOnce() -> Result<LatestEntropyRelease, String>,
-) -> Result<LatestEntropyRelease, String> {
+    fetch_from_api: impl FnOnce() -> Result<LatestAkConfiguratorRelease, String>,
+    fetch_from_redirect: impl FnOnce() -> Result<LatestAkConfiguratorRelease, String>,
+) -> Result<LatestAkConfiguratorRelease, String> {
     match fetch_from_api() {
         Ok(release) => Ok(release),
         Err(api_error) => fetch_from_redirect().map_err(|redirect_error| {
@@ -505,43 +524,50 @@ fn fetch_latest_release_with_fallback(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn fetch_latest_release_from_redirect() -> Result<LatestEntropyRelease, String> {
-    let response = ureq::get(ENTROPY_LATEST_RELEASE_PAGE)
-        .set("User-Agent", concat!("Entropy/", env!("CARGO_PKG_VERSION")))
+fn fetch_latest_release_from_redirect() -> Result<LatestAkConfiguratorRelease, String> {
+    let response = ureq::get(AK_CONFIGURATOR_LATEST_RELEASE_PAGE)
+        .set(
+            "User-Agent",
+            concat!("AK-Configurator/", env!("CARGO_PKG_VERSION")),
+        )
         .call()
         .map_err(|error| format!("GitHub Releases request failed: {error}"))?;
 
     release_from_latest_release_redirect(response.get_url())
 }
 
-fn latest_entropy_release_from_api(release: GitHubRelease) -> Result<LatestEntropyRelease, String> {
-    if parse_canonical_entropy_release_tag(&release.tag_name).is_none() {
-        return Err("GitHub API did not return a canonical stable Entropy version".to_owned());
+fn latest_ak_configurator_release_from_api(
+    release: GitHubRelease,
+) -> Result<LatestAkConfiguratorRelease, String> {
+    if parse_canonical_ak_configurator_release_tag(&release.tag_name).is_none() {
+        return Err(
+            "GitHub API did not return a canonical stable AK Configurator version".to_owned(),
+        );
     }
-    let url_tag = parse_entropy_release_url(&release.html_url)
+    let url_tag = parse_ak_configurator_release_url(&release.html_url)
         .map_err(|error| format!("GitHub API release URL was invalid: {error}"))?;
     if url_tag != release.tag_name {
         return Err("GitHub API release tag and URL did not match".to_owned());
     }
 
-    Ok(LatestEntropyRelease {
-        html_url: canonical_entropy_release_url(&release.tag_name),
+    Ok(LatestAkConfiguratorRelease {
+        html_url: canonical_ak_configurator_release_url(&release.tag_name),
         tag_name: release.tag_name,
-        assets: EntropyReleaseAssets::Known(release.assets),
+        assets: AkConfiguratorReleaseAssets::Known(release.assets),
     })
 }
 
-fn release_from_latest_release_redirect(url: &str) -> Result<LatestEntropyRelease, String> {
-    let tag_name = parse_entropy_release_url(url)?;
+fn release_from_latest_release_redirect(url: &str) -> Result<LatestAkConfiguratorRelease, String> {
+    let tag_name = parse_ak_configurator_release_url(url)?;
 
-    Ok(LatestEntropyRelease {
-        html_url: canonical_entropy_release_url(&tag_name),
+    Ok(LatestAkConfiguratorRelease {
+        html_url: canonical_ak_configurator_release_url(&tag_name),
         tag_name,
-        assets: EntropyReleaseAssets::Unavailable,
+        assets: AkConfiguratorReleaseAssets::Unavailable,
     })
 }
 
-fn parse_entropy_release_url(url: &str) -> Result<String, String> {
+fn parse_ak_configurator_release_url(url: &str) -> Result<String, String> {
     let parsed = url::Url::parse(url)
         .map_err(|error| format!("GitHub Releases redirect URL was invalid: {error}"))?;
 
@@ -553,19 +579,22 @@ fn parse_entropy_release_url(url: &str) -> Result<String, String> {
         return Err("GitHub Releases redirect URL had no path".to_owned());
     };
     let segments = segments.collect::<Vec<_>>();
-    let ["ergohaven", "entropy", "releases", "tag", tag] = segments.as_slice() else {
-        return Err("GitHub Releases redirect URL was not an Entropy release tag".to_owned());
-    };
-    if parse_canonical_entropy_release_tag(tag).is_none() {
+    let ["dvino", "ak-configurator", "releases", "tag", tag] = segments.as_slice() else {
         return Err(
-            "GitHub Releases redirect URL did not contain a canonical Entropy version".to_owned(),
+            "GitHub Releases redirect URL was not an AK Configurator release tag".to_owned(),
+        );
+    };
+    if parse_canonical_ak_configurator_release_tag(tag).is_none() {
+        return Err(
+            "GitHub Releases redirect URL did not contain a canonical AK Configurator version"
+                .to_owned(),
         );
     }
 
     Ok((*tag).to_owned())
 }
 
-fn parse_canonical_entropy_release_tag(tag: &str) -> Option<semver::Version> {
+fn parse_canonical_ak_configurator_release_tag(tag: &str) -> Option<semver::Version> {
     let version = semver::Version::parse(tag.strip_prefix('v')?).ok()?;
     if !version.pre.is_empty() || !version.build.is_empty() || format!("v{version}") != tag {
         return None;
@@ -573,8 +602,8 @@ fn parse_canonical_entropy_release_tag(tag: &str) -> Option<semver::Version> {
     Some(version)
 }
 
-fn canonical_entropy_release_url(tag: &str) -> String {
-    format!("https://github.com/ergohaven/entropy/releases/tag/{tag}")
+fn canonical_ak_configurator_release_url(tag: &str) -> String {
+    format!("https://github.com/dvino/ak-configurator/releases/tag/{tag}")
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -585,7 +614,10 @@ fn fetch_rmk_releases() -> Result<Vec<GitHubRelease>, String> {
 #[cfg(not(target_arch = "wasm32"))]
 fn fetch_github_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     ureq::get(url)
-        .set("User-Agent", concat!("Entropy/", env!("CARGO_PKG_VERSION")))
+        .set(
+            "User-Agent",
+            concat!("AK-Configurator/", env!("CARGO_PKG_VERSION")),
+        )
         .set("Accept", "application/vnd.github+json")
         .call()
         .map_err(|error| format!("GitHub request failed: {error}"))?
@@ -593,16 +625,16 @@ fn fetch_github_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, Str
         .map_err(|error| format!("GitHub response parse failed: {error}"))
 }
 
-fn build_update_result(latest: LatestEntropyRelease) -> UpdateCheckResult {
-    let LatestEntropyRelease {
+fn build_update_result(latest: LatestAkConfiguratorRelease) -> UpdateCheckResult {
+    let LatestAkConfiguratorRelease {
         tag_name,
         html_url,
         assets,
     } = latest;
     let asset = match assets {
-        EntropyReleaseAssets::Known(assets) => assets
+        AkConfiguratorReleaseAssets::Known(assets) => assets
             .into_iter()
-            .find(platform_asset_matches)
+            .find(|asset| platform_asset_matches(asset, &tag_name))
             .map(|asset| {
                 UpdateAssetState::Available(UpdateAsset {
                     name: asset.name,
@@ -610,9 +642,9 @@ fn build_update_result(latest: LatestEntropyRelease) -> UpdateCheckResult {
                 })
             })
             .unwrap_or(UpdateAssetState::MissingForPlatform),
-        EntropyReleaseAssets::Unavailable => UpdateAssetState::MetadataUnavailable,
+        AkConfiguratorReleaseAssets::Unavailable => UpdateAssetState::MetadataUnavailable,
     };
-    let relation = compare_entropy_versions(env!("CARGO_PKG_VERSION"), &tag_name);
+    let relation = compare_ak_configurator_versions(env!("CARGO_PKG_VERSION"), &tag_name);
 
     UpdateCheckResult {
         latest_version: tag_name,
@@ -652,24 +684,35 @@ fn build_firmware_update_result(
     })
 }
 
-fn platform_asset_matches(asset: &GitHubAsset) -> bool {
-    let name = asset.name.to_ascii_lowercase();
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("linux", "x86_64") => name.ends_with(".appimage") && name.contains("x86_64"),
-        ("windows", "x86_64") => {
-            name.ends_with(".exe") && name.contains("windows") && name.contains("x86_64")
-        }
-        ("macos", "aarch64") => {
-            name.ends_with(".dmg") && name.contains("macos") && name.contains("arm64")
-        }
-        ("macos", "x86_64") => {
-            name.ends_with(".dmg") && name.contains("macos") && name.contains("x86_64")
-        }
-        _ => false,
-    }
+fn platform_asset_matches(asset: &GitHubAsset, tag: &str) -> bool {
+    platform_asset_matches_for(
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        tag,
+        &asset.name,
+    )
 }
 
-fn compare_entropy_versions(current: &str, latest: &str) -> VersionRelation {
+fn platform_asset_matches_for(os: &str, arch: &str, tag: &str, asset_name: &str) -> bool {
+    let Some(version) = tag.strip_prefix('v') else {
+        return false;
+    };
+    if version.is_empty() || version.contains('/') || version.contains('\\') {
+        return false;
+    }
+    let suffix = match (os, arch) {
+        ("linux", "x86_64") => "linux-x86_64.tar.gz",
+        ("linux", "aarch64") => "linux-arm64.tar.gz",
+        ("windows", "x86_64") => "windows-x86_64.zip",
+        ("windows", "aarch64") => "windows-arm64.zip",
+        ("macos", "aarch64") => "macos-arm64.app.zip",
+        ("macos", "x86_64") => "macos-x86_64.app.zip",
+        _ => return false,
+    };
+    asset_name == format!("ak-configurator-{version}-{suffix}")
+}
+
+fn compare_ak_configurator_versions(current: &str, latest: &str) -> VersionRelation {
     let ordering = match (parse_semver(current), parse_semver(latest)) {
         (Some(current), Some(latest)) => current.cmp_precedence(&latest),
         _ => numeric_version_parts(current).cmp(&numeric_version_parts(latest)),
@@ -727,10 +770,10 @@ fn normalized_arch_label() -> &'static str {
 mod tests {
     use super::*;
 
-    fn entropy_release(tag: &str, assets: &[&str]) -> GitHubRelease {
+    fn ak_configurator_release(tag: &str, assets: &[&str]) -> GitHubRelease {
         GitHubRelease {
             tag_name: tag.to_owned(),
-            html_url: format!("https://github.com/ergohaven/entropy/releases/tag/{tag}"),
+            html_url: format!("https://github.com/dvino/ak-configurator/releases/tag/{tag}"),
             draft: false,
             prerelease: false,
             assets: assets
@@ -738,7 +781,7 @@ mod tests {
                 .map(|name| GitHubAsset {
                     name: (*name).to_owned(),
                     browser_download_url: format!(
-                        "https://github.com/ergohaven/entropy/releases/download/{tag}/{name}"
+                        "https://github.com/dvino/ak-configurator/releases/download/{tag}/{name}"
                     ),
                 })
                 .collect(),
@@ -747,10 +790,12 @@ mod tests {
 
     fn current_platform_asset_name() -> Option<&'static str> {
         match (std::env::consts::OS, std::env::consts::ARCH) {
-            ("linux", "x86_64") => Some("entropy-v0.3.21-x86_64.AppImage"),
-            ("windows", "x86_64") => Some("Entropy-Windows-v0.3.21-x86_64.exe"),
-            ("macos", "aarch64") => Some("Entropy-macOS-v0.3.21-arm64.dmg"),
-            ("macos", "x86_64") => Some("Entropy-macOS-v0.3.21-x86_64.dmg"),
+            ("linux", "x86_64") => Some("ak-configurator-0.3.21-linux-x86_64.tar.gz"),
+            ("linux", "aarch64") => Some("ak-configurator-0.3.21-linux-arm64.tar.gz"),
+            ("windows", "x86_64") => Some("ak-configurator-0.3.21-windows-x86_64.zip"),
+            ("windows", "aarch64") => Some("ak-configurator-0.3.21-windows-arm64.zip"),
+            ("macos", "aarch64") => Some("ak-configurator-0.3.21-macos-arm64.app.zip"),
+            ("macos", "x86_64") => Some("ak-configurator-0.3.21-macos-x86_64.app.zip"),
             _ => None,
         }
     }
@@ -776,31 +821,34 @@ mod tests {
     #[test]
     fn builds_tag_only_release_from_latest_redirect() {
         let release = release_from_latest_release_redirect(
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.21",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.21",
         )
         .unwrap();
 
         assert_eq!(release.tag_name, "v0.3.21");
         assert_eq!(
             release.html_url,
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.21"
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.21"
         );
-        assert!(matches!(release.assets, EntropyReleaseAssets::Unavailable));
+        assert!(matches!(
+            release.assets,
+            AkConfiguratorReleaseAssets::Unavailable
+        ));
     }
 
     #[test]
     fn rejects_noncanonical_or_untrusted_latest_redirects() {
         for url in [
             "https://github.com/ergohaven/another-repo/releases/tag/v0.3.21",
-            "https://github.com/ergohaven/entropy/releases/tag/release%2Fv0.3.21",
-            "https://github.com/ergohaven/entropy/releases/tag/v0%2E3%2E21",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.21-rc.1",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.21+build.1",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.03.21",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3",
-            "https://github.com/ergohaven/entropy/releases/tag/0.3.21",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.21?source=update",
-            "https://github.com/ergohaven/entropy/releases/tag/",
+            "https://github.com/dvino/ak-configurator/releases/tag/release%2Fv0.3.21",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0%2E3%2E21",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.21-rc.1",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.21+build.1",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.03.21",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3",
+            "https://github.com/dvino/ak-configurator/releases/tag/0.3.21",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.21?source=update",
+            "https://github.com/dvino/ak-configurator/releases/tag/",
         ] {
             assert!(release_from_latest_release_redirect(url).is_err(), "{url}");
         }
@@ -811,9 +859,9 @@ mod tests {
         let mut fallback_requested = false;
         let latest = fetch_latest_release_with_fallback(
             || {
-                latest_entropy_release_from_api(entropy_release(
+                latest_ak_configurator_release_from_api(ak_configurator_release(
                     "v0.3.21",
-                    &["entropy-v0.3.21-x86_64.AppImage"],
+                    &["ak-configurator-0.3.21-linux-x86_64.tar.gz"],
                 ))
             },
             || {
@@ -824,22 +872,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(latest.tag_name, "v0.3.21");
-        assert!(matches!(latest.assets, EntropyReleaseAssets::Known(_)));
+        assert!(matches!(
+            latest.assets,
+            AkConfiguratorReleaseAssets::Known(_)
+        ));
         assert!(!fallback_requested);
     }
 
     #[test]
     fn rejects_api_release_when_tag_and_url_do_not_match() {
-        let mut release = entropy_release("v0.3.21", &[]);
-        release.html_url = "https://github.com/ergohaven/entropy/releases/tag/v0.3.20".to_owned();
+        let mut release = ak_configurator_release("v0.3.21", &[]);
+        release.html_url =
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.20".to_owned();
 
-        assert!(latest_entropy_release_from_api(release).is_err());
+        assert!(latest_ak_configurator_release_from_api(release).is_err());
     }
 
     #[test]
     fn rejects_noncanonical_api_release_tags() {
         for tag in ["0.3.21", "v0.3.21-rc.1", "v0.3.21+build.1", "v0.03.21"] {
-            assert!(latest_entropy_release_from_api(entropy_release(tag, &[])).is_err());
+            assert!(
+                latest_ak_configurator_release_from_api(ak_configurator_release(tag, &[])).is_err()
+            );
         }
     }
 
@@ -849,10 +903,15 @@ mod tests {
             return;
         };
         let available = build_update_result(
-            latest_entropy_release_from_api(entropy_release("v0.3.21", &[asset_name])).unwrap(),
+            latest_ak_configurator_release_from_api(ak_configurator_release(
+                "v0.3.21",
+                &[asset_name],
+            ))
+            .unwrap(),
         );
         let missing = build_update_result(
-            latest_entropy_release_from_api(entropy_release("v0.3.21", &[])).unwrap(),
+            latest_ak_configurator_release_from_api(ak_configurator_release("v0.3.21", &[]))
+                .unwrap(),
         );
 
         assert!(matches!(
@@ -875,7 +934,7 @@ mod tests {
             || Err("GitHub request failed: rate limited".to_owned()),
             || {
                 release_from_latest_release_redirect(
-                    "https://github.com/ergohaven/entropy/releases/tag/v999.0.0",
+                    "https://github.com/dvino/ak-configurator/releases/tag/v999.0.0",
                 )
             },
         )
@@ -885,7 +944,7 @@ mod tests {
         assert_eq!(result.latest_version, "v999.0.0");
         assert_eq!(
             result.release_url,
-            "https://github.com/ergohaven/entropy/releases/tag/v999.0.0"
+            "https://github.com/dvino/ak-configurator/releases/tag/v999.0.0"
         );
         assert_eq!(result.asset, UpdateAssetState::MetadataUnavailable);
         assert!(result.downloadable_asset().is_none());
@@ -911,34 +970,90 @@ mod tests {
     #[test]
     fn compares_prerelease_versions_using_semver_precedence() {
         assert_eq!(
-            compare_entropy_versions("0.3.21-rc.1", "v0.3.21"),
+            compare_ak_configurator_versions("0.3.21-rc.1", "v0.3.21"),
             VersionRelation::UpdateAvailable
         );
         assert_eq!(
-            compare_entropy_versions("0.3.21", "v0.3.21-rc.1"),
+            compare_ak_configurator_versions("0.3.21", "v0.3.21-rc.1"),
             VersionRelation::DevelopmentBuild
         );
         assert_eq!(
-            compare_entropy_versions("0.3.21", "v0.3.21"),
+            compare_ak_configurator_versions("0.3.21", "v0.3.21"),
             VersionRelation::UpToDate
         );
         assert_eq!(
-            compare_entropy_versions("0.3.21+local", "v0.3.21"),
+            compare_ak_configurator_versions("0.3.21+local", "v0.3.21"),
             VersionRelation::UpToDate
         );
     }
 
     #[test]
-    fn trusts_entropy_and_rmk_release_urls() {
+    fn trusts_ak_configurator_and_rmk_release_urls() {
         for url in [
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.0",
-            "https://github.com/ergohaven/entropy/releases/download/v0.3.0/Entropy-Windows-x86_64.exe",
-            "https://github.com/ergohaven/entropy/releases/tag/release%2Fv0.3.0",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.0",
+            "https://github.com/dvino/ak-configurator/releases/download/v0.3.0/ak-configurator-0.3.0-windows-x86_64.zip",
             "https://github.com/ergohaven/rmk/releases/tag/v0.1.6",
             "https://github.com/ergohaven/rmk/releases/download/v0.1.6/k04-v0.1.6.zip",
         ] {
             assert!(is_trusted_release_url(url), "{url}");
         }
+        assert!(!is_trusted_release_url(
+            "https://github.com/ergohaven/entropy/releases/tag/v1.2.3"
+        ));
+    }
+
+    #[test]
+    fn matches_only_the_six_candidate_platform_packages() {
+        let cases = [
+            (
+                "linux",
+                "x86_64",
+                "ak-configurator-1.2.3-linux-x86_64.tar.gz",
+            ),
+            (
+                "linux",
+                "aarch64",
+                "ak-configurator-1.2.3-linux-arm64.tar.gz",
+            ),
+            (
+                "windows",
+                "x86_64",
+                "ak-configurator-1.2.3-windows-x86_64.zip",
+            ),
+            (
+                "windows",
+                "aarch64",
+                "ak-configurator-1.2.3-windows-arm64.zip",
+            ),
+            (
+                "macos",
+                "aarch64",
+                "ak-configurator-1.2.3-macos-arm64.app.zip",
+            ),
+            (
+                "macos",
+                "x86_64",
+                "ak-configurator-1.2.3-macos-x86_64.app.zip",
+            ),
+        ];
+        for (os, arch, name) in cases {
+            assert!(
+                platform_asset_matches_for(os, arch, "v1.2.3", name),
+                "{os}/{arch}: {name}"
+            );
+        }
+        assert!(!platform_asset_matches_for(
+            "linux",
+            "x86_64",
+            "v1.2.3",
+            "Entropy-Windows-x86_64.exe"
+        ));
+        assert!(!platform_asset_matches_for(
+            "linux",
+            "x86_64",
+            "v1.2.3",
+            "ak-configurator-9.9.9-linux-x86_64.tar.gz"
+        ));
     }
 
     #[test]
@@ -948,16 +1063,16 @@ mod tests {
             "https://github.com.evil.invalid/ergohaven/entropy/releases/tag/v0.3.0",
             "https://github.com/ergohaven/another-repo/releases/tag/v0.3.0",
             "https://github.com/attacker/rmk/releases/tag/v0.1.6",
-            "https://github.com/ergohaven/entropy/issues",
+            "https://github.com/dvino/ak-configurator/issues",
             "file:///C:/Windows/System32/calc.exe",
-            "https://github.com/ergohaven/entropy/releases/tag/",
-            "https://github.com/ergohaven/entropy/releases/download/",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.0/extra",
-            "https://github.com/ergohaven/entropy/releases/download/v0.3.0/nested/Entropy.exe",
-            "https://github.com/ergohaven/entropy/releases/tag/v0.3.0?source=update",
-            "https://github.com/ergohaven/entropy/releases/download/../../../../attacker/repo/releases/download/v1/payload.exe",
-            "https://github.com/ergohaven/entropy/releases/download/%2e%2e/%2e%2e/%2e%2e/%2e%2e/attacker/repo/releases/download/v1/payload.exe",
-            "https://github.com/ergohaven/entropy/releases/download/..\\..\\..\\../attacker/repo/releases/download/v1/payload.exe",
+            "https://github.com/dvino/ak-configurator/releases/tag/",
+            "https://github.com/dvino/ak-configurator/releases/download/",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.0/extra",
+            "https://github.com/dvino/ak-configurator/releases/download/v0.3.0/nested/Entropy.exe",
+            "https://github.com/dvino/ak-configurator/releases/tag/v0.3.0?source=update",
+            "https://github.com/dvino/ak-configurator/releases/download/../../../../attacker/repo/releases/download/v1/payload.exe",
+            "https://github.com/dvino/ak-configurator/releases/download/%2e%2e/%2e%2e/%2e%2e/%2e%2e/attacker/repo/releases/download/v1/payload.exe",
+            "https://github.com/dvino/ak-configurator/releases/download/..\\..\\..\\../attacker/repo/releases/download/v1/payload.exe",
         ] {
             assert!(!is_trusted_release_url(url), "{url}");
         }

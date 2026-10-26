@@ -4,11 +4,11 @@
 //! (firmware repository GPL-3.0-or-later), plus ak820_tool.py and the
 //! tools/installer image policy. Preserves source constants and instruction bytes.
 //!
-//! This module is deliberately unregistered. No transport, file IO, ownership
-//! assertion or installation authorization is provided. Native-to-Vial migration,
-//! local recovery ownership, release/revocation policy and full installer session
-//! checks remain gates outside this bounded packing model. A pinned OEM digest
-//! identifies a revision, never the physical unit which owns it.
+//! Packing provides no transport, file IO, ownership assertion or installation
+//! authorization. The native installer separately checks local recovery ownership,
+//! release admission, a fresh source capture and the complete transaction.
+//! A pinned OEM digest identifies a revision, never its physical owner. Public
+//! beta2 compressed defaults follow the pinned release packer contract.
 use crate::ak820_settings_backup::{sha256, BackupResult};
 use crate::ak820_settings_model::validate_nvm;
 use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
@@ -29,6 +29,154 @@ const FACTORY_SHA: &str = "431db5e715957be1b158e122a2ee95034dcb248c091b3e423e50c
 const PATCHED_SHA: &str = "92ddc3c33a23a216e360ee137c08309336c8a95250bd5523f44cfbafab9d8a72";
 type Code = BTreeMap<usize, u8>;
 pub(crate) type Symbols = BTreeMap<String, usize>;
+/// SDCC CODE symbols from the exact, independently pinned release map.
+pub(crate) fn read_symbols(text: &str) -> BackupResult<Symbols> {
+    let mut symbols = Symbols::new();
+    for line in text.lines().filter(|line| line.starts_with("C:")) {
+        let mut words = line[2..].split_whitespace();
+        let (Some(address), Some(name)) = (words.next(), words.next()) else {
+            continue;
+        };
+        if address.len() != 8 || !address.bytes().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        let value = usize::from_str_radix(address, 16).map_err(|_| "Invalid map address")?;
+        // SDCC's printed map truncates long function names; two unrelated
+        // unused functions can therefore share the displayed name. Only the
+        // exact symbols consumed by this packer must be unique.
+        let required = matches!(
+            name,
+            "_keymaps"
+                | "_encoder_map"
+                | "_ak820_default_classes"
+                | "_ak820_default_offsets"
+                | "_ak820_default_payload"
+                | "__sdcc_gsinit_startup"
+                | "_USB_DeviceInterrupt"
+                | "_ak820_timer_irq"
+                | "_ak820_led_irq"
+                | "__mcs51_genXINIT"
+                | "s_XINIT"
+                | "s_XISEG"
+                | "l_XINIT"
+                | "s_XSEG"
+                | "l_XSEG"
+                | "l_PSEG"
+                | "l_XISEG"
+                | "s_GSINIT3"
+                | "l_GSINIT3"
+        );
+        if symbols
+            .insert(name.to_owned(), value)
+            .is_some_and(|old| required && old != value)
+        {
+            return Err("Conflicting linked symbols".into());
+        }
+    }
+    need(!symbols.is_empty(), "Missing linked symbols")?;
+    Ok(symbols)
+}
+
+/// The two compiled default layers, in SDCC little-endian uint16_t order.
+/// Mirrors pack_ak820.factory_keymaps, including canonical compressed records.
+pub(crate) fn factory_keymaps(data: &Code, symbols: &Symbols) -> BackupResult<Vec<u8>> {
+    let names = [
+        "_ak820_default_classes",
+        "_ak820_default_offsets",
+        "_ak820_default_payload",
+    ];
+    let present = names.map(|name| symbols.contains_key(name));
+    if let Some(&address) = symbols.get("_keymaps") {
+        need(
+            !present.iter().any(|v| *v),
+            "Ambiguous compiled default keymaps",
+        )?;
+        return bytes(data, address, 512);
+    }
+    need(
+        present.iter().all(|v| *v),
+        "Missing compressed default keymap tables",
+    )?;
+    let start = names.map(|name| symbols[name]);
+    let classes = bytes(data, start[0], 64)?;
+    let offsets = bytes(data, start[1], 32)?;
+    let mut cursor = 0usize;
+    let mut output = Vec::with_capacity(512);
+    for row in 0..32 {
+        need(
+            offsets[row] as usize == cursor,
+            "Non-contiguous default keymap payload",
+        )?;
+        for col in 0..8 {
+            let kind = (classes[row * 2 + col / 4] >> ((col % 4) * 2)) & 3;
+            let value = if kind < 2 {
+                kind as u16
+            } else {
+                let raw = bytes(
+                    data,
+                    start[2]
+                        .checked_add(cursor)
+                        .ok_or("Default table overflow")?,
+                    kind as usize - 1,
+                )?;
+                let value = if kind == 2 {
+                    raw[0] as u16
+                } else {
+                    u16::from_le_bytes([raw[0], raw[1]])
+                };
+                need(
+                    value >= if kind == 2 { 2 } else { 256 },
+                    "Non-canonical default keymap encoding",
+                )?;
+                cursor += kind as usize - 1;
+                value
+            };
+            output.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    need(cursor <= 255, "Default keymap payload exceeds byte offsets")?;
+    let ranges = [(start[0], 64), (start[1], 32), (start[2], cursor)];
+    for (index, &(a, length)) in ranges.iter().enumerate() {
+        let end = a.checked_add(length).ok_or("Default table overflow")?;
+        for &(b, count) in &ranges[index + 1..] {
+            let other_end = b.checked_add(count).ok_or("Default table overflow")?;
+            need(
+                length == 0 || count == 0 || a.max(b) >= end.min(other_end),
+                "Overlapping default keymap tables",
+            )?;
+        }
+    }
+    Ok(output)
+}
+
+/// Explicit factory settings for the selected compiled image. These are public
+/// defaults, never a migration of the user's current settings or OEM macros.
+pub(crate) fn default_nvm(ihx: &str, symbols: &Symbols) -> BackupResult<Vec<u8>> {
+    let data = read_ihex(ihx)?;
+    let keys = factory_keymaps(&data, symbols)?;
+    let encoders = bytes(&data, symbol(symbols, "_encoder_map")?, 8)?;
+    let mut nvm = vec![0; 0x2800];
+    nvm[..2].copy_from_slice(&[0xe6, 0xfe]);
+    nvm[3] = 1;
+    nvm[24..32].copy_from_slice(&[5, 0, 255, 80, 96, 255, 0, 0]);
+    nvm[37..40].copy_from_slice(&[3, 0x20, 8]);
+    for key in nvm[0x40..0x658].chunks_exact_mut(2) {
+        key.copy_from_slice(&[0, 1]);
+    }
+    for (target, value) in nvm[0x40..0x240]
+        .chunks_exact_mut(2)
+        .zip(keys.chunks_exact(2))
+    {
+        target.copy_from_slice(&[value[1], value[0]]);
+    }
+    for (index, source) in [1usize, 0, 3, 2].into_iter().enumerate() {
+        let value = &encoders[source * 2..source * 2 + 2];
+        nvm[0x640 + index * 2..0x642 + index * 2].copy_from_slice(&[value[1], value[0]]);
+    }
+    nvm[0x7f1..0x7f3].copy_from_slice(&16u16.to_le_bytes());
+    validate_nvm(&nvm, 0x082003)?;
+    Ok(nvm)
+}
 fn need(ok: bool, message: &str) -> BackupResult<()> {
     if ok {
         Ok(())
@@ -329,13 +477,30 @@ fn pack_core(
         "_USB_DeviceInterrupt",
         "_ak820_timer_irq",
         "_ak820_led_irq",
-        "_keymaps",
         "_encoder_map",
     ] {
         need(
             data.contains_key(&symbol(s, name)?),
             "Missing reachable linked symbol",
         )?;
+    }
+    if let Some(&address) = s.get("_keymaps") {
+        need(
+            data.contains_key(&address),
+            "Missing reachable linked keymaps",
+        )?;
+        need(
+            ![
+                "_ak820_default_classes",
+                "_ak820_default_offsets",
+                "_ak820_default_payload",
+            ]
+            .iter()
+            .any(|name| s.contains_key(*name)),
+            "Ambiguous compiled default keymaps",
+        )?;
+    } else {
+        factory_keymaps(data, s)?;
     }
     need(
         bytes(data, CODE_START, 3)? == ljmp(symbol(s, "__sdcc_gsinit_startup")?)?,
@@ -398,6 +563,17 @@ fn pack_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn printed_map_allows_unused_truncated_names_but_rejects_ambiguous_inputs() {
+        let text = "C: 00003027 _encoder_map\nC: 00004000 _truncated_unused_function_name\nC: 00004004 _truncated_unused_function_name\n";
+        assert_eq!(read_symbols(text).unwrap()["_encoder_map"], 0x3027);
+        assert!(read_symbols(&format!("{text}C: 00005000 _encoder_map\n")).is_err());
+        assert!(read_symbols(
+            "C: 00003027 _ak820_default_classes\nC: 00004000 _ak820_default_classes\n"
+        )
+        .is_err());
+    }
     fn record(address: u16, kind: u8, raw: &[u8]) -> String {
         let mut r = vec![raw.len() as u8, (address >> 8) as u8, address as u8, kind];
         r.extend(raw);
@@ -576,14 +752,8 @@ mod tests {
             assert!(verify_payload(&bad, 0x082002).is_err());
         }
         assert!(verify_payload(&stock, 0x082002).is_err());
-        assert!(pack_candidate(
-            "",
-            &s,
-            &stock,
-            &nvm,
-            EntryMode::Permanent,
-            ProfileId::Game
-        )
-        .is_err());
+        assert!(
+            pack_candidate("", &s, &stock, &nvm, EntryMode::Permanent, ProfileId::Game).is_err()
+        );
     }
 }

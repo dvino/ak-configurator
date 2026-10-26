@@ -447,6 +447,23 @@ fn capture_reconcile_getters(
 }
 
 impl HidDevice {
+    /// One volatile FD02 exchange on the verified existing owner. This does
+    /// not enter a saved-setting transaction or perform any NVM operation.
+    pub(crate) fn ak820_os_indicator_set(&self, mode: crate::ak820_os_indicator::Mode) -> Result<()> {
+        let request = crate::ak820_os_indicator::request(mode);
+        if let Some(session) = &self.read_only { return Err(session.refuse(&request)); }
+        let state = self.ak820.as_ref().context("Not an AK820 session")?;
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        ensure!(state.loaded && state.failure.is_none(), "Read AK820 settings before OS indication");
+        let profile = state.image.and_then(ImageContract::profile).context("Exact beta2 image required for OS indication")?;
+        ensure!(crate::app::ak820_beta1_profiles::has_feature(profile, "os-indicators"), "Image has no OS indicator module");
+        let result = self.usb_send_traced(&request).and_then(|reply| {
+            crate::ak820_os_indicator::validate_reply(mode, &reply).map_err(anyhow::Error::msg)
+        });
+        if let Err(error) = &result { state.failure = Some(format!("{error:#}")); }
+        result
+    }
+
     /// Capture on the existing owner only. No unlock, setter or retry is issued.
     pub(crate) fn ak820_capture_backup(
         &self,
@@ -1039,6 +1056,51 @@ impl HidDevice {
 mod transaction_tests;
 
 #[cfg(test)]
+mod os_indicator_tests {
+    use super::*;
+    use crate::ak820_os_indicator::Mode;
+    use crate::app::ak820_beta1_profiles::ProfileId;
+
+    #[test]
+    fn fd02_has_one_exchange_and_never_touches_nvm() {
+        let (hid, log) = HidDevice::test_beta2_ak820_device(ProfileId::Main, true);
+        log.respond_by(|p| {
+            let mut reply = [0;32];
+            reply[..10].copy_from_slice(&[0xfd,2,1,0,p[4],0xa8,0xb8,0x0b,0,0x10]);
+            Some(Ok(reply))
+        });
+        for mode in [Mode::Off, Mode::On, Mode::Breathing, Mode::Normal] {
+            hid.ak820_os_indicator_set(mode).unwrap();
+        }
+        let requests = log.requests();
+        assert_eq!(requests.len(),4);
+        assert!(requests.iter().all(|p| p[..4] == [0xfd,2,1,1]));
+        assert!(hid.ak820_editing_ready());
+    }
+
+    #[test]
+    fn fd02_bad_reply_latches_without_retry_or_next_refresh() {
+        let (hid, log) = HidDevice::test_beta2_ak820_device(ProfileId::Main, true);
+        log.respond_by(|_| Some(Ok([0;32])));
+        assert!(hid.ak820_os_indicator_set(Mode::On).is_err());
+        assert!(hid.ak820_os_indicator_set(Mode::Normal).is_err());
+        assert_eq!(log.requests().len(),1);
+        assert!(!hid.ak820_editing_ready());
+    }
+
+    #[test]
+    fn fd02_requires_full_load_and_refuses_read_only_without_packets() {
+        let (mut hid, log) = HidDevice::test_beta2_ak820_device(ProfileId::Main, false);
+        assert!(hid.ak820_os_indicator_set(Mode::On).is_err());
+        assert!(log.requests().is_empty());
+        hid.ak820.as_ref().unwrap().lock().unwrap().loaded = true;
+        hid.read_only = Some(super::super::ReadOnlyHidSession::default());
+        assert!(hid.ak820_os_indicator_set(Mode::On).is_err());
+        assert!(log.requests().is_empty());
+    }
+}
+
+#[cfg(test)]
 #[path = "hid_ak820_beta2_tests.rs"]
 mod beta2_transaction_tests;
 
@@ -1155,3 +1217,7 @@ mod backup_tests;
 
 #[path = "ak820_restore_executor.rs"]
 mod restore_executor;
+
+#[path = "hid_ak820_install.rs"]
+mod install;
+pub(crate) use install::{InstallUsb, WireCommand, usb_port};

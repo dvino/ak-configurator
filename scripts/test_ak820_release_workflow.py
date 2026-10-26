@@ -5,6 +5,8 @@ import json
 from pathlib import Path, PurePosixPath
 import subprocess
 import tempfile
+import tarfile
+import io
 import tomllib
 import unittest
 import zipfile
@@ -46,19 +48,38 @@ def update_internal_sums(contents):
 
 
 def replace_archive(archive, transform):
-    with zipfile.ZipFile(archive) as source:
-        contents = {PurePosixPath(info.filename).name: source.read(info) for info in source.infolist()}
+    archive_root = archive.name.removesuffix(".app.zip").removesuffix(".tar.gz").removesuffix(".zip") + "/"
+    if archive.name.endswith(".tar.gz"):
+        with tarfile.open(archive, "r:gz") as source:
+            contents = {item.name[len(archive_root):]: source.extractfile(item).read() for item in source.getmembers()}
+    else:
+        with zipfile.ZipFile(archive) as source:
+            contents = {info.filename[len(archive_root):]: source.read(info) for info in source.infolist()}
     transform(contents)
     update_internal_sums(contents)
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as target:
-        root = archive.stem + "/"
-        for name, data in sorted(contents.items()):
-            target.writestr(root + name, data)
+    root = archive_root
+    if archive.name.endswith(".tar.gz"):
+        with tarfile.open(archive, "w:gz") as target:
+            for name, data in sorted(contents.items()):
+                info = tarfile.TarInfo(root + name)
+                info.size = len(data)
+                target.addfile(info, io.BytesIO(data))
+    else:
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as target:
+            for name, data in sorted(contents.items()):
+                target.writestr(root + name, data)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_name(archive.name + ".sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
 
 
 class ReleaseVerificationTests(unittest.TestCase):
+    def test_release_workflow_only_retains_verified_artifacts(self):
+        workflow = (ROOT / ".github/workflows/ak820-release.yml").read_text(encoding="utf-8")
+        self.assertIn("candidate-artifacts/*.tar.gz", workflow)
+        self.assertIn("actions/upload-artifact@v7", workflow)
+        self.assertNotIn("gh release create", workflow)
+        self.assertNotIn("contents: write", workflow)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp.name)
@@ -66,7 +87,8 @@ class ReleaseVerificationTests(unittest.TestCase):
             binary = self.directory / ("ak-configurator.exe" if platform.startswith("windows-") else "ak-configurator")
             binary.write_bytes(executable(platform))
             build_package(binary, platform, self.directory, allow_dirty=True)
-            archive = self.directory / f"ak-configurator-{VERSION}-{platform}.zip"
+            suffix = ".app.zip" if platform.startswith("macos-") else (".tar.gz" if platform.startswith("linux-") else ".zip")
+            archive = self.directory / f"ak-configurator-{VERSION}-{platform}{suffix}"
             # Exercise the actual packager, while normalizing its local dirty-tree marker
             # to the clean checkout that a release runner builds from.
             replace_archive(archive, lambda files: files.update({
@@ -84,12 +106,12 @@ class ReleaseVerificationTests(unittest.TestCase):
         self.assertIn("unsigned desktop trial", report["status"])
 
     def test_rejects_missing_platform(self):
-        (self.directory / f"ak-configurator-{VERSION}-macos-arm64.zip").unlink()
+        (self.directory / f"ak-configurator-{VERSION}-macos-arm64.app.zip").unlink()
         with self.assertRaisesRegex(ValueError, "Missing candidate"):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_wrong_platform_manifest(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         def mutate(files):
             manifest = json.loads(files["manifest.json"])
             manifest["platform"] = "linux-arm64"
@@ -99,7 +121,7 @@ class ReleaseVerificationTests(unittest.TestCase):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_version_mismatch(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         def mutate(files):
             manifest = json.loads(files["manifest.json"])
             manifest["application_version"] = "9.9.9"
@@ -113,10 +135,10 @@ class ReleaseVerificationTests(unittest.TestCase):
             verify(self.directory, VERSION, "b" * 40)
 
     def test_rejects_wrong_architecture_even_when_hashes_match(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         def mutate(files):
             binary = executable("linux-arm64")
-            files["ak-configurator"] = binary
+            files["ak-configurator.exe"] = binary
             manifest = json.loads(files["manifest.json"])
             manifest["binary_sha256"] = hashlib.sha256(binary).hexdigest()
             files["manifest.json"] = json.dumps(manifest).encode()
@@ -125,19 +147,19 @@ class ReleaseVerificationTests(unittest.TestCase):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_missing_package_member(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         replace_archive(archive, lambda files: files.pop("INSTALL.en.md"))
         with self.assertRaisesRegex(ValueError, "missing or unexpected members"):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_changed_bundled_firmware_provenance(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         replace_archive(archive, lambda files: files.update({"firmware-provenance.json": b"{}"}))
         with self.assertRaisesRegex(ValueError, "Bundled source file differs"):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_corrupt_internal_checksum_manifest(self):
-        archive = self.directory / f"ak-configurator-{VERSION}-linux-x86_64.zip"
+        archive = self.directory / f"ak-configurator-{VERSION}-windows-x86_64.zip"
         with zipfile.ZipFile(archive) as source:
             entries = [(info.filename, source.read(info)) for info in source.infolist()]
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as target:

@@ -21,7 +21,11 @@ impl EntropyApp {
                     "DEMO · no keyboard connection",
                 ));
             } else if self.keycode_picker.ak820_profile {
-                if let Some(image) = self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image) {
+                if let Some(image) = self
+                    .hid_device
+                    .as_ref()
+                    .and_then(crate::hid::HidDevice::ak820_image)
+                {
                     ui.label(format!("AK820 · {}", image.label()));
                 }
                 if ui
@@ -50,12 +54,26 @@ impl EntropyApp {
                     d.insert_temp(egui::Id::new(super::ak820_backup_inspection::OPEN_ID), true)
                 });
             }
-            if ui.button(text("Файлы прошивки", "Firmware files")).clicked() {
+            if ui
+                .button(text("Файлы прошивки", "Firmware files"))
+                .clicked()
+            {
                 ui.ctx().data_mut(|d| {
                     d.insert_temp(egui::Id::new(super::ak820_install_files::OPEN_ID), true)
                 });
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui
+                .button(text("Установить прошивку", "Install firmware"))
+                .clicked()
+            {
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(egui::Id::new(super::ak820_install::OPEN_ID), true)
+                });
+            }
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        self.draw_ak820_os_indicator(ui);
         if let Some(reason) = &failed {
             ui.colored_label(
                 Color32::from_rgb(220, 70, 60),

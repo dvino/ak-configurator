@@ -193,7 +193,7 @@ pub(crate) use hid_settings::BatteryHalves;
 mod hid_vial;
 
 #[path = "hid_ak820.rs"]
-mod hid_ak820;
+pub(crate) mod hid_ak820;
 use hid_ak820::Ak820Session;
 pub(crate) use hid_ak820::{Ak820RgbStream, Ak820RgbStreamResult};
 

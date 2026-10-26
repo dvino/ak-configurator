@@ -372,7 +372,7 @@ fn names(dir: &File, limit: usize) -> BackupResult<Vec<OsString>> {
     }
     Ok(out)
 }
-fn regular(dir: &File, entry: &str, maximum: usize) -> BackupResult<Vec<u8>> {
+pub(super) fn regular(dir: &File, entry: &str, maximum: usize) -> BackupResult<Vec<u8>> {
     let file = open(dir, OsStr::new(entry), false, false, null_mut(), false)?;
     let mut info: FileInfo = unsafe { std::mem::zeroed() };
     if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0
@@ -626,6 +626,36 @@ fn remove(file: &File) -> BackupResult<()> {
         return Err(invalid());
     }
     Ok(())
+}
+pub(super) fn delete_validated(path: &Path, expected_manifest: &str) -> BackupResult<()> {
+    let name = path.file_name().ok_or_else(invalid)?;
+    let parent = directory(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )?;
+    let dir = open(&parent, name, true, false, null_mut(), true)?;
+    let (manifest, files) = read(&dir)?;
+    super::validate_loaded_bytes(manifest.clone(), files.clone(), Some(expected_manifest))?;
+    for (entry, bytes) in &files {
+        if regular(&dir, entry, bytes.len())? != *bytes {
+            return Err("Backup changed before deletion".into());
+        }
+    }
+    if regular(&dir, MANIFEST, MANIFEST_LIMIT)? != manifest {
+        return Err("Backup changed before deletion".into());
+    }
+    for name in FILES
+        .iter()
+        .map(|(name, _)| *name)
+        .chain(std::iter::once(MANIFEST))
+    {
+        let file = open(&dir, OsStr::new(name), false, false, null_mut(), true)?;
+        remove(&file)
+            .map_err(|_| "Backup deletion stopped; inspect the remaining folder".to_owned())?;
+    }
+    remove(&dir)
+        .map_err(|_| "Backup files were removed but the folder could not be removed".to_owned())
 }
 pub(super) struct Stage {
     pub parent: File,

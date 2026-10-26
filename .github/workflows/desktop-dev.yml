@@ -157,6 +157,7 @@ jobs:
           name: desktop-candidate-${{ matrix.platform }}
           path: |
             target/candidate/*.zip
+            target/candidate/*.tar.gz
             target/candidate/*.sha256
           if-no-files-found: error
           retention-days: 7

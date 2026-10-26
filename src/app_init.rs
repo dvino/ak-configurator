@@ -449,7 +449,11 @@ impl EntropyApp {
             #[cfg(not(target_arch = "wasm32"))]
             hid_device: None,
             #[cfg(not(target_arch = "wasm32"))]
+            ak820_os_indicator_runtime: super::ak820_os_indicator::Runtime::default(),
+            #[cfg(not(target_arch = "wasm32"))]
             ak820_rgb_runtime: super::ak820_rgb_runtime::Runtime::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            ak820_install_runtime: super::ak820_install::Runtime::default(),
             #[cfg(not(target_arch = "wasm32"))]
             shared_hid_output: None,
             #[cfg(not(target_arch = "wasm32"))]

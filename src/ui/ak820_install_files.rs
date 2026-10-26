@@ -27,16 +27,36 @@ enum Problem {
 }
 fn problem_text(problem: Problem, ru: bool) -> &'static str {
     match (problem, ru) {
-        (Problem::Open, false) => "Could not open a selected file. Choose an accessible local file.",
-        (Problem::Open, true) => "Не удалось открыть выбранный файл. Выберите доступный локальный файл.",
-        (Problem::Read, false) => "Could not read a selected file. Check local file access and try again.",
-        (Problem::Read, true) => "Не удалось прочитать выбранный файл. Проверьте доступ к нему и повторите попытку.",
-        (Problem::Size, false) => "A selection is not a regular file of the required exact size: firmware 51,136 bytes; each ROM copy 65,536 bytes.",
-        (Problem::Size, true) => "Выбранный файл не является обычным файлом нужного размера: прошивка — 51 136 байт, каждая копия ROM — 65 536 байт.",
-        (Problem::Content, false) => "Content checks failed. Verify the selected profile, official prepared firmware, complete current snapshot, and personal OEM recovery copy.",
-        (Problem::Content, true) => "Проверка содержимого не пройдена. Проверьте профиль, подготовленную официальную прошивку, полный текущий снимок и личную OEM-копию восстановления.",
-        (Problem::Background, false) => "The local check stopped unexpectedly. Select the files again and retry.",
-        (Problem::Background, true) => "Локальная проверка неожиданно остановилась. Выберите файлы ещё раз и повторите попытку.",
+        (Problem::Open, false) => {
+            "Could not open a selected file. Choose an accessible local file."
+        }
+        (Problem::Open, true) => {
+            "Не удалось открыть выбранный файл. Выберите доступный локальный файл."
+        }
+        (Problem::Read, false) => {
+            "Could not read a selected file. Check local file access and try again."
+        }
+        (Problem::Read, true) => {
+            "Не удалось прочитать выбранный файл. Проверьте доступ к нему и повторите попытку."
+        }
+        (Problem::Size, false) => {
+            "A selection is not a regular file of the required exact size: firmware 51,136 bytes; each ROM copy 65,536 bytes."
+        }
+        (Problem::Size, true) => {
+            "Выбранный файл не является обычным файлом нужного размера: прошивка — 51 136 байт, каждая копия ROM — 65 536 байт."
+        }
+        (Problem::Content, false) => {
+            "Content checks failed. Verify the selected profile, official prepared firmware, complete current snapshot, and personal OEM recovery copy."
+        }
+        (Problem::Content, true) => {
+            "Проверка содержимого не пройдена. Проверьте профиль, подготовленную официальную прошивку, полный текущий снимок и личную OEM-копию восстановления."
+        }
+        (Problem::Background, false) => {
+            "The local check stopped unexpectedly. Select the files again and retry."
+        }
+        (Problem::Background, true) => {
+            "Локальная проверка неожиданно остановилась. Выберите файлы ещё раз и повторите попытку."
+        }
     }
 }
 #[derive(Clone)]
@@ -162,6 +182,16 @@ fn read_bounded(path: &Path, expected: usize) -> Result<Input, Problem> {
         bytes: data,
     })
 }
+
+pub(super) fn read_input_bytes(
+    path: &Path,
+    expected: usize,
+    russian: bool,
+) -> Result<Vec<u8>, String> {
+    read_bounded(path, expected)
+        .map(|input| input.bytes)
+        .map_err(|problem| problem_text(problem, russian).to_owned())
+}
 use std::io::Read;
 
 fn slot_expected(slot: Slot) -> usize {
@@ -207,8 +237,8 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
     let mut close = false;
     ui.label(tr(
         ru,
-        "Checks the selected files locally. Firmware installation still uses the separate installer.",
-        "Проверяет выбранные файлы локально. Для установки пока нужен отдельный установщик.",
+        "Checks the selected files locally. Use Install firmware for a separate device-bound installation plan.",
+        "Проверяет выбранные файлы локально. Для установки используйте отдельное окно «Установить прошивку» с проверкой устройства.",
     ));
     ui.horizontal(|ui| {
         ui.label(tr(ru, "Target profile", "Целевой профиль"));

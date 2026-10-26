@@ -102,6 +102,9 @@ fn preview(
 
 #[derive(Clone)]
 enum FilePayload {
+    Deleted {
+        path: PathBuf,
+    },
     History {
         root: PathBuf,
         history: BackupHistory,
@@ -139,6 +142,8 @@ struct WindowState {
     restore_pending: Option<(u64, u64)>,
     undo_backup: Option<BackupLocation>,
     restore_verified: bool,
+    reset_preview: bool,
+    delete_confirm: bool,
     target: Option<TargetSnapshot>,
     preview: Option<Preview>,
     saved_name: Option<String>,
@@ -155,11 +160,30 @@ impl WindowState {
         }
         self.pending = None;
         match message.result {
+            Ok(Some(FilePayload::Deleted { path })) => {
+                if self
+                    .undo_backup
+                    .as_ref()
+                    .is_some_and(|location| location.path == path)
+                {
+                    self.undo_backup = None;
+                }
+                self.source = None;
+                self.source_path = None;
+                self.preview = None;
+                self.preview_plan = None;
+                self.reset_preview = false;
+                self.delete_confirm = false;
+                self.history = None;
+                self.saved_name = None;
+            }
             Ok(Some(FilePayload::History { root, history })) => {
                 self.root = Some(root);
                 self.history = Some(Arc::new(history));
             }
             Ok(Some(FilePayload::Source { path, source })) => {
+                self.reset_preview = false;
+                self.delete_confirm = false;
                 self.source_path = Some(path);
                 self.source = Some(source);
                 self.preview_plan = None;
@@ -196,6 +220,8 @@ impl WindowState {
         }
     }
     fn close(&mut self) {
+        self.reset_preview = false;
+        self.delete_confirm = false;
         self.id();
         self.pending = None;
         self.capture_pending = None;
@@ -313,6 +339,10 @@ pub(super) fn restore_failed(
 }
 
 enum FileAction {
+    Delete {
+        path: PathBuf,
+        manifest_sha256: String,
+    },
     Open(Option<(PathBuf, String)>),
     History(Option<PathBuf>),
     Save {
@@ -342,6 +372,14 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
     std::thread::spawn(move || {
         let result = (|| -> Result<Option<FilePayload>, Problem> {
             match action {
+                FileAction::Delete {
+                    path,
+                    manifest_sha256,
+                } => {
+                    files::delete_validated_archive(&path, &manifest_sha256)
+                        .map_err(|_| Problem::File)?;
+                    Ok(Some(FilePayload::Deleted { path }))
+                }
                 FileAction::Open(selected) => {
                     let (path, pin) = match selected {
                         Some((path, pin)) => (path, Some(pin)),
@@ -491,6 +529,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     let mut capture = false;
     let mut cancel = false;
     let mut compare = false;
+    let mut reset = false;
     let mut restore = false;
     let mut close = false;
     let mut open = true;
@@ -557,6 +596,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 if ui.add_enabled(!busy && state.root.is_some() && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")), egui::Button::new(tr(ru, "Save new backup", "Сохранить новую копию"))).clicked() {
                     file_action = Some(FileAction::Save { root: state.root.clone().unwrap(), snapshot: target.data.clone() });
                 }
+                if ui.add_enabled(!busy && can_capture, egui::Button::new(tr(ru, "Preview reset to release defaults…", "Предпросмотр сброса к настройкам выпуска…"))).clicked() { reset = true; }
             }
             if state.restore_verified {
                 ui.colored_label(egui::Color32::LIGHT_GREEN, tr(ru, "Restore verified. The editor reads the current settings again.", "Восстановление проверено. Редактор повторно читает текущие настройки."));
@@ -570,11 +610,25 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             if let Some(source) = &state.source {
                 ui.separator(); draw_source(ui, source, ru);
                 if ui.add_enabled(!busy && state.target.is_some(), egui::Button::new(tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"))).clicked() { compare = true; }
+                if ui.add_enabled(!busy && state.source_path.is_some(), egui::Button::new(tr(ru, "Delete this backup…", "Удалить эту копию…"))).clicked() { state.delete_confirm = true; }
+                if state.delete_confirm {
+                    let name = state.source_path.as_ref().and_then(|p| p.file_name()).map(|p| p.to_string_lossy()).unwrap_or_default();
+                    ui.label(format!("{}: {}", tr(ru, "Permanently delete all files of this validated backup", "Безвозвратно удалить все файлы этой проверенной копии"), short_text(&name)));
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.add_enabled(!busy, egui::Button::new(tr(ru, "Delete permanently", "Удалить безвозвратно"))).clicked() {
+                            if let Some(path) = &state.source_path { file_action = Some(FileAction::Delete { path:path.clone(), manifest_sha256:source.archive().manifest_sha256.clone() }); }
+                            state.delete_confirm = false;
+                        }
+                        if ui.button(tr(ru, "Keep backup", "Сохранить копию")).clicked() { state.delete_confirm = false; }
+                    });
+                }
             }
             if let Some(value) = &state.preview {
                 ui.separator(); draw_preview(ui, value, ru);
-                let ready = !busy && can_capture && value.commands > 0 && state.preview_plan.is_some() && state.source_path.is_some() && state.root.is_some();
-                if ui.add_enabled(ready, egui::Button::new(tr(ru, "Restore these settings…", "Восстановить эти настройки…"))).clicked() { restore = true; }
+                if state.reset_preview { ui.label(tr(ru, "Reset supported keys, encoder mappings, macros, lighting and enabled modules. Inactive and inaccessible data remain intact. A verified safety backup is required before fresh confirmation.", "Сбрасываются поддерживаемые назначения клавиш и энкодера, макросы, подсветка и включённые модули. Неактивные и недоступные данные сохраняются. Перед новым подтверждением обязательна проверенная защитная копия.")); }
+                let ready = !busy && can_capture && value.commands > 0 && state.preview_plan.is_some() && (state.reset_preview || state.source_path.is_some()) && state.root.is_some();
+                let label = if state.reset_preview { tr(ru, "Reset these settings…", "Сбросить эти настройки…") } else { tr(ru, "Restore these settings…", "Восстановить эти настройки…") };
+                if ui.add_enabled(ready, egui::Button::new(label)).clicked() { restore = true; }
                 if state.root.is_none() { ui.label(tr(ru, "Choose a backup folder before restore.", "Перед восстановлением выберите папку для защитной копии.")); }
             }
             if let Some((id, _)) = state.restore_pending {
@@ -599,6 +653,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             if ui.button(tr(ru, "Close", "Закрыть")).clicked() { close = true; }
         });
     if compare {
+        state.reset_preview = false;
         if let (Some(source), Some(target)) = (&state.source, &state.target) {
             match preview(source, &target.data) {
                 Ok((value, plan)) => {
@@ -610,6 +665,42 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                     state.preview = None;
                     state.preview_plan = None;
                     state.error = Some(error);
+                }
+            }
+        }
+    }
+    if reset {
+        if let Some(target) = &state.target {
+            match crate::ak820_restore_plan::plan_factory_reset(
+                target.data.profile(),
+                target.data.identity(),
+                target.data.nvm(),
+            ) {
+                Ok(plan) => {
+                    let mut groups = std::collections::BTreeMap::new();
+                    for step in plan.steps() {
+                        *groups.entry(step.command()).or_insert(0) += 1;
+                    }
+                    state.preview = Some(Preview {
+                        source_profile: Some(target.data.profile()),
+                        target_profile: target.data.profile(),
+                        groups: groups.into_iter().collect(),
+                        commands: plan.steps().len(),
+                        changed_bytes: plan
+                            .before_nvm()
+                            .iter()
+                            .zip(plan.expected_nvm())
+                            .filter(|(a, b)| a != b)
+                            .count(),
+                    });
+                    state.preview_plan = Some(Arc::new(plan));
+                    state.reset_preview = true;
+                    state.error = None;
+                }
+                Err(_) => {
+                    state.preview = None;
+                    state.preview_plan = None;
+                    state.error = Some(Problem::Incompatible);
                 }
             }
         }
@@ -633,26 +724,50 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if restore {
-        if let (Some(plan), Some(source), Some(path), Some(root)) = (
-            state.preview_plan.clone(),
-            state.source.clone(),
-            state.source_path.clone(),
-            state.root.as_ref(),
-        ) {
-            match PreparedRestore::new(plan, source, path, root) {
-                Ok(request) => {
-                    let id = state.id();
-                    if app.start_ak820_restore(ctx, id, Arc::new(request))
-                        == super::vial_hid_task::VialHidTaskStart::Started
-                    {
-                        state.restore_pending = Some((id, app.connection_generation));
-                        state.error = None;
-                        state.restore_verified = false;
-                    } else {
-                        state.error = Some(Problem::Restore);
+        if state.reset_preview {
+            if let (Some(plan), Some(target), Some(root)) = (
+                state.preview_plan.clone(),
+                state.target.as_ref(),
+                state.root.as_ref(),
+            ) {
+                match PreparedRestore::factory_defaults(plan, target.data.profile(), root) {
+                    Ok(request) => {
+                        let id = state.id();
+                        if app.start_ak820_restore(ctx, id, Arc::new(request))
+                            == super::vial_hid_task::VialHidTaskStart::Started
+                        {
+                            state.restore_pending = Some((id, app.connection_generation));
+                            state.error = None;
+                            state.restore_verified = false;
+                        } else {
+                            state.error = Some(Problem::Restore);
+                        }
                     }
+                    Err(_) => state.error = Some(Problem::Incompatible),
                 }
-                Err(_) => state.error = Some(Problem::Incompatible),
+            }
+        } else {
+            if let (Some(plan), Some(source), Some(path), Some(root)) = (
+                state.preview_plan.clone(),
+                state.source.clone(),
+                state.source_path.clone(),
+                state.root.as_ref(),
+            ) {
+                match PreparedRestore::new(plan, source, path, root) {
+                    Ok(request) => {
+                        let id = state.id();
+                        if app.start_ak820_restore(ctx, id, Arc::new(request))
+                            == super::vial_hid_task::VialHidTaskStart::Started
+                        {
+                            state.restore_pending = Some((id, app.connection_generation));
+                            state.error = None;
+                            state.restore_verified = false;
+                        } else {
+                            state.error = Some(Problem::Restore);
+                        }
+                    }
+                    Err(_) => state.error = Some(Problem::Incompatible),
+                }
             }
         }
     }

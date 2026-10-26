@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Verify six complete unsigned packages before creating a draft release."""
+"""Verify six complete unsigned candidate packages before artifact retention."""
 import argparse
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import tarfile
 import tomllib
 import zipfile
 
@@ -32,7 +33,14 @@ def sha256(data):
 
 
 def expected_static_files():
-    return {name: (ROOT / path).read_bytes() for name, path in STATIC_FILES.items()}
+    files = {name: (ROOT / path).read_bytes() for name, path in STATIC_FILES.items()}
+    for asset in sorted((ROOT / "assets/ak820").glob("beta2-*.json")):
+        files[f"offline/{asset.name.removeprefix('beta2-')}"] = asset.read_bytes()
+    for asset in sorted((ROOT / "assets/ak820/firmware-beta2").rglob("*")):
+        if asset.is_file():
+            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta2").as_posix()
+            files[f"offline/firmware-beta2/{relative}"] = asset.read_bytes()
+    return files
 
 
 def verify_internal_checksums(contents):
@@ -45,7 +53,7 @@ def verify_internal_checksums(contents):
         raise ValueError("Internal SHA256SUMS is not ASCII") from exc
     parsed = {}
     for line in lines:
-        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._/-]+)", line)
         if not match:
             raise ValueError("Malformed entry in internal SHA256SUMS")
         digest, filename = match.groups()
@@ -72,7 +80,8 @@ def verify(directory: Path, version: str, commit: str):
               "source_commit": commit, "status": "unsigned desktop trial; hardware and platform qualification remain separate",
               "platforms": {}}
     for platform in EXPECTED:
-        name = f"ak-configurator-{version}-{platform}.zip"
+        suffix = ".app.zip" if platform.startswith("macos-") else (".tar.gz" if platform.startswith("linux-") else ".zip")
+        name = f"ak-configurator-{version}-{platform}{suffix}"
         archive = directory / name
         checksum = directory / f"{name}.sha256"
         if not archive.is_file() or not checksum.is_file():
@@ -80,23 +89,35 @@ def verify(directory: Path, version: str, commit: str):
         archive_hash = sha256(archive.read_bytes())
         if checksum.read_text(encoding="ascii").strip() != f"{archive_hash}  {name}":
             raise ValueError(f"Checksum mismatch for {platform}")
-        with zipfile.ZipFile(archive) as package:
-            root = f"ak-configurator-{version}-{platform}/"
+        if platform.startswith("linux-"):
+            package = tarfile.open(archive, "r:gz")
+            infos = package.getmembers()
+            names = [item.name for item in infos]
+            read_member = lambda member: package.extractfile(member).read()
+        else:
+            package = zipfile.ZipFile(archive)
             infos = package.infolist()
             names = [item.filename for item in infos]
+            read_member = package.read
+        with package:
+            root = f"ak-configurator-{version}-{platform}/"
             if len(names) != len(set(names)):
-                raise ValueError(f"Duplicate ZIP member for {platform}")
+                raise ValueError(f"Duplicate archive member for {platform}")
             for member in names:
                 parts = PurePosixPath(member).parts
                 if "\\" in member or member.startswith("/") or any(part in ("", ".", "..") for part in parts):
                     raise ValueError(f"Unsafe ZIP member path for {platform}")
-                if not member.startswith(root) or len(parts) != 2:
+                if not member.startswith(root):
                     raise ValueError(f"Unexpected ZIP member path for {platform}")
             binary_name = "ak-configurator.exe" if platform.startswith("windows-") else "ak-configurator"
-            expected_names = set(STATIC_FILES) | {binary_name, "manifest.json", "SHA256SUMS"}
-            if set(names) != {root + filename for filename in expected_names}:
+            expected_names = set(expected_static) | {binary_name, "manifest.json", "SHA256SUMS"}
+            app_binary = "AK-Configurator.app/Contents/MacOS/ak-configurator"
+            if platform.startswith("macos-"):
+                expected_names.remove(binary_name)
+                expected_names |= {app_binary, "AK-Configurator.app/Contents/Info.plist"}
+            if {member[len(root):] for member in names} != expected_names:
                 raise ValueError(f"Candidate package has missing or unexpected members for {platform}")
-            contents = {PurePosixPath(member).name: package.read(member) for member in names}
+            contents = {member[len(root):]: read_member(member) for member in names}
         for filename, expected in expected_static.items():
             if contents.get(filename) != expected:
                 raise ValueError(f"Bundled source file differs from checked-out source: {filename}")
@@ -123,7 +144,7 @@ def verify(directory: Path, version: str, commit: str):
             raise ValueError(f"Wrong firmware tag provenance for {platform}")
         if manifest.get("firmware_provenance_sha256") != sha256(expected_static["firmware-provenance.json"]):
             raise ValueError(f"Firmware provenance digest mismatch for {platform}")
-        binary = contents[binary_name]
+        binary = contents[app_binary if platform.startswith("macos-") else binary_name]
         if manifest.get("binary_sha256") != sha256(binary):
             raise ValueError(f"Binary digest mismatch for {platform}")
         check_architecture(binary, platform)

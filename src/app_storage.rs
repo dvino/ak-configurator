@@ -2,10 +2,46 @@ use super::*;
 use crate::app::typing_trainer_symbols::TypingTrainerCharacterStatsMap;
 
 const TYPING_TRAINER_SYMBOL_STATS_VERSION: u8 = 1;
+static APP_SETTINGS_SAVE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 mod scoped_config_tests {
     use super::*;
+
+    #[test]
+    fn ak820_recovery_receipt_is_durable_and_survives_stale_preference_save() {
+        let _guard = ScopedTempConfig::new();
+        let stale = AppSettings::default();
+        save_app_settings(&stale);
+        let path = app_settings_path();
+        let first = "a".repeat(64);
+        let second = "b".repeat(64);
+        record_ak820_recovery_manifest(&path, &first).unwrap();
+        record_ak820_recovery_manifest(&path, &second).unwrap();
+        save_app_settings(&stale);
+        let saved = read_settings_for_save(&path).unwrap().unwrap();
+        assert_eq!(
+            saved.ak820_recovery_manifests,
+            [first, second].into_iter().collect()
+        );
+        assert!(record_ak820_recovery_manifest(&path, "untrusted format").is_err());
+    }
+
+    #[test]
+    fn ak820_recovery_receipt_save_failure_leaves_existing_bytes_intact() {
+        let _guard = ScopedTempConfig::new();
+        let path = app_settings_path();
+        std::fs::write(&path, b"corrupt preferences").unwrap();
+        assert!(record_ak820_recovery_manifest(&path, &"a".repeat(64)).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"corrupt preferences");
+        let absent = path
+            .parent()
+            .unwrap()
+            .join("missing-parent")
+            .join("settings.json");
+        assert!(record_ak820_recovery_manifest(&absent, &"b".repeat(64)).is_err());
+        assert!(!absent.exists());
+    }
 
     #[test]
     fn scoped_storage_restores_nested_roots_and_isolates_parallel_threads() {
@@ -598,14 +634,79 @@ pub(super) fn save_app_settings(settings: &AppSettings) {
             }
         }
     }
-    match serde_json::to_string_pretty(settings) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write(app_settings_path(), json) {
-                log::warn!("save_app_settings failed: {e}");
-            }
-        }
-        Err(e) => log::warn!("save_app_settings serialize failed: {e}"),
+    let _guard = APP_SETTINGS_SAVE_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Err(error) = save_app_settings_durable(&app_settings_path(), settings) {
+        log::warn!("save_app_settings failed: {error}");
     }
+}
+
+/// Publication of first-capture ownership must be durable before the installer
+/// can erase. Resolve the path on the UI thread, including isolated test roots.
+pub(super) fn record_ak820_recovery_manifest(
+    path: &std::path::Path,
+    pin: &str,
+) -> Result<(), String> {
+    if pin.len() != 64
+        || !pin
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err("Invalid recovery manifest digest".into());
+    }
+    let _guard = APP_SETTINGS_SAVE_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut settings = read_settings_for_save(path)
+        .map_err(|e| format!("Recovery registry could not be read: {e}"))?
+        .unwrap_or_default();
+    settings.ak820_recovery_manifests.insert(pin.to_owned());
+    save_app_settings_durable(path, &settings)
+        .map_err(|e| format!("Recovery ownership could not be saved; installation stopped: {e}"))?;
+    if !read_settings_for_save(path)
+        .map_err(|e| format!("Recovery registry could not be reread: {e}"))?
+        .is_some_and(|s| s.ak820_recovery_manifests.contains(pin))
+    {
+        return Err("Recovery ownership reread differs; installation stopped".into());
+    }
+    Ok(())
+}
+
+fn read_settings_for_save(path: &std::path::Path) -> std::io::Result<Option<AppSettings>> {
+    match std::fs::read(path) {
+        Ok(bytes) => serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(std::io::Error::other),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// A stale GUI preferences value must never discard a receipt saved by the
+/// installer worker. Atomic replacement also leaves the old settings intact
+/// when writing the new temporary file fails.
+fn save_app_settings_durable(
+    path: &std::path::Path,
+    settings: &AppSettings,
+) -> std::io::Result<()> {
+    let mut merged = settings.clone();
+    if let Some(previous) = read_settings_for_save(path)? {
+        merged
+            .ak820_recovery_manifests
+            .extend(previous.ak820_recovery_manifests);
+    }
+    let data = serde_json::to_vec_pretty(&merged).map_err(std::io::Error::other)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Missing settings directory"))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    std::io::Write::write_all(&mut temp, &data)?;
+    temp.as_file().sync_all()?;
+    temp.persist(path).map_err(|e| e.error)?;
+    #[cfg(unix)]
+    std::fs::File::open(parent)?.sync_all()?;
+    Ok(())
 }
 
 pub(super) fn normalize_text_expander_app_name(raw: &str) -> Option<String> {

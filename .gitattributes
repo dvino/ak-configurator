@@ -1,0 +1,4 @@
+# Pinned firmware inputs must keep their exact published bytes on every OS.
+assets/ak820/** -text
+# SDCC maps retain upstream column padding, including trailing spaces.
+assets/ak820/firmware-beta2/*/application.map whitespace=-blank-at-eol

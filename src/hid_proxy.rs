@@ -30,6 +30,7 @@ const MAX_FRAME: usize = 4_096;
 // bound, and no new helper can bypass an unreclaimed physical reservation.
 const MAX_UNSETTLED_HELPERS: usize = 2;
 const OUTPUT_PREFIX: &str = "output:";
+const INSTALL_PREFIX: &str = "ak820-install:";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -131,6 +132,24 @@ impl HidProxy {
         let mut command = Command::new(exe);
         command
             .arg("--entropy-hid-proxy")
+            .arg(serde_json::to_string(device)?);
+        Self::start(
+            device,
+            HelperCommand {
+                command,
+                #[cfg(test)]
+                fake: false,
+                #[cfg(test)]
+                exit_gate: None,
+            },
+            STARTUP_TIMEOUT,
+        )
+    }
+
+    pub(super) fn open_install(device: &Device) -> Result<Self> {
+        let mut command = Command::new(std::env::current_exe()?);
+        command
+            .arg("--ak820-install-proxy")
             .arg(serde_json::to_string(device)?);
         Self::start(
             device,
@@ -328,6 +347,26 @@ impl HidProxy {
         // ipc_owner already validated the full frame before delivering it.
         let bytes = hex_to_bytes(response.data.as_deref().context("Missing HID response")?)?;
         let mut out = [0; MSG_LEN];
+        out.copy_from_slice(&bytes);
+        Ok(out)
+    }
+
+    pub(super) fn install_command(
+        &self,
+        command: &super::hid_ak820::WireCommand,
+    ) -> Result<[u8; 32]> {
+        let line = self.request(
+            format!("{INSTALL_PREFIX}{}", serde_json::to_string(command)?),
+            Duration::from_secs(30),
+        )?;
+        let response: ProxyResponse = serde_json::from_str(&line)?;
+        let bytes = hex_to_bytes(
+            response
+                .data
+                .as_deref()
+                .context("Missing installer reply")?,
+        )?;
+        let mut out = [0; 32];
         out.copy_from_slice(&bytes);
         Ok(out)
     }
@@ -652,9 +691,11 @@ fn ipc_owner(
 pub fn run_hid_proxy_if_requested() -> bool {
     let mut args = std::env::args();
     let _ = args.next();
-    if args.next().as_deref() != Some("--entropy-hid-proxy") {
-        return false;
-    }
+    let install_only = match args.next().as_deref() {
+        Some("--entropy-hid-proxy") => false,
+        Some("--ak820-install-proxy") => true,
+        _ => return false,
+    };
     let result = (|| -> Result<()> {
         let json = args.next().context("Missing HID helper device argument")?;
         let device: Device = serde_json::from_str(&json)?;
@@ -662,7 +703,7 @@ pub fn run_hid_proxy_if_requested() -> bool {
         // thread must initialize the process-global IOHIDManager/run loop.
         #[cfg(target_os = "macos")]
         super::initialize_macos_hid_on_main_thread();
-        run_hid_proxy(device)
+        run_hid_proxy(device, install_only)
     })();
     if let Err(error) = result {
         let _ = emit_response(&ProxyResponse {
@@ -680,7 +721,7 @@ fn emit_response(response: &ProxyResponse) -> Result<()> {
     Ok(())
 }
 
-fn run_hid_proxy(device: Device) -> Result<()> {
+fn run_hid_proxy(device: Device, install_only: bool) -> Result<()> {
     // The actual transport owner holds this across every request and its final
     // handle drop. A GUI crash cannot release it while its helper is still alive.
     let _device_lease = if device.is_ak820() {
@@ -688,12 +729,21 @@ fn run_hid_proxy(device: Device) -> Result<()> {
     } else {
         None
     };
-    let hid = HidDevice::open_in_helper(&device)?;
+    let hid = if install_only {
+        None
+    } else {
+        Some(HidDevice::open_in_helper(&device)?)
+    };
     emit_response(&ProxyResponse {
         ok: true,
         data: None,
         error: None,
     })?;
+    let mut install: Option<super::hid_ak820::InstallUsb> = if install_only {
+        Some(super::hid_ak820::InstallUsb::open(&device)?)
+    } else {
+        None
+    };
     let mut reader = BufReader::new(std::io::stdin());
     loop {
         let line = read_frame(&mut reader)?;
@@ -701,14 +751,37 @@ fn run_hid_proxy(device: Device) -> Result<()> {
         // Keep the IOHIDManager guard INSIDE this helper for the entire local
         // operation. Parent Proxy calls explicitly do not acquire that lock.
         #[cfg(target_os = "macos")]
-        let _hid_lock = hid.macos_hid_operation_lock();
-        let result = if let Some(encoded) = line.strip_prefix(OUTPUT_PREFIX) {
+        let _hid_lock = hid.as_ref().map(|h| h.macos_hid_operation_lock());
+        let result = if let Some(encoded) = line.strip_prefix(INSTALL_PREFIX) {
+            (|| -> Result<Option<String>> {
+                #[cfg(test)]
+                bail!("Physical installation is disabled in test builds");
+                #[cfg(not(test))]
+                {
+                    if install.is_none() {
+                        install = Some(super::hid_ak820::InstallUsb::open(&device)?);
+                    }
+                    let command = serde_json::from_str(encoded)?;
+                    let reply = install
+                        .as_mut()
+                        .context("No installer owner")?
+                        .command(command)?;
+                    Ok(Some(bytes_to_hex(&reply)))
+                }
+            })()
+        } else if install.is_some() {
+            Err(anyhow::anyhow!("Installation owns this HID session"))
+        } else if let Some(encoded) = line.strip_prefix(OUTPUT_PREFIX) {
             hex_to_bytes(encoded)
-                .and_then(|data| hid.write_output_report(&data))
+                .and_then(|data| {
+                    hid.as_ref()
+                        .context("No normal HID owner")?
+                        .write_output_report(&data)
+                })
                 .map(|()| None)
         } else {
             hex_to_bytes(line)
-                .and_then(|data| hid.usb_send(&data))
+                .and_then(|data| hid.as_ref().context("No normal HID owner")?.usb_send(&data))
                 .map(|data| Some(bytes_to_hex(&data)))
         };
         let response = match result {

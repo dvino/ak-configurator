@@ -203,7 +203,13 @@ impl EntropyApp {
         selected_device_is_bluetooth: bool,
         discovery_platform: &str,
     ) {
+        self.poll_ak820_install(ctx);
+        if self.ak820_install_runtime.owns_hid() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(40));
+            return;
+        }
         self.poll_ak820_rgb_task();
+        self.poll_ak820_os_indicator_task();
         self.poll_vial_hid_task(ctx);
         self.poll_sticky_layout_background(ctx);
         self.poll_settings_write(ctx);
@@ -291,8 +297,11 @@ impl EntropyApp {
         self.maybe_start_periodic_battery_refresh(ctx, main_window_hidden_to_tray);
         self.maybe_start_deferred_device_load(ctx, main_window_hidden_to_tray);
         self.update_application_layout_runtime();
-        if main_window_hidden_to_tray { self.ak820_rgb_scene_stop(); }
+        if main_window_hidden_to_tray {
+            self.ak820_rgb_scene_stop();
+        }
         self.tick_ak820_rgb_scene(ctx);
+        self.tick_ak820_os_indicator(ctx);
         // Foreground application changes happen while Entropy itself is not
         // focused. Keep a lightweight runtime tick alive so auto-switching is
         // not accidentally tied to egui input/repaint events.
@@ -1455,6 +1464,8 @@ impl eframe::App for EntropyApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        self.release_tray_before_gui_drop();
         #[cfg(not(target_arch = "wasm32"))]
         self.ak820_rgb_scene_stop();
         if self.ak820_demo {
@@ -1641,11 +1652,20 @@ impl eframe::App for EntropyApp {
         #[cfg(not(target_arch = "wasm32"))]
         egui::TopBottomPanel::top("ak820_session_status")
             .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(16, 8)))
-            .show_inside(root_ui, |ui| self.draw_ak820_status(ui));
+            .show_inside(root_ui, |ui| {
+                if self.ak820_install_runtime.owns_hid() {
+                    ui.disable();
+                }
+                self.draw_ak820_status(ui)
+            });
 
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
             self.draw_canvas_footer(ui, ctx);
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.ak820_install_runtime.owns_hid() {
+                ui.disable();
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if self
                 .hid_device
@@ -1909,6 +1929,8 @@ impl eframe::App for EntropyApp {
         super::ak820_offline_files::show(self, ctx);
         super::ak820_backup_inspection::show(self, ctx);
         super::ak820_install_files::show(self, ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        super::ak820_install::show(self, ctx);
         if self.ak820_demo {
             if let Some(profile) = self.ak820_demo_profile {
                 super::ak820_beta1_profiles_ui::sync_offline_project(ctx, profile);
@@ -1970,7 +1992,11 @@ impl eframe::App for EntropyApp {
                         .vscroll(true)
                         .show(ctx, |ui| {
                             if super::ak820_beta1_profiles::matrix_profile(profile)
-                                .capabilities.dynamic_entries.tap_dance > 0 {
+                                .capabilities
+                                .dynamic_entries
+                                .tap_dance
+                                > 0
+                            {
                                 let tap_count = super::ak820_beta1_profiles::matrix_profile(profile)
                                     .capabilities
                                     .dynamic_entries

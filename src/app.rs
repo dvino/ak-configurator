@@ -1,26 +1,32 @@
 use crate::device::{Device, DeviceIdentity, DeviceManager};
 use crate::firmware::FirmwareProtocol;
+#[path = "ui/ak820_backup_inspection.rs"]
+mod ak820_backup_inspection;
 #[path = "ak820_beta1_profiles.rs"]
 pub(crate) mod ak820_beta1_profiles;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_install.rs"]
+mod ak820_install;
+#[path = "ui/ak820_install_files.rs"]
+mod ak820_install_files;
 #[path = "ui/ak820_offline_extensions.rs"]
 pub(crate) mod ak820_offline_extensions;
 #[path = "ui/ak820_offline_files.rs"]
 mod ak820_offline_files;
-#[path = "ui/ak820_backup_inspection.rs"]
-mod ak820_backup_inspection;
+#[cfg(test)]
+#[path = "ui/ak820_offline_project_tests.rs"]
+mod ak820_offline_project_tests;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_os_indicator.rs"]
+mod ak820_os_indicator;
 #[path = "ui/ak820_restore_request.rs"]
 mod ak820_restore_request;
-#[path = "ui/ak820_install_files.rs"]
-mod ak820_install_files;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_rgb_palette.rs"]
 mod ak820_rgb_palette;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_rgb_runtime.rs"]
 mod ak820_rgb_runtime;
-#[cfg(test)]
-#[path = "ui/ak820_offline_project_tests.rs"]
-mod ak820_offline_project_tests;
 
 use crate::keyboard::{KeyboardLayout, LayoutOption, PhysicalEncoder, PhysicalKey};
 use crate::keycode::{
@@ -81,6 +87,8 @@ mod entlayout;
 #[path = "headless_export.rs"]
 mod headless_export;
 #[cfg(not(target_arch = "wasm32"))]
+pub(crate) use ak820_os_indicator::{background_helper_enabled, run_background_helper, HelperExit};
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use headless_export::{
     run_headless_export, HeadlessExportRequest, EXIT_INSTANCE_RUNNING, EXIT_USAGE,
 };
@@ -118,16 +126,16 @@ mod bluetooth_settings_ui;
 mod combo_write;
 #[cfg(not(target_arch = "wasm32"))]
 use combo_write::ComboWriteTask;
-#[path = "ui/combo_settings.rs"]
-mod combo_settings_ui;
-#[path = "ui/device_connect_apply.rs"]
-mod device_connect_apply;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_connection.rs"]
 mod ak820_connection;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_status.rs"]
 mod ak820_status;
+#[path = "ui/combo_settings.rs"]
+mod combo_settings_ui;
+#[path = "ui/device_connect_apply.rs"]
+mod device_connect_apply;
 #[path = "ui/device_connect_task.rs"]
 mod device_connect_task;
 #[path = "ui/device_connection.rs"]

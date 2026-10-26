@@ -16,8 +16,12 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Add animated offline previews, bounded scene undo/redo, and explicit scene v2 save/load while retaining static palette v1 files
 - Add playback through the existing HID owner with a one-frame queue, a conservative 10 frames/s application ceiling, cancellation, priority pauses, and stop-on-error or lost mode ownership
 - Add complete beta2 backup capture and guarded restore execution with fresh-capture comparison, verified safety backup, fresh physical hold, one-attempt setters and final verification; add Linux/macOS/Windows private backup storage and validated bounded history
-- Add local three-file AK820 firmware input checks and a bounded OEM loader wire codec; the checker validates bytes and does not install firmware
-- Add a dedicated unsigned DRAFT candidate workflow and verifier for six platform targets, including localized guides and firmware provenance; no publication has been executed
+- Add native beta2 firmware installation with bundled public IHX/map inputs, verified packing/defaults, exact release admission and saved withdrawal blocks, immutable preview, exclusive loader ownership, fresh confirmation, durable safety snapshots, one-attempt flashing and full-ROM verification; retain the separate local three-file checker
+- Add initial bundled installation from an exact fresh OEM capture without a preexisting ROM file, using private packing bytes locally and explicit defaults; keep a personal OEM reference mandatory for project updates and prepared payloads, and reject invalid supplied references without fallback
+- Add provenance-bound local OEM rollback and a trusted recovery-manifest registry synced/reread before erase; stop on safety/registry failures while retaining saved paths; support settings preservation/migration or explicit defaults with separate firmware/settings results
+- Add release-default settings reset through the guarded safety-backup/confirmation executor and explicit digest-pinned permanent backup deletion
+- Add opt-in EN/RU OS indication through volatile FD02, shared owner/failure gates and a small `--ak820-helper`; release GUI app/renderer/windows while the helper runs and recreate the interface on request in the same process
+- Add a dedicated unsigned DRAFT candidate workflow and verifier for six platform targets: Linux `.tar.gz`, Windows `.zip` and macOS `.app.zip`, with SHA256, localized guides, public offline firmware inputs and provenance; no publication has been executed
 
 ### Corrections
 
@@ -29,8 +33,9 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 
 - Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification
 - RGB scenes require explicit playback; frames remain in device RAM, have no palette readback or atomic commit, and are not saved to NVM or restored automatically
-- Focused backup/AK820 tests and native Linux offline UI checks pass; full-suite environment-dependent tests passed separately, unchanged. Physical RGB timing, safe frame rate, resource measurements, and Windows/macOS/arm64 runtime qualification remain open
-- Live restore and safety-backup execution are implemented but have not been qualified on hardware. Live firmware installation remains unimplemented: loader transition/reconnect binding, release/revocation authority and a durable safety/write/readback transaction are still required. OEM ownership, full-app Windows/macOS builds, platform runtime qualification, installers and signing remain open. Windows GNU and macOS arm64 isolated adapter typechecks passed only. Backup operations cover Linux/macOS/Windows with platform-specific guarantees. The dedicated candidate workflow is DRAFT-only; no publication occurred. No positive released full-ROM fixture or physical-keyboard test is claimed.
+- Previously recorded focused backup/AK820 tests and native Linux offline UI checks passed; the changed tree requires its own results in REVIEW. Physical RGB timing, safe frame rate, resource measurements, and Windows/macOS/arm64 runtime qualification remain open
+- Native restore, reset, installation, OEM rollback and helper lifecycle are implemented in source; their physical behavior and platform lifecycle/resource qualification remain open. No hardware operation is claimed. Public linked firmware and default-settings fixtures do not replace the unavailable positive released packed-image/full-ROM fixture or its OEM erase-helper inputs. Historical isolated Windows GNU/macOS arm64 adapter typechecks are not current full-app build evidence. Current six-target execution, per-platform runtime/HID/function checks and signing remain separate gates. Portable archives do not claim native system installers. The candidate workflow remains DRAFT-only; no publication occurred.
+- Firmware admission is pinned to beta2 with explicit prerelease opt-in and persistent known withdrawal blocks. Offline metadata can miss a later withdrawal; latest-stable/history browsing and arbitrary custom-build support remain outside this path. OEM rollback requires locally pinned first-capture ownership evidence; missing usable serial/provenance blocks it.
 - Existing Entropy release history below is retained unchanged
 
 ## v0.5.0 - Public Beta

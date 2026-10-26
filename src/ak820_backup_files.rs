@@ -676,6 +676,190 @@ fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> Backu
     canonical(&manifest)
 }
 
+/// Validate a capture in memory for a compatible firmware settings migration.
+pub(crate) fn validate_captured(
+    capture: &crate::ak820_backup_capture::CapturedBackup,
+) -> BackupResult<ValidatedArchive> {
+    let manifest = make_manifest(capture.profile(), capture.files())?;
+    validate_profile_archive(&manifest, capture.files(), capture.profile(), None)
+}
+
+/// Durable complete ROM safety copy for installation, including OEM sources.
+/// This separate format is never misrepresented as a restorable settings archive.
+#[derive(Clone, Debug)]
+pub(crate) struct InstallSnapshotReceipt {
+    pub(crate) rom_sha256: String,
+    pub(crate) manifest_sha256: String,
+}
+pub(crate) fn publish_install_snapshot(
+    path: &Path,
+    rom: &[u8],
+    provenance: Option<&crate::ak820_install_executor::RecoveryProvenance>,
+) -> BackupResult<InstallSnapshotReceipt> {
+    if rom.len() != 65536 {
+        return Err("Installation safety snapshot must contain the complete ROM".into());
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = path;
+        return Err("Private installation snapshots are unavailable on this platform".into());
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        #[cfg(target_os = "windows")]
+        use windows as anchored;
+        let digest = sha256(rom);
+        let manifest = canonical(
+            &json!({"format":"ak820-install-safety-1", "created_utc":chrono::Utc::now().to_rfc3339(), "rom_file":"before-full-rom.bin", "rom_bytes":65536,"rom_sha256":digest,"recovery_provenance":provenance}),
+        )?;
+        let target = path.file_name().ok_or_else(invalid)?;
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let mut stage = anchored::Stage::new(anchored::directory(parent)?)?;
+        stage.write("before-full-rom.bin", rom)?;
+        stage.write(MANIFEST, &manifest)?;
+        stage.write(".gitignore", b"*\n")?;
+        if anchored::regular(&stage.dir, "before-full-rom.bin", 65536)? != rom
+            || anchored::regular(&stage.dir, MANIFEST, MANIFEST_LIMIT)? != manifest
+        {
+            return Err("Installation safety snapshot reread differs".into());
+        }
+        #[cfg(not(target_os = "windows"))]
+        stage.dir.sync_all().map_err(|_| invalid())?;
+        stage.publish(target)?;
+        #[cfg(not(target_os = "windows"))]
+        stage.parent.sync_all().map_err(|_| invalid())?;
+        Ok(InstallSnapshotReceipt {
+            rom_sha256: digest,
+            manifest_sha256: sha256(&manifest),
+        })
+    }
+}
+
+/// Only a first-capture manifest remembered by this installation of the app may
+/// supply OEM ownership evidence. A self-authored/imported receipt cannot add
+/// itself to that registry, even if its public hashes are internally consistent.
+pub(crate) fn read_install_recovery(
+    path: &Path,
+    trusted_manifest_pins: &std::collections::BTreeSet<String>,
+) -> BackupResult<(Vec<u8>, crate::ak820_install_executor::RecoveryProvenance)> {
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (path, trusted_manifest_pins);
+        Err("Private installation snapshots are unavailable on this platform".into())
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        #[cfg(target_os = "windows")]
+        use windows as anchored;
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Receipt {
+            format: String,
+            created_utc: String,
+            rom_file: String,
+            rom_bytes: usize,
+            rom_sha256: String,
+            recovery_provenance: Option<crate::ak820_install_executor::RecoveryProvenance>,
+        }
+        let dir = anchored::directory(path)?;
+        let manifest = anchored::regular(&dir, MANIFEST, MANIFEST_LIMIT)?;
+        if !trusted_manifest_pins.contains(&sha256(&manifest)) {
+            return Err(
+                "OEM snapshot was not recorded by this application; ownership is unproven".into(),
+            );
+        }
+        let receipt: Receipt = serde_json::from_slice(&manifest)
+            .map_err(|_| "Invalid installation snapshot manifest")?;
+        if receipt.format != "ak820-install-safety-1"
+            || receipt.rom_file != "before-full-rom.bin"
+            || receipt.rom_bytes != 65536
+            || receipt.created_utc.is_empty()
+        {
+            return Err("Invalid installation snapshot format".into());
+        }
+        let rom = anchored::regular(&dir, "before-full-rom.bin", 65536)?;
+        if rom.len() != 65536
+            || sha256(&rom) != receipt.rom_sha256
+            || anchored::regular(&dir, MANIFEST, MANIFEST_LIMIT)? != manifest
+        {
+            return Err("OEM snapshot changed since its capture".into());
+        }
+        Ok((
+            rom,
+            receipt
+                .recovery_provenance
+                .ok_or("Snapshot has no supported per-device ownership evidence")?,
+        ))
+    }
+}
+
+/// Remove only an explicitly selected, currently valid settings archive with
+/// the exact manifest shown in the UI. No recursive deletion is performed.
+pub(crate) fn delete_validated_archive(path: &Path, expected_manifest: &str) -> BackupResult<()> {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::fs::MetadataExt;
+        let name = path.file_name().ok_or_else(invalid)?;
+        let parent_path = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let parent = anchored::directory(parent_path)?;
+        let parent_meta = parent.metadata().map_err(|_| invalid())?;
+        if parent_meta.uid() != unsafe { libc::geteuid() } || parent_meta.mode() & 0o022 != 0 {
+            return Err("Backup deletion requires an owner-controlled parent".into());
+        }
+        let dir = anchored::open_at(&parent, name, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+        let original = dir.metadata().map_err(|_| invalid())?;
+        let (manifest, files) = anchored::read(&dir)?;
+        validate_loaded_bytes(manifest.clone(), files.clone(), Some(expected_manifest))?;
+        for (entry, bytes) in &files {
+            if anchored::regular(&dir, entry, bytes.len())? != *bytes {
+                return Err("Backup changed before deletion".into());
+            }
+        }
+        if anchored::regular(&dir, MANIFEST, MANIFEST_LIMIT)? != manifest {
+            return Err("Backup changed before deletion".into());
+        }
+        for entry in FILES
+            .iter()
+            .map(|(entry, _)| *entry)
+            .chain(std::iter::once(MANIFEST))
+        {
+            let entry = std::ffi::CString::new(entry).map_err(|_| invalid())?;
+            if unsafe { libc::unlinkat(dir.as_raw_fd(), entry.as_ptr(), 0) } != 0 {
+                return Err("Backup deletion stopped; inspect the remaining folder".into());
+            }
+        }
+        let current = anchored::open_at(&parent, name, libc::O_RDONLY | libc::O_DIRECTORY, 0)?
+            .metadata()
+            .map_err(|_| invalid())?;
+        if current.dev() != original.dev() || current.ino() != original.ino() {
+            return Err("Backup folder identity changed during deletion".into());
+        }
+        let name = std::ffi::CString::new(name.as_bytes()).map_err(|_| invalid())?;
+        if unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) } != 0 {
+            return Err("Backup files were removed but the folder could not be removed".into());
+        }
+        parent.sync_all().map_err(|_| invalid())?;
+        Ok(())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        windows::delete_validated(path, expected_manifest)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (path, expected_manifest);
+        Err("Backup deletion is unavailable on this platform".into())
+    }
+}
+
 fn check_map(files: &BTreeMap<String, Vec<u8>>) -> BackupResult<()> {
     if files.len() != FILES.len() {
         return Err("Unexpected backup files".into());
@@ -738,6 +922,44 @@ pub fn publish_validated_archive(
 mod tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
+    #[test]
+    fn installation_snapshots_are_private_verified_and_never_replace_or_mint_ownership() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("snapshot");
+        let rom = vec![0x55; 65536]; // public synthetic filesystem bytes, not an accepted device image
+        let receipt = publish_install_snapshot(&path, &rom, None).unwrap();
+        assert_eq!(receipt.rom_sha256, sha256(&rom));
+        assert_eq!(fs::read(path.join("before-full-rom.bin")).unwrap(), rom);
+        assert_eq!(
+            fs::metadata(path.join("before-full-rom.bin"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        assert!(publish_install_snapshot(&path, &rom, None).is_err());
+        assert!(read_install_recovery(&path, &Default::default()).is_err());
+        let trusted = std::collections::BTreeSet::from([receipt.manifest_sha256]);
+        assert!(read_install_recovery(&path, &trusted).is_err()); // no OEM provenance
+        assert!(publish_install_snapshot(&temp.path().join("short"), &rom[..65535], None).is_err());
+    }
+    #[test]
+    fn deletion_rejects_unvalidated_or_changed_archives_without_removing_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("backup");
+        fs::create_dir(&path).unwrap();
+        envelope(&path);
+        assert!(delete_validated_archive(&path, &"0".repeat(64)).is_err());
+        for (name, _) in FILES {
+            assert!(path.join(name).is_file());
+        }
+        assert!(path.join(MANIFEST).is_file());
+        let link = temp.path().join("link");
+        symlink(&path, &link).unwrap();
+        assert!(delete_validated_archive(&link, &"0".repeat(64)).is_err());
+        assert!(path.join(MANIFEST).is_file());
+    }
     fn envelope(dir: &Path) {
         fs::write(dir.join(MANIFEST), b"{}").unwrap();
         for (name, _) in FILES {

@@ -239,6 +239,57 @@ pub(crate) fn plan_restore(
         &pairs,
     )
 }
+
+/// Reset the settings reachable through the reviewed setters to the selected
+/// release's compiled defaults. Inactive modules, reserved bytes and values
+/// without a setter remain unchanged. This is a derived local reset plan, not
+/// an imported or supposedly captured settings archive.
+pub(crate) fn plan_factory_reset(
+    profile: ProfileId,
+    target: &ImageIdentity,
+    before: &[u8],
+) -> BackupResult<RestorePlan> {
+    require(
+        identity(profile)? == *target,
+        "Reset target identity differs",
+    )?;
+    validate_nvm(before, target.schema)?;
+    let defaults = crate::ak820_release::bundled_defaults(profile)?;
+    let mut wanted = before.to_vec();
+    wanted[24..29].copy_from_slice(&defaults[24..29]);
+    wanted[40] = defaults[40];
+    wanted[0x40..0x6a8].copy_from_slice(&defaults[0x40..0x6a8]);
+    wanted[0x7f0..0x7f3].copy_from_slice(&defaults[0x7f0..0x7f3]);
+    wanted[0x800..0x810].fill(0);
+    let contract = matrix_profile(profile);
+    let mut typed = Extensions::decode_nvm(before)?;
+    let default_settings = QmkSettings::default();
+    for &id in &contract.capabilities.runtime_qmk_settings_ids {
+        typed.settings.set(id, default_settings.get(id)?)?;
+    }
+    if contract.capabilities.dynamic_entries.tap_dance > 0 {
+        typed.tap_dance.fill(Default::default());
+    }
+    if contract.capabilities.dynamic_entries.key_overrides > 0 {
+        typed.key_overrides.fill(Default::default());
+    }
+    wanted = typed.apply_to_nvm(&wanted, profile)?;
+    let settings = settings_from_nvm(
+        &wanted,
+        &rgb_wire_for_profile(&wanted[24..32], false, profile)?,
+        true,
+    )?;
+    let manifest = json!({"format":"ak820-derived-factory-reset-1","profile":profile.as_str(),
+        "files":{"saved-nvm.bin":{"size":wanted.len(),"sha256":sha256(&wanted)}},
+        "compiled_ihx_sha256":target.ihx_sha256});
+    let archive = ValidatedArchive {
+        manifest_sha256: sha256(&canonical(&manifest)?),
+        manifest,
+        settings,
+        source: target.clone(),
+    };
+    plan_restore(&archive, &wanted, profile, target, before)
+}
 // Private registry injection exists for pure synthetic tests only. No caller can
 // replace the production trusted registry or bypass catalog admission.
 fn plan_with_registry(
@@ -531,6 +582,13 @@ fn plan_with_registry(
             .enumerate()
         {
             let data = hex_bytes(value)?;
+            if data.iter().all(|&byte| byte == 0)
+                && plan.expected[0x658 + i * 10..0x662 + i * 10]
+                    .iter()
+                    .all(|&byte| byte == 0)
+            {
+                continue;
+            }
             let mut stored = data.clone();
             stored[4..8].copy_from_slice(&[0x20, 8, 1, 0]);
             plan.persist(
@@ -694,6 +752,46 @@ fn migrate_with_registry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn factory_reset_uses_public_defaults_and_preserves_inactive_and_reserved_bytes() {
+        for image in crate::app::ak820_beta1_profiles::profiles() {
+            let profile = image.profile;
+            let target = identity(profile).unwrap();
+            let defaults = crate::ak820_release::bundled_defaults(profile).unwrap();
+            let unchanged = plan_factory_reset(profile, &target, &defaults).unwrap();
+            assert!(
+                unchanged.steps().is_empty(),
+                "{}: {:?}",
+                profile.as_str(),
+                unchanged.steps()
+            );
+            let mut before = defaults.clone();
+            before[0x40..0x42].copy_from_slice(&4u16.to_be_bytes());
+            before[0x7a0] = 0x55; // unused extension padding
+            let mut typed = Extensions::decode_nvm(&before).unwrap();
+            typed.settings.set(7, 350).unwrap();
+            // QSID4 is stored but inaccessible in all profiles except Typing.
+            typed.settings.set(4, 250).unwrap();
+            before[0x6a8..0x6c0].copy_from_slice(&typed.settings.encode());
+            let plan = plan_factory_reset(profile, &target, &before).unwrap();
+            assert_eq!(plan.expected_nvm()[0x7a0], 0x55);
+            let after = Extensions::decode_nvm(plan.expected_nvm()).unwrap();
+            assert_eq!(
+                after.settings.get(7).unwrap(),
+                QmkSettings::default().get(7).unwrap()
+            );
+            assert_eq!(
+                after.settings.get(4).unwrap(),
+                if profile == ProfileId::Typing {
+                    QmkSettings::default().get(4).unwrap()
+                } else {
+                    250
+                }
+            );
+            assert!(!plan.steps().is_empty());
+            assert!(plan.requires_fresh_physical_unlock());
+        }
+    }
     // These identities and bytes are synthetic offline models. Explicit test
     // registries/pairs never establish production image or hardware qualification.
     fn image(tag: char, schema: u32) -> ImageIdentity {

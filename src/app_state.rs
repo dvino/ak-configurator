@@ -23,8 +23,8 @@ pub(crate) const COMBO_COLOR_SEED_PALETTE: [u32; 16] = [
 ];
 
 use super::typing_trainer_symbols::{
-    TYPING_TRAINER_SYMBOL_COUNTS, TypingTrainerCharacterStatsMap, record_symbol_attempt,
-    weighted_symbol_text,
+    record_symbol_attempt, weighted_symbol_text, TypingTrainerCharacterStatsMap,
+    TYPING_TRAINER_SYMBOL_COUNTS,
 };
 use super::*;
 
@@ -64,6 +64,14 @@ pub(crate) struct LayoutElementVisibility {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AppSettings {
+    #[serde(default)]
+    pub(crate) ak820_os_indicator: crate::ak820_os_indicator::Settings,
+    #[serde(default)]
+    pub(crate) ak820_release_observation: crate::ak820_release::ReleaseObservation,
+    /// Locally published first-OEM-capture manifests. Imported receipts alone
+    /// do not establish ownership of a recovery image.
+    #[serde(default)]
+    pub(crate) ak820_recovery_manifests: std::collections::BTreeSet<String>,
     /// Local cosmetic choices, keyed by the same stable device identity as encoder visibility.
     #[serde(default)]
     pub(crate) layout_element_visibility:
@@ -239,6 +247,9 @@ pub(crate) fn clamp_ui_scale(scale: f32) -> f32 {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            ak820_os_indicator: Default::default(),
+            ak820_release_observation: Default::default(),
+            ak820_recovery_manifests: Default::default(),
             layout_element_visibility: std::collections::BTreeMap::new(),
             migrated_fixed_encoder_visibility: std::collections::BTreeSet::new(),
             application_layouts: std::collections::BTreeMap::new(),
@@ -2769,7 +2780,10 @@ pub(crate) fn load_display_settings(
         state.display_timeout_supported = supported_qmk_settings.contains(&DISPLAY_TIMEOUT_QSID);
         if state.display_timeout_supported {
             let timeout = read_display_setting_u8(dev_conn, DISPLAY_TIMEOUT_QSID)?;
-            anyhow::ensure!(timeout <= 7, "Invalid SM62 display timeout index: {timeout}");
+            anyhow::ensure!(
+                timeout <= 7,
+                "Invalid SM62 display timeout index: {timeout}"
+            );
             state.display_timeout = timeout;
             state.confirmed_display_timeout = timeout;
         }
@@ -2777,31 +2791,48 @@ pub(crate) fn load_display_settings(
             state.sm62_values[index] = read_display_setting_u8(dev_conn, qsid)?;
         }
         state.confirmed_sm62_values = state.sm62_values;
-        state.sm62_stars_supported = [246, 247].iter().all(|q| supported_qmk_settings.contains(q));
-        state.sm62_screens_off_supported = [248, 249].iter().all(|q| supported_qmk_settings.contains(q));
+        state.sm62_stars_supported = [246, 247]
+            .iter()
+            .all(|q| supported_qmk_settings.contains(q));
+        state.sm62_screens_off_supported = [248, 249]
+            .iter()
+            .all(|q| supported_qmk_settings.contains(q));
         if state.sm62_stars_supported {
-            for side in 0..2 { state.sm62_stars_values[side] = read_display_setting_u8(dev_conn, 246 + side as u16)?; }
+            for side in 0..2 {
+                state.sm62_stars_values[side] =
+                    read_display_setting_u8(dev_conn, 246 + side as u16)?;
+            }
             state.confirmed_sm62_stars_values = state.sm62_stars_values;
         }
         if state.sm62_screens_off_supported {
-            for side in 0..2 { state.sm62_screens_off_values[side] = read_display_setting_u8(dev_conn, 248 + side as u16)?; }
+            for side in 0..2 {
+                state.sm62_screens_off_values[side] =
+                    read_display_setting_u8(dev_conn, 248 + side as u16)?;
+            }
             state.confirmed_sm62_screens_off_values = state.sm62_screens_off_values;
         }
-        state.sm62_language_supported = [244, 245].iter().all(|qsid| supported_qmk_settings.contains(qsid));
+        state.sm62_language_supported = [244, 245]
+            .iter()
+            .all(|qsid| supported_qmk_settings.contains(qsid));
         if state.sm62_language_supported {
             for (side, qsid) in [244, 245].iter().enumerate() {
                 state.sm62_language_values[side] = read_display_setting_u8(dev_conn, *qsid)?;
             }
             state.confirmed_sm62_language_values = state.sm62_language_values;
         }
-        state.sm62_date_supported = [240, 241].iter().all(|qsid| supported_qmk_settings.contains(qsid));
+        state.sm62_date_supported = [240, 241]
+            .iter()
+            .all(|qsid| supported_qmk_settings.contains(qsid));
         if state.sm62_date_supported {
             for (side, qsid) in [240, 241].iter().enumerate() {
                 state.sm62_date_values[side] = read_display_setting_u8(dev_conn, *qsid)?;
             }
             state.confirmed_sm62_date_values = state.sm62_date_values;
         }
-        if [242, 243].iter().all(|qsid| supported_qmk_settings.contains(qsid)) {
+        if [242, 243]
+            .iter()
+            .all(|qsid| supported_qmk_settings.contains(qsid))
+        {
             let hold = [242, 243].map(|qsid| dev_conn.get_qmk_setting_u16(qsid));
             if let [Ok(left), Ok(right)] = hold {
                 if left <= 10_000 && right <= 10_000 {
@@ -3041,15 +3072,15 @@ pub(crate) fn load_display_settings(
         sm62_values: [0, 0, 20, 1, 1, 2, 1, 20, 1, 1],
         confirmed_sm62_values: [0, 0, 20, 1, 1, 2, 1, 20, 1, 1],
         sm62_stars_supported: false,
-            sm62_stars_values: [1, 1],
-            confirmed_sm62_stars_values: [1, 1],
-            sm62_screens_off_supported: false,
-            sm62_screens_off_values: [0, 0],
-            confirmed_sm62_screens_off_values: [0, 0],
-            sm62_language_supported: false,
-            sm62_language_values: [1, 1],
-            confirmed_sm62_language_values: [1, 1],
-            sm62_date_supported: false,
+        sm62_stars_values: [1, 1],
+        confirmed_sm62_stars_values: [1, 1],
+        sm62_screens_off_supported: false,
+        sm62_screens_off_values: [0, 0],
+        confirmed_sm62_screens_off_values: [0, 0],
+        sm62_language_supported: false,
+        sm62_language_values: [1, 1],
+        confirmed_sm62_language_values: [1, 1],
+        sm62_date_supported: false,
         sm62_hold_supported: false,
         sm62_hold_ms: [200; 2],
         confirmed_sm62_hold_ms: [200; 2],
@@ -3211,8 +3242,10 @@ mod display_settings_load_tests {
         assert_eq!(state.sm62_language_values, [0, 1]);
         assert_eq!(state.confirmed_sm62_language_values, [0, 1]);
         assert!(state.sm62_stars_supported && state.sm62_screens_off_supported);
-        assert_eq!(state.sm62_stars_values,[0,1]); assert_eq!(state.confirmed_sm62_stars_values,[0,1]);
-        assert_eq!(state.sm62_screens_off_values,[1,0]); assert_eq!(state.confirmed_sm62_screens_off_values,[1,0]);
+        assert_eq!(state.sm62_stars_values, [0, 1]);
+        assert_eq!(state.confirmed_sm62_stars_values, [0, 1]);
+        assert_eq!(state.sm62_screens_off_values, [1, 0]);
+        assert_eq!(state.confirmed_sm62_screens_off_values, [1, 0]);
     }
 
     #[test]
@@ -3567,7 +3600,7 @@ pub(crate) const TYPING_TRAINER_DURATIONS: [u32; 4] = [15, 30, 60, 120];
 pub(crate) const TYPING_TRAINER_WORD_COUNTS: [usize; 4] = [10, 25, 50, 100];
 pub(crate) const TYPING_TRAINER_HISTORY_LIMIT: usize = 20;
 const TYPING_TRAINER_DEFAULT_TEXT_WORDS: usize = 72;
-pub(crate) use super::typing_trainer_words::{TYPING_TRAINER_LANGUAGES, TypingTrainerLanguage};
+pub(crate) use super::typing_trainer_words::{TypingTrainerLanguage, TYPING_TRAINER_LANGUAGES};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -5135,12 +5168,10 @@ mod typing_trainer_tests {
         state.set_language(TypingTrainerLanguage::Russian);
 
         assert_eq!(state.language, TypingTrainerLanguage::Russian);
-        assert!(
-            state
-                .target_text
-                .chars()
-                .any(|ch| ('а'..='я').contains(&ch))
-        );
+        assert!(state
+            .target_text
+            .chars()
+            .any(|ch| ('а'..='я').contains(&ch)));
         assert!(!state.target_text.chars().any(|ch| ch.is_ascii_alphabetic()));
     }
 
@@ -5176,12 +5207,10 @@ mod typing_trainer_tests {
 
         state.set_punctuation_enabled(true);
         assert!(state.punctuation_enabled);
-        assert!(
-            state
-                .target_text
-                .chars()
-                .any(|ch| ch.is_ascii_punctuation())
-        );
+        assert!(state
+            .target_text
+            .chars()
+            .any(|ch| ch.is_ascii_punctuation()));
 
         state.set_numbers_enabled(true);
         assert!(state.numbers_enabled);
@@ -5354,7 +5383,11 @@ pub(crate) const LAYOUT_BOTTOM_RESERVED_H: f32 = 76.0_f32;
 
 pub struct EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
+    pub(super) ak820_os_indicator_runtime: super::ak820_os_indicator::Runtime,
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) ak820_rgb_runtime: super::ak820_rgb_runtime::Runtime,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) ak820_install_runtime: super::ak820_install::Runtime,
     pub(crate) ak820_demo: bool,
     pub(crate) ak820_demo_profile: Option<super::ak820_beta1_profiles::ProfileId>,
     pub(crate) ak820_demo_seed: Option<crate::keyboard::KeyboardLayout>,
@@ -5433,7 +5466,8 @@ pub struct EntropyApp {
     pub(crate) retiring_connects: Vec<RetiringConnect>,
     /// Deterministic worker-launch seam: tests supply completions without HID I/O.
     #[cfg(all(test, not(target_arch = "wasm32")))]
-    pub(crate) test_device_scan_requests: Option<mpsc::Sender<(bool, mpsc::Sender<Result<Vec<Device>, String>>)>>,
+    pub(crate) test_device_scan_requests:
+        Option<mpsc::Sender<(bool, mpsc::Sender<Result<Vec<Device>, String>>)>>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     pub(crate) test_connect_requests:
         Option<mpsc::Sender<(Device, mpsc::Sender<ConnectTaskMessage>)>>,

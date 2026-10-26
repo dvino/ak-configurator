@@ -1,0 +1,1370 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! User-driven AK820 installation flow. Device ownership is exclusive from
+//! preparation through readback; this module never retries or resets a device.
+use super::*;
+use crate::ak820_backup_capture::CapturedBackup;
+use crate::ak820_install_executor::{InstallRequest, InstallSettingsChoice, PreparedInstallation};
+use crate::ak820_settings_backup::sha256;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::mpsc;
+
+pub(crate) const OPEN_ID: &str = "ak820_install_open";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Firmware,
+    OemRollback,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Source {
+    Bundled,
+    PreparedFile,
+}
+
+struct Preview {
+    hid: crate::hid::HidDevice,
+    plan: PreparedInstallation,
+    capture: Option<CapturedBackup>,
+    backup_root: PathBuf,
+    provenance: Option<crate::ak820_install_executor::RecoveryProvenance>,
+}
+
+enum Owner {
+    Idle,
+    Preparing {
+        rx: mpsc::Receiver<Result<Preview, String>>,
+        cancel: std::sync::Arc<AtomicBool>,
+        progress: std::sync::Arc<AtomicU32>,
+    },
+    Prepared(Preview),
+    Executing {
+        rx: mpsc::Receiver<ExecutionReport>,
+        cancel: std::sync::Arc<AtomicBool>,
+        progress: std::sync::Arc<AtomicU32>,
+        safety: std::sync::Arc<std::sync::Mutex<SafetyPaths>>,
+    },
+    Finished {
+        text: String,
+        success: bool,
+    },
+}
+
+#[derive(Clone, Default)]
+struct SafetyPaths {
+    settings_archive: Option<PathBuf>,
+    rom_snapshot: Option<PathBuf>,
+    recovery_manifest_pin: Option<String>,
+}
+impl SafetyPaths {
+    fn user_text(&self) -> String {
+        let settings = self
+            .settings_archive
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "none".into());
+        let rom = self
+            .rom_snapshot
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "none".into());
+        format!("settings archive: {settings}; full-ROM safety snapshot: {rom}")
+    }
+}
+struct ExecutionReport {
+    result: Result<crate::ak820_install_executor::InstallationResult, String>,
+    safety: SafetyPaths,
+}
+
+#[derive(Clone)]
+struct SelectedFile {
+    name: String,
+    bytes: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pick {
+    Payload,
+    Recovery,
+    BackupRoot,
+    OemRecovery,
+}
+
+struct Dialog {
+    rx: mpsc::Receiver<Option<PathBuf>>,
+    pick: Pick,
+}
+
+pub(crate) struct Runtime {
+    owner: Owner,
+    mode: Mode,
+    source: Source,
+    profile: crate::app::ak820_beta1_profiles::ProfileId,
+    prerelease_opt_in: bool,
+    start_with_defaults: bool,
+    external_payload: Option<SelectedFile>,
+    recovery: Option<SelectedFile>,
+    rollback_recovery: Option<(
+        Vec<u8>,
+        crate::ak820_install_executor::RecoveryProvenance,
+        String,
+    )>,
+    candidates: Vec<crate::device::Device>,
+    candidate_index: Option<usize>,
+    backup_root: Option<PathBuf>,
+    dialog: Option<Dialog>,
+    release_check: Option<mpsc::Receiver<Result<crate::ak820_release::ReleaseObservation, String>>>,
+    release_check_text: Option<String>,
+    candidate_scan: Option<mpsc::Receiver<Result<Vec<crate::device::Device>, String>>>,
+}
+
+impl Default for Runtime {
+    fn default() -> Self {
+        Self {
+            owner: Owner::Idle,
+            mode: Mode::Firmware,
+            source: Source::Bundled,
+            profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
+            prerelease_opt_in: false,
+            start_with_defaults: false,
+            external_payload: None,
+            recovery: None,
+            rollback_recovery: None,
+            candidates: Vec::new(),
+            candidate_index: None,
+            backup_root: None,
+            dialog: None,
+            release_check: None,
+            release_check_text: None,
+            candidate_scan: None,
+        }
+    }
+}
+
+impl Runtime {
+    pub(super) fn owns_hid(&self) -> bool {
+        matches!(
+            &self.owner,
+            Owner::Preparing { .. } | Owner::Prepared(_) | Owner::Executing { .. }
+        )
+    }
+    pub(super) fn blocks_exit(&self) -> bool {
+        self.owns_hid()
+    }
+}
+
+fn tr<'a>(ru: bool, en: &'a str, russian: &'a str) -> &'a str {
+    if ru {
+        russian
+    } else {
+        en
+    }
+}
+
+fn profile_nvm_identity(
+    profile: crate::app::ak820_beta1_profiles::ProfileId,
+) -> Result<crate::ak820_settings_backup::ImageIdentity, String> {
+    let exact = crate::app::ak820_beta1_profiles::matrix_profile(profile)
+        .settings_identity
+        .as_ref()
+        .ok_or("Selected profile has no exact settings identity")?;
+    Ok(crate::ak820_settings_backup::ImageIdentity {
+        ihx_sha256: exact.ihx_sha256.clone(),
+        code_sha256: exact.code_sha256.clone(),
+        definition_sha256: exact.definition_sha256.clone(),
+        schema: exact.nvm_schema,
+    })
+}
+
+fn build_preserved_nvm(
+    capture: &CapturedBackup,
+    target: crate::app::ak820_beta1_profiles::ProfileId,
+) -> Result<Vec<u8>, String> {
+    if capture.profile() == target {
+        return Ok(capture.nvm().to_vec());
+    }
+    let target_identity = profile_nvm_identity(target)?;
+    let target_defaults = crate::ak820_release::bundled_defaults(target)?;
+    let archive = crate::ak820_backup_files::validate_captured(capture)?;
+    let plan = crate::ak820_restore_plan::plan_restore(
+        &archive,
+        capture.nvm(),
+        target,
+        &target_identity,
+        &target_defaults,
+    )?;
+    let nvm = plan.expected_nvm().to_vec();
+    Ok(nvm)
+}
+
+fn validate_payload_nvm(payload: &[u8], expected_nvm: &[u8]) -> Result<String, String> {
+    let start = 0xc700 - crate::ak820_image_pack::APP_START;
+    let end = 0xef00 - crate::ak820_image_pack::APP_START;
+    if payload.len() != 51136 || expected_nvm.len() != end - start {
+        return Err("Prepared firmware or expected settings has an invalid exact size".into());
+    }
+    if payload[start..end] != *expected_nvm {
+        return Err(
+            "Prepared firmware settings do not match the captured or selected default settings"
+                .into(),
+        );
+    }
+    Ok(sha256(expected_nvm))
+}
+
+fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
+    if app.ak820_install_runtime.owns_hid() || app.hid_write_lifecycle_busy() || app.headless {
+        return;
+    }
+    let device = app
+        .ak820_install_runtime
+        .candidate_index
+        .and_then(|index| app.ak820_install_runtime.candidates.get(index).cloned())
+        .or_else(|| {
+            app.selected_device
+                .and_then(|index| app.device_manager.devices().get(index).cloned())
+        });
+    let Some(device) = device else {
+        app.status_msg = "Refresh candidates and select the AK820 device first".into();
+        return;
+    };
+    if !device.is_ak820() {
+        app.status_msg = "Installation requires an AK820 device".into();
+        return;
+    }
+    let mode = app.ak820_install_runtime.mode;
+    let recovery = app.ak820_install_runtime.recovery.clone();
+    let rollback_recovery = app.ak820_install_runtime.rollback_recovery.clone();
+    if mode == Mode::Firmware
+        && app.ak820_install_runtime.source == Source::PreparedFile
+        && recovery.is_none()
+    {
+        app.status_msg = "Choose the personal OEM recovery ROM first".into();
+        return;
+    }
+    if mode == Mode::OemRollback && rollback_recovery.is_none() {
+        app.status_msg = "Choose a previously recorded OEM recovery folder".into();
+        return;
+    }
+    let root = match app.ak820_install_runtime.backup_root.clone() {
+        Some(x) if x.is_dir() => x,
+        _ => {
+            app.status_msg = "Choose an existing backup folder first".into();
+            return;
+        }
+    };
+    let profile = app.ak820_install_runtime.profile;
+    let defaults = app.ak820_install_runtime.start_with_defaults;
+    let source = app.ak820_install_runtime.source;
+    let opt_in = app.ak820_install_runtime.prerelease_opt_in;
+    let observation = app.app_settings.ak820_release_observation.clone();
+    if app.hid_device.is_none() && !matches!(app.connect_state, ConnectState::Idle) {
+        app.status_msg = "Wait for current device activity to finish".into();
+        return;
+    }
+    let selected_device_matches = app
+        .selected_device
+        .and_then(|selected| app.device_manager.devices().get(selected))
+        .map(|selected| {
+            selected.path == device.path && selected.instance_token == device.instance_token
+        })
+        .unwrap_or(false);
+    let hid = if selected_device_matches {
+        app.hid_device.take()
+    } else {
+        // The existing editor session may belong to another AK820 endpoint.
+        // Drop it before opening the explicitly selected installation owner.
+        app.hid_device.take();
+        app.shared_hid_output = None;
+        None
+    };
+    app.ak820_rgb_scene_stop();
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let progress = std::sync::Arc::new(AtomicU32::new(0));
+    let worker_cancel = cancel.clone();
+    let worker_progress = progress.clone();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<Preview, String> {
+            let hid = match hid {
+                Some(h) => h,
+                None => crate::hid::HidDevice::open_for_install(&device)
+                    .map_err(|e| format!("Could not open installation owner: {e:#}"))?,
+            };
+            let capture_result = hid
+                .ak820_capture_backup(&worker_cancel, &worker_progress)
+                .map_err(|e| e.to_string());
+            let capture = match capture_result {
+                Ok(capture) => {
+                    crate::ak820_backup_files::validate_captured(&capture)?;
+                    Some(capture)
+                }
+                Err(e) if defaults || mode == Mode::OemRollback => {
+                    let _ = e;
+                    None
+                }
+                Err(e) => {
+                    return Err(format!(
+                        "Complete settings backup failed. Explicitly choose Start with defaults to continue: {e}"
+                    ));
+                }
+            };
+            if worker_cancel.load(Ordering::Acquire) {
+                return Err("Preparation cancelled before device read".into());
+            }
+            let request = if mode == Mode::OemRollback {
+                let (rom, provenance, _) =
+                    rollback_recovery.ok_or("Choose a previously recorded OEM recovery folder")?;
+                InstallRequest::OemRollback {
+                    recovery: rom,
+                    provenance,
+                }
+            } else {
+                match source {
+                    Source::PreparedFile => {
+                        let recovery = recovery.as_ref().ok_or(
+                            "Choose the personal OEM recovery ROM required for prepared payloads",
+                        )?;
+                        let payload = external
+                            .as_ref()
+                            .ok_or("Choose the prepared firmware file")?
+                            .bytes
+                            .clone();
+                        let expected = if defaults {
+                            crate::ak820_release::bundled_defaults(profile)?
+                        } else {
+                            build_preserved_nvm(capture.as_ref().ok_or("Complete saved settings are required to preserve/migrate payload settings")?, profile)?
+                        };
+                        let digest = validate_payload_nvm(&payload, &expected)?;
+                        InstallRequest::Firmware {
+                            profile,
+                            payload,
+                            recovery: recovery.bytes.clone(),
+                            settings: if defaults {
+                                InstallSettingsChoice::Defaults
+                            } else {
+                                InstallSettingsChoice::PreservedInPayload { nvm_sha256: digest }
+                            },
+                        }
+                    }
+                    Source::Bundled => {
+                        if let Some(capture) = capture.as_ref() {
+                            let source_rom = capture
+                                .files()
+                                .get("before-full-rom.bin")
+                                .ok_or("Captured full ROM is missing")?;
+                            if crate::ak820_installer::classify_snapshot(source_rom)?
+                                == crate::ak820_installer::SnapshotKind::Oem
+                                && !defaults
+                            {
+                                return Err("Initial OEM installation requires the explicit Start with defaults choice".into());
+                            }
+                            if recovery.is_none()
+                                && crate::ak820_installer::classify_snapshot(source_rom)?
+                                    != crate::ak820_installer::SnapshotKind::Oem
+                            {
+                                return Err(
+                                    "Project updates require your personal OEM recovery ROM".into(),
+                                );
+                            }
+                        }
+                        let settings = if defaults {
+                            InstallSettingsChoice::Defaults
+                        } else {
+                            let capture = capture
+                                .as_ref()
+                                .ok_or("No complete settings capture is available")?;
+                            let nvm = build_preserved_nvm(capture, profile)?;
+                            InstallSettingsChoice::PreservedInPayload {
+                                nvm_sha256: sha256(&nvm),
+                            }
+                        };
+                        InstallRequest::BundledFirmware {
+                            profile,
+                            recovery: recovery.as_ref().map(|recovery| recovery.bytes.clone()),
+                            settings,
+                        }
+                    }
+                }
+            };
+            let admission = if mode == Mode::Firmware {
+                Some(
+                    crate::ak820_release::ReleaseAdmission::bundled(profile, opt_in)?
+                        .with_observation(&observation)?,
+                )
+            } else {
+                None
+            };
+            let plan = hid
+                .ak820_prepare_install(request, admission.as_ref(), &worker_cancel)
+                .map_err(|e| format!("Installation preview rejected: {e:#}"))?;
+            if let Some(capture) = &capture {
+                let source = capture
+                    .files()
+                    .get("before-full-rom.bin")
+                    .ok_or("Captured full ROM is missing")?;
+                if sha256(source) != plan.summary().source_sha256 {
+                    return Err(
+                        "Full-ROM digest changed between settings capture and installation preview"
+                            .into(),
+                    );
+                }
+            }
+            let provenance = plan.recovery_provenance().cloned();
+            Ok(Preview {
+                hid,
+                plan,
+                capture,
+                backup_root: root,
+                provenance,
+            })
+        })();
+        let _ = tx.send(result);
+    });
+    app.ak820_install_runtime.owner = Owner::Preparing {
+        rx,
+        cancel,
+        progress,
+    };
+    app.status_msg.clear();
+}
+
+impl EntropyApp {
+    pub(super) fn poll_ak820_install(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = self.ak820_install_runtime.candidate_scan.take() {
+            match rx.try_recv() {
+                Ok(Ok(candidates)) => {
+                    self.ak820_install_runtime.candidate_index =
+                        if candidates.len() == 1 { Some(0) } else { None };
+                    self.ak820_install_runtime.candidates = candidates;
+                    self.status_msg = if self.ak820_install_runtime.candidates.is_empty() {
+                        "No supported USB installation endpoint found".into()
+                    } else {
+                        "Select the exact installation endpoint".into()
+                    };
+                }
+                Ok(Err(error)) => {
+                    self.status_msg =
+                        format!("Could not enumerate installation candidates: {error}")
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.ak820_install_runtime.candidate_scan = Some(rx);
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.status_msg = "Installation candidate scan stopped unexpectedly".into();
+                }
+            }
+        }
+        let completed = match &self.ak820_install_runtime.owner {
+            Owner::Preparing { rx, .. } => match rx.try_recv() {
+                Ok(result) => Some(Completion::Prepared(result)),
+                Err(mpsc::TryRecvError::Empty) => None,
+                Err(mpsc::TryRecvError::Disconnected) => Some(Completion::Prepared(Err(
+                    "Installation preparation worker stopped unexpectedly".into(),
+                ))),
+            },
+            Owner::Executing { rx, safety, .. } => match rx.try_recv() {
+                Ok(mut report) => {
+                    report.safety = safety.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                    Some(Completion::Executed(report))
+                }
+                Err(mpsc::TryRecvError::Empty) => None,
+                Err(mpsc::TryRecvError::Disconnected) => Some(Completion::Lost(
+                    safety.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+                )),
+            },
+            _ => None,
+        };
+        if let Some(completed) = completed {
+            match completed {
+                Completion::Prepared(Ok(preview)) => {
+                    self.ak820_install_runtime.owner = Owner::Prepared(preview)
+                }
+                Completion::Prepared(Err(error)) => self.finish_install(error, false),
+                Completion::Executed(report) => {
+                    self.persist_install_receipts(&report.safety);
+                    let result = report.result;
+                    let (text, success) = match result {
+                        Ok(result) if result.error.is_none() && result.firmware == crate::ak820_install_executor::InstallFirmwareOutcome::Verified => (format!("Firmware verified. Settings: {:?}. Safety data: {}", result.settings, report.safety.user_text()), true),
+                        Ok(result) => (format!("Installation stopped: {}. Firmware outcome: {:?}; settings outcome: {:?}. Saved safety data: {}. No retry or automatic recovery was attempted.", result.error.unwrap_or_else(|| "unknown error".into()), result.firmware, result.settings, report.safety.user_text()), false),
+                        Err(error) => (format!("Installation worker failed: {error}. Saved safety data: {}. Do not retry blindly; reconnect and verify the full image.", report.safety.user_text()), false),
+                    };
+                    self.finish_install(text, success);
+                }
+                Completion::Lost(safety) => {
+                    self.persist_install_receipts(&safety);
+                    self.finish_install(format!("Installation worker ended without a result. Saved safety data: {}. Reconnect and verify; do not retry blindly.", safety.user_text()), false);
+                }
+            }
+            ctx.request_repaint();
+        }
+        if let Owner::Executing { safety, .. } = &self.ak820_install_runtime.owner {
+            let current = safety.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            self.persist_install_receipts(&current);
+        }
+        if let Some(dialog) = &self.ak820_install_runtime.dialog {
+            match dialog.rx.try_recv() {
+                Ok(Some(path)) => {
+                    let pick = dialog.pick;
+                    self.ak820_install_runtime.dialog = None;
+                    match pick {
+                        Pick::BackupRoot => self.ak820_install_runtime.backup_root = Some(path),
+                        Pick::OemRecovery => {
+                            match crate::ak820_backup_files::read_install_recovery(
+                                &path,
+                                &self.app_settings.ak820_recovery_manifests,
+                            ) {
+                                Ok((rom, provenance)) => {
+                                    let label = path
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string();
+                                    self.ak820_install_runtime.rollback_recovery =
+                                        Some((rom, provenance, label));
+                                    self.retire_install_preview();
+                                }
+                                Err(error) => self.status_msg = error,
+                            }
+                        }
+                        Pick::Payload | Pick::Recovery => {
+                            let expected = if pick == Pick::Payload { 51136 } else { 65536 };
+                            match super::ak820_install_files::read_input_bytes(
+                                &path,
+                                expected,
+                                self.app_settings.language == crate::i18n::Language::Russian,
+                            ) {
+                                Ok(bytes) => {
+                                    let input = SelectedFile {
+                                        name: path
+                                            .file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy()
+                                            .chars()
+                                            .filter(|c| !c.is_control())
+                                            .take(72)
+                                            .collect(),
+                                        bytes,
+                                    };
+                                    if pick == Pick::Payload {
+                                        self.ak820_install_runtime.external_payload = Some(input);
+                                        self.ak820_install_runtime.source = Source::PreparedFile;
+                                    } else {
+                                        self.ak820_install_runtime.recovery = Some(input);
+                                    }
+                                    self.retire_install_preview();
+                                }
+                                Err(error) => self.status_msg = error,
+                            }
+                        }
+                    }
+                }
+                Ok(None) => self.ak820_install_runtime.dialog = None,
+                Err(mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(80))
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.ak820_install_runtime.dialog = None;
+                    self.status_msg = "File selection stopped unexpectedly".into();
+                }
+            }
+        }
+        if let Some(rx) = self.ak820_install_runtime.release_check.take() {
+            match rx.try_recv() {
+                Ok(Ok(observation)) => {
+                    self.app_settings
+                        .ak820_release_observation
+                        .apply(observation);
+                    self.ak820_install_runtime.release_check_text = Some(
+                        if self.app_settings.ak820_release_observation.blocked {
+                            "Bundled release is blocked"
+                        } else {
+                            "Release check completed"
+                        }
+                        .into(),
+                    );
+                    save_app_settings(&self.app_settings);
+                    self.ak820_install_runtime.release_check = None;
+                }
+                Ok(Err(error)) => {
+                    self.ak820_install_runtime.release_check_text = Some(error);
+                    self.ak820_install_runtime.release_check = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.ak820_install_runtime.release_check = Some(rx);
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.ak820_install_runtime.release_check_text =
+                        Some("Release check stopped unexpectedly".into());
+                    self.ak820_install_runtime.release_check = None;
+                }
+            }
+        }
+        if self.app_settings.ak820_release_observation.blocked
+            && matches!(&self.ak820_install_runtime.owner, Owner::Prepared(preview) if preview.plan.summary().action.starts_with("firmware:"))
+        {
+            self.retire_install_preview();
+            self.status_msg =
+                "Bundled firmware preview retired because the latest release check reports a block"
+                    .into();
+        }
+    }
+
+    fn finish_install(&mut self, text: String, success: bool) {
+        // Any installation result invalidates the old session, even when the
+        // executor stopped early: its identity and staged editor state are stale.
+        self.hid_device = None;
+        self.shared_hid_output = None;
+        self.connection_generation = self.connection_generation.wrapping_add(1);
+        self.selected_device = None;
+        self.keycode_picker.ak820_profile = false;
+        self.layout = None;
+        self.deferred_device_load = Default::default();
+        self.ak820_install_runtime.owner = Owner::Finished { text, success };
+        self.start_device_scan();
+    }
+
+    fn persist_install_receipts(&mut self, receipts: &SafetyPaths) {
+        if let Some(pin) = &receipts.recovery_manifest_pin {
+            if self
+                .app_settings
+                .ak820_recovery_manifests
+                .insert(pin.clone())
+            {
+                save_app_settings(&self.app_settings);
+            }
+        }
+    }
+
+    fn retire_install_preview(&mut self) {
+        if matches!(self.ak820_install_runtime.owner, Owner::Prepared(_)) {
+            self.ak820_install_runtime.owner = Owner::Idle;
+            self.connection_generation = self.connection_generation.wrapping_add(1);
+            self.selected_device = None;
+            self.start_device_scan();
+        }
+    }
+}
+
+enum Completion {
+    Prepared(Result<Preview, String>),
+    Executed(ExecutionReport),
+    Lost(SafetyPaths),
+}
+
+fn launch_execute(app: &mut EntropyApp, confirmed_pin: String) {
+    if app.ak820_install_runtime.release_check.is_some() {
+        app.status_msg = "Wait for the release status check to finish before starting".into();
+        return;
+    }
+    let firmware_action = matches!(&app.ak820_install_runtime.owner, Owner::Prepared(preview) if preview.plan.summary().action.starts_with("firmware:"));
+    let admission = if firmware_action {
+        let profile = app.ak820_install_runtime.profile;
+        let observation = &app.app_settings.ak820_release_observation;
+        match crate::ak820_release::ReleaseAdmission::bundled(
+            profile,
+            app.ak820_install_runtime.prerelease_opt_in,
+        )
+        .and_then(|admission| admission.with_observation(observation))
+        {
+            Ok(admission) => Some(admission),
+            Err(error) => {
+                app.retire_install_preview();
+                app.status_msg = error;
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let owner = std::mem::replace(&mut app.ak820_install_runtime.owner, Owner::Idle);
+    let Owner::Prepared(preview) = owner else {
+        return;
+    };
+    if confirmed_pin != preview.plan.confirmation_pin() {
+        app.ak820_install_runtime.owner = Owner::Prepared(preview);
+        return;
+    }
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let progress = std::sync::Arc::new(AtomicU32::new(0));
+    let worker_cancel = cancel.clone();
+    let worker_progress = progress.clone();
+    let safety = std::sync::Arc::new(std::sync::Mutex::new(SafetyPaths::default()));
+    let worker_safety = safety.clone();
+    let provenance = preview.provenance.clone();
+    let settings_path = app_settings_path();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
+        let snapshot_path = preview
+            .backup_root
+            .join(format!("ak820-install-before-{stamp}"));
+        let archive_path = preview
+            .backup_root
+            .join(format!("ak820-settings-before-install-{stamp}"));
+        let capture = preview.capture;
+        let result = preview
+            .hid
+            .ak820_execute_install(
+                &preview.plan,
+                admission.as_ref(),
+                &confirmed_pin,
+                &worker_cancel,
+                &worker_progress,
+                |rom| {
+                    if let Some(capture) = &capture {
+                        if capture
+                            .files()
+                            .get("before-full-rom.bin")
+                            .map(Vec::as_slice)
+                            != Some(rom)
+                        {
+                            return Err(
+                                "Fresh install source differs from captured settings backup".into(),
+                            );
+                        }
+                        crate::ak820_backup_files::publish_validated_archive(
+                            &archive_path,
+                            capture.profile(),
+                            capture.files(),
+                        )?;
+                        worker_safety
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .settings_archive = Some(archive_path.clone());
+                    }
+                    let receipt = crate::ak820_backup_files::publish_install_snapshot(
+                        &snapshot_path,
+                        rom,
+                        provenance.as_ref(),
+                    )?;
+                    worker_safety
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .rom_snapshot = Some(snapshot_path.clone());
+                    if provenance.is_some() {
+                        super::app_storage::record_ak820_recovery_manifest(
+                            &settings_path,
+                            &receipt.manifest_sha256,
+                        )?;
+                        worker_safety
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .recovery_manifest_pin = Some(receipt.manifest_sha256.clone());
+                    }
+                    Ok(())
+                },
+            )
+            .map_err(|e| format!("{e:#}"));
+        let _ = tx.send(ExecutionReport {
+            result,
+            safety: worker_safety
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        });
+    });
+    app.ak820_install_runtime.owner = Owner::Executing {
+        rx,
+        cancel,
+        progress,
+        safety,
+    };
+}
+
+fn start_release_check(runtime: &mut Runtime) {
+    if runtime.release_check.is_some() {
+        return;
+    }
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = crate::ak820_release::check_bundled_release();
+        let _ = tx.send(result);
+    });
+    runtime.release_check = Some(rx);
+    runtime.release_check_text = Some("Checking release metadata…".into());
+}
+
+fn pick(runtime: &mut Runtime, kind: Pick) {
+    if runtime.dialog.is_some() {
+        return;
+    }
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let path = if matches!(kind, Pick::BackupRoot | Pick::OemRecovery) {
+            rfd::FileDialog::new().pick_folder()
+        } else {
+            rfd::FileDialog::new().pick_file()
+        };
+        let _ = tx.send(path);
+    });
+    runtime.dialog = Some(Dialog { rx, pick: kind });
+}
+
+fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
+    let ru = app.app_settings.language == crate::i18n::Language::Russian;
+    let selected = app
+        .ak820_install_runtime
+        .candidate_index
+        .and_then(|i| app.ak820_install_runtime.candidates.get(i))
+        .or_else(|| {
+            app.selected_device
+                .and_then(|i| app.device_manager.devices().get(i))
+        })
+        .map(|d| format!("{} · {}", d.name, d.serial_number));
+    let mut retire = false;
+    let mut begin = false;
+    let mut execute = None;
+    let mut rescan = false;
+    let mut close_result = false;
+    let mut refresh_candidates = false;
+    {
+        let runtime = &mut app.ak820_install_runtime;
+        let busy = runtime.owns_hid();
+        ui.label(tr(ru, "Select the exact image and local safety inputs. Preparation reads the device; no flash write occurs until you review the preview and explicitly start.", "Выберите точный образ и локальные защитные данные. Подготовка читает устройство; запись прошивки начнётся только после проверки плана и явного запуска."));
+        ui.horizontal(|ui| {
+            if ui
+                .button(tr(
+                    ru,
+                    "Refresh install candidates",
+                    "Обновить устройства для установки",
+                ))
+                .clicked()
+            {
+                refresh_candidates = true;
+            }
+            if !runtime.candidates.is_empty() {
+                let selected = runtime
+                    .candidate_index
+                    .filter(|i| *i < runtime.candidates.len());
+                let title = selected
+                    .map(|i| {
+                        format!(
+                            "{} · {}",
+                            runtime.candidates[i].name, runtime.candidates[i].serial_number
+                        )
+                    })
+                    .unwrap_or_else(|| tr(ru, "Choose device…", "Выбрать устройство…").into());
+                egui::ComboBox::from_id_salt("ak820_install_candidate")
+                    .selected_text(title)
+                    .show_ui(ui, |ui| {
+                        for (index, device) in runtime.candidates.iter().enumerate() {
+                            if ui
+                                .selectable_value(
+                                    &mut runtime.candidate_index,
+                                    Some(index),
+                                    format!("{} · {}", device.name, device.serial_number),
+                                )
+                                .changed()
+                            {
+                                retire = true;
+                            }
+                        }
+                    });
+            }
+        });
+        ui.add_enabled_ui(!busy, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!(
+                "{}: {}",
+                tr(ru, "Device", "Устройство"),
+                selected.as_deref().unwrap_or(tr(
+                    ru,
+                    "select in device list",
+                    "выберите в списке устройств"
+                ))
+            ));
+            ui.label(format!(
+                "{}: {}",
+                tr(ru, "Backup folder", "Папка резервных копий"),
+                runtime
+                    .backup_root
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| tr(ru, "not selected", "не выбрана").into())
+            ));
+            if ui
+                .add_enabled(
+                    !busy && runtime.dialog.is_none(),
+                    egui::Button::new(tr(ru, "Choose folder…", "Выбрать папку…")),
+                )
+                .clicked()
+            {
+                pick(runtime, Pick::BackupRoot);
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr(ru, "Action", "Действие"));
+            egui::ComboBox::from_id_salt("ak820_install_mode")
+                .selected_text(match runtime.mode {
+                    Mode::Firmware => tr(ru, "Install firmware", "Установить прошивку"),
+                    Mode::OemRollback => tr(ru, "OEM rollback", "Восстановить OEM"),
+                })
+                .show_ui(ui, |ui| {
+                    if ui
+                        .selectable_value(
+                            &mut runtime.mode,
+                            Mode::Firmware,
+                            tr(ru, "Install firmware", "Установить прошивку"),
+                        )
+                        .changed()
+                    {
+                        retire = true;
+                    }
+                    if ui
+                        .selectable_value(
+                            &mut runtime.mode,
+                            Mode::OemRollback,
+                            tr(ru, "OEM rollback", "Восстановить OEM"),
+                        )
+                        .changed()
+                    {
+                        retire = true;
+                    }
+                });
+            if runtime.mode == Mode::Firmware {
+                ui.label(tr(ru, "Profile", "Профиль"));
+                egui::ComboBox::from_id_salt("ak820_install_profile")
+                    .selected_text(
+                        crate::app::ak820_beta1_profiles::profile_description(runtime.profile)
+                            .title
+                            .for_language(ru),
+                    )
+                    .show_ui(ui, |ui| {
+                        for image in crate::app::ak820_beta1_profiles::profiles() {
+                            if ui
+                                .selectable_value(
+                                    &mut runtime.profile,
+                                    image.profile,
+                                    crate::app::ak820_beta1_profiles::profile_description(
+                                        image.profile,
+                                    )
+                                    .title
+                                    .for_language(ru),
+                                )
+                                .changed()
+                            {
+                                retire = true;
+                            }
+                        }
+                    });
+            }
+        });
+        if runtime.mode == Mode::Firmware {
+            ui.horizontal(|ui| {
+                ui.label(tr(ru, "Firmware input", "Источник прошивки"));
+                if ui
+                    .selectable_value(
+                        &mut runtime.source,
+                        Source::Bundled,
+                        tr(ru, "Bundled beta2 image", "Встроенный образ beta2"),
+                    )
+                    .changed()
+                {
+                    retire = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut runtime.source,
+                        Source::PreparedFile,
+                        tr(ru, "Prepared payload file", "Подготовленный файл"),
+                    )
+                    .changed()
+                {
+                    retire = true;
+                }
+                if runtime.source == Source::PreparedFile
+                    && ui
+                        .add_enabled(
+                            !busy,
+                            egui::Button::new(
+                                runtime
+                                    .external_payload
+                                    .as_ref()
+                                    .map(|x| x.name.as_str())
+                                    .unwrap_or(tr(ru, "Choose…", "Выбрать…")),
+                            ),
+                        )
+                        .clicked()
+                {
+                    pick(runtime, Pick::Payload);
+                }
+            });
+            if ui
+                .checkbox(
+                    &mut runtime.prerelease_opt_in,
+                    tr(ru, "Allow beta prerelease", "Разрешить бета-версию"),
+                )
+                .changed()
+            {
+                retire = true;
+            }
+            if ui
+                .checkbox(
+                    &mut runtime.start_with_defaults,
+                    tr(
+                        ru,
+                        "Start with defaults (explicit)",
+                        "Начать с настроек по умолчанию (явный выбор)",
+                    ),
+                )
+                .changed()
+            {
+                retire = true;
+            }
+            ui.label(tr(
+                ru,
+                "For a first OEM installation, explicitly choose defaults. Project updates require the personal OEM reference; a prepared payload always requires it.",
+                "Для первой установки поверх OEM явно выберите настройки по умолчанию. Для обновления проекта нужна личная OEM-копия; для подготовленного файла она обязательна всегда.",
+            ));
+            ui.horizontal(|ui| {
+                ui.label(tr(
+                    ru,
+                    "Personal OEM recovery ROM (optional for first OEM install)",
+                    "Личная OEM-копия ROM (необязательна при первой установке поверх OEM)",
+                ));
+                if ui
+                    .add_enabled(
+                        !busy,
+                        egui::Button::new(
+                            runtime
+                                .recovery
+                                .as_ref()
+                                .map(|x| x.name.as_str())
+                                .unwrap_or(tr(
+                                    ru,
+                                    "Choose 65,536-byte file…",
+                                    "Выбрать файл 65 536 байт…",
+                                )),
+                        ),
+                    )
+                    .clicked()
+                {
+                    pick(runtime, Pick::Recovery);
+                }
+            });
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(tr(
+                    ru,
+                    "Previously recorded OEM recovery snapshot",
+                    "Ранее сохранённый снимок OEM",
+                ));
+                let label = runtime
+                    .rollback_recovery
+                    .as_ref()
+                    .map(|x| x.2.as_str())
+                    .unwrap_or(tr(
+                        ru,
+                        "Choose verified snapshot folder…",
+                        "Выбрать проверенную папку снимка…",
+                    ));
+                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                    pick(runtime, Pick::OemRecovery);
+                }
+            });
+            ui.label(tr(ru, "Rollback is available only from a private same-app first-capture snapshot with a recorded device and USB-port binding.", "Откат доступен только из закрытого снимка первого чтения, сохранённого этим приложением и связанного с устройством и USB-портом."));
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(
+                    !busy && runtime.release_check.is_none(),
+                    egui::Button::new(tr(ru, "Check release status", "Проверить статус выпуска")),
+                )
+                .clicked()
+            {
+                start_release_check(runtime);
+            }
+        });
+        if let Some(text) = &runtime.release_check_text {
+            ui.label(text);
+        }
+        ui.label(tr(ru, "Preserving settings requires a complete verified capture. If it fails, explicitly choose defaults and prepare again; there is no silent fallback.", "Для сохранения настроек нужно полное проверенное чтение. При ошибке явно выберите настройки по умолчанию и подготовьте план повторно."));
+        });
+        match &runtime.owner {
+            Owner::Idle => {
+                if ui
+                    .add_enabled(
+                        matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none(),
+                        egui::Button::new(tr(ru, "Prepare preview", "Подготовить план")),
+                    )
+                    .clicked()
+                {
+                    begin = true;
+                }
+            }
+            Owner::Preparing {
+                cancel, progress, ..
+            } => {
+                ui.spinner();
+                ui.label(format!(
+                    "{} {}%",
+                    tr(
+                        ru,
+                        "Reading and validating device…",
+                        "Чтение и проверка устройства…"
+                    ),
+                    progress.load(Ordering::Acquire)
+                ));
+                if ui
+                    .button(tr(ru, "Cancel preparation", "Отменить подготовку"))
+                    .clicked()
+                {
+                    cancel.store(true, Ordering::Release);
+                }
+            }
+            Owner::Prepared(preview) => {
+                let summary = preview.plan.summary();
+                ui.separator();
+                ui.strong(tr(
+                    ru,
+                    "Review installation plan",
+                    "Проверьте план установки",
+                ));
+                ui.label(format!(
+                    "{}: {}",
+                    tr(ru, "Action", "Действие"),
+                    summary.action
+                ));
+                ui.label(format!(
+                    "{}: {}",
+                    tr(ru, "Source ROM SHA-256", "SHA-256 исходного ROM"),
+                    summary.source_sha256
+                ));
+                ui.label(format!(
+                    "{}: {}",
+                    tr(ru, "Payload SHA-256", "SHA-256 прошивки"),
+                    summary.payload_sha256
+                ));
+                ui.label(format!(
+                    "{}: {}",
+                    tr(ru, "Expected ROM SHA-256", "SHA-256 ожидаемого ROM"),
+                    summary.expected_sha256
+                ));
+                ui.label(format!(
+                    "{}: {}",
+                    tr(ru, "Settings", "Настройки"),
+                    if preview.plan.summary().action.starts_with("oem-") {
+                        tr(ru, "OEM settings", "Настройки OEM")
+                    } else if preview.capture.is_some() && !runtime.start_with_defaults {
+                        tr(ru, "preserved/migrated", "сохранены/перенесены")
+                    } else {
+                        tr(ru, "target defaults", "по умолчанию")
+                    }
+                ));
+                ui.label(if summary.physical_hold {
+                    tr(
+                        ru,
+                        "A fresh Esc + Left Control hold for 3 seconds will be requested.",
+                        "Потребуется новое удержание Esc + Left Control в течение 3 секунд.",
+                    )
+                } else {
+                    tr(
+                        ru,
+                        "No project-image hold is required for this source.",
+                        "Для этого образа удержание подтверждения не требуется.",
+                    )
+                });
+                ui.colored_label(ui.visuals().warn_fg_color, tr(ru, "Keep the keyboard connected and on external power. An error stops the one attempt; no retry, reset, or automatic restore follows.", "Не отключайте клавиатуру и используйте внешнее питание. Ошибка останавливает единственную попытку; автоматических повтора, сброса и восстановления не будет."));
+                if preview.plan.recovery_provenance().is_none()
+                    && preview.plan.summary().action.starts_with("firmware:")
+                {
+                    ui.colored_label(
+                        ui.visuals().warn_fg_color,
+                        tr(
+                            ru,
+                            "This device has no unique serial binding. A full safety snapshot will be saved, but this app cannot offer a verified OEM rollback for it.",
+                            "У устройства нет уникального серийного номера. Полный защитный снимок будет сохранён, но приложение не сможет предложить проверенный откат к OEM для этого устройства.",
+                        ),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            runtime.release_check.is_none(),
+                            egui::Button::new(tr(ru, "Start flashing", "Начать прошивку")),
+                        )
+                        .clicked()
+                    {
+                        execute = Some(summary.confirmation_pin.clone());
+                    }
+                    if ui
+                        .button(tr(ru, "Retire preview", "Закрыть план"))
+                        .clicked()
+                    {
+                        retire = true;
+                    }
+                });
+            }
+            Owner::Executing {
+                cancel, progress, ..
+            } => {
+                ui.separator();
+                ui.strong(tr(
+                    ru,
+                    "Installation owns the device",
+                    "Установка владеет устройством",
+                ));
+                let value = progress.load(Ordering::Acquire);
+                ui.add(egui::ProgressBar::new(value as f32 / 100.0).show_percentage());
+                if value < 20
+                    && ui
+                        .button(tr(ru, "Cancel before erase", "Отменить до стирания"))
+                        .clicked()
+                {
+                    cancel.store(true, Ordering::Release);
+                }
+                if value >= 20 {
+                    ui.label(tr(
+                        ru,
+                        "Erase/write started; cancellation is no longer effective.",
+                        "Стирание/запись начались; отмена больше не действует.",
+                    ));
+                }
+            }
+            Owner::Finished { text, success } => {
+                ui.separator();
+                ui.colored_label(
+                    if *success {
+                        ui.visuals().text_color()
+                    } else {
+                        ui.visuals().error_fg_color
+                    },
+                    text,
+                );
+                if ui
+                    .button(tr(
+                        ru,
+                        "Close result and rescan",
+                        "Закрыть результат и проверить снова",
+                    ))
+                    .clicked()
+                {
+                    close_result = true;
+                    rescan = true;
+                }
+            }
+        }
+    }
+    if close_result {
+        app.ak820_install_runtime.owner = Owner::Idle;
+    }
+    if retire {
+        app.retire_install_preview();
+    }
+    if let Some(pin) = execute {
+        launch_execute(app, pin);
+    }
+    if begin {
+        let payload = app.ak820_install_runtime.external_payload.clone();
+        start_prepare(app, payload);
+    }
+    if rescan {
+        app.start_device_scan();
+    }
+    if refresh_candidates {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = crate::hid::HidDevice::ak820_install_candidates()
+                .map_err(|error| format!("{error:#}"));
+            let _ = tx.send(result);
+        });
+        app.ak820_install_runtime.candidate_scan = Some(rx);
+        app.status_msg = "Scanning USB installation endpoints…".into();
+    }
+}
+
+pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
+    if !ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false)) {
+        return;
+    }
+    app.poll_ak820_install(ctx);
+    let ru = app.app_settings.language == crate::i18n::Language::Russian;
+    let active = app.ak820_install_runtime.owns_hid();
+    let mut open = true;
+    egui::Window::new(tr(
+        ru,
+        "AK820 firmware installation",
+        "Установка прошивки AK820",
+    ))
+    .id(egui::Id::new("ak820_install_window"))
+    .open(&mut open)
+    .resizable(true)
+    .default_size(egui::vec2(760.0, 450.0))
+    .max_width((ctx.content_rect().width() - 24.0).max(280.0))
+    .max_height((ctx.content_rect().height() - 32.0).max(120.0))
+    .vscroll(true)
+    .show(ctx, |ui| draw(app, ui));
+    if !open && !active {
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn prepared_payload_settings_must_equal_the_derived_settings_bytes() {
+        let expected = crate::ak820_release::bundled_defaults(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+        ).unwrap();
+        // This is only a comparison model, not a catalog-admitted image.
+        let mut payload = vec![0; 51136];
+        let start = 0xc700 - crate::ak820_image_pack::APP_START;
+        payload[start..start + expected.len()].copy_from_slice(&expected);
+        assert_eq!(validate_payload_nvm(&payload, &expected).unwrap(), sha256(&expected));
+        payload[start + 0x40] ^= 1;
+        assert!(validate_payload_nvm(&payload, &expected).is_err());
+        assert!(validate_payload_nvm(&payload[..51135], &expected).is_err());
+        assert!(validate_payload_nvm(&payload, &expected[..expected.len() - 1]).is_err());
+    }
+
+    #[test]
+    fn owner_gate_blocks_every_live_hid_phase_but_not_terminal_result() {
+        let (_tx, rx) = mpsc::channel();
+        let mut runtime = Runtime::default();
+        assert!(!runtime.owns_hid());
+        runtime.owner = Owner::Preparing {
+            rx,
+            cancel: Default::default(),
+            progress: Default::default(),
+        };
+        assert!(runtime.owns_hid() && runtime.blocks_exit());
+        runtime.owner = Owner::Idle;
+        assert!(!runtime.owns_hid());
+    }
+    #[test]
+    fn install_view_is_localized_and_demo_never_opens_hid() {
+        for language in [
+            crate::i18n::Language::English,
+            crate::i18n::Language::Russian,
+        ] {
+            let ctx = egui::Context::default();
+            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
+            for _ in 0..3 {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(800.0, 500.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| show(&mut app, ctx),
+                );
+            }
+            let rect = ctx
+                .memory(|m| m.area_rect(egui::Id::new("ak820_install_window")))
+                .unwrap();
+            assert!(rect.width() <= 800.0 && rect.height() <= 500.0);
+            assert!(app.hid_device.is_none());
+            assert!(!app.ak820_install_runtime.owns_hid());
+        }
+    }
+}

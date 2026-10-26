@@ -4,15 +4,19 @@ mod action_icons;
 mod ak820;
 mod ak820_backup_capture;
 mod ak820_backup_files;
+mod ak820_help;
 mod ak820_image_pack;
+mod ak820_install_executor;
 mod ak820_install_plan;
 mod ak820_installer;
 mod ak820_loader;
+mod ak820_offline_project;
+mod ak820_os_indicator;
+mod ak820_release;
 mod ak820_restore_plan;
 mod ak820_rgb;
 mod ak820_rgb_compositor;
 mod ak820_rgb_scheduler;
-mod ak820_offline_project;
 mod ak820_settings_backup;
 mod ak820_settings_model;
 mod ak820_typed_storage;
@@ -25,7 +29,6 @@ mod device;
 mod diagnostics;
 mod firmware;
 mod firmware_builtin_icons;
-mod ak820_help;
 #[cfg(not(target_arch = "wasm32"))]
 mod hid;
 #[cfg(not(target_arch = "wasm32"))]
@@ -58,6 +61,31 @@ const APP_TITLE: &str = "AK Configurator";
 const APP_ID: &str = "ak-configurator";
 const SINGLE_INSTANCE_ENV: &str = "AK_CONFIGURATOR_SINGLE_INSTANCE";
 const LAUNCH_MINIMIZED_ARG: &str = "--minimized";
+#[cfg(not(target_arch = "wasm32"))]
+static BACKGROUND_HELPER_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn background_helper_allowed() -> bool {
+    single_instance_enabled() && !std::env::args_os().any(|arg| arg == "--demo-ak820")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn request_background_helper() {
+    if background_helper_allowed() {
+        BACKGROUND_HELPER_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn background_helper_requested() -> bool {
+    BACKGROUND_HELPER_REQUESTED.load(std::sync::atomic::Ordering::Acquire)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn cancel_background_helper_request() {
+    BACKGROUND_HELPER_REQUESTED.store(false, std::sync::atomic::Ordering::Release);
+}
 
 #[cfg(target_os = "windows")]
 struct SingleInstanceGuard(*mut core::ffi::c_void);
@@ -318,7 +346,7 @@ fn main() -> eframe::Result<()> {
     };
 
     diagnostics::init(diagnostics::settings_file_enabled());
-    let launch_minimized = launch_minimized_from_args(std::env::args_os());
+    let mut launch_minimized = launch_minimized_from_args(std::env::args_os());
 
     // A headless export shares the single-instance lock with the GUI: two
     // processes speaking Vial to one keyboard would interleave requests.
@@ -357,6 +385,36 @@ fn main() -> eframe::Result<()> {
     #[cfg(target_os = "macos")]
     hid::initialize_macos_hid_on_main_thread();
 
+    // Autostart can enter the opted-in helper without creating a renderer or
+    // loading GUI fonts. The same process retains the single-instance lock.
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::args_os().any(|a| a == "--ak820-helper")
+        || (launch_minimized && app::background_helper_enabled() && background_helper_allowed())
+    {
+        if !background_helper_allowed() {
+            return Ok(());
+        }
+        if matches!(app::run_background_helper(), app::HelperExit::Disabled) {
+            return Ok(());
+        }
+        launch_minimized = false;
+    }
+
+    loop {
+        run_native_gui(launch_minimized)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if BACKGROUND_HELPER_REQUESTED.swap(false, std::sync::atomic::Ordering::AcqRel)
+            && background_helper_allowed()
+            && matches!(app::run_background_helper(), app::HelperExit::OpenInterface)
+        {
+            launch_minimized = false;
+            continue;
+        }
+        return Ok(());
+    }
+}
+
+fn run_native_gui(launch_minimized: bool) -> eframe::Result {
     let viewport = egui::ViewportBuilder::default()
         .with_title(APP_TITLE)
         .with_app_id(APP_ID)
@@ -370,6 +428,9 @@ fn main() -> eframe::Result<()> {
         viewport,
         persistence_path: Some(eframe_persistence_path()),
         centered: true,
+        // eframe reuses its native event loop but drops the app, windows and
+        // renderer before returning. Only the helper remains between opens.
+        run_and_return: true,
         ..Default::default()
     };
 

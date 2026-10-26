@@ -13,10 +13,17 @@ pub(super) struct BackupLocation {
 }
 
 #[derive(Clone)]
+enum RestoreSource {
+    Archive {
+        data: LoadedBackup,
+        location: BackupLocation,
+    },
+    Defaults(crate::app::ak820_beta1_profiles::ProfileId),
+}
+#[derive(Clone)]
 pub(super) struct PreparedRestore {
     plan: Arc<RestorePlan>,
-    source: LoadedBackup,
-    location: BackupLocation,
+    source: RestoreSource,
     safety_path: PathBuf,
     saved: Arc<std::sync::Mutex<Option<BackupLocation>>>,
 }
@@ -46,9 +53,38 @@ impl PreparedRestore {
         };
         Ok(Self {
             plan,
-            source,
-            location,
+            source: RestoreSource::Archive {
+                data: source,
+                location,
+            },
             safety_path: backup_root.join(name),
+            saved: Default::default(),
+        })
+    }
+
+    pub(super) fn factory_defaults(
+        plan: Arc<RestorePlan>,
+        profile: crate::app::ak820_beta1_profiles::ProfileId,
+        backup_root: &std::path::Path,
+    ) -> Result<Self, String> {
+        let checked = crate::ak820_restore_plan::plan_factory_reset(
+            profile,
+            plan.target(),
+            plan.before_nvm(),
+        )?;
+        if checked.expected_nvm() != plan.expected_nvm()
+            || checked.steps() != plan.steps()
+            || plan.steps().is_empty()
+        {
+            return Err("Factory reset plan differs or no changes are needed".into());
+        }
+        Ok(Self {
+            plan,
+            source: RestoreSource::Defaults(profile),
+            safety_path: backup_root.join(format!(
+                "ak820-before-reset-{}",
+                chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ")
+            )),
             saved: Default::default(),
         })
     }
@@ -70,16 +106,33 @@ impl PreparedRestore {
             cancel,
             progress,
             || {
-                let reopened = files::read_backup_auto(
-                    &self.location.path,
-                    Some(&self.location.manifest_sha256),
-                )
-                .map_err(anyhow::Error::msg)?;
-                anyhow::ensure!(
-                    reopened.archive().source == self.source.archive().source
-                        && reopened.files() == self.source.files(),
-                    "Restore source changed since preview"
-                );
+                match &self.source {
+                    RestoreSource::Archive { data, location } => {
+                        let reopened = files::read_backup_auto(
+                            &location.path,
+                            Some(&location.manifest_sha256),
+                        )
+                        .map_err(anyhow::Error::msg)?;
+                        anyhow::ensure!(
+                            reopened.archive().source == data.archive().source
+                                && reopened.files() == data.files(),
+                            "Restore source changed since preview"
+                        );
+                    }
+                    RestoreSource::Defaults(profile) => {
+                        let checked = crate::ak820_restore_plan::plan_factory_reset(
+                            *profile,
+                            self.plan.target(),
+                            self.plan.before_nvm(),
+                        )
+                        .map_err(anyhow::Error::msg)?;
+                        anyhow::ensure!(
+                            checked.expected_nvm() == self.plan.expected_nvm()
+                                && checked.steps() == self.plan.steps(),
+                            "Reset defaults changed since preview"
+                        );
+                    }
+                }
                 Ok(())
             },
             |captured| {

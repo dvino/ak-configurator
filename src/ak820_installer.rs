@@ -112,7 +112,10 @@ fn verify_exact_readback(rom: &[u8], expected: &[u8]) -> BackupResult<()> {
     }
     Ok(())
 }
-fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
+pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
+    if rom.len() != 65536 {
+        return Err("Snapshot must contain exactly 65536 bytes".into());
+    }
     if validate_native_revision(rom).is_ok() {
         return Ok(SnapshotKind::Oem);
     }
@@ -172,7 +175,9 @@ mod tests {
                 .is_err());
             }
         }
-        assert!(classify_snapshot(&[0; 65536]).is_err());
+        for size in [0, 1, 0xc700, 65535, 65536, 65537] {
+            assert!(classify_snapshot(&vec![0; size]).is_err());
+        }
     }
     #[test]
     fn strict_readback_covers_every_region_and_rejects_partial_reads() {

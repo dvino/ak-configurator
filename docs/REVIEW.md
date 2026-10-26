@@ -2,6 +2,51 @@
 
 # Desktop adaptation and review
 
+## Native installation, reset and OS helper — 2026-10-26
+
+This continuation starts at `1c3dc1878e2f19e3abcd16c4b0a690a420b33796` on `desktop-dev`. Application version remains `0.1.0-beta.2`, with the exact AK820 `v0.6.0-beta.2` target. Firmware code, published catalogs, image identities and upstream Entropy history are unchanged. Twenty public IHX/map files from the pinned release are bundled and checked against its manifest; no private OEM data is included. Git attributes preserve exact firmware bytes across platform line-ending settings; upstream SDCC map padding is retained.
+
+The native installer now owns preparation, an immutable preview and one complete attempt through the existing HID helper. It verifies a fresh complete source, release admission, prepared settings and a durable safety snapshot before erase, requires the source-specific fresh confirmation, retains the physical-port lease across loader transitions, and compares the complete ROM after reconnect. Cancellation ends at erase. Firmware and settings outcomes are separate, and saved backup paths survive errors and lost workers. Defaults are explicit; supported preservation/migration must match the source-derived NVM exactly. The first bundled OEM installation can use its exact verified fresh OEM capture locally; project updates and manually prepared payloads still require a supported personal OEM reference. An invalid supplied reference never falls back silently.
+
+OEM rollback requires a locally recorded first-capture manifest and matching nonempty serial/USB-port binding. The record is atomically published, synced and reread before erase; ordinary settings saves retain worker-added records. Missing ownership evidence blocks rollback. Backup inspection adds a default-settings reset through the guarded restore executor and separately confirmed, digest-pinned deletion of only the validated archive files. Reset preserves inactive/reserved bytes. A filesystem error can leave a partial deletion and is reported without recursion or retry.
+
+The opt-in FD02 layout helper maps EN/RU to normal/off/on/breathing, sends bounded volatile heartbeats and yields the single HID owner to other work. Unknown layouts release the override; failures latch until a new concrete session. `--ak820-helper` and opted-in minimized startup avoid creating a GUI. Normal close releases the app/renderer and enters the helper; reopening creates the GUI in the same process and explicit Quit exits. Global tray callbacks on Windows/macOS use a current-GUI relay so they retain no closed Context/HWND. Application updates now refer to AK Configurator and remain user initiated. Portable candidates use Linux `.tar.gz`, Windows `.zip`, and macOS `.app.zip`; the workflow verifies and retains all six artifacts without publishing a release.
+
+### Independent findings and closure
+
+Independent reviewers inspected code, firmware references, matching EN/RU documents and the recorded evidence. Corrections include:
+
+- Prepared-file preservation previously trusted the selected file's own settings digest. Both UI and engine now require the independently derived source/target settings bytes; malformed length and mismatching bytes have regressions.
+- A newly blocked release could leave a prepared preview executable. Pending checks now prevent Start, blocked observations retire previews, and execution requires renewed admission. Authoritative changed-release evidence is retained even when another API asset lacks a digest.
+- Failures after snapshot publication could hide saved paths. Both settings and ROM references survive all terminal outcomes. First-OEM ownership publication is synchronous and durable before erase, and stale preference saves cannot discard its pin.
+- SDCC maps truncate some unused long names. Those collisions no longer reject the ten public maps; every symbol consumed by the packer must still be unambiguous. The default NVM for all ten profiles matches independently derived public reference hashes.
+- A first OEM installation unnecessarily required a preexisting dump. The bundled request now accepts the exact fresh validated OEM capture only; project sources and invalid supplied inputs retain strict rejection.
+- The proposed tray cleanup used `set_event_handler(None)`, which the pinned crates' `OnceCell` cannot apply after registration. A process-once handler and cleared current-GUI relay replace it. Exact isolated Windows/macOS compilation and a fresh independent source pass cover this correction.
+
+### Verification
+
+| Check | Result and scope |
+| --- | --- |
+| Full sequential offline suite (`test-full-final.log`) | **1742 passed, 0 failed, 14 ignored, 0 filtered**, 675.77 s. Device/manual checks remain ignored. The unchanged executable ran from a traversable temporary path so the private-directory test could use its unprivileged child. |
+| Final focused AK820 suite (`test-ak820-last.log`) | **174 passed, 0 failed, 0 ignored**, 18.88 s, including private-directory UID-child checks. This executable includes the final platform-only tray relay correction and the additional prepared-settings comparison regression. |
+| Python workflow/package checks (`test-python-last.log`) | **26 tests: 25 passed, 1 skipped**, 29.183 s. The existing skipped case requires a native DMG. Six-platform package tests use synthetic executable headers and do not establish target execution. |
+| Native Linux build (`build-native-final.log`) | `cargo build --locked --offline` passed on Ubuntu 24.04 x86_64 with Rust 1.97.0, in **19.69 s**, development profile with debug information and incremental compilation disabled; **136 warnings**. This is not a new optimized release build. |
+| Platform adapter checks | Isolated current Windows GNU and macOS arm64 physical-port/ownership typechecks passed; Windows includes the current backup deletion module. Exact current tray relay methods also compiled on both targets against pinned `tray-icon 0.22.2`, `muda 0.17.2` and `egui 0.34.3`. Parent types are stubbed; these are not full-app builds, links or platform runtime tests. |
+| Native demo UI | The native binary ran in isolated Xvfb with `--demo-ak820`. RU/EN installer controls and first-OEM/defaults guidance fit at **800 × 500**. Demo discovery guards and absence of HID/USB file descriptors were checked. Ordinary `WM_DELETE_WINDOW` closed the app. |
+| No-device GUI/helper lifecycle | In an isolated profile with no hidraw nodes or sysfs HID class, explicit helper startup created no window. Two open/ordinary-close cycles retained the same process and recreated/released the GUI. Disabling the helper preference ended it successfully. This checks Linux process/window behavior without a device, not physical LED behavior or resource qualification. |
+| Real Linux trial archive | A development-binary `.tar.gz` was packaged with `--allow-dirty`. All **39 members**, including **20 public firmware files**, and internal/outer SHA256 values were checked. Its manifest explicitly records dirty trial provenance; no published candidate is claimed. |
+| Localization, documentation and whitespace | `scripts/check_i18n.py`, current relative documentation links and `git diff --check` passed. EN/RU installation commands match archive layouts; shell examples passed syntax checks. PowerShell examples were not run on Windows. A `core.autocrlf=true` checkout preserved all 26 pinned firmware files byte for byte. |
+
+Full-suite executable SHA256: `3895f002178eb913adc57af3b90426293a82ce9e67e480da7dbd6cc4bebdd83c`. Final focused executable: `93978d4063a63e496699ce6097c02d4e64ae497db67ff594500af32f21db0f7f`. The broad run precedes only the Windows/macOS-only tray correction and one added pure regression; Linux production behavior is unchanged by that delta. Native UI/helper binary: `8fd66e041c97fcd974b1b211089c283f54fac87f092c747e0ea8f4fbbcb83ee6`.
+
+Initial restricted-sandbox UID-child execution and Xvfb socket binding failed because of the execution environment. The unchanged offline test executables were copied to a traversable temporary path and run with the unprivileged child supported; virtual-display checks used an isolated local display with the required socket permission. An initial helper screenshot attempted to capture a not-yet-visible window; the completed lifecycle check waits for a visible window. No test assertion or source ignore was weakened.
+
+### Remaining qualification
+
+No keyboard setting write, reset, loader transition, erase, flash or OEM rollback was performed. A positive released packed-image/full-ROM fixture still needs unavailable private OEM erase-helper bytes; public defaults and synthetic transport models do not substitute for it. Actual port/serial behavior, physical hold, flash/retention/readback, minimum OS versions, timing, resource use, complete six-target builds/runtime, signing and browser work remain separate gates. Latest-stable/history browsing and arbitrary custom firmware are outside the pinned beta2 admission path. No push, tag or release publication occurred.
+
+Final independent integration acceptance: approved for a local commit and cumulative Git bundle from `c207ad1`, with reviewed staged patch SHA256 `c180191aeb69b02b133c1455b4844f459899c4ff634e5a3f7baa86adca32af0e`; this acceptance covers source handoff and does not qualify hardware, release publication or full platform runtime.
+
 ## Guarded restore and desktop integration — 2026-10-26
 
 This checkpoint starts at `bbd18ef6bfeb86422e7696d69701d3fa43f203f4` on `desktop-dev`. Application version remains `0.1.0-beta.2`; firmware target remains AK820 `v0.6.0-beta.2`. No firmware catalog, archive identity, or release version was changed.

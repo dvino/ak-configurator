@@ -2,11 +2,33 @@
 
 use super::*;
 
+// Pinned tray-icon/muda handlers are stored in OnceCell and cannot be
+// replaced or cleared. Their process-lifetime closures therefore own no GUI.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+struct TrayGui {
+    context: egui::Context,
+    #[cfg(target_os = "windows")]
+    windows_hwnd: Option<isize>,
+}
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+static TRAY_GUI: std::sync::Mutex<Option<TrayGui>> = std::sync::Mutex::new(None);
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+static TRAY_HANDLERS: std::sync::Once = std::sync::Once::new();
+
+const AUTOSTART_WINDOWS_VALUE: &str = "AK Configurator";
+const AUTOSTART_LINUX_FILE: &str = "ak-configurator.desktop";
+const AUTOSTART_MACOS_FILE: &str = "com.dvino.ak-configurator.plist";
+const AUTOSTART_MACOS_LABEL: &str = "com.dvino.ak-configurator";
+
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
 fn should_keep_vial_unlock_visible(unlock_open: bool, unlock_polling: bool) -> bool {
     unlock_open || unlock_polling
+}
+
+fn should_handoff_close_to_helper(enabled: bool, allowed: bool, explicit_quit: bool) -> bool {
+    enabled && allowed && !explicit_quit
 }
 
 impl EntropyApp {
@@ -29,6 +51,17 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn defer_exit_until_hid_write_returns(&mut self, ctx: &egui::Context) -> bool {
+        if self.ak820_install_runtime.blocks_exit() {
+            self.exit_after_hid_write = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Закройте или отмените план установки после безопасного завершения операции.".into()
+            } else {
+                "Close or retire the installation plan after the operation safely finishes.".into()
+            };
+            ctx.request_repaint_after(std::time::Duration::from_millis(40));
+            return true;
+        }
         if !self.hid_write_lifecycle_busy() && !self.deferred_exit_has_pending_hid_writes() {
             return false;
         }
@@ -223,6 +256,19 @@ impl EntropyApp {
             return;
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        if should_handoff_close_to_helper(
+            crate::app::background_helper_enabled(),
+            crate::background_helper_allowed(),
+            self.force_close_requested,
+        ) {
+            if self.defer_exit_until_hid_write_returns(ctx) {
+                return;
+            }
+            crate::request_background_helper();
+            return;
+        }
+
         if self.app_settings.minimize_to_tray_on_close
             || matches!(
                 self.app_settings.close_to_tray_behavior,
@@ -257,11 +303,11 @@ impl EntropyApp {
         }
 
         #[cfg(target_os = "linux")]
-        let background_status = "Entropy is running in background";
+        let background_status = "AK Configurator is running in background";
         #[cfg(target_os = "macos")]
-        let background_status = "Entropy is running in the menu bar";
+        let background_status = "AK Configurator is running in the menu bar";
         #[cfg(all(not(target_os = "linux"), not(target_os = "macos")))]
-        let background_status = "Entropy is running in the tray";
+        let background_status = "AK Configurator is running in the tray";
 
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         self.ensure_tray_icon(ctx);
@@ -590,7 +636,7 @@ impl EntropyApp {
                         "add",
                         r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
                         "/v",
-                        "Entropy",
+                        AUTOSTART_WINDOWS_VALUE,
                         "/t",
                         "REG_SZ",
                         "/d",
@@ -604,7 +650,7 @@ impl EntropyApp {
                         "delete",
                         r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
                         "/v",
-                        "Entropy",
+                        AUTOSTART_WINDOWS_VALUE,
                         "/f",
                     ])
                     .status()
@@ -616,7 +662,7 @@ impl EntropyApp {
             let Some(autostart_dir) = dirs::config_dir().map(|dir| dir.join("autostart")) else {
                 return false;
             };
-            let desktop_path = autostart_dir.join("entropy.desktop");
+            let desktop_path = autostart_dir.join(AUTOSTART_LINUX_FILE);
             if !enabled {
                 return match std::fs::remove_file(&desktop_path) {
                     Ok(()) => true,
@@ -646,7 +692,7 @@ impl EntropyApp {
                 launch_minimized,
             );
             let desktop_entry = format!(
-                "[Desktop Entry]\nType=Application\nName=Entropy\nComment=Modern app for programmable keyboards and input devices\nExec={exec}\nTerminal=false\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\n"
+                "[Desktop Entry]\nType=Application\nName=AK Configurator\nComment=AK820 keyboard configuration\nExec={exec}\nTerminal=false\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\n"
             );
             if let Err(e) = std::fs::write(&desktop_path, desktop_entry) {
                 log::warn!("failed to write autostart entry: {e}");
@@ -661,7 +707,7 @@ impl EntropyApp {
             else {
                 return false;
             };
-            let plist_path = launch_agents_dir.join("com.ergohaven.entropy.plist");
+            let plist_path = launch_agents_dir.join(AUTOSTART_MACOS_FILE);
             if !enabled {
                 return match std::fs::remove_file(&plist_path) {
                     Ok(()) => true,
@@ -699,71 +745,86 @@ impl EntropyApp {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(super) fn ensure_tray_icon(&mut self, ctx: &egui::Context) {
+        *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = Some(TrayGui {
+            context: ctx.clone(),
+            #[cfg(target_os = "windows")]
+            windows_hwnd: self.windows_hwnd,
+        });
         if self.tray_icon.is_some() {
             return;
         }
         let Some(icon) = crate::app_icon::tray_icon(32) else {
             return;
         };
-        let ctx_for_handler = ctx.clone();
-        #[cfg(target_os = "windows")]
-        let hwnd_for_handler = self.windows_hwnd;
-        tray_icon::TrayIconEvent::set_event_handler(Some(move |event| {
-            use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-            match event {
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                }
-                | TrayIconEvent::DoubleClick {
-                    button: MouseButton::Left,
-                    ..
-                } => {
-                    TRAY_RESTORE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    #[cfg(target_os = "windows")]
-                    if let Some(hwnd) = hwnd_for_handler {
-                        unsafe {
-                            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                                SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
-                            };
-                            let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
-                            ShowWindow(hwnd, SW_SHOW);
-                            ShowWindow(hwnd, SW_RESTORE);
-                            SetForegroundWindow(hwnd);
+        TRAY_HANDLERS.call_once(|| {
+            tray_icon::TrayIconEvent::set_event_handler(Some(|event| {
+                use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+                match event {
+                    TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    }
+                    | TrayIconEvent::DoubleClick {
+                        button: MouseButton::Left,
+                        ..
+                    } => {
+                        let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
+                        let Some(gui) = relay.as_ref() else {
+                            return;
+                        };
+                        TRAY_RESTORE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        #[cfg(target_os = "windows")]
+                        if let Some(hwnd) = gui.windows_hwnd {
+                            unsafe {
+                                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                                    SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+                                };
+                                let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+                                ShowWindow(hwnd, SW_SHOW);
+                                ShowWindow(hwnd, SW_RESTORE);
+                                SetForegroundWindow(hwnd);
+                            }
                         }
+                        gui.context
+                            .send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                        gui.context
+                            .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                        gui.context.send_viewport_cmd(egui::ViewportCommand::Focus);
+                        gui.context.request_repaint();
                     }
-                    ctx_for_handler.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx_for_handler.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                    ctx_for_handler.send_viewport_cmd(egui::ViewportCommand::Focus);
-                    ctx_for_handler.request_repaint();
+                    _ => {}
                 }
-                _ => {}
-            }
-        }));
-        let ctx_for_menu = ctx.clone();
-        #[cfg(target_os = "windows")]
-        let hwnd_for_menu = self.windows_hwnd;
-        tray_icon::menu::MenuEvent::set_event_handler(Some(
-            move |event: tray_icon::menu::MenuEvent| {
-                if event.id == "entropy_tray_quit" {
-                    TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    #[cfg(target_os = "windows")]
-                    if let Some(hwnd) = hwnd_for_menu {
-                        request_windows_window_close_from_tray(hwnd);
+            }));
+            tray_icon::menu::MenuEvent::set_event_handler(Some(
+                |event: tray_icon::menu::MenuEvent| {
+                    if event.id == "entropy_tray_quit" {
+                        let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
+                        let Some(gui) = relay.as_ref() else {
+                            return;
+                        };
+                        TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        #[cfg(target_os = "windows")]
+                        if let Some(hwnd) = gui.windows_hwnd {
+                            request_windows_window_close_from_tray(hwnd);
+                        }
+                        gui.context.request_repaint();
                     }
-                    ctx_for_menu.request_repaint();
-                }
-            },
-        ));
+                },
+            ));
+        });
         let tray_menu = tray_icon::menu::Menu::new();
-        let quit_item =
-            tray_icon::menu::MenuItem::with_id("entropy_tray_quit", "Quit Entropy", true, None);
+        let quit_item = tray_icon::menu::MenuItem::with_id(
+            "entropy_tray_quit",
+            "Quit AK Configurator",
+            true,
+            None,
+        );
         if let Err(e) = tray_menu.append(&quit_item) {
             log::warn!("failed to create tray menu: {e}");
         }
         match tray_icon::TrayIconBuilder::new()
-            .with_tooltip("Entropy")
+            .with_tooltip("AK Configurator")
             .with_menu(Box::new(tray_menu))
             .with_menu_on_left_click(false)
             .with_menu_on_right_click(true)
@@ -776,10 +837,21 @@ impl EntropyApp {
     }
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub(super) fn release_tray_before_gui_drop(&mut self) {
+        // Clearing the relay also waits for any current callback to finish;
+        // process-global handlers retain neither the old Context nor its HWND.
+        *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.tray_icon = None;
+        TRAY_RESTORE_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+        TRAY_QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn consume_tray_quit_request(&mut self) -> bool {
         if !TRAY_QUIT_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             return false;
         }
+        crate::cancel_background_helper_request();
         self.force_close_requested = true;
         save_app_settings(&self.app_settings);
         true
@@ -1001,7 +1073,7 @@ fn macos_launch_agent_plist(program_arguments: &[String]) -> String {
             "<plist version=\"1.0\">\n",
             "<dict>\n",
             "    <key>Label</key>\n",
-            "    <string>com.ergohaven.entropy</string>\n",
+            "    <string>{label}</string>\n",
             "    <key>ProgramArguments</key>\n",
             "    <array>\n",
             "{arguments_xml}",
@@ -1011,7 +1083,8 @@ fn macos_launch_agent_plist(program_arguments: &[String]) -> String {
             "</dict>\n",
             "</plist>\n"
         ),
-        arguments_xml = arguments_xml
+        arguments_xml = arguments_xml,
+        label = AUTOSTART_MACOS_LABEL
     )
 }
 
@@ -1095,6 +1168,24 @@ mod tests {
             with_launch_minimized_arg("\"/opt/Entropy\"".to_owned(), true),
             "\"/opt/Entropy\" --minimized"
         );
+    }
+
+    #[test]
+    fn ak_configurator_autostart_names_do_not_replace_entropy_entries() {
+        assert_eq!(AUTOSTART_WINDOWS_VALUE, "AK Configurator");
+        assert_eq!(AUTOSTART_LINUX_FILE, "ak-configurator.desktop");
+        assert_eq!(AUTOSTART_MACOS_FILE, "com.dvino.ak-configurator.plist");
+        let plist = macos_launch_agent_plist(&["/Applications/AK-Configurator.app".into()]);
+        assert!(plist.contains(AUTOSTART_MACOS_LABEL));
+        assert!(!plist.contains("com.ergohaven.entropy"));
+    }
+
+    #[test]
+    fn helper_close_handoff_requires_opt_in_and_never_intercepts_explicit_quit() {
+        assert!(should_handoff_close_to_helper(true, true, false));
+        assert!(!should_handoff_close_to_helper(false, true, false));
+        assert!(!should_handoff_close_to_helper(true, false, false));
+        assert!(!should_handoff_close_to_helper(true, true, true));
     }
 
     #[test]

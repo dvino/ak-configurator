@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import struct
 import tempfile
+import tarfile
 import unittest
 import zipfile
 
@@ -46,9 +47,9 @@ class CandidateTests(unittest.TestCase):
             binary = root / "synthetic"
             binary.write_bytes(header("linux-x86_64"))
             archive = candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True)
-            with zipfile.ZipFile(archive) as package:
-                contents = {Path(name).name: package.read(name) for name in package.namelist()}
-                self.assertEqual(set(contents), {"ak-configurator", "INSTALL.en.md", "INSTALL.ru.md", "RGB-PLAN.en.md", "RGB-PLAN.ru.md", "manifest.json", "firmware-provenance.json", "SHA256SUMS", "LICENSE", "FONT-LICENSES.txt", "LUCIDE-LICENSE.txt", "eframe-LICENSE-MIT", "eframe-LICENSE-APACHE"})
+            with tarfile.open(archive, "r:gz") as package:
+                contents = {item.name.split("/", 1)[1]: package.extractfile(item).read() for item in package.getmembers()}
+                self.assertTrue({"ak-configurator", "INSTALL.en.md", "INSTALL.ru.md", "RGB-PLAN.en.md", "RGB-PLAN.ru.md", "manifest.json", "firmware-provenance.json", "SHA256SUMS", "LICENSE", "FONT-LICENSES.txt", "LUCIDE-LICENSE.txt", "eframe-LICENSE-MIT", "eframe-LICENSE-APACHE", "offline/firmware-beta2/main/application.ihx", "offline/firmware-beta2/main/application.map", "offline/capability-catalog.json"}.issubset(contents))
                 self.assertEqual(contents["LICENSE"], (candidate.ROOT / "LICENSE").read_bytes())
                 manifest = json.loads(contents["manifest.json"])
                 self.assertEqual(manifest["firmware_release"], "v0.6.0-beta.2")
@@ -61,9 +62,9 @@ class CandidateTests(unittest.TestCase):
                 for line in contents["SHA256SUMS"].decode().splitlines():
                     expected, name = line.split("  ")
                     self.assertEqual(expected, hashlib.sha256(contents[name]).hexdigest())
-                executable = next(item for item in package.infolist() if item.filename.endswith("/ak-configurator"))
-                self.assertEqual((executable.external_attr >> 16) & 0o777, 0o755)
-            expected = archive.with_suffix(".zip.sha256").read_text().split()[0]
+                executable = next(item for item in package.getmembers() if item.name.endswith("/ak-configurator"))
+                self.assertEqual(executable.mode & 0o777, 0o755)
+            expected = Path(str(archive) + ".sha256").read_text().split()[0]
             self.assertEqual(expected, hashlib.sha256(archive.read_bytes()).hexdigest())
             with self.assertRaisesRegex(ValueError, "already exists"):
                 candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True)
