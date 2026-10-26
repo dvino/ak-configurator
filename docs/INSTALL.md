@@ -2,7 +2,7 @@
 
 # Installation and development
 
-AK Configurator v0.1.0-beta.2 is in release preparation. Current source checks and limits are recorded in [Status](STATUS.md) and [Review](REVIEW.md). The six-target workflow defines development binaries; the historical CI run does not verify the current source tree. Browser support follows the native desktop milestone.
+AK Configurator v0.1.0-beta.2 is in release preparation. Current source checks and limits are recorded in [Status](STATUS.md) and [Review](REVIEW.md). The six-target workflow defines development binaries and a separate unsigned DRAFT candidate; no candidate publication has been executed. Windows GNU and macOS arm64 adapter typechecks are not full-app builds or runtime qualification. Browser support follows the native desktop milestone.
 
 ## Build from source
 
@@ -47,7 +47,7 @@ The script requests elevation through `pkexec` or `sudo` and writes `/etc/udev/r
 
 ## Supported device and packages
 
-The beta2 source contract supports ten exact v0.6.0-beta.2 packed profile images: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The application verifies packed CODE/settings identity and required settings before enabling edits. Unknown, custom, trial and mismatched images are rejected. See the [desktop guide](DESKTOP.md).
+The beta2 source contract supports ten exact v0.6.0-beta.2 packed profile images: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The application verifies packed CODE/settings identity and required settings before enabling edits. Unknown, custom, trial and mismatched images are rejected. See the [desktop guide](DESKTOP.md). Firmware files currently offers local byte checks only; it does not flash a device. The installer still needs a live loader transition/reconnect flow, release/revocation authority, durable safety and full-ROM readback transaction, and separate settings-result handling.
 
 The `desktop-dev` workflow defines raw development binaries for Linux and Windows x86_64/arm64 and macOS x86_64/arm64. Each artifact contains a binary and `SHA256SUMS`; they are unsigned development binaries, not installers. A successful workflow run for the current source is required before downloading its artifacts. The known successful six-target run at commit `1afd0f1` is historical and is not evidence for beta2 source.
 

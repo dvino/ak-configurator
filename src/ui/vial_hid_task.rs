@@ -222,6 +222,10 @@ pub(super) enum VialHidOperation {
     Ak820BackupCapture {
         request_id: u64,
     },
+    Ak820Restore {
+        request_id: u64,
+        request: std::sync::Arc<super::ak820_restore_request::PreparedRestore>,
+    },
     LayerNameWrite(LayerNameWrite),
     UnlockStart,
     UnlockPoll,
@@ -301,6 +305,7 @@ impl VialHidOperation {
 #[cfg(not(target_arch = "wasm32"))]
 enum VialHidOutcome {
     Ak820BackupCaptured(crate::ak820_backup_capture::CapturedBackup),
+    Ak820Restored(super::ak820_restore_request::RestoreCompleted),
     LayerNameWritten(String),
     UnlockStarted {
         unlocked: bool,
@@ -364,6 +369,9 @@ fn run_vial_hid_operation_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
 ) -> anyhow::Result<VialHidOutcome> {
     match operation {
+        VialHidOperation::Ak820Restore { request, .. } => request
+            .run(hid, cancel, progress)
+            .map(VialHidOutcome::Ak820Restored),
         VialHidOperation::Ak820BackupCapture { .. } => hid
             .ak820_capture_backup(cancel, progress)
             .map(VialHidOutcome::Ak820BackupCaptured),
@@ -654,6 +662,42 @@ impl EntropyApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn start_ak820_restore(
+        &mut self,
+        ctx: &egui::Context,
+        request_id: u64,
+        request: std::sync::Arc<super::ak820_restore_request::PreparedRestore>,
+    ) -> VialHidTaskStart {
+        if !self.can_capture_ak820_backup() {
+            return VialHidTaskStart::Busy;
+        }
+        // Playback can never resume using a pre-restore volatile RGB state.
+        self.ak820_rgb_scene_stop();
+        self.start_vial_hid_operation(
+            ctx,
+            VialHidOperation::Ak820Restore {
+                request_id,
+                request,
+            },
+        )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn ak820_restore_progress(&self, request_id: u64) -> Option<u32> {
+        self.vial_hid_task.as_ref().and_then(|task| {
+            matches!(task.operation, VialHidOperation::Ak820Restore { request_id: id, .. } if id == request_id)
+                .then(|| task.progress.load(std::sync::atomic::Ordering::Acquire).min(100))
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn cancel_ak820_restore(&self, request_id: u64) {
+        if let Some(task) = self.vial_hid_task.as_ref().filter(|task| {
+            matches!(task.operation, VialHidOperation::Ak820Restore { request_id: id, .. } if id == request_id)
+        }) { task.cancel.store(true, std::sync::atomic::Ordering::Release); }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn ak820_backup_capture_progress(&self, request_id: u64) -> Option<f32> {
         self.vial_hid_task.as_ref().and_then(|task| {
             matches!(task.operation, VialHidOperation::Ak820BackupCapture { request_id: id } if id == request_id)
@@ -674,11 +718,12 @@ impl EntropyApp {
     // the receiver alone would let an old read overlap the next connection.
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn cancel_active_ak820_backup_capture(&self) -> bool {
-        if let Some(task) = self
-            .vial_hid_task
-            .as_ref()
-            .filter(|task| matches!(task.operation, VialHidOperation::Ak820BackupCapture { .. }))
-        {
+        if let Some(task) = self.vial_hid_task.as_ref().filter(|task| {
+            matches!(
+                task.operation,
+                VialHidOperation::Ak820BackupCapture { .. } | VialHidOperation::Ak820Restore { .. }
+            )
+        }) {
             task.cancel
                 .store(true, std::sync::atomic::Ordering::Release);
             return true;
@@ -909,6 +954,18 @@ impl EntropyApp {
                             Err(()),
                         );
                     }
+                    if let VialHidOperation::Ak820Restore {
+                        request_id,
+                        request,
+                    } = &task.operation
+                    {
+                        super::ak820_backup_inspection::restore_failed(
+                            ctx,
+                            *request_id,
+                            task.generation,
+                            request.safety_location(),
+                        );
+                    }
                     self.finish_vial_hid_error(
                         task.operation,
                         "Vial HID worker stopped".to_owned(),
@@ -928,6 +985,22 @@ impl EntropyApp {
 
         self.hid_device = result.hid_device;
         match result.outcome {
+            Ok(VialHidOutcome::Ak820Restored(completed)) => {
+                if let VialHidOperation::Ak820Restore { request_id, .. } = result.operation {
+                    super::ak820_backup_inspection::restore_finished(
+                        ctx,
+                        request_id,
+                        result.generation,
+                        Ok(completed),
+                    );
+                    // Retire the old editor values and perform the ordinary
+                    // verified read-only load. No setter or retry is scheduled.
+                    if let Some(index) = self.selected_device {
+                        self.start_connect(index);
+                    }
+                }
+                return;
+            }
             Ok(VialHidOutcome::Ak820BackupCaptured(snapshot)) => {
                 if let VialHidOperation::Ak820BackupCapture { request_id } = result.operation {
                     super::ak820_backup_inspection::capture_finished(
@@ -1219,6 +1292,18 @@ impl EntropyApp {
                         Err(()),
                     );
                 }
+                if let VialHidOperation::Ak820Restore {
+                    request_id,
+                    request,
+                } = &result.operation
+                {
+                    super::ak820_backup_inspection::restore_failed(
+                        ctx,
+                        *request_id,
+                        result.generation,
+                        request.safety_location(),
+                    );
+                }
                 self.finish_vial_hid_error(result.operation, error, result.disconnected);
             }
         }
@@ -1360,6 +1445,18 @@ impl EntropyApp {
         error: String,
         disconnected: bool,
     ) {
+        if matches!(operation, VialHidOperation::Ak820Restore { .. }) {
+            let text = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Восстановление остановлено. Прочитайте настройки снова; сохранённые защитные копии доступны в выбранной папке."
+            } else {
+                "Restore stopped. Read settings again; saved safety backups remain in the selected folder."
+            };
+            // Even a pre-write file error cannot leave a potentially stale
+            // editor accepting follow-up writes after a failed restore.
+            self.clear_connected_keyboard_state(text);
+            self.status_msg = text.into();
+            return;
+        }
         // A capture has no setter or reconnect continuation. Keep transport
         // diagnostics, paths and potentially private bytes out of presentation.
         if matches!(operation, VialHidOperation::Ak820BackupCapture { .. }) {
@@ -1468,7 +1565,9 @@ impl EntropyApp {
         }
 
         match operation {
-            VialHidOperation::Ak820BackupCapture { .. } => unreachable!("capture handled above"),
+            VialHidOperation::Ak820BackupCapture { .. } | VialHidOperation::Ak820Restore { .. } => {
+                unreachable!("backup operation handled above")
+            }
             VialHidOperation::UnlockStart => self.fail_vial_unlock_start(error),
             VialHidOperation::LayerNameWrite(_) => {
                 self.status_msg = layer_name_write_error(self.app_settings.language, &error);

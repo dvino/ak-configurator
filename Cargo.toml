@@ -85,9 +85,11 @@ dbus = { version = "0.9", features = ["vendored"] }
 futures-lite = "2"
 hidapi = { version = "2.6", default-features = false, features = ["linux-native-basic-udev"] }
 kdotool = { version = "0.3", default-features = false }
-libc = "0.2"
 x11-dl = "2"
 zbus = "5.16"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"

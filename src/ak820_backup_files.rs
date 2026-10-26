@@ -74,7 +74,11 @@ fn allowed_name(name: &std::ffi::OsStr) -> bool {
     name == MANIFEST || FILES.iter().any(|(entry, _)| name == *entry)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(target_os = "windows")]
+#[path = "ak820_backup_windows.rs"]
+mod windows;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod anchored {
     use super::*;
     use std::ffi::{CStr, CString, OsStr, OsString};
@@ -82,6 +86,84 @@ mod anchored {
     use std::os::unix::ffi::OsStrExt;
     use std::path::Component;
 
+    // macOS mode bits do not remove inherited extended ACL grants. Strip
+    // ACLs through the owned descriptor, then verify the empty ACL before any
+    // private bytes are written. Parent ACLs are checked without modifying them.
+    #[cfg(target_os = "macos")]
+    mod privacy {
+        use super::*;
+        use std::ffi::c_void;
+        extern "C" {
+            fn acl_init(count: i32) -> *mut c_void;
+            fn acl_free(value: *mut c_void) -> i32;
+            fn acl_get_fd_np(fd: i32, kind: i32) -> *mut c_void;
+            fn acl_set_fd_np(fd: i32, acl: *mut c_void, kind: i32) -> i32;
+            fn acl_valid(acl: *mut c_void) -> i32;
+            fn acl_get_entry(acl: *mut c_void, entry: i32, out: *mut *mut c_void) -> i32;
+        }
+        struct Acl(*mut c_void);
+        impl Drop for Acl {
+            fn drop(&mut self) {
+                unsafe {
+                    acl_free(self.0);
+                }
+            }
+        }
+        pub(super) fn empty(file: &File) -> BackupResult<()> {
+            let acl = unsafe { acl_get_fd_np(file.as_raw_fd(), 0x100) };
+            if acl.is_null() {
+                return if std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT) {
+                    Ok(())
+                } else {
+                    Err(invalid())
+                };
+            }
+            let acl = Acl(acl);
+            if unsafe { acl_valid(acl.0) } != 0 {
+                return Err(invalid());
+            }
+            let mut entry = std::ptr::null_mut();
+            if unsafe { acl_get_entry(acl.0, 0, &mut entry) } == 0 {
+                return Err("Backup paths with extended ACL grants are unsupported".into());
+            }
+            if std::io::Error::last_os_error().raw_os_error() != Some(libc::EINVAL) {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        pub(super) fn strip(file: &File) -> BackupResult<()> {
+            let acl = Acl(unsafe { acl_init(0) });
+            if acl.0.is_null() || unsafe { acl_set_fd_np(file.as_raw_fd(), acl.0, 0x100) } != 0 {
+                return Err(invalid());
+            }
+            empty(file)
+        }
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+            #[test]
+            fn inherited_acl_grants_are_removed_before_private_writes() {
+                let temp = tempfile::tempdir().unwrap();
+                let path = temp.path().join("empty-private-member");
+                let file = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .unwrap();
+                let status = std::process::Command::new("/bin/chmod")
+                    .args(["+a", "everyone allow read,write"])
+                    .arg(&path)
+                    .status()
+                    .unwrap();
+                assert!(status.success());
+                assert!(empty(&file).is_err());
+                strip(&file).unwrap();
+                empty(&file).unwrap();
+                assert_eq!(file.metadata().unwrap().len(), 0);
+            }
+        }
+    }
     fn name(value: &OsStr) -> BackupResult<CString> {
         CString::new(value.as_bytes()).map_err(|_| invalid())
     }
@@ -92,7 +174,9 @@ mod anchored {
                 dir.as_raw_fd(),
                 entry.as_ptr(),
                 flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
-                mode as libc::mode_t,
+                // openat is variadic: Darwin mode_t is u16 and must undergo
+                // C's integer promotion before crossing the ABI boundary.
+                mode as libc::c_uint,
             )
         };
         if fd < 0 {
@@ -217,12 +301,16 @@ mod anchored {
         let stream = Stream(stream);
         let mut out = Vec::new();
         loop {
+            #[cfg(target_os = "linux")]
+            let errno = unsafe { libc::__errno_location() };
+            #[cfg(target_os = "macos")]
+            let errno = unsafe { libc::__error() };
             unsafe {
-                *libc::__errno_location() = 0;
+                *errno = 0;
             }
             let item = unsafe { libc::readdir(stream.0) };
             if item.is_null() {
-                if unsafe { *libc::__errno_location() } != 0 {
+                if unsafe { *errno } != 0 {
                     return Err(invalid());
                 }
                 break;
@@ -252,6 +340,8 @@ mod anchored {
             use std::sync::atomic::{AtomicU64, Ordering};
             // A directory writable by another user could substitute the stage
             // name before publication. Require an owner-controlled parent.
+            #[cfg(target_os = "macos")]
+            privacy::empty(&parent)?;
             let metadata = parent.metadata().map_err(|_| invalid())?;
             if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
                 return Err("Backup destination parent must be owned by the current user and not writable by group or others".into());
@@ -306,6 +396,8 @@ mod anchored {
                 if unsafe { libc::fchmod(dir.as_raw_fd(), 0o700) } != 0 {
                     return Err(invalid());
                 }
+                #[cfg(target_os = "macos")]
+                privacy::strip(&dir)?;
                 pending.armed = false;
                 drop(pending);
                 return Ok(Self {
@@ -329,6 +421,8 @@ mod anchored {
             if unsafe { libc::fchmod(file.as_raw_fd(), 0o600) } != 0 {
                 return Err(invalid());
             }
+            #[cfg(target_os = "macos")]
+            privacy::strip(&file)?;
             file.write_all(bytes).map_err(|_| invalid())?;
             file.sync_all().map_err(|_| invalid())
         }
@@ -352,7 +446,7 @@ mod anchored {
                     self.name.as_ptr(),
                     self.parent.as_raw_fd(),
                     target.as_ptr(),
-                    0x4,
+                    libc::RENAME_EXCL,
                 )
             };
             #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -387,13 +481,17 @@ mod anchored {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn read_directory(path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
     anchored::read(&anchored::directory(path)?)
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+fn read_directory(path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+    windows::read(&windows::directory(path)?)
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn read_directory(_path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
-    Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+    Err("Backup directory I/O is unsupported on this platform: anchored no-follow handles are unavailable".into())
 }
 
 /// Read and validate an exact firmware-compatible backup directory.
@@ -484,12 +582,12 @@ fn validate_loaded_bytes(
 
 /// Scan immediate child directories only. Every advertised candidate has
 /// passed complete archive validation; malformed entries are counted.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn scan_backup_history(root: &Path) -> BackupResult<BackupHistory> {
     let root_dir = anchored::directory(root)?;
     scan_open_history(root, &root_dir)
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory> {
     let children = anchored::children(root_dir)?;
     let mut entries = Vec::new();
@@ -537,9 +635,13 @@ fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory
         }),
     })
 }
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+pub(crate) fn scan_backup_history(root: &Path) -> BackupResult<BackupHistory> {
+    windows::history(root)
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub(crate) fn scan_backup_history(_root: &Path) -> BackupResult<BackupHistory> {
-    Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+    Err("Backup directory I/O is unsupported on this platform: anchored no-follow handles are unavailable".into())
 }
 
 fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> BackupResult<Vec<u8>> {
@@ -595,13 +697,15 @@ pub fn publish_validated_archive(
     profile: ProfileId,
     files: &BTreeMap<String, Vec<u8>>,
 ) -> BackupResult<ValidatedArchive> {
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         let _ = (path, profile, files);
-        Err("Backup directory I/O is unsupported on this platform: private ACL and no-follow handles are not qualified on macOS/Windows".into())
+        Err("Backup directory I/O is unsupported on this platform: anchored no-follow handles are unavailable".into())
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
+        #[cfg(target_os = "windows")]
+        use windows as anchored;
         check_map(files)?;
         let manifest = make_manifest(profile, files)?;
         validate_profile_archive(&manifest, files, profile, None)
@@ -621,8 +725,10 @@ pub fn publish_validated_archive(
         let (stored_manifest, stored_files) = anchored::read(&stage.dir)?;
         let verified = validate_profile_archive(&stored_manifest, &stored_files, profile, None)
             .map_err(|_| "Backup validation failed".to_owned())?;
+        #[cfg(not(target_os = "windows"))]
         stage.dir.sync_all().map_err(|_| invalid())?;
         stage.publish(target)?;
+        #[cfg(not(target_os = "windows"))]
         stage.parent.sync_all().map_err(|_| invalid())?;
         Ok(verified)
     }

@@ -1,6 +1,12 @@
 name: Desktop development builds
 
 on:
+  workflow_call:
+    inputs:
+      candidate_ref:
+        description: Git ref to build and package
+        required: true
+        type: string
   workflow_dispatch:
   push:
     branches: [desktop-dev]
@@ -57,6 +63,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_ref || github.ref }}
 
       - name: Install Rust 1.97.0
         uses: dtolnay/rust-toolchain@stable
@@ -88,9 +96,17 @@ jobs:
             libgl1-mesa-dev \
             zenity
 
-      - name: Test all targets
+      - name: Test all targets (Linux)
         if: startsWith(matrix.platform, 'linux-')
         run: cargo test --locked --all-targets -- --test-threads=1
+
+      - name: Test AK820 filesystem and ownership (Windows and macOS)
+        if: startsWith(matrix.platform, 'windows-') || startsWith(matrix.platform, 'macos-')
+        run: cargo test --locked --bin ak-configurator ak820_backup_files -- --test-threads=1
+
+      - name: Test AK820 device ownership (Windows and macOS)
+        if: startsWith(matrix.platform, 'windows-') || startsWith(matrix.platform, 'macos-')
+        run: cargo test --locked --bin ak-configurator hid_ownership -- --test-threads=1
 
       - name: Build development binary (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')

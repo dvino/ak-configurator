@@ -681,6 +681,13 @@ fn emit_response(response: &ProxyResponse) -> Result<()> {
 }
 
 fn run_hid_proxy(device: Device) -> Result<()> {
+    // The actual transport owner holds this across every request and its final
+    // handle drop. A GUI crash cannot release it while its helper is still alive.
+    let _device_lease = if device.is_ak820() {
+        Some(crate::hid_ownership::DeviceLease::acquire(&device)?)
+    } else {
+        None
+    };
     let hid = HidDevice::open_in_helper(&device)?;
     emit_response(&ProxyResponse {
         ok: true,

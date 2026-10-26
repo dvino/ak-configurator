@@ -15,8 +15,9 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Add local RGB scenes with up to 16 ordered layers, LED masks, Solid/Gradient/Wave/Breathing/Rain effects, axes, opacity, periods, and a quiet-hours brightness cap
 - Add animated offline previews, bounded scene undo/redo, and explicit scene v2 save/load while retaining static palette v1 files
 - Add playback through the existing HID owner with a one-frame queue, a conservative 10 frames/s application ceiling, cancellation, priority pauses, and stop-on-error or lost mode ownership
-- Add read-only complete beta2 backup capture, explicit Linux save to a new staged folder, validated bounded history with pinned reopen, and immutable restore previews without a live restore executor
-- Add a separate unsigned desktop-candidate ZIP and SHA-256 artifact for each of six platform targets, including localized installation/RGB guides and firmware provenance
+- Add complete beta2 backup capture and guarded restore execution with fresh-capture comparison, verified safety backup, fresh physical hold, one-attempt setters and final verification; add Linux/macOS/Windows private backup storage and validated bounded history
+- Add local three-file AK820 firmware input checks and a bounded OEM loader wire codec; the checker validates bytes and does not install firmware
+- Add a dedicated unsigned DRAFT candidate workflow and verifier for six platform targets, including localized guides and firmware provenance; no publication has been executed
 
 ### Corrections
 
@@ -29,7 +30,7 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification
 - RGB scenes require explicit playback; frames remain in device RAM, have no palette readback or atomic commit, and are not saved to NVM or restored automatically
 - Focused backup/AK820 tests and native Linux offline UI checks pass; full-suite environment-dependent tests passed separately, unchanged. Physical RGB timing, safe frame rate, resource measurements, and Windows/macOS/arm64 runtime qualification remain open
-- Live restore execution, safety-backup and fresh physical-hold workflow, OEM ownership, platform qualification, and signing remain open. Backup file I/O is Linux-only; capture outside Linux is not runtime-qualified. No positive released full-ROM fixture or physical-keyboard test is claimed.
+- Live restore and safety-backup execution are implemented but have not been qualified on hardware. Live firmware installation remains unimplemented: loader transition/reconnect binding, release/revocation authority and a durable safety/write/readback transaction are still required. OEM ownership, full-app Windows/macOS builds, platform runtime qualification, installers and signing remain open. Windows GNU and macOS arm64 isolated adapter typechecks passed only. Backup operations cover Linux/macOS/Windows with platform-specific guarantees. The dedicated candidate workflow is DRAFT-only; no publication occurred. No positive released full-ROM fixture or physical-keyboard test is claimed.
 - Existing Entropy release history below is retained unchanged
 
 ## v0.5.0 - Public Beta

@@ -2,18 +2,27 @@
 use super::*;
 
 fn palette_device(fail_at: Option<u8>) -> (HidDevice, super::super::TestHidRecorder) {
-    let (hid, log) = HidDevice::test_beta2_ak820_device(crate::app::ak820_beta1_profiles::ProfileId::Main, true);
+    let (hid, log) =
+        HidDevice::test_beta2_ak820_device(crate::app::ak820_beta1_profiles::ProfileId::Main, true);
     let mut mode = [2, 0, 42, 80, 200, 100];
     log.respond_by(move |p| {
         let mut reply = [0; 32];
         match (p[0], p[1]) {
             (0xFD, 1) => reply[..4].copy_from_slice(&[0xFD, 1, 1, 0xA8]),
-            (8, 0x41) => { reply[..2].copy_from_slice(&[8, 0x41]); reply[2..8].copy_from_slice(&mode); }
+            (8, 0x41) => {
+                reply[..2].copy_from_slice(&[8, 0x41]);
+                reply[2..8].copy_from_slice(&mode);
+            }
             (7, 0x42) => {
-                if fail_at == Some(p[2]) { return Some(Err("scripted Direct timeout".into())); }
+                if fail_at == Some(p[2]) {
+                    return Some(Err("scripted Direct timeout".into()));
+                }
                 reply = *p;
             }
-            (7, 0x41) => { mode.copy_from_slice(&p[2..8]); reply = *p; }
+            (7, 0x41) => {
+                mode.copy_from_slice(&p[2..8]);
+                reply = *p;
+            }
             _ => return Some(Err(format!("unexpected palette request {p:02x?}"))),
         }
         Some(Ok(reply))
@@ -31,10 +40,14 @@ fn static_palette_is_bounded_and_never_saves_nvm() {
     assert_eq!(packets.iter().map(|p| p[4] as usize).sum::<usize>(), 82);
     for (index, p) in packets.iter().enumerate() {
         assert_eq!(p[2] as usize, index * 9);
-        for hsv in p[5..5 + p[4] as usize * 3].chunks_exact(3) { assert_eq!(hsv, [0, 255, 160]); }
+        for hsv in p[5..5 + p[4] as usize * 3].chunks_exact(3) {
+            assert_eq!(hsv, [0, 255, 160]);
+        }
     }
     assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
-    assert!(!requests.iter().any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F));
+    assert!(!requests
+        .iter()
+        .any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F));
     assert!(hid.ak820_editing_ready());
 }
 
@@ -70,11 +83,18 @@ fn palette_rejects_unavailable_profiles_partial_reads_and_invalid_values_before_
 fn rgb_stream_enters_direct_once_and_never_saves_frames() {
     let (hid, log) = palette_device(None);
     let cancel = AtomicBool::new(false);
-    let Ak820RgbStreamResult::Applied(owned) = hid.ak820_stream_rgb_frame(&[[160, 0, 0]; 82], None, &cancel).unwrap()
-        else { panic!("first frame must enter Direct"); };
+    let Ak820RgbStreamResult::Applied(owned) = hid
+        .ak820_stream_rgb_frame(&[[160, 0, 0]; 82], None, &cancel)
+        .unwrap()
+    else {
+        panic!("first frame must enter Direct");
+    };
     let before = log.requests().len();
-    assert!(matches!(hid.ak820_stream_rgb_frame(&[[0, 160, 0]; 82], Some(&owned), &cancel).unwrap(),
-        Ak820RgbStreamResult::Applied(_)));
+    assert!(matches!(
+        hid.ak820_stream_rgb_frame(&[[0, 160, 0]; 82], Some(&owned), &cancel)
+            .unwrap(),
+        Ak820RgbStreamResult::Applied(_)
+    ));
     let sent = log.requests();
     let next = &sent[before..];
     assert_eq!(next.iter().filter(|p| p[..2] == [7, 0x42]).count(), 10);
@@ -87,12 +107,19 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
     for packet in 0..10 {
         let (hid, log) = palette_device(Some(packet * 9));
         let cancel = AtomicBool::new(false);
-        assert!(hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel).is_err());
+        assert!(hid
+            .ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
+            .is_err());
         let sent = log.requests();
-        assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x42]).count(), packet as usize + 1);
+        assert_eq!(
+            sent.iter().filter(|p| p[..2] == [7, 0x42]).count(),
+            packet as usize + 1
+        );
         assert!(!sent.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
         assert!(!hid.ak820_editing_ready());
-        assert!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel).is_err());
+        assert!(hid
+            .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel)
+            .is_err());
         assert_eq!(sent.len(), log.requests().len());
     }
 }
@@ -100,8 +127,11 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
 #[test]
 fn rgb_stream_cancellation_is_checked_before_io_and_between_packets() {
     let (hid, log) = palette_device(None);
-    assert!(matches!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(true)).unwrap(),
-        Ak820RgbStreamResult::Cancelled));
+    assert!(matches!(
+        hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(true))
+            .unwrap(),
+        Ak820RgbStreamResult::Cancelled
+    ));
     assert!(log.requests().is_empty());
     let cancel = std::sync::Arc::new(AtomicBool::new(false));
     let worker_cancel = cancel.clone();
@@ -115,9 +145,18 @@ fn rgb_stream_cancellation_is_checked_before_io_and_between_packets() {
         }
         Some(Ok(reply))
     });
-    assert!(matches!(hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel).unwrap(),
-        Ak820RgbStreamResult::Cancelled));
-    assert_eq!(log.requests().iter().filter(|p| p[..2] == [7, 0x42]).count(), 1);
+    assert!(matches!(
+        hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
+            .unwrap(),
+        Ak820RgbStreamResult::Cancelled
+    ));
+    assert_eq!(
+        log.requests()
+            .iter()
+            .filter(|p| p[..2] == [7, 0x42])
+            .count(),
+        1
+    );
     assert!(hid.ak820_editing_ready());
 }
 
@@ -126,10 +165,18 @@ fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_setti
     for changed_field in [2, 4, 5, 6, 7] {
         let (hid, log) = palette_device(None);
         let cancel = AtomicBool::new(false);
-        let Ak820RgbStreamResult::Applied(owned) = hid.ak820_stream_rgb_frame(&[[100; 3]; 82], None, &cancel).unwrap()
-            else { panic!("first frame"); };
+        let Ak820RgbStreamResult::Applied(owned) = hid
+            .ak820_stream_rgb_frame(&[[100; 3]; 82], None, &cancel)
+            .unwrap()
+        else {
+            panic!("first frame");
+        };
         let mut changed = owned.mode;
-        changed[changed_field] = if changed_field == 2 { 2 } else { changed[changed_field].saturating_sub(1) };
+        changed[changed_field] = if changed_field == 2 {
+            2
+        } else {
+            changed[changed_field].saturating_sub(1)
+        };
         log.respond_by(move |p| {
             let mut r = [0; 32];
             match (p[0], p[1]) {
@@ -140,8 +187,11 @@ fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_setti
             Some(Ok(r))
         });
         let before = log.requests().len();
-        assert!(matches!(hid.ak820_stream_rgb_frame(&[[50; 3]; 82], Some(&owned), &cancel).unwrap(),
-            Ak820RgbStreamResult::OwnershipLost));
+        assert!(matches!(
+            hid.ak820_stream_rgb_frame(&[[50; 3]; 82], Some(&owned), &cancel)
+                .unwrap(),
+            Ak820RgbStreamResult::OwnershipLost
+        ));
         assert_eq!(log.requests().len() - before, 2);
         assert!(hid.ak820_editing_ready());
     }
@@ -151,7 +201,9 @@ fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_setti
 fn rgb_stream_rejects_read_only_sessions_before_transport() {
     let (mut hid, log) = palette_device(None);
     hid.read_only = Some(super::super::ReadOnlyHidSession::default());
-    assert!(hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false)).is_err());
+    assert!(hid
+        .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false))
+        .is_err());
     assert!(log.requests().is_empty());
 }
 

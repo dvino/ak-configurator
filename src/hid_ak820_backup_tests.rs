@@ -174,7 +174,8 @@ fn modeled_getter(p: &[u8], nvm: &[u8]) -> [u8; 32] {
         }
         (0xfe, 3) => {
             let at = 0x640 + p[2] as usize * 4;
-            r[..4].copy_from_slice(&nvm[at..at + 4]);
+            r[..2].copy_from_slice(&nvm[at + 2..at + 4]);
+            r[2..4].copy_from_slice(&nvm[at..at + 2]);
         }
         (2, 2) => {
             r[..2].copy_from_slice(p);

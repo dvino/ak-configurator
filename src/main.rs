@@ -6,6 +6,8 @@ mod ak820_backup_capture;
 mod ak820_backup_files;
 mod ak820_image_pack;
 mod ak820_install_plan;
+mod ak820_installer;
+mod ak820_loader;
 mod ak820_restore_plan;
 mod ak820_rgb;
 mod ak820_rgb_compositor;
@@ -26,6 +28,8 @@ mod firmware_builtin_icons;
 mod ak820_help;
 #[cfg(not(target_arch = "wasm32"))]
 mod hid;
+#[cfg(not(target_arch = "wasm32"))]
+mod hid_ownership;
 mod i18n;
 mod integration_icons;
 mod keyboard;

@@ -127,6 +127,7 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
     let (valid, write) = match p[0] {
         0x01 | 0x0C | 0x0D | 0x11 => (tail(1), false),
         0x02 => ((p[1] == 2 || p[1] == 3) && tail(2), false),
+        0x03 => (p[1] == 2 && p[2..5] == [0, 0, 0] && tail(6), true),
         0x04 => (matrix() && tail(4), false),
         0x05 => (
             matrix()
@@ -340,7 +341,8 @@ fn capture_reconcile_getters(
     for layer in 0..6 {
         let reply = send(&[0xfe, 3, layer as u8, 0])?;
         ensure!(
-            reply[..4] == nvm[0x640 + layer * 4..0x644 + layer * 4],
+            reply[..2] == nvm[0x642 + layer * 4..0x644 + layer * 4]
+                && reply[2..4] == nvm[0x640 + layer * 4..0x642 + layer * 4],
             "Captured encoder getter differs"
         );
     }
@@ -921,6 +923,14 @@ impl HidDevice {
         image: ImageContract,
     ) -> Result<()> {
         match (p[0], p[1]) {
+            (0x03, 2) => {
+                ensure!(reply == p, "AK820 layout setter was rejected");
+                let actual = self.usb_send_traced(&[2, 2])?;
+                ensure!(
+                    actual[..6] == [2, 2, p[2], p[3], p[4], p[5]],
+                    "AK820 layout readback differs"
+                );
+            }
             (0x05, _) => {
                 ensure!(reply == p, "AK820 key setter was rejected");
                 let actual = self.usb_send_traced(&[4, p[1], p[2], p[3]])?;
@@ -1142,3 +1152,6 @@ mod tests {
 #[cfg(test)]
 #[path = "hid_ak820_backup_tests.rs"]
 mod backup_tests;
+
+#[path = "ak820_restore_executor.rs"]
+mod restore_executor;

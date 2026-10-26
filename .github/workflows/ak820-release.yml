@@ -1,0 +1,97 @@
+name: AK Configurator unsigned desktop candidate
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to build as an unsigned draft candidate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ak820-candidate-${{ github.event.inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate candidate tag and source version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.identity.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.release_tag || github.ref }}
+          fetch-depth: 0
+      - name: Require exact v-prefixed Cargo version tag
+        id: identity
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version])')"
+          test "$REQUESTED_TAG" = "v$version" || { echo "Tag $REQUESTED_TAG must exactly equal v$version" >&2; exit 1; }
+          git rev-parse --verify "refs/tags/$REQUESTED_TAG^{commit}" >/dev/null
+          tag_commit="$(git rev-parse "refs/tags/$REQUESTED_TAG^{commit}")"
+          head_commit="$(git rev-parse HEAD)"
+          test "$head_commit" = "$tag_commit" || { echo "Checkout HEAD does not match resolved tag commit" >&2; exit 1; }
+          echo "tag=$REQUESTED_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$tag_commit" >> "$GITHUB_OUTPUT"
+      - name: Run offline verifier tests
+        run: python3 scripts/test_ak820_release_workflow.py
+
+  build:
+    name: Build and test all six targets
+    needs: validate
+    uses: ./.github/workflows/desktop-dev.yml
+    with:
+      candidate_ref: ${{ needs.validate.outputs.commit }}
+    permissions:
+      contents: read
+
+  draft:
+    name: Verify all candidates and create draft release
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: desktop-candidate-*
+          path: candidate-artifacts
+          merge-multiple: true
+      - name: Verify all six packages and provenance
+        env:
+          CANDIDATE_VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          python3 scripts/verify_ak820_release_candidate.py \
+            --directory candidate-artifacts \
+            --version "$CANDIDATE_VERSION" \
+            --source-commit "$SOURCE_COMMIT" \
+            --manifest release-manifest.json
+      - name: Create unsigned draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            candidate-artifacts/*.zip candidate-artifacts/*.zip.sha256 \
+            release-manifest.json \
+            --draft --title "AK Configurator $RELEASE_VERSION unsigned desktop trial" \
+            --notes "Unsigned desktop trial candidates. This draft is not a final release. Platform and hardware qualification remains separate; no claim of flashing, physical behavior, signing, or complete release acceptance is made. Confirm the attached release manifest and EN/RU installation instructions before any manual publication."

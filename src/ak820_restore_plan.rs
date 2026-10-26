@@ -464,17 +464,24 @@ fn plan_with_registry(
     if plan.expected[0x800..0x800 + stream.len()] != stream
         || plan.expected[0x7f1..0x7f3] != (stream.len() as u16).to_le_bytes()
     {
-        // Chunk durable ranges are known; intermediate upload metadata is not a
-        // published stream. Full-NVM expectation is attached only on publication.
+        // beta2 ak820_macro_write durably sets busy before the first chunk;
+        // length remains unchanged until publication of terminator sixteen.
+        let mut intermediate = plan.expected.clone();
         for (offset, data) in chunks {
+            intermediate[0x7f0] = 1;
+            intermediate[0x800 + offset..0x800 + offset + data.len()].copy_from_slice(&data);
+            let mut expectations = vec![ReadExpectation::NvmRange {
+                offset: 0x800 + offset,
+                expected: data.clone(),
+            }];
+            if offset + data.len() < stream.len() {
+                expectations.push(ReadExpectation::FullNvm(intermediate.clone()));
+            }
             plan.steps.push(RestoreStep {
                 preconditions: plan.preconditions.clone(),
                 command: "upload_macro_chunk",
                 arguments: json!([offset, data]),
-                expectations: vec![ReadExpectation::NvmRange {
-                    offset: 0x800 + offset,
-                    expected: data,
-                }],
+                expectations,
             });
         }
         plan.expected[0x800..0x800 + stream.len()].copy_from_slice(&stream);
@@ -839,6 +846,29 @@ mod tests {
         assert!(migrate_schema02_to03(&raw, &from, ProfileId::Main, &target).is_ok());
     }
     #[test]
+    fn read_only_restore_refuses_before_transport_and_callbacks() {
+        let before = nvm(0x082002);
+        let mut saved = before.clone();
+        saved[0x40..0x42].copy_from_slice(&4u16.to_be_bytes());
+        let restore = plan(&saved, &before).unwrap();
+        assert!(!restore.steps().is_empty());
+        let (hid, recorder) = crate::hid::HidDevice::test_read_only_device(Default::default());
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        let progress = std::sync::atomic::AtomicU32::new(0);
+        let error = hid
+            .ak820_restore_backup(
+                &restore,
+                &cancelled,
+                &progress,
+                || panic!("read-only restore must not reopen a source"),
+                |_| panic!("read-only restore must not create a backup"),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        assert!(recorder.requests().is_empty());
+    }
+
+    #[test]
     fn no_op_and_key_plan_preserve_unaddressable_neighbors() {
         let before = nvm(0x082002);
         assert!(plan(&before, &before).unwrap().steps().is_empty());
@@ -939,7 +969,7 @@ mod tests {
             .contains(&RestorePrecondition::FinalGetterReconciliation));
         assert_eq!(p.steps().len(), 2);
         assert_eq!(p.steps()[0].command(), "upload_macro_chunk");
-        assert_eq!(p.steps()[0].expectations().len(), 1);
+        assert_eq!(p.steps()[0].expectations().len(), 2);
         assert!(matches!(
             p.steps()[1].expectations().last(),
             Some(ReadExpectation::FullNvm(_))

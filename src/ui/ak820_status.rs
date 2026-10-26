@@ -50,6 +50,11 @@ impl EntropyApp {
                     d.insert_temp(egui::Id::new(super::ak820_backup_inspection::OPEN_ID), true)
                 });
             }
+            if ui.button(text("Файлы прошивки", "Firmware files")).clicked() {
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(egui::Id::new(super::ak820_install_files::OPEN_ID), true)
+                });
+            }
         });
         if let Some(reason) = &failed {
             ui.colored_label(
