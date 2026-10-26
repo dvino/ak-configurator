@@ -36,3 +36,23 @@ Windows использует статические пакеты vcpkg FFTW и p
 архивируемых рецептов разрешённым версиям. Исправление реестра затрагивает
 седьмой исходный файл upstream; все семь путей перечислены в
 `vendor/cava-provenance.json`.
+
+Windows CI отдельно подготавливает нативный pkgconf 3.0.10 из официального MSI
+для x64 или arm64. Скрипт проверяет закреплённые размер и SHA256 до распаковки
+административного образа, затем использует абсолютный путь `PKG_CONFIG` и
+сохраняет эту переменную в очищенном окружении vcpkg. Это устраняет загрузку
+устаревших пакетов MSYS2 без изменения версий FFTW/pthreads и статической
+линковки. pkgconf нужен только при сборке и в приложение не включается. Полный
+скрипт и [инструкция пересборки](../../vendor/cava-dependencies/REBUILD.md)
+остаются в каталоге `audio-sources` пакета.
+
+После подготовки закреплённого vcpkg выполните в PowerShell:
+
+```powershell
+$env:PKG_CONFIG = python scripts/build_cava_helper.py --prepare-windows-pkgconf build/pkgconf
+if ($LASTEXITCODE -ne 0) { throw 'pkgconf preparation failed' }
+python scripts/build_cava_helper.py --output-dir build/audio
+```
+
+Первая команда загружает и проверяет инструмент, распаковывает его в указанный
+каталог и выводит путь. Она не устанавливает pkgconf и не меняет системный PATH.

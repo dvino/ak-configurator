@@ -2,6 +2,47 @@
 
 # Desktop adaptation and review
 
+## Windows audio CI repair — 2026-10-26
+
+Baseline: `1e1f33e58dd1acc7ffbf2142bbe89910a5ff4094` on `desktop-dev`.
+In [run 40342461961](https://github.com/dvino/ak-configurator/actions/runs/40342461961),
+Linux and macOS passed on both architectures. Both Windows jobs failed during
+FFTW pkg-config fixup, before Rust compilation: every configured mirror returned
+404 for `msys2-runtime-3.5.4-2-x86_64.pkg.tar.zst`.
+
+The workflow now explicitly prepares official native pkgconf 3.0.10 for x64 or
+arm64. Its MSI size and SHA256 are checked before administrative extraction;
+the executable version is checked before CMake. `PKG_CONFIG` is passed to both
+CMake commands and retained through `VCPKG_KEEP_ENV_VARS`. The
+[pinned vcpkg lookup](https://github.com/microsoft/vcpkg/blob/64810c6bf2bdc91ebcd75f140aec77580113f219/scripts/cmake/vcpkg_find_acquire_program%28PKGCONFIG%29.cmake)
+uses that override before MSYS acquisition. The matching
+[vcpkg-tool 2025-04-16 code](https://github.com/microsoft/vcpkg-tool/blob/2025-04-16/src/vcpkg/base/system.process.cpp)
+preserves the explicitly listed environment variables.
+
+The vcpkg checkout/registry, FFTW `3.3.10#10`, pthreads `3.0.0#14`, static CRT,
+static target triplets, six build targets and source/license archives remain
+unchanged. A failed bootstrap now also stops its PowerShell step immediately.
+The standalone source kit includes the updated builder and rebuild commands.
+
+| Check | Result and scope |
+| --- | --- |
+| Audio setup regression tests | 12 passed, including both Windows targets, changed MSI rejection, extraction failure, missing/ambiguous/wrong-version tools and propagation to both CMake steps. Windows processes are mocked. |
+| Package and release verifier tests | 3 package tests and 15 release tests passed. These construct all six packages with synthetic executable headers; they do not execute Windows binaries. |
+| Existing CI-policy tests | 45 passed after fetching complete commit history. The initial shallow checkout correctly failed the existing full-history guard; no test or guard was weakened. |
+| Official MSI assets | Both release assets were downloaded; sizes and SHA256 matched the pins. Linux MSI extraction found one `pkgconf.exe` each, with PE machine `0x8664` and `0xAA64` respectively. This is archive/architecture inspection, not Windows execution. |
+| Actual pinned CMake lookup | CMake 4.4.4 selected the explicit path, including a space, without entering the MSYS branch. Removing `PKG_CONFIG` reached the deliberately failing MSYS sentinel. This executes the upstream lookup on a host model. |
+| Source checks | Changed Python parsed, all workflow YAML parsed, localization and `git diff --check` passed. |
+
+The repair was not pushed or executed on native Windows runners in this work.
+MSI administrative extraction, MSVC builds and installed-package execution still
+need the next Windows CI run after integration. Rust/application behavior and
+physical keyboard operations were not changed or tested by this repair.
+
+Independent GPT-6.1 Sol Low review approved the 12-file repair for commit with no
+blocking findings. It checked the code, workflow, failure logs, pinned CMake
+lookup and matching EN/RU documents; independently repeated all 12 setup tests
+and the whitespace check passed. Native Windows qualification remains open.
+
 ## Bundle acceptance — 2026-10-26
 
 The seven commits from `c207ad1` through `5820455` were imported from a verified

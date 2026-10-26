@@ -56,6 +56,14 @@ The native `--self-check [--output NEW_JSON_FILE]` command runs before preferenc
 
 ## Verification boundary and delivery
 
+CI run [40342461961](https://github.com/dvino/ak-configurator/actions/runs/40342461961)
+for `1e1f33e` completed the Linux and macOS jobs on both architectures. Windows
+x86_64 and arm64 failed before Rust compilation: the pinned vcpkg requested a
+removed MSYS2 runtime archive while fixing FFTW pkg-config files. The current
+repair prepares verified native pkgconf and carries `PKG_CONFIG` through vcpkg's
+clean environment. Local setup, package and CI-policy tests passed; native
+Windows execution of the repaired source remains pending. See [REVIEW.md](REVIEW.md).
+
 Exact current-source build, test and independent-review evidence belongs in [REVIEW.md](REVIEW.md). Source inspection, host/synthetic tests, local platform execution and physical behavior remain separate. No physical keyboard operations, successful flashing, settings retention or OEM rollback are claimed. No positive released packed-image/full-ROM fixture is available: public Intel HEX and default-settings fixtures cannot replace unavailable OEM erase-helper bytes. Private OEM bytes are not added.
 
 The dedicated unsigned candidate workflow and verifier prepare Linux x86_64/arm64 `.tar.gz`, Windows x86_64/arm64 `.zip` and macOS x86_64/arm64 `.app.zip` archives with per-user installation/removal scripts, matching SHA256, firmware provenance, public offline inputs and EN/RU guides. Each native build must execute its own `--self-check`; the six-package verifier checks the exact report, source and artifact identities before generating the application update index. Current execution of this workflow on all six targets, per-platform GUI/HID/functions/resources and signing remain separate gates. The historical CI run `40174635838` for `1afd0f1` does not verify the current tree. Prior Ubuntu 24.04 builds do not establish Debian 12 compatibility or other-platform runtime. Per-user script installation does not claim MSI/DEB/PKG packaging or signed/notarized distribution.

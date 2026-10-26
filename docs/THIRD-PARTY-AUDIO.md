@@ -33,3 +33,23 @@ The unused moving artifact registry is removed. The builder rejects inconsistent
 registry/tool/version pins and verifies that the archived port recipes match the
 resolved versions. This registry correction is the seventh modified upstream
 source file; all seven paths are listed in `vendor/cava-provenance.json`.
+
+Windows CI separately prepares native pkgconf 3.0.10 from its official x64 or
+arm64 MSI. The build script checks the pinned size and SHA256 before administrative
+extraction, then uses its absolute `PKG_CONFIG` path and preserves that variable
+through vcpkg's clean environment. This removes the stale MSYS2 download path
+without changing FFTW/pthreads versions or static linkage. pkgconf is a build
+tool and is not included in the application. The complete build script and
+[rebuild instructions](../vendor/cava-dependencies/REBUILD.md) remain in the
+package's `audio-sources` directory.
+
+After preparing the pinned vcpkg checkout, run in PowerShell:
+
+```powershell
+$env:PKG_CONFIG = python scripts/build_cava_helper.py --prepare-windows-pkgconf build/pkgconf
+if ($LASTEXITCODE -ne 0) { throw 'pkgconf preparation failed' }
+python scripts/build_cava_helper.py --output-dir build/audio
+```
+
+The first command downloads and verifies the tool, extracts it into the named
+directory and prints its path. It does not install pkgconf or change system PATH.

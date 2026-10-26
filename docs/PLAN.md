@@ -21,6 +21,15 @@ Working-tree baseline for the P1 RGB continuation: `8b1f67f`. The target is AK82
 
 Continue the native release scope with explicit hardware gates. Public linked sources and independently derived defaults improve offline coverage but cannot construct an approved positive packed-image/full-ROM fixture without the OEM erase-helper bytes. Private OEM bytes are not added. The independent architecture stage is complete; a new architect handoff is not a standing blocker.
 
+## Windows CI repair
+
+Windows CI repair starts from `1e1f33e` after run `40342461961`. Both Windows
+jobs failed on an obsolete MSYS2 runtime download during FFTW pkg-config fixup;
+the four Linux/macOS jobs passed. Native pkgconf preparation now bypasses that
+download while preserving the vcpkg and library pins and all six build targets.
+The corrected Windows source still needs native CI execution after integration.
+See [REVIEW.md](REVIEW.md) for the exact checks and limits.
+
 ## P1 completion boundary
 
 The application reuses CAVA 1.0.0 for capture/FFT/smoothing and the upstream OpenRGB wire format. No new audio analysis engine is introduced. The package includes the managed helper and corresponding sources/licenses. Source controls, stop/fault handling, shared HID ownership and explicit built-in effect restoration are implemented. Current Direct palette readback and atomic application cannot be closed against beta2: they require a separately reviewed firmware protocol and catalog update. Game/screen integrations remain a later phase. See [RGB-PLAN.md](RGB-PLAN.md) for the exact scope and [REVIEW.md](REVIEW.md) for evidence.

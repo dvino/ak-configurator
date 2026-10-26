@@ -3,7 +3,10 @@
 
 Unix: FFTW and iniparser link statically; Linux uses the system PulseAudio client
 ABI (also available on PipeWire through pipewire-pulse). Windows uses vcpkg's
-static triplet. No package manager runs implicitly.
+static triplet and an explicitly prepared native pkgconf tool. The separate
+--prepare-windows-pkgconf command downloads and extracts its pinned MSI without
+installing a product or changing the system PATH. No package manager runs
+implicitly.
 """
 import argparse
 import os
@@ -15,13 +18,83 @@ import subprocess
 import tarfile
 import hashlib
 import json
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'vendor/cava'
+PKGCONF_VERSION = '3.0.10'
+# Official pkgconf release assets, checked before Windows Installer opens them.
+PKGCONF_WINDOWS = {
+    'x64': ('28cc9e44473a3ef277260f3dac20f58e2a667760393bd47dc309b6426e9bd727', 524288),
+    'arm64': ('6447773d59fca3260304aa8fe2f01c086ed93ee0e12f2c0e5c369fc86f588a7c', 487424),
+}
 
 
 def run(command, **kwargs):
     subprocess.run([str(arg) for arg in command], check=True, **kwargs)
+
+
+def windows_architecture():
+    machine = platform.machine().lower()
+    if machine in ('arm64', 'aarch64'):
+        return 'arm64'
+    if machine in ('amd64', 'x86_64'):
+        return 'x64'
+    raise ValueError('Unsupported Windows architecture: ' + machine)
+
+
+def check_pkgconf(executable):
+    executable = Path(executable)
+    if not executable.is_absolute() or not executable.is_file():
+        raise ValueError('PKG_CONFIG must name an existing absolute executable path')
+    version = subprocess.check_output([str(executable), '--version'], text=True, timeout=15).strip()
+    if version != PKGCONF_VERSION:
+        raise ValueError('Expected native pkgconf ' + PKGCONF_VERSION + ', found ' + version)
+    return executable
+
+
+def prepare_windows_pkgconf(output):
+    """Explicit tool bootstrap; administrative extraction does not install it."""
+    if platform.system() != 'Windows':
+        raise ValueError('Native Windows pkgconf preparation requires Windows')
+    arch = windows_architecture()
+    expected_hash, expected_size = PKGCONF_WINDOWS[arch]
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    filename = f'pkgconf-{arch}-{PKGCONF_VERSION}.msi'
+    installer = output / filename
+    if installer.is_file():
+        data = installer.read_bytes()
+    else:
+        url = f'https://github.com/pkgconf/pkgconf/releases/download/pkgconf-{PKGCONF_VERSION}/{filename}'
+        with urllib.request.urlopen(url, timeout=60) as response:
+            data = response.read(expected_size + 1)
+    if len(data) != expected_size or hashlib.sha256(data).hexdigest() != expected_hash:
+        raise ValueError('Pinned pkgconf MSI size or SHA256 mismatch: ' + filename)
+    installer.write_bytes(data)
+    extracted = output / arch
+    run(['msiexec.exe', '/a', installer, '/qn', '/norestart',
+         'TARGETDIR=' + str(extracted), '/L*v', output / (arch + '-extract.log')],
+        stdout=subprocess.DEVNULL, timeout=120)
+    candidates = list(extracted.rglob('pkgconf.exe'))
+    if len(candidates) != 1:
+        raise ValueError('Expected exactly one extracted native pkgconf.exe')
+    return check_pkgconf(candidates[0])
+
+
+def windows_build_environment():
+    """Keep the explicit pkgconf override inside vcpkg's clean port environment."""
+    value = os.environ.get('PKG_CONFIG')
+    if not value:
+        raise ValueError('Set PKG_CONFIG from --prepare-windows-pkgconf before building on Windows')
+    executable = check_pkgconf(value)
+    env = os.environ.copy()
+    env['PKG_CONFIG'] = str(executable)
+    kept = [name for name in env.get('VCPKG_KEEP_ENV_VARS', '').split(';') if name]
+    if 'PKG_CONFIG' not in kept:
+        kept.append('PKG_CONFIG')
+    env['VCPKG_KEEP_ENV_VARS'] = ';'.join(kept)
+    return env
 
 
 def validate_vcpkg_configuration(source=SOURCE, tool_root=None):
@@ -54,14 +127,16 @@ def build(output, prefix=None):
     validate_vcpkg_configuration()
     system = platform.system()
     if system == 'Windows':
-        triplet = 'arm64-windows-static' if platform.machine().lower() in ('arm64', 'aarch64') else 'x64-windows-static'
+        arch = windows_architecture()
+        triplet = arch + '-windows-static'
         vcpkg = Path(os.environ['VCPKG_ROOT'])
         validate_vcpkg_configuration(tool_root=vcpkg)
+        env = windows_build_environment()
         run(['cmake', '-S', SOURCE, '-B', output / 'build', '-A', 'ARM64' if triplet.startswith('arm64') else 'x64',
              '-DCMAKE_TOOLCHAIN_FILE=' + str(vcpkg / 'scripts/buildsystems/vcpkg.cmake'),
              '-DVCPKG_TARGET_TRIPLET=' + triplet, '-DUSING_VCPKG=ON',
-             '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded', '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW'])
-        run(['cmake', '--build', output / 'build', '--config', 'Release', '--parallel', '2'])
+             '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded', '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW'], env=env)
+        run(['cmake', '--build', output / 'build', '--config', 'Release', '--parallel', '2'], env=env)
         shutil.copy2(output / 'build/Release/cava.exe', output / 'cava.exe')
         # Preserve the actual patched vcpkg source and build recipes used by this
         # runner, rather than assuming that a moving registry used our versions.
@@ -135,7 +210,14 @@ def build(output, prefix=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output-dir', type=Path, required=True)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument('--output-dir', type=Path)
+    action.add_argument('--prepare-windows-pkgconf', type=Path, metavar='DIRECTORY')
     parser.add_argument('--dependency-prefix', type=Path)
     args = parser.parse_args()
-    print(build(args.output_dir, args.dependency_prefix))
+    if args.prepare_windows_pkgconf is not None:
+        if args.dependency_prefix is not None:
+            parser.error('--dependency-prefix is only valid with --output-dir')
+        print(prepare_windows_pkgconf(args.prepare_windows_pkgconf))
+    else:
+        print(build(args.output_dir, args.dependency_prefix))

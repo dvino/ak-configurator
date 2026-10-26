@@ -39,11 +39,22 @@ FFTW 3.3.10 port revision 10 and PThreads4W 3.0.0 port revision 14. The builder 
 port recipes have these exact versions. Both target
 architectures use the static runtime and static dependency triplets.
 
+Prepare native pkgconf 3.0.10 before building. The explicit preparation command
+downloads the official x64 or arm64 MSI, verifies its pinned size and SHA256,
+and uses `msiexec /a` to extract an administrative image under the specified
+directory. It does not install pkgconf or change PATH. The printed executable
+path becomes `PKG_CONFIG`; the builder also preserves it through vcpkg's clean
+environment using `VCPKG_KEEP_ENV_VARS`. This avoids vcpkg's obsolete MSYS2
+package downloads. A missing or wrong-version tool stops before CMake.
+
 ```powershell
 git clone https://github.com/microsoft/vcpkg.git vcpkg
 git -C vcpkg checkout 64810c6bf2bdc91ebcd75f140aec77580113f219
 ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed' }
 $env:VCPKG_ROOT = (Resolve-Path ./vcpkg).Path
+$env:PKG_CONFIG = python scripts/build_cava_helper.py --prepare-windows-pkgconf build/pkgconf
+if ($LASTEXITCODE -ne 0) { throw 'pkgconf preparation failed' }
 python scripts/build_cava_helper.py --output-dir build/audio
 ```
 

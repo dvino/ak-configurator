@@ -74,6 +74,10 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
+      - name: Test audio dependency setup (offline)
+        shell: bash
+        run: python scripts/test_build_cava_helper.py
+
       - name: Install macOS Rust target
         if: startsWith(matrix.os, 'macos-')
         run: rustup target add ${{ matrix.target }}
@@ -111,7 +115,16 @@ jobs:
         shell: pwsh
         run: |
           & "$env:GITHUB_WORKSPACE/target/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VCPKG_ROOT=$env:GITHUB_WORKSPACE/target/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Prepare pinned native Windows pkgconf
+        if: startsWith(matrix.platform, 'windows-')
+        shell: pwsh
+        run: |
+          $pkgconf = python scripts/build_cava_helper.py --prepare-windows-pkgconf target/pkgconf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "PKG_CONFIG=$pkgconf" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build bundled audio helper without capture
         shell: bash
