@@ -2,6 +2,46 @@
 
 # Desktop adaptation and review
 
+## P0 application delivery — 2026-10-26
+
+This work starts from `8e8ff0cd9d29956dd83d9fa9736a68d402d8c201` on `desktop-dev`. Application version remains `0.1.0-beta.2`, with the unchanged exact firmware `v0.6.0-beta.2` catalog. The work implements application update delivery, per-user installation and stronger native CI gates. It does not declare all hardware/platform release gates passed.
+
+### Changes and independent review
+
+The application update window now checks stable releases by default, with explicit prerelease opt-in. A complete six-target index and matching GitHub asset sizes/SHA256, project URLs and platform identities are required. Before downloading, the chosen release is checked again. A bounded, cancellable download is synced, reread and published without replacing an existing cache file. The UI displays the verified archive and installation instructions; it never launches an installer or sends a keyboard command. Application update polling now also runs in demo mode. The old unverified application download browser button is removed.
+
+Linux, Windows and macOS candidates include per-user install/uninstall scripts. They validate package inputs, stage replacement files, preserve the previous owned installation until activation, and leave separate preferences and backups intact. Stable installation paths preserve autostart targets. The CI installation probe installs, reinstalls, checks the installed binary and public inputs, verifies preservation of local preference data, and removes owned application files. It uses isolated paths and no GUI/device operations.
+
+The binary's `--self-check` path returns before settings, instance signalling, HID/proxy initialization and GUI creation. It checks public source/default contracts for all ten profiles and the application icon. Each native CI target must run this probe. The aggregate verifier requires exact source/binary/archive hashes, public profile identities and matching native installation reports before generating `app-update-index.json`. The pipeline retains reports and artifacts without publishing a release. macOS bundle version metadata is numeric; declared deployment minima do not establish runtime acceptance of older macOS versions.
+
+Separate independent reviewers inspected the update/UI/self-check scope and delivery/installer scope, with matching EN/RU documentation. Corrected findings include the nested updater module path exposed by the full Windows check; update jobs left unpolled in demo; unsafe old-installation deletion and cleanup of unowned staging paths; first-install/upgrade activation rollback; a moving Linux autostart target; Windows/macOS installer failure paths; invalid macOS version metadata; archive link/drive/ADS paths; incomplete runtime identity checks; and order-sensitive comparison of profile reports produced by separate processes. Semantic negative fixtures preserve all unrelated hashes so the intended rejection stage is tested.
+
+### Verification
+
+| Check | Result and scope |
+| --- | --- |
+| Full native offline suite | **1755 passed, 0 failed, 14 ignored**, 722.09 s. All automatic host tests ran sequentially; manual/special-environment checks remain ignored. |
+| New update/window/self-check tests | Seven verified-update, two update-window and three self-check cases passed and are included in the full suite. Window bounds were checked in RU/EN at 800 × 500. |
+| Python workflow/package suite | **31 tests: 30 passed, 1 skipped**, 44.179 s. The existing skipped case needs a native DMG. Synthetic six-platform package checks do not establish execution on those platforms. |
+| Native Linux binary | Development build passed with Rust 1.97.0 on Ubuntu 24.04 x86_64 in 24.10 s, with 160 warnings. This is not an optimized release build. |
+| Executable self-check | Actual Linux binary returned a passing report for ten profiles. A preexisting report was left unchanged with exit 1; combining self-check with the helper argument returned exit 2. No GUI, settings or HID initialization occurred on this path. |
+| Full Windows application checks | Production and test code passed `cargo check --locked --offline --target x86_64-pc-windows-gnu` using real MinGW C/resource dependencies, in 12.89 s and 25.08 s respectively. No platform API stubs were used. This is typechecking, not linking, Windows execution or MSVC/ARM64 qualification. |
+| Real Linux package and installation | A 42-member development trial archive was packaged with explicit dirty-source provenance. Install, reinstall, installed self-check and removal passed in an isolated prefix. Preference data remained. Installed binary and archive SHA256 are recorded in the smoke result; packaged scripts and guides match the final source byte for byte. |
+| Installer failure models and archive validation | Independent Linux fresh-install and upgrade desktop-publication failures retained/restored the expected prior state. ZIP/TAR drive-relative, ADS, traversal, absolute, backslash, link and special-file cases were rejected before extraction. These do not establish Windows/macOS script execution. |
+| Localization/documentation | Localization keys, changed EN/RU relative links, shell syntax and `git diff --check` passed. Python cache files are ignored so tests cannot create false dirty-source packaging failures. |
+
+Full-suite executable SHA256: `c122b03936405dde102d3e8ec5a509e929497a907c3ab6e0156aea1b836b0ed3`. Native binary: `8efa46fdeabf19dad5acb29d72f1af172d2208f3dae0017533e47a310c733c70`. The Linux trial archive is 34,854,194 bytes, SHA256 `9ba103df9b02fbc79e8add7d1fe4d9dc27bd5240ed827dc80094330410e95297`. It is test evidence, not a published release artifact.
+
+The native build initially exposed stale copied dependency metadata; a clean build resolved that environment problem without changing dependencies. Initial cross-platform attempts lacked a MinGW compiler and a correct nested module path; both were resolved before the passing Windows checks. A macOS ARM64 full check stopped in the `ring` C build because an Apple cross compiler/SDK is unavailable. Intermediate package test runs also caught source-snapshot races and fixtures whose newly bound hashes rejected mutations before the intended semantic assertion; the final tests use the corrected frozen source. No test assertion was weakened or newly ignored.
+
+### Release boundaries
+
+The updated six-target workflow has not been executed remotely for this commit. Windows/macOS/ARM64 executable linking, native installer/runtime behavior, GUI/tray/helper lifecycle, physical HID/reconnect/loader behavior, persistence, resource use and signed/notarized publication still need their own evidence. No signing credentials or Apple SDK are supplied. No keyboard operation, push, tag or public release occurred. SHA256 against GitHub metadata checks integrity, not independent publisher authenticity. The local packed-ROM fixture still requires unavailable private OEM bytes; none were added.
+
+The software changes are ready for source delivery after independent review. Full P0 release acceptance remains explicitly open for these external/native and hardware gates.
+
+Final independent integration acceptance: approved for a local commit and cumulative Git bundle from `c207ad1`, with reviewed staged patch SHA256 `e5d9d12b9145b1e5d0910e5bdc71bbed6476e56a817cc7c109db5faaaecb40e5`. No blocking findings remain. Only this acceptance record and its Russian counterpart were added after that review. Acceptance covers source handoff and the recorded local checks, not external CI, hardware, signing or release publication.
+
 ## Native installation, reset and OS helper — 2026-10-26
 
 This continuation starts at `1c3dc1878e2f19e3abcd16c4b0a690a420b33796` on `desktop-dev`. Application version remains `0.1.0-beta.2`, with the exact AK820 `v0.6.0-beta.2` target. Firmware code, published catalogs, image identities and upstream Entropy history are unchanged. Twenty public IHX/map files from the pinned release are bundled and checked against its manifest; no private OEM data is included. Git attributes preserve exact firmware bytes across platform line-ending settings; upstream SDCC map padding is retained.

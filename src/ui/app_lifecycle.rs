@@ -1485,6 +1485,10 @@ impl eframe::App for EntropyApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // Application-only update jobs also run in the offline keyboard demo.
+        // Poll before its device-work early return; starting a job remains explicit.
+        #[cfg(not(target_arch = "wasm32"))]
+        self.app_update_runtime.poll(&mut self.update_check);
         if self.ak820_demo {
             #[cfg(not(target_arch = "wasm32"))]
             self.tick_ak820_rgb_scene(ctx);
@@ -1531,6 +1535,7 @@ impl eframe::App for EntropyApp {
             let connect_pending = matches!(self.connect_state, ConnectState::Loading { .. });
             let update_check_pending =
                 matches!(self.update_check, UpdateCheckState::Checking { .. })
+                    || self.app_update_runtime.busy()
                     || crate::app::firmware_update_check_pending(&self.firmware_update_check);
             let layout_indicator_interval = self
                 .app_settings
@@ -1570,6 +1575,9 @@ impl eframe::App for EntropyApp {
         // Submit the independent layout-indicator viewport from `ui`; `logic`
         // remains model-only, while the native renderer owns viewport scheduling.
         self.draw_sticky_layout_window(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.app_update_runtime
+            .draw(ctx, self.app_settings.language);
 
         self.tour_target_rects.clear();
 

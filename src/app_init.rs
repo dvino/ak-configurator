@@ -687,6 +687,8 @@ impl EntropyApp {
             device_display_names: std::collections::HashMap::new(),
             device_about_info: None,
             update_check,
+            #[cfg(not(target_arch = "wasm32"))]
+            app_update_runtime: Default::default(),
             firmware_update_check: FirmwareUpdateCheckState::Unsupported,
             tour_state: TourState::default(),
             tour_target_rects: Vec::new(),

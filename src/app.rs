@@ -114,6 +114,9 @@ mod alt_repeat_settings_ui;
 mod app_lifecycle;
 #[path = "ui/app_settings.rs"]
 mod app_settings_ui;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/app_updates.rs"]
+pub(crate) mod app_updates;
 #[path = "ui/application_layout_runtime.rs"]
 mod application_layout_runtime;
 #[path = "ui/application_layouts_settings.rs"]

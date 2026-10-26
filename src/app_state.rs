@@ -5737,6 +5737,8 @@ pub struct EntropyApp {
     pub(crate) device_display_names: std::collections::HashMap<String, String>,
     pub(crate) device_about_info: Option<DeviceAboutInfo>,
     pub(crate) update_check: UpdateCheckState,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) app_update_runtime: super::app_updates::Runtime,
     pub(crate) firmware_update_check: FirmwareUpdateCheckState,
     pub(crate) tour_state: TourState,
     pub(crate) tour_target_rects: Vec<(TourTarget, egui::Rect)>,

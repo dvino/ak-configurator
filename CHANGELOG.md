@@ -23,6 +23,10 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Add opt-in EN/RU OS indication through volatile FD02, shared owner/failure gates and a small `--ak820-helper`; release GUI app/renderer/windows while the helper runs and recreate the interface on request in the same process
 - Add a dedicated unsigned DRAFT candidate workflow and verifier for six platform targets: Linux `.tar.gz`, Windows `.zip` and macOS `.app.zip`, with SHA256, localized guides, public offline firmware inputs and provenance; no publication has been executed
 
+- Add explicit stable/prerelease application updates with a six-target release index, GitHub size/SHA256 checks, withdrawal/change recheck, cancellable verified cache downloads and a manual installation handoff
+- Add verified per-user installation/removal with staged replacement and stable application paths; preserve helper settings and separately stored keyboard data
+- Add `--self-check` before GUI/HID/preferences startup and require exact public-source execution reports plus native installer smoke checks in candidate CI
+
 ### Corrections
 
 - Preserve the dispatch cooldown across short pauses and expire pending Off commands after sleep or clock discontinuities
@@ -34,7 +38,7 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification
 - RGB scenes require explicit playback; frames remain in device RAM, have no palette readback or atomic commit, and are not saved to NVM or restored automatically
 - Previously recorded focused backup/AK820 tests and native Linux offline UI checks passed; the changed tree requires its own results in REVIEW. Physical RGB timing, safe frame rate, resource measurements, and Windows/macOS/arm64 runtime qualification remain open
-- Native restore, reset, installation, OEM rollback and helper lifecycle are implemented in source; their physical behavior and platform lifecycle/resource qualification remain open. No hardware operation is claimed. Public linked firmware and default-settings fixtures do not replace the unavailable positive released packed-image/full-ROM fixture or its OEM erase-helper inputs. Historical isolated Windows GNU/macOS arm64 adapter typechecks are not current full-app build evidence. Current six-target execution, per-platform runtime/HID/function checks and signing remain separate gates. Portable archives do not claim native system installers. The candidate workflow remains DRAFT-only; no publication occurred.
+- Native restore, reset, installation, OEM rollback and helper lifecycle are implemented in source; their physical behavior and platform lifecycle/resource qualification remain open. No hardware operation is claimed. Public linked firmware and default-settings fixtures do not replace the unavailable positive released packed-image/full-ROM fixture or its OEM erase-helper inputs. Historical isolated Windows GNU/macOS arm64 adapter typechecks are not current full-app build evidence. Current six-target execution, per-platform runtime/HID/function checks and signing remain separate gates. Per-user install scripts are included; MSI/DEB/PKG packaging and signed/notarized distribution are not claimed. The candidate workflow remains DRAFT-only; no publication occurred.
 - Firmware admission is pinned to beta2 with explicit prerelease opt-in and persistent known withdrawal blocks. Offline metadata can miss a later withdrawal; latest-stable/history browsing and arbitrary custom-build support remain outside this path. OEM rollback requires locally pinned first-capture ownership evidence; missing usable serial/provenance blocks it.
 - Existing Entropy release history below is retained unchanged
 

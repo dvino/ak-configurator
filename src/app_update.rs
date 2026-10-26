@@ -1,3 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "app_update/verified.rs"]
+pub(crate) mod verified;
+
 const AK_CONFIGURATOR_LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/dvino/ak-configurator/releases/latest";
 const AK_CONFIGURATOR_LATEST_RELEASE_PAGE: &str =

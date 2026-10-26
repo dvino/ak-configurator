@@ -11,6 +11,7 @@ import tarfile
 import tomllib
 import zipfile
 import io
+import plistlib
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
@@ -45,7 +46,7 @@ def check_architecture(data, platform):
         raise ValueError(f"Binary format/architecture does not match {platform}")
 
 
-def build_package(binary, platform, output, allow_dirty=False):
+def build_package(binary, platform, output, allow_dirty=False, runtime_check=None):
     data = Path(binary).read_bytes()
     check_architecture(data, platform)
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
@@ -90,10 +91,30 @@ def build_package(binary, platform, output, allow_dirty=False):
         "eframe-LICENSE-MIT": (ROOT / "vendor/eframe/LICENSE-MIT").read_bytes(),
         "eframe-LICENSE-APACHE": (ROOT / "vendor/eframe/LICENSE-APACHE").read_bytes(),
     }
-    files.update(offline_files)
+    helper_dir = "windows" if platform.startswith("windows-") else ("macos" if app_bundle else "linux")
+    files["install-user.ps1" if helper_dir == "windows" else "install-user.sh"] = (ROOT / "scripts/ak820-release" / helper_dir / ("install-user.ps1" if helper_dir == "windows" else "install-user.sh")).read_bytes()
+    files["uninstall-user.ps1" if helper_dir == "windows" else "uninstall-user.sh"] = (ROOT / "scripts/ak820-release" / helper_dir / ("uninstall-user.ps1" if helper_dir == "windows" else "uninstall-user.sh")).read_bytes()
     if app_bundle:
-        plist = f'''<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>ak-configurator</string><key>CFBundleIdentifier</key><string>com.dvino.ak-configurator</string><key>CFBundleName</key><string>AK Configurator</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>{version}</string><key>LSMinimumSystemVersion</key><string>10.15</string></dict></plist>\n'''
-        files["AK-Configurator.app/Contents/Info.plist"] = plist.encode("utf-8")
+        files["AK-Configurator.app/Contents/Resources/install-user.sh"] = files["install-user.sh"]
+        files["AK-Configurator.app/Contents/Resources/uninstall-user.sh"] = files["uninstall-user.sh"]
+    files.update(offline_files)
+    if runtime_check is not None:
+        check = json.loads(Path(runtime_check).read_text(encoding="utf-8"))
+        if check.get("format") != "ak-configurator-self-check-1" or check.get("platform") != platform or check.get("status") != "passed" or check.get("hardware_access") is not False or check.get("network_access") is not False:
+            raise ValueError("Runtime self-check does not prove a passing, offline, device-free execution for this target")
+        files["runtime-self-check.json"] = (json.dumps(check, indent=2, sort_keys=True) + "\n").encode()
+    if app_bundle:
+        numeric_version = ".".join(version.split("-", 1)[0].split("+")[0].split(".")[:3])
+        plist = {
+            "CFBundleExecutable": "ak-configurator",
+            "CFBundleIdentifier": "com.dvino.ak-configurator",
+            "CFBundleName": "AK Configurator",
+            "CFBundlePackageType": "APPL",
+            "CFBundleShortVersionString": numeric_version,
+            "CFBundleVersion": numeric_version,
+            "LSMinimumSystemVersion": "11.0" if platform == "macos-arm64" else "10.15",
+        }
+        files["AK-Configurator.app/Contents/Info.plist"] = plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=True)
     manifest = {
         "format": "ak-configurator-desktop-candidate-1",
         "application_version": version,
@@ -146,9 +167,10 @@ def main():
     parser.add_argument("--platform", choices=PLATFORMS, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument("--runtime-check", type=Path, help="JSON produced by the built target's --self-check")
     args = parser.parse_args()
     try:
-        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty))
+        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty, args.runtime_check))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Packaging stopped: {error}\n")
 

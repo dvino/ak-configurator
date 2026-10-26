@@ -81,7 +81,8 @@ jobs:
             --directory candidate-artifacts \
             --version "$CANDIDATE_VERSION" \
             --source-commit "$SOURCE_COMMIT" \
-            --manifest release-manifest.json
+            --manifest release-manifest.json \
+            --update-index app-update-index.json
       - name: Retain verified candidate packages (no release publication)
         uses: actions/upload-artifact@v7
         with:
@@ -90,6 +91,8 @@ jobs:
             candidate-artifacts/*.zip
             candidate-artifacts/*.tar.gz
             candidate-artifacts/*.sha256
+            candidate-artifacts/install-smoke-*.json
             release-manifest.json
+            app-update-index.json
           if-no-files-found: error
           retention-days: 30

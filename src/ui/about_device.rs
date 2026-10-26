@@ -839,30 +839,16 @@ impl EntropyApp {
                     ui.ctx()
                         .data_mut(|d| d.insert_temp(licenses_id, show_licenses));
                 }
-                let checking = matches!(self.update_check, UpdateCheckState::Checking { .. });
-                let ready = match &self.update_check {
-                    UpdateCheckState::Ready(result) => Some(result.clone()),
-                    _ => None,
-                };
-                let has_asset = ready
-                    .as_ref()
-                    .is_some_and(|result| result.downloadable_asset().is_some());
-                let button_size = egui::vec2(metrics.value(132.0), metrics.value(32.0));
-                let button_gap = metrics.value(8.0);
-                let button_count = 2 + usize::from(has_asset) + usize::from(ready.is_some());
-                let actions_width = button_size.x * button_count as f32
-                    + button_gap * button_count.saturating_sub(1) as f32;
+                let button_size = egui::vec2(metrics.value(166.0), metrics.value(32.0));
                 let actions_rect = egui::Rect::from_center_size(
                     egui::pos2(
                         list_viewport.center().x,
                         list_viewport.bottom() + metrics.value(34.0),
                     ),
-                    egui::vec2(actions_width, button_size.y),
+                    egui::vec2(button_size.x * 2.0 + metrics.value(8.0), button_size.y),
                 );
                 crate::ui_style::allocate_ui_at_rect(ui, actions_rect, |ui| {
-                    ui.set_min_size(actions_rect.size());
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = button_gap;
+                    ui.horizontal_wrapped(|ui| {
                         if crate::ui_style::modern_button(
                             ui,
                             crate::i18n::tr_catalog(lang, "display_settings.font_licenses"),
@@ -873,44 +859,19 @@ impl EntropyApp {
                         {
                             ui.ctx().data_mut(|d| d.insert_temp(licenses_id, true));
                         }
+                        #[cfg(not(target_arch = "wasm32"))]
                         if crate::ui_style::modern_button(
                             ui,
-                            check_updates_label(lang, checking),
+                            match lang {
+                                crate::i18n::Language::Russian => "Обновления приложения",
+                                crate::i18n::Language::English => "Application updates",
+                            },
                             button_size,
-                            !checking,
+                            true,
                         )
                         .clicked()
                         {
-                            self.update_check = crate::app::start_update_check();
-                        }
-
-                        if let Some(result) = ready {
-                            if let Some(asset) = result.downloadable_asset() {
-                                if crate::ui_style::modern_button(
-                                    ui,
-                                    download_update_label(lang),
-                                    button_size,
-                                    true,
-                                )
-                                .clicked()
-                                    && !crate::app::open_url_in_browser(&asset.url)
-                                {
-                                    self.status_msg = browser_open_failed(lang).to_owned();
-                                }
-                            }
-
-                            if crate::ui_style::modern_button(
-                                ui,
-                                changelog_label(lang),
-                                button_size,
-                                true,
-                            )
-                            .on_hover_text(changelog_tooltip(lang))
-                            .clicked()
-                                && !crate::app::open_url_in_browser(&result.release_url)
-                            {
-                                self.status_msg = browser_open_failed(lang).to_owned();
-                            }
+                            self.app_update_runtime.open = true;
                         }
                     });
                 });

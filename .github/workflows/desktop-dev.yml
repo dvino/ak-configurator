@@ -106,7 +106,11 @@ jobs:
 
       - name: Test AK820 device ownership (Windows and macOS)
         if: startsWith(matrix.platform, 'windows-') || startsWith(matrix.platform, 'macos-')
-        run: cargo test --locked --bin ak-configurator hid_ownership -- --test-threads=1
+        run: cargo test --locked --bin ak-configurator 'hid_ownership::' -- --test-threads=1
+
+      - name: Test macOS USB metadata validation
+        if: startsWith(matrix.platform, 'macos-')
+        run: cargo test --locked --bin ak-configurator macos_usb -- --test-threads=1
 
       - name: Build development binary (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
@@ -134,12 +138,30 @@ jobs:
           $hash = (Get-FileHash $env:BINARY -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $(Split-Path $env:BINARY -Leaf)" | Set-Content -Encoding ascii (Join-Path (Split-Path $env:BINARY) 'SHA256SUMS')
 
+      - name: Execute target runtime self-check (offline, no device access)
+        shell: bash
+        env:
+          CANDIDATE_BINARY: ${{ matrix.binary }}
+        run: |
+          mkdir -p target/candidate
+          "$CANDIDATE_BINARY" --self-check --output target/candidate/runtime-self-check.json
+
       - name: Package unsigned beta2 desktop candidate
         shell: bash
         env:
           CANDIDATE_BINARY: ${{ matrix.binary }}
           CANDIDATE_PLATFORM: ${{ matrix.platform }}
-        run: python scripts/package_ak820_candidate.py --binary "$CANDIDATE_BINARY" --platform "$CANDIDATE_PLATFORM" --output-dir target/candidate
+        run: python scripts/package_ak820_candidate.py --binary "$CANDIDATE_BINARY" --platform "$CANDIDATE_PLATFORM" --output-dir target/candidate --runtime-check target/candidate/runtime-self-check.json
+
+      - name: Install, execute, and uninstall candidate on native runner
+        shell: bash
+        env:
+          CANDIDATE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          version="$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          archive="target/candidate/ak-configurator-${version}-${CANDIDATE_PLATFORM}"
+          case "$CANDIDATE_PLATFORM" in linux-*) archive="$archive.tar.gz" ;; windows-*) archive="$archive.zip" ;; macos-*) archive="$archive.app.zip" ;; esac
+          python scripts/test_ak820_installed_candidate.py --archive "$archive" --platform "$CANDIDATE_PLATFORM" --report "target/candidate/install-smoke-${CANDIDATE_PLATFORM}.json"
 
       - name: Upload development binary and checksum
         uses: actions/upload-artifact@v7
@@ -159,5 +181,6 @@ jobs:
             target/candidate/*.zip
             target/candidate/*.tar.gz
             target/candidate/*.sha256
+            target/candidate/install-smoke-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: 7

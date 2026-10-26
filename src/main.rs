@@ -45,6 +45,8 @@ mod linux_ble;
 #[cfg(target_os = "linux")]
 mod linux_setup;
 #[cfg(not(target_arch = "wasm32"))]
+mod package_self_check;
+#[cfg(not(target_arch = "wasm32"))]
 mod pdf;
 mod popup_state;
 #[cfg(not(target_arch = "wasm32"))]
@@ -331,6 +333,13 @@ fn initial_window_size() -> [f32; 2] {
 }
 
 fn main() -> eframe::Result<()> {
+    // Packaging probes must return before proxy/device discovery, preferences,
+    // single-instance signalling, platform HID initialization or GUI startup.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(code) = package_self_check::run_if_requested(std::env::args_os()) {
+        std::process::exit(code);
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     if hid::run_hid_proxy_if_requested() {
         return Ok(());

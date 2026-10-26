@@ -48,6 +48,10 @@ Enable **OS layout indicator** and map EN/RU to Off, On or Slow breathing; Norma
 
 ## Candidate delivery and evidence
 
-Portable packages are Linux x86_64/arm64 `.tar.gz`, Windows x86_64/arm64 `.zip` and macOS x86_64/arm64 `.app.zip`, with SHA256, provenance, public offline firmware inputs and EN/RU instructions. They are unsigned candidates; native system installers, signing/notarization and platform integration are separate concerns. See [INSTALL.md](INSTALL.md) for extraction and launch.
+Portable packages are Linux x86_64/arm64 `.tar.gz`, Windows x86_64/arm64 `.zip` and macOS x86_64/arm64 `.app.zip`, with SHA256, provenance, public offline firmware inputs and EN/RU instructions. They include explicit per-user installation/removal scripts and remain unsigned candidates; MSI/DEB/PKG and signing/notarization are separate concerns. See [INSTALL.md](INSTALL.md) for extraction, installation and launch.
 
 The native workflows above are implemented in source. No physical flash, OEM rollback, settings retention or complete six-target runtime qualification is claimed. Public IHX/map and default-settings fixtures do not provide a positive released packed-image/full-ROM fixture without the unavailable OEM erase-helper bytes. Current build/test/review evidence is recorded in [REVIEW.md](REVIEW.md). No fully qualified release or publication is claimed.
+
+## Application updates
+
+Open **About AK Configurator → Application updates** to check releases explicitly. Stable is the default; prereleases require opt-in. A newer release can be downloaded only after its complete six-target index, project origin, platform, size and SHA256 agree. The release is checked again before download; a changed or withdrawn selection stops the operation. The verified archive is saved locally and its path is displayed. Quit the application and helper, then follow the included per-user installation instructions. No installer or keyboard command starts automatically, and helper preferences are preserved.
