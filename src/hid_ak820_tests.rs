@@ -207,6 +207,220 @@ fn rgb_stream_rejects_read_only_sessions_before_transport() {
     assert!(log.requests().is_empty());
 }
 
+fn start_rgb(hid: &HidDevice) -> Ak820RgbStream {
+    let Ak820RgbStreamResult::Applied(token) = hid
+        .ak820_stream_rgb_frame(&[[80; 3]; 82], None, &AtomicBool::new(false))
+        .unwrap()
+    else {
+        panic!("start");
+    };
+    token
+}
+
+#[test]
+fn rgb_restore_preserves_original_across_frames_and_never_saves() {
+    let (hid, log) = palette_device(None);
+    let first = start_rgb(&hid);
+    assert!(first.can_restore_builtin());
+    let Ak820RgbStreamResult::Applied(next) = hid
+        .ak820_stream_rgb_frame(&[[0; 3]; 82], Some(&first), &AtomicBool::new(false))
+        .unwrap()
+    else {
+        panic!("frame");
+    };
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&next, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::Restored([2, 0, 42, 80, 200, 100])
+    );
+    let before = log.requests().len();
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&first, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+    assert_eq!(before, log.requests().len());
+    assert!(!log.requests().iter().any(|p| p[0] == 9));
+}
+
+#[test]
+fn rgb_restore_prior_direct_is_unavailable_and_off_is_preserved() {
+    for mode in [0, 1] {
+        let (hid, log) = palette_device(None);
+        // The initial observed mode is authoritative, including Off.
+        let mut current = [mode, 0, 77, 60, 90, 100];
+        log.respond_by(move |p| {
+            let mut r = *p;
+            match (p[0], p[1]) {
+                (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+                (8, 0x41) => r[2..8].copy_from_slice(&current),
+                (7, 0x41) => current.copy_from_slice(&p[2..8]),
+                (7, 0x42) => {}
+                _ => return Some(Err("unexpected".into())),
+            }
+            Some(Ok(r))
+        });
+        let token = start_rgb(&hid);
+        assert_eq!(token.can_restore_builtin(), mode != 1);
+        let before = log.requests().len();
+        let result = hid
+            .ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+            .unwrap();
+        if mode == 1 {
+            assert_eq!(result, Ak820RgbRestoreResult::Unavailable);
+            assert_eq!(before, log.requests().len());
+        } else {
+            assert_eq!(
+                result,
+                Ak820RgbRestoreResult::Restored([0, 0, 77, 60, 90, 100])
+            );
+        }
+        assert!(!log.requests().iter().any(|p| p[0] == 9));
+    }
+}
+
+#[test]
+fn rgb_restore_rejects_stale_sessions_new_starts_readonly_and_cancel() {
+    let (mut hid, log) = palette_device(None);
+    let first = start_rgb(&hid);
+    let second = start_rgb(&hid);
+    let (other, other_log) = palette_device(None);
+    assert_eq!(
+        other
+            .ak820_restore_rgb_stream(&second, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+    assert!(other_log.requests().is_empty());
+    let before = log.requests().len();
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&first, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&second, &AtomicBool::new(true))
+            .unwrap(),
+        Ak820RgbRestoreResult::Cancelled
+    );
+    hid.read_only = Some(super::super::ReadOnlyHidSession::default());
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&second, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+    assert_eq!(before, log.requests().len());
+}
+
+#[test]
+fn rgb_restore_yields_to_changed_mode_and_latches_bad_readback() {
+    for bad_readback in [false, true] {
+        let (hid, log) = palette_device(None);
+        let token = start_rgb(&hid);
+        let owned_mode = token.mode;
+        log.respond_by(move |p| {
+            let mut r = *p;
+            match (p[0], p[1]) {
+                (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+                (8, 0x41) => {
+                    r = owned_mode;
+                    if !bad_readback {
+                        r[2] = 2;
+                    }
+                }
+                (7, 0x41) if bad_readback => {}
+                _ => return Some(Err("must stop".into())),
+            }
+            Some(Ok(r))
+        });
+        let before = log.requests().len();
+        let result = hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false));
+        if bad_readback {
+            assert!(result.is_err());
+            assert!(!hid.ak820_editing_ready());
+        } else {
+            assert_eq!(result.unwrap(), Ak820RgbRestoreResult::OwnershipLost);
+            assert_eq!(log.requests().len() - before, 2);
+        }
+        let sent = log.requests().len();
+        assert_eq!(
+            hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+                .unwrap(),
+            Ak820RgbRestoreResult::OwnershipLost
+        );
+        assert_eq!(sent, log.requests().len());
+        assert!(!log.requests().iter().any(|p| p[0] == 9));
+    }
+}
+
+#[test]
+fn rgb_restore_cancellation_after_getter_sends_no_setter() {
+    let (hid, log) = palette_device(None);
+    let token = start_rgb(&hid);
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let worker_cancel = cancel.clone();
+    let mode = token.mode;
+    log.respond_by(move |p| {
+        let mut r = *p;
+        match (p[0], p[1]) {
+            (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+            (8, 0x41) => {
+                r = mode;
+                worker_cancel.store(true, Ordering::Release);
+            }
+            _ => return Some(Err("cancelled before setter".into())),
+        }
+        Some(Ok(r))
+    });
+    let before = log.requests().len();
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&token, &cancel).unwrap(),
+        Ak820RgbRestoreResult::Cancelled
+    );
+    assert_eq!(log.requests().len() - before, 2);
+    assert!(hid.ak820_editing_ready());
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+}
+
+#[test]
+fn rgb_restore_storage_timeout_or_unknown_mode_stops_and_latches() {
+    for unknown_mode in [false, true] {
+        let (hid, log) = palette_device(None);
+        let token = start_rgb(&hid);
+        log.respond_by(move |p| {
+            if !unknown_mode {
+                return Some(Err("storage timeout".into()));
+            }
+            let mut r = *p;
+            if p[..2] == [0xfd, 1] {
+                r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]);
+            } else if p[..2] == [8, 0x41] {
+                r[2] = 255;
+            } else {
+                return Some(Err("must not restore unknown mode".into()));
+            }
+            Some(Ok(r))
+        });
+        let before = log.requests().len();
+        assert!(hid
+            .ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+            .is_err());
+        assert!(!hid.ak820_editing_ready());
+        let sent = log.requests();
+        assert!(!sent[before..].iter().any(|p| p[0] == 7 || p[0] == 9));
+        assert_eq!(
+            hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+                .unwrap(),
+            Ak820RgbRestoreResult::OwnershipLost
+        );
+        assert_eq!(sent.len(), log.requests().len());
+    }
+}
+
 fn stream(first: &[u8]) -> Vec<u8> {
     let mut bytes = first.to_vec();
     bytes.extend([0; 16]);

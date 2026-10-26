@@ -2,3 +2,14 @@
 assets/ak820/** -text
 # SDCC maps retain upstream column padding, including trailing spaces.
 assets/ak820/firmware-beta2/*/application.map whitespace=-blank-at-eol
+# Vendored CAVA and dependency source material retains its upstream bytes.
+vendor/cava/** -text
+vendor/cava-dependencies/** -text
+# Preserve whitespace in these unmodified files from the pinned archive.
+vendor/cava/README.md whitespace=-space-before-tab
+vendor/cava/SHADERS.md whitespace=-blank-at-eof
+vendor/cava/cava_win/setup.iss whitespace=-blank-at-eof
+vendor/cava/example_files/test_configs/*_zero_test whitespace=-blank-at-eof
+vendor/cava/cavandroid/gradlew.bat whitespace=cr-at-eol
+vendor/cava/third_party/incbin.h whitespace=-blank-at-eol
+vendor/cava-dependencies/iniparser-4.2.6-LICENSE whitespace=-blank-at-eof

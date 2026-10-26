@@ -38,8 +38,10 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 install -m 0755 "$HERE/ak-configurator" "$STAGE/ak-configurator"
+cp -R "$HERE/audio" "$STAGE/audio"
+chmod 0755 "$STAGE/audio/cava"
 touch "$STAGE/.ak-configurator-owned"
-for f in "$HERE"/offline "$HERE"/INSTALL.en.md "$HERE"/INSTALL.ru.md "$HERE"/firmware-provenance.json; do [ ! -e "$f" ] || cp -R "$f" "$STAGE/"; done
+for f in "$HERE"/audio-sources "$HERE"/CAVA-LICENSE "$HERE"/CAVA-PROVENANCE.json "$HERE"/THIRD-PARTY-AUDIO.en.md "$HERE"/THIRD-PARTY-AUDIO.ru.md "$HERE"/offline "$HERE"/INSTALL.en.md "$HERE"/INSTALL.ru.md "$HERE"/firmware-provenance.json; do [ ! -e "$f" ] || cp -R "$f" "$STAGE/"; done
 install -m 0755 "$HERE/install-user.sh" "$STAGE/install-user.sh"
 install -m 0755 "$HERE/uninstall-user.sh" "$STAGE/uninstall-user.sh"
 ln -s "$CURRENT/ak-configurator" "$LINK_STAGE"

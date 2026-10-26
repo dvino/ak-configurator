@@ -46,7 +46,12 @@ def check_architecture(data, platform):
         raise ValueError(f"Binary format/architecture does not match {platform}")
 
 
-def build_package(binary, platform, output, allow_dirty=False, runtime_check=None):
+def build_package(binary, platform, output, allow_dirty=False, runtime_check=None, cava_helper=None):
+    if cava_helper is None:
+        raise ValueError("Bundled CAVA helper is required")
+    cava_data = Path(cava_helper).read_bytes()
+    check_architecture(cava_data, platform)
+    cava_identity = json.loads((ROOT / "vendor/cava-provenance.json").read_text())
     data = Path(binary).read_bytes()
     check_architecture(data, platform)
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
@@ -78,7 +83,14 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
     executable = "ak-configurator.exe" if platform.startswith("windows-") else "ak-configurator"
     app_bundle = platform.startswith("macos-")
     payload_binary = "AK-Configurator.app/Contents/MacOS/ak-configurator" if app_bundle else executable
+    cava_name = ("AK-Configurator.app/Contents/MacOS/" if app_bundle else "") + "audio/cava" + (".exe" if platform.startswith("windows-") else "")
     files = {
+        cava_name: cava_data,
+        "audio-sources/build_cava_helper.py": (ROOT / "scripts/build_cava_helper.py").read_bytes(),
+        "CAVA-LICENSE": (ROOT / "vendor/cava/LICENSE").read_bytes(),
+        "CAVA-PROVENANCE.json": (ROOT / "vendor/cava-provenance.json").read_bytes(),
+        "THIRD-PARTY-AUDIO.en.md": (ROOT / "docs/THIRD-PARTY-AUDIO.md").read_bytes(),
+        "THIRD-PARTY-AUDIO.ru.md": (ROOT / "docs/ru/THIRD-PARTY-AUDIO.md").read_bytes(),
         payload_binary: data,
         "INSTALL.en.md": (ROOT / "docs/INSTALL.md").read_bytes(),
         "INSTALL.ru.md": (ROOT / "docs/ru/INSTALL.md").read_bytes(),
@@ -97,7 +109,29 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
     if app_bundle:
         files["AK-Configurator.app/Contents/Resources/install-user.sh"] = files["install-user.sh"]
         files["AK-Configurator.app/Contents/Resources/uninstall-user.sh"] = files["uninstall-user.sh"]
+    if platform.startswith("windows-"):
+        windows_source = Path(cava_helper).parent / "cava-windows-dependency-sources.tar.gz"
+        if not windows_source.is_file():
+            raise ValueError("Windows helper corresponding dependency source is required")
+        files["audio-sources/windows-built-dependencies.tar.gz"] = windows_source.read_bytes()
     files.update(offline_files)
+    for dependency in sorted((ROOT / "vendor/cava-dependencies").iterdir()):
+        if dependency.is_file():
+            files["audio-sources/" + dependency.name] = dependency.read_bytes()
+    source_buffer = io.BytesIO()
+    with tarfile.open(fileobj=source_buffer, mode="w:gz") as source_archive:
+        for source in sorted((ROOT / "vendor/cava").rglob("*")):
+            if source.is_file():
+                value = source.read_bytes()
+                entry = tarfile.TarInfo("cava/" + source.relative_to(ROOT / "vendor/cava").as_posix())
+                entry.size = len(value)
+                entry.mode = 0o644
+                source_archive.addfile(entry, io.BytesIO(value))
+    files["audio-sources/cava-patched-source.tar.gz"] = source_buffer.getvalue()
+    if app_bundle:
+        for filename, value in list(files.items()):
+            if filename.startswith(("audio-sources/", "CAVA-", "THIRD-PARTY-AUDIO")):
+                files["AK-Configurator.app/Contents/Resources/" + filename] = value
     if runtime_check is not None:
         check = json.loads(Path(runtime_check).read_text(encoding="utf-8"))
         if check.get("format") != "ak-configurator-self-check-1" or check.get("platform") != platform or check.get("status") != "passed" or check.get("hardware_access") is not False or check.get("network_access") is not False:
@@ -112,6 +146,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": numeric_version,
             "CFBundleVersion": numeric_version,
+            "NSAudioCaptureUsageDescription": "Audio visualization uses system playback audio locally while Music is enabled.",
             "LSMinimumSystemVersion": "11.0" if platform == "macos-arm64" else "10.15",
         }
         files["AK-Configurator.app/Contents/Info.plist"] = plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=True)
@@ -128,6 +163,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         "firmware_tag_object": firmware["tag_object"],
         "firmware_provenance_sha256": digest(provenance),
         "binary_sha256": digest(data),
+        "audio_helper": {**cava_identity, "path": cava_name, "sha256": digest(cava_data)},
     }
     files["manifest.json"] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     files["SHA256SUMS"] = "".join(f"{digest(value)}  {name}\n" for name, value in sorted(files.items())).encode()
@@ -145,7 +181,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
                 info = tarfile.TarInfo(f"{name}/{filename}")
                 info.size = len(value)
                 info.mtime = 0
-                info.mode = 0o755 if filename == executable else 0o644
+                info.mode = 0o755 if filename in (executable, cava_name) else 0o644
                 info.uid = info.gid = 0
                 info.uname = info.gname = ""
                 package.addfile(info, io.BytesIO(value))
@@ -154,7 +190,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
             for filename, value in sorted(files.items()):
                 info = zipfile.ZipInfo(f"{name}/{filename}", date_time=(1980, 1, 1, 0, 0, 0))
                 info.create_system = 3
-                info.external_attr = (0o100755 if filename == payload_binary else 0o100644) << 16
+                info.external_attr = (0o100755 if filename in (payload_binary, cava_name) else 0o100644) << 16
                 info.compress_type = zipfile.ZIP_DEFLATED
                 package.writestr(info, value)
     checksum.write_text(f"{digest(archive.read_bytes())}  {archive.name}\n", encoding="ascii")
@@ -168,9 +204,10 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--allow-dirty", action="store_true")
     parser.add_argument("--runtime-check", type=Path, help="JSON produced by the built target's --self-check")
+    parser.add_argument("--cava-helper", type=Path, required=True)
     args = parser.parse_args()
     try:
-        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty, args.runtime_check))
+        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty, args.runtime_check, args.cava_helper))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Packaging stopped: {error}\n")
 

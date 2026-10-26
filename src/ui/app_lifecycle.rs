@@ -297,9 +297,9 @@ impl EntropyApp {
         self.maybe_start_periodic_battery_refresh(ctx, main_window_hidden_to_tray);
         self.maybe_start_deferred_device_load(ctx, main_window_hidden_to_tray);
         self.update_application_layout_runtime();
-        if main_window_hidden_to_tray {
-            self.ak820_rgb_scene_stop();
-        }
+        // eframe keeps App::logic alive while the GUI is hidden. Explicit RGB
+        // sources keep their existing bounded tick; on_exit still stops them
+        // when quitting or handing off to the lightweight layout helper.
         self.tick_ak820_rgb_scene(ctx);
         self.tick_ak820_os_indicator(ctx);
         // Foreground application changes happen while Entropy itself is not
@@ -1360,6 +1360,35 @@ mod tests {
         // Minimized and occluded windows are not tray-hidden, so App::logic
         // keeps their background device polling alive while App::ui is skipped.
         assert!(should_poll_device_scan(false, false));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn hidden_to_tray_keeps_explicit_rgb_sources_until_exit() {
+        for music in [false, true] {
+            let mut app = EntropyApp::new_inert_for_test();
+            app.ak820_demo = true;
+            app.ak820_demo_profile = Some(crate::app::ak820_beta1_profiles::ProfileId::Main);
+            let scene = crate::ak820_rgb_compositor::Scene::default();
+            if music {
+                app.ak820_rgb_music_start(scene, crate::ak820_rgb_audio::Options::default(), true);
+            } else {
+                app.ak820_rgb_scene_start(scene);
+            }
+            assert!(app.ak820_rgb_scene_running());
+            app.update_native_background_for_platform(
+                &egui::Context::default(),
+                0.0,
+                true,
+                false,
+                "windows",
+            );
+            assert!(app.ak820_rgb_scene_running());
+            assert!(app.ak820_rgb_scene_preview().is_some());
+            assert!(app.hid_device.is_none());
+            eframe::App::on_exit(&mut app, None);
+            assert!(!app.ak820_rgb_scene_running());
+        }
     }
 
     #[test]

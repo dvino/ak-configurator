@@ -9,12 +9,18 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+import io
 
 from package_ak820_candidate import PLATFORMS, check_architecture
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = tuple(sorted(PLATFORMS))
 STATIC_FILES = {
+    "audio-sources/build_cava_helper.py": "scripts/build_cava_helper.py",
+    "CAVA-LICENSE": "vendor/cava/LICENSE",
+    "CAVA-PROVENANCE.json": "vendor/cava-provenance.json",
+    "THIRD-PARTY-AUDIO.en.md": "docs/THIRD-PARTY-AUDIO.md",
+    "THIRD-PARTY-AUDIO.ru.md": "docs/ru/THIRD-PARTY-AUDIO.md",
     "INSTALL.en.md": "docs/INSTALL.md",
     "INSTALL.ru.md": "docs/ru/INSTALL.md",
     "RGB-PLAN.en.md": "docs/RGB-PLAN.md",
@@ -55,6 +61,13 @@ def expected_static_files(platform):
         if asset.is_file():
             relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta2").as_posix()
             files[f"offline/firmware-beta2/{relative}"] = asset.read_bytes()
+    for dependency in sorted((ROOT / "vendor/cava-dependencies").iterdir()):
+        if dependency.is_file():
+            files["audio-sources/" + dependency.name] = dependency.read_bytes()
+    if os_name == "macos":
+        for filename, value in list(files.items()):
+            if filename.startswith(("audio-sources/", "CAVA-", "THIRD-PARTY-AUDIO")):
+                files["AK-Configurator.app/Contents/Resources/" + filename] = value
     return files
 
 
@@ -88,6 +101,38 @@ def normalize_runtime_profiles(report):
             key=lambda item: item.get("profile", "") if isinstance(item, dict) else "",
         )
     return normalized
+
+
+
+def verify_windows_audio_sources(raw):
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
+            names = [member.name for member in archive.getmembers() if member.isfile()]
+            required = (("fftw3/source/", "/api/fftw3.h"), ("pthreads/source/", "/pthread.h"),
+                        ("fftw3/vcpkg-port/", "/portfile.cmake"), ("pthreads/vcpkg-port/", "/portfile.cmake"),
+                        ("licenses-and-build-metadata/", "/fftw3/copyright"),
+                        ("licenses-and-build-metadata/", "/pthreads/copyright"))
+            if not all(any(name.startswith(prefix) and name.endswith(suffix) for name in names)
+                       for prefix, suffix in required):
+                raise ValueError("Windows corresponding FFTW/pthreads sources or licenses missing")
+    except tarfile.TarError as exc:
+        raise ValueError("Malformed Windows corresponding dependency source archive") from exc
+
+
+def verify_cava_source(raw):
+    expected = {source.relative_to(ROOT / "vendor/cava").as_posix(): source.read_bytes()
+                for source in (ROOT / "vendor/cava").rglob("*") if source.is_file()}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as source_archive:
+            members = source_archive.getmembers()
+            names = [member.name for member in members]
+            if len(names) != len(set(names)) or set(names) != {"cava/" + name for name in expected}:
+                raise ValueError("Bundled CAVA corresponding source differs from checkout")
+            for member in members:
+                if not member.isfile() or source_archive.extractfile(member).read() != expected[member.name.removeprefix("cava/")]:
+                    raise ValueError("Bundled CAVA corresponding source differs from checkout")
+    except tarfile.TarError as exc:
+        raise ValueError("Malformed CAVA source archive") from exc
 
 
 def verify_internal_checksums(contents):
@@ -161,11 +206,14 @@ def verify(directory: Path, version: str, commit: str):
             helper_platform = TARGETS[platform][0]
             helper_suffix = ".ps1" if helper_platform == "windows" else ".sh"
             helper_names = {f"{kind}-user{helper_suffix}" for kind in ("install", "uninstall")}
-            expected_names = set(expected_static) | helper_names | {binary_name, "manifest.json", "SHA256SUMS", "runtime-self-check.json"}
+            cava_name = ("AK-Configurator.app/Contents/MacOS/" if platform.startswith("macos-") else "") + "audio/cava" + (".exe" if platform.startswith("windows-") else "")
+            expected_names = {cava_name, "audio-sources/cava-patched-source.tar.gz"} | set(expected_static) | helper_names | {binary_name, "manifest.json", "SHA256SUMS", "runtime-self-check.json"}
+            if platform.startswith("windows-"):
+                expected_names.add("audio-sources/windows-built-dependencies.tar.gz")
             app_binary = "AK-Configurator.app/Contents/MacOS/ak-configurator"
             if platform.startswith("macos-"):
                 expected_names.remove(binary_name)
-                expected_names |= {app_binary, "AK-Configurator.app/Contents/Info.plist"}
+                expected_names |= {app_binary, "AK-Configurator.app/Contents/Info.plist", "AK-Configurator.app/Contents/Resources/audio-sources/cava-patched-source.tar.gz"}
             if {member[len(root):] for member in names} != expected_names:
                 raise ValueError(f"Candidate package has missing or unexpected members for {platform}")
             contents = {member[len(root):]: read_member(member) for member in names}
@@ -173,6 +221,11 @@ def verify(directory: Path, version: str, commit: str):
             if contents.get(filename) != expected:
                 raise ValueError(f"Bundled source file differs from checked-out source: {filename}")
         verify_internal_checksums(contents)
+        verify_cava_source(contents["audio-sources/cava-patched-source.tar.gz"])
+        if platform.startswith("windows-"):
+            verify_windows_audio_sources(contents["audio-sources/windows-built-dependencies.tar.gz"])
+        if platform.startswith("macos-") and contents["AK-Configurator.app/Contents/Resources/audio-sources/cava-patched-source.tar.gz"] != contents["audio-sources/cava-patched-source.tar.gz"]:
+            raise ValueError("Installed macOS CAVA source archive differs")
         try:
             runtime = json.loads(contents["runtime-self-check.json"])
         except (KeyError, json.JSONDecodeError) as exc:
@@ -198,6 +251,7 @@ def verify(directory: Path, version: str, commit: str):
         if (smoke.get("format") != "ak-configurator-installed-smoke-1" or smoke.get("platform") != platform
                 or smoke.get("user_data_preserved") is not True or smoke.get("uninstalled") is not True
                 or smoke.get("archive_sha256") != archive_hash
+                or smoke.get("audio_helper_version") != "cava 1.0.0"
                 or smoke.get("upgrade_verified") is not True
                 or normalize_runtime_profiles(smoke.get("installed_self_check", {})) != normalized_runtime):
             raise ValueError(f"Native installed-package smoke result is invalid for {platform}")
@@ -226,9 +280,15 @@ def verify(directory: Path, version: str, commit: str):
         binary = contents[app_binary if platform.startswith("macos-") else binary_name]
         if manifest.get("binary_sha256") != sha256(binary):
             raise ValueError(f"Binary digest mismatch for {platform}")
+        if smoke.get("audio_helper_sha256") != sha256(contents[cava_name]):
+            raise ValueError(f"Installed helper digest mismatch for {platform}")
         if smoke.get("binary_sha256") != manifest.get("binary_sha256"):
             raise ValueError(f"Installed smoke binary digest mismatch for {platform}")
         check_architecture(binary, platform)
+        check_architecture(contents[cava_name], platform)
+        cava_identity = json.loads((ROOT / "vendor/cava-provenance.json").read_text())
+        if manifest.get("audio_helper") != {**cava_identity, "path": cava_name, "sha256": sha256(contents[cava_name])}:
+            raise ValueError(f"CAVA helper identity mismatch for {platform}")
         result["platforms"][platform] = {"archive": name, "sha256": archive_hash,
                                          "runtime_self_check": runtime, "installation_smoke": smoke}
     if set(result["platforms"]) != set(EXPECTED):

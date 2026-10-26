@@ -1,0 +1,27 @@
+{
+  "name": "CAVA",
+  "version": "1.0.0",
+  "repository": "https://github.com/karlstav/cava",
+  "commit": "15f89867908fa66baaaec8d4b9a2d684a329a0fb",
+  "source_url": "https://codeload.github.com/karlstav/cava/tar.gz/15f89867908fa66baaaec8d4b9a2d684a329a0fb",
+  "source_archive_sha256": "31b0a924272208b0d1739828fea236a7d951bb85f368d1a874b4d789503e64b5",
+  "source_archive_size": 3353410,
+  "license": "MIT",
+  "patches": [
+    "Suppress OSC console title when stdout is not a terminal",
+    "Use public CoreAudio process-tap consent without private TCC lookup or opening Settings",
+    "Require six/eight channels before reading sixth/eighth channel during Windows downmix",
+    "Windows raw-only build omits unused SDL/GLEW graphics engines; static pthreads runtime",
+    "Allow Windows helper execution without a console window",
+    "Align explicit vcpkg registry and manifest to the immutable tool baseline; remove unused moving artifact registry"
+  ],
+  "modified_upstream_files": [
+    "CMakeLists.txt",
+    "cava.c",
+    "config.h",
+    "input/coreaudio_tap.m",
+    "input/winscap.c",
+    "vcpkg.json",
+    "vcpkg-configuration.json"
+  ]
+}

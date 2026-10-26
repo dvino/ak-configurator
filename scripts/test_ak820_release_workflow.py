@@ -107,7 +107,15 @@ class ReleaseVerificationTests(unittest.TestCase):
                 "platform": platform, **expected_runtime_identity(platform),
                 "hardware_access": False, "network_access": False, "status": "passed",
             }), encoding="utf-8")
-            build_package(binary, platform, self.directory, allow_dirty=True, runtime_check=runtime)
+            if platform.startswith("windows-"):
+                with tarfile.open(binary.parent / "cava-windows-dependency-sources.tar.gz", "w:gz") as sources:
+                    for filename in ("fftw3/source/fixture/api/fftw3.h", "pthreads/source/fixture/pthread.h",
+                                     "fftw3/vcpkg-port/portfile.cmake", "pthreads/vcpkg-port/portfile.cmake",
+                                     "licenses-and-build-metadata/fftw3/copyright", "licenses-and-build-metadata/pthreads/copyright"):
+                        member = tarfile.TarInfo(filename)
+                        member.size = 7
+                        sources.addfile(member, io.BytesIO(b"fixture"))
+            build_package(binary, platform, self.directory, allow_dirty=True, runtime_check=runtime, cava_helper=binary)
             suffix = ".app.zip" if platform.startswith("macos-") else (".tar.gz" if platform.startswith("linux-") else ".zip")
             archive = self.directory / f"ak-configurator-{VERSION}-{platform}{suffix}"
             # Exercise the actual packager, while normalizing its local dirty-tree marker
@@ -120,6 +128,8 @@ class ReleaseVerificationTests(unittest.TestCase):
                 "format": "ak-configurator-installed-smoke-1", "platform": platform,
                 "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                 "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                "audio_helper_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                "audio_helper_version": "cava 1.0.0",
                 "installed_self_check": json.loads(runtime.read_text(encoding="utf-8")),
                 "user_data_preserved": True, "upgrade_verified": True, "uninstalled": True,
             }
@@ -168,14 +178,16 @@ class ReleaseVerificationTests(unittest.TestCase):
         binary = root / "ak-configurator"
         binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         binary.chmod(0o755)
+        (root / "audio").mkdir()
+        (root / "audio/cava").write_bytes(b"synthetic helper")
         (root / "manifest.json").write_text(json.dumps({
             "format": "ak-configurator-desktop-candidate-1", "application_version": VERSION,
             "platform": "linux-x86_64", "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         }), encoding="utf-8")
         (root / "install-user.sh").write_bytes((ROOT / "scripts/ak820-release/linux/install-user.sh").read_bytes())
         (root / "uninstall-user.sh").write_bytes((ROOT / "scripts/ak820-release/linux/uninstall-user.sh").read_bytes())
-        sums = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
-                       for path in sorted(root.iterdir()) if path.name != "SHA256SUMS")
+        sums = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n"
+                       for path in sorted(root.rglob("*")) if path.is_file() and path.name != "SHA256SUMS")
         (root / "SHA256SUMS").write_text(sums, encoding="ascii")
         home = self.directory / "per-user"
         env = os.environ.copy()
@@ -196,8 +208,8 @@ class ReleaseVerificationTests(unittest.TestCase):
         manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
         manifest["binary_sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
         (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        sums = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
-                       for path in sorted(root.iterdir()) if path.name != "SHA256SUMS")
+        sums = "".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n"
+                       for path in sorted(root.rglob("*")) if path.is_file() and path.name != "SHA256SUMS")
         (root / "SHA256SUMS").write_text(sums, encoding="ascii")
         subprocess.run(["sh", str(root / "install-user.sh")], env=env, check=True, capture_output=True, text=True)
         self.assertNotEqual((home / ".local/share/ak-configurator/current/ak-configurator").read_bytes(), first_binary)
@@ -225,7 +237,7 @@ class ReleaseVerificationTests(unittest.TestCase):
         (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         (root / "install-user.sh").write_bytes((ROOT / "scripts/ak820-release/linux/install-user.sh").read_bytes())
         (root / "uninstall-user.sh").write_bytes((ROOT / "scripts/ak820-release/linux/uninstall-user.sh").read_bytes())
-        (root / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+        (root / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n"
                                                  for path in sorted(root.iterdir())), encoding="ascii")
         home = self.directory / "unmanaged-home"
         launcher_dir = home / ".local/bin"

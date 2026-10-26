@@ -195,7 +195,7 @@ mod hid_vial;
 #[path = "hid_ak820.rs"]
 pub(crate) mod hid_ak820;
 use hid_ak820::Ak820Session;
-pub(crate) use hid_ak820::{Ak820RgbStream, Ak820RgbStreamResult};
+pub(crate) use hid_ak820::{Ak820RgbRestoreResult, Ak820RgbStream, Ak820RgbStreamResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct HidDevice {
@@ -740,7 +740,9 @@ impl HidDevice {
         match &self.backend {
             HidBackend::Proxy(proxy) => proxy.host_output.with_settings_write_paused(operation),
             #[cfg(test)]
-            HidBackend::Test { recorder, .. } => recorder.host_output.with_settings_write_paused(operation),
+            HidBackend::Test { recorder, .. } => {
+                recorder.host_output.with_settings_write_paused(operation)
+            }
             _ => operation(),
         }
     }
@@ -1190,7 +1192,10 @@ fn usb_read_timeout_ms(transport: HidTransport, data: &[u8]) -> i32 {
         PICTOGRAM_SLOT_COMMIT_READ_TIMEOUT_MS
     } else if data.len() >= 4
         && data[0] == CMD_VIA_VIAL_PREFIX
-        && matches!(data[1], CMD_VIAL_QMK_SETTINGS_SET | CMD_VIAL_QMK_SETTINGS_GET)
+        && matches!(
+            data[1],
+            CMD_VIAL_QMK_SETTINGS_SET | CMD_VIAL_QMK_SETTINGS_GET
+        )
         && (230..=249).contains(&u16::from_le_bytes([data[2], data[3]]))
     {
         // The first SM62 player/ship frame may occupy the display task while
@@ -1789,11 +1794,14 @@ fn response_matches_command(command: &[u8], resp: &[u8; MSG_LEN]) -> bool {
     };
 
     match cmd {
-        0xFD => command.len() >= 2 && match command[1] {
-            0 => command.len() >= 5 && resp[..5] == command[..5],
-            1 => resp[..4] == [0xFD, 1, 1, 0xA8],
-            _ => false,
-        },
+        0xFD => {
+            command.len() >= 2
+                && match command[1] {
+                    0 => command.len() >= 5 && resp[..5] == command[..5],
+                    1 => resp[..4] == [0xFD, 1, 1, 0xA8],
+                    _ => false,
+                }
+        }
         CMD_VIA_GET_PROTOCOL_VERSION => {
             resp[0] == CMD_VIA_GET_PROTOCOL_VERSION
                 && is_supported_via_protocol(u16::from_be_bytes([resp[1], resp[2]]))
@@ -2457,14 +2465,20 @@ mod tests {
             for qsid in [230u16, 235, 241] {
                 let [low, high] = qsid.to_le_bytes();
                 assert_eq!(
-                    usb_read_timeout_ms(HidTransport::Usb, &[CMD_VIA_VIAL_PREFIX, command, low, high]),
+                    usb_read_timeout_ms(
+                        HidTransport::Usb,
+                        &[CMD_VIA_VIAL_PREFIX, command, low, high]
+                    ),
                     SM62_DISPLAY_READ_TIMEOUT_MS
                 );
             }
         }
         let [low, high] = 229u16.to_le_bytes();
         assert_eq!(
-            usb_read_timeout_ms(HidTransport::Usb, &[CMD_VIA_VIAL_PREFIX, CMD_VIAL_QMK_SETTINGS_GET, low, high]),
+            usb_read_timeout_ms(
+                HidTransport::Usb,
+                &[CMD_VIA_VIAL_PREFIX, CMD_VIAL_QMK_SETTINGS_GET, low, high]
+            ),
             VIAL_GUI_READ_TIMEOUT_MS
         );
     }

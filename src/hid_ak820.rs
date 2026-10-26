@@ -12,6 +12,23 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone, Debug)]
 pub(crate) struct Ak820RgbStream {
     mode: [u8; MSG_LEN],
+    previous: Option<[u8; MSG_LEN]>,
+    image: ImageContract,
+    owner: std::sync::Arc<()>,
+}
+
+impl Ak820RgbStream {
+    pub(crate) fn can_restore_builtin(&self) -> bool {
+        self.previous.is_some()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Ak820RgbRestoreResult {
+    Restored([u8; 6]),
+    Unavailable,
+    OwnershipLost,
+    Cancelled,
 }
 
 #[derive(Debug)]
@@ -26,6 +43,7 @@ pub(super) struct Ak820Session {
     image: Option<ImageContract>,
     loaded: bool,
     failure: Option<String>,
+    rgb_owner: Option<std::sync::Arc<()>>,
 }
 
 fn storage_ready(response: &[u8; MSG_LEN]) -> Result<()> {
@@ -449,18 +467,34 @@ fn capture_reconcile_getters(
 impl HidDevice {
     /// One volatile FD02 exchange on the verified existing owner. This does
     /// not enter a saved-setting transaction or perform any NVM operation.
-    pub(crate) fn ak820_os_indicator_set(&self, mode: crate::ak820_os_indicator::Mode) -> Result<()> {
+    pub(crate) fn ak820_os_indicator_set(
+        &self,
+        mode: crate::ak820_os_indicator::Mode,
+    ) -> Result<()> {
         let request = crate::ak820_os_indicator::request(mode);
-        if let Some(session) = &self.read_only { return Err(session.refuse(&request)); }
+        if let Some(session) = &self.read_only {
+            return Err(session.refuse(&request));
+        }
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
-        ensure!(state.loaded && state.failure.is_none(), "Read AK820 settings before OS indication");
-        let profile = state.image.and_then(ImageContract::profile).context("Exact beta2 image required for OS indication")?;
-        ensure!(crate::app::ak820_beta1_profiles::has_feature(profile, "os-indicators"), "Image has no OS indicator module");
+        ensure!(
+            state.loaded && state.failure.is_none(),
+            "Read AK820 settings before OS indication"
+        );
+        let profile = state
+            .image
+            .and_then(ImageContract::profile)
+            .context("Exact beta2 image required for OS indication")?;
+        ensure!(
+            crate::app::ak820_beta1_profiles::has_feature(profile, "os-indicators"),
+            "Image has no OS indicator module"
+        );
         let result = self.usb_send_traced(&request).and_then(|reply| {
             crate::ak820_os_indicator::validate_reply(mode, &reply).map_err(anyhow::Error::msg)
         });
-        if let Err(error) = &result { state.failure = Some(format!("{error:#}")); }
+        if let Err(error) = &result {
+            state.failure = Some(format!("{error:#}"));
+        }
         result
     }
 
@@ -636,6 +670,19 @@ impl HidDevice {
             state.loaded && state.failure.is_none(),
             "Read complete AK820 settings before applying RGB"
         );
+        if owned.is_some_and(|stream| {
+            stream.image != image
+                || !state
+                    .rgb_owner
+                    .as_ref()
+                    .is_some_and(|owner| std::sync::Arc::ptr_eq(owner, &stream.owner))
+        }) {
+            return Ok(Ak820RgbStreamResult::OwnershipLost);
+        }
+        let owner = owned
+            .map(|stream| stream.owner.clone())
+            .unwrap_or_else(|| std::sync::Arc::new(()));
+        state.rgb_owner = Some(owner.clone());
         let result = (|| {
             if cancel.load(Ordering::Acquire) {
                 return Ok(Ak820RgbStreamResult::Cancelled);
@@ -687,7 +734,88 @@ impl HidDevice {
                 }
             }
             storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
-            Ok(Ak820RgbStreamResult::Applied(Ak820RgbStream { mode }))
+            let previous = owned
+                .map(|stream| stream.previous)
+                .unwrap_or_else(|| (previous[2] != 1).then_some(previous));
+            Ok(Ak820RgbStreamResult::Applied(Ak820RgbStream {
+                mode,
+                previous,
+                image,
+                owner,
+            }))
+        })();
+        if !matches!(&result, Ok(Ak820RgbStreamResult::Applied(_))) {
+            state.rgb_owner = None;
+        }
+        if let Err(error) = &result {
+            state.failure = Some(format!("{error:#}"));
+        }
+        result
+    }
+
+    /// Explicit, single-attempt volatile restore. No palette can be recovered
+    /// when playback began in Direct. Errors never trigger a retry or restore.
+    pub(crate) fn ak820_restore_rgb_stream(
+        &self,
+        stream: &Ak820RgbStream,
+        cancel: &AtomicBool,
+    ) -> Result<Ak820RgbRestoreResult> {
+        use Ak820RgbRestoreResult::*;
+        if self.read_only.is_some() {
+            return Ok(OwnershipLost);
+        }
+        let Some(state) = &self.ak820 else {
+            return Ok(OwnershipLost);
+        };
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        if !state.loaded
+            || state.failure.is_some()
+            || state.image != Some(stream.image)
+            || !state
+                .rgb_owner
+                .as_ref()
+                .is_some_and(|owner| std::sync::Arc::ptr_eq(owner, &stream.owner))
+        {
+            return Ok(OwnershipLost);
+        }
+        // Retire this observation before the first exchange, including when a
+        // read, cancellation, ownership check or write fails.
+        state.rgb_owner = None;
+        if cancel.load(Ordering::Acquire) {
+            return Ok(Cancelled);
+        }
+        let Some(previous) = stream.previous else {
+            return Ok(Unavailable);
+        };
+        if !stream.image.rgb_modes().contains(&previous[2]) || previous[2] == 1 {
+            return Ok(Unavailable);
+        }
+        let result = (|| {
+            storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+            if cancel.load(Ordering::Acquire) {
+                return Ok(Cancelled);
+            }
+            let current = self.usb_send_traced(&[8, 0x41])?;
+            ensure!(
+                current[..2] == [8, 0x41]
+                    && current[3] == 0
+                    && stream.image.rgb_modes().contains(&current[2])
+                    && current[7] <= 160,
+                "AK820 current RGB mode is invalid"
+            );
+            if current[2..8] != stream.mode[2..8] || current[2] != 1 {
+                return Ok(OwnershipLost);
+            }
+            if cancel.load(Ordering::Acquire) {
+                return Ok(Cancelled);
+            }
+            let mut setter = previous;
+            setter[0] = 7;
+            setter[8..].fill(0);
+            let reply = self.usb_send_traced(&setter)?;
+            self.ak820_verify_write(&setter, &reply, stream.image)?;
+            storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+            Ok(Restored(previous[2..8].try_into().unwrap()))
         })();
         if let Err(error) = &result {
             state.failure = Some(format!("{error:#}"));
@@ -777,6 +905,7 @@ impl HidDevice {
             state.image.is_some() && state.failure.is_none(),
             "AK820 image is not verified"
         );
+        state.rgb_owner = None;
         state.loaded = true;
         Ok(())
     }
@@ -865,6 +994,7 @@ impl HidDevice {
         }
         let write = allowed_request(&p, state.image)?;
         if write {
+            state.rgb_owner = None;
             ensure!(
                 state.image.is_some() && state.loaded,
                 "AK820 settings remain read-only until the complete device state is read"
@@ -1029,6 +1159,7 @@ impl HidDevice {
             image: ready.then_some(ImageContract::Alpha3),
             loaded: ready,
             failure: None,
+            rgb_owner: None,
         }));
         (hid, recorder)
     }
@@ -1065,26 +1196,26 @@ mod os_indicator_tests {
     fn fd02_has_one_exchange_and_never_touches_nvm() {
         let (hid, log) = HidDevice::test_beta2_ak820_device(ProfileId::Main, true);
         log.respond_by(|p| {
-            let mut reply = [0;32];
-            reply[..10].copy_from_slice(&[0xfd,2,1,0,p[4],0xa8,0xb8,0x0b,0,0x10]);
+            let mut reply = [0; 32];
+            reply[..10].copy_from_slice(&[0xfd, 2, 1, 0, p[4], 0xa8, 0xb8, 0x0b, 0, 0x10]);
             Some(Ok(reply))
         });
         for mode in [Mode::Off, Mode::On, Mode::Breathing, Mode::Normal] {
             hid.ak820_os_indicator_set(mode).unwrap();
         }
         let requests = log.requests();
-        assert_eq!(requests.len(),4);
-        assert!(requests.iter().all(|p| p[..4] == [0xfd,2,1,1]));
+        assert_eq!(requests.len(), 4);
+        assert!(requests.iter().all(|p| p[..4] == [0xfd, 2, 1, 1]));
         assert!(hid.ak820_editing_ready());
     }
 
     #[test]
     fn fd02_bad_reply_latches_without_retry_or_next_refresh() {
         let (hid, log) = HidDevice::test_beta2_ak820_device(ProfileId::Main, true);
-        log.respond_by(|_| Some(Ok([0;32])));
+        log.respond_by(|_| Some(Ok([0; 32])));
         assert!(hid.ak820_os_indicator_set(Mode::On).is_err());
         assert!(hid.ak820_os_indicator_set(Mode::Normal).is_err());
-        assert_eq!(log.requests().len(),1);
+        assert_eq!(log.requests().len(), 1);
         assert!(!hid.ak820_editing_ready());
     }
 
@@ -1220,4 +1351,4 @@ mod restore_executor;
 
 #[path = "hid_ak820_install.rs"]
 mod install;
-pub(crate) use install::{InstallUsb, WireCommand, usb_port};
+pub(crate) use install::{usb_port, InstallUsb, WireCommand};

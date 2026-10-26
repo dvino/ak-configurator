@@ -212,6 +212,7 @@ impl EntropyApp {
             "AK820 per-key RGB"
         });
         ui.label(if ru { "Локальный предпросмотр. Режим Direct хранится только в ОЗУ клавиатуры; прочитать цвета обратно нельзя." } else { "Local preview only. Direct RGB is RAM-only and cannot be read back from the keyboard." });
+        self.draw_ak820_rgb_inputs(ui, &e.scene);
         let mut changed = false;
         let mut history_move = false;
         let before = e.scene.clone();

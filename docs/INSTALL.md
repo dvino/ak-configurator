@@ -11,7 +11,7 @@ Use Rust 1.97 and the platform build dependencies. On Ubuntu 24.04, install the 
 ```sh
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-  build-essential pkg-config libdbus-1-dev libgtk-3-dev libudev-dev \
+  build-essential pkg-config libdbus-1-dev libgtk-3-dev libudev-dev libpulse-dev \
   libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
   libxkbcommon-dev libxkbcommon-x11-0 libgl1-mesa-dev zenity
 ```
@@ -22,6 +22,7 @@ From the repository root, build and test serially:
 
 ```sh
 cargo build --release --locked
+python3 scripts/build_cava_helper.py --output-dir target/release/audio
 cargo test --locked --all-targets -- --test-threads=1
 ```
 
@@ -34,6 +35,12 @@ cargo run --locked -- --demo-ak820
 The demo does not discover or open HID devices. Its examples are not device backups. The executable is `target/release/ak-configurator` on Linux/macOS and `target/release/ak-configurator.exe` on Windows. A build or host test does not prove physical-keyboard behavior.
 
 Current source build evidence is for Ubuntu 24.04 with Rust 1.97.0. Older Debian 12 runtime success belongs to a prior artifact and does not establish compatibility for the current build. Alpine/musl is not qualified. Linux builds require desktop runtime libraries and a portal or Zenity for file dialogs.
+
+### Bundled music component
+
+Full candidate packages include `audio/cava` (`audio/cava.exe` on Windows) beside the application; the macOS app contains it under `Contents/MacOS/audio`. Keep that directory with the executable. Per-user installers copy it automatically. Separate OpenRGB or CAVA installation is not required for music. The package also carries exact third-party source archives and notices; retain them when redistributing.
+
+The source build command above builds pinned CAVA and its static FFTW/iniparser inputs. Linux additionally needs the PulseAudio client runtime (`libpulse0`) and a running PulseAudio or PipeWire-Pulse service. For `cargo run` development, use `--output-dir target/debug/audio` instead. Windows helper builds use CMake/MSVC and the pinned vcpkg manifest with static dependencies; set `VCPKG_ROOT` to that checkout. macOS needs Xcode command-line tools and a 14.2+ SDK for the audio helper. Native system-audio capture on macOS requires 14.2+ and user consent; non-audio application features retain their separate requirements. See [THIRD-PARTY-AUDIO.md](THIRD-PARTY-AUDIO.md).
 
 ## Linux device access
 
@@ -64,6 +71,7 @@ mkdir -p target/candidate
 target/release/ak-configurator --self-check --output target/candidate/runtime-self-check.json
 python3 scripts/package_ak820_candidate.py \
   --binary target/release/ak-configurator \
+  --cava-helper target/release/audio/cava \
   --platform linux-x86_64 \
   --runtime-check target/candidate/runtime-self-check.json \
   --output-dir target/candidate

@@ -1,9 +1,11 @@
 //! Native scene playback borrows the application's existing HID handle for a
 //! single frame. Settings work always gets the next opportunity to use it.
 use super::*;
+use crate::ak820_openrgb_bridge::{Bridge, Status as BridgeStatus};
+use crate::ak820_rgb_audio::{self as audio, Capture, Options as AudioOptions};
 use crate::ak820_rgb_compositor::Scene;
 use crate::ak820_rgb_scheduler::{Frame, FrameScheduler, FRAME_INTERVAL_MS, SUSPEND_GAP_MS};
-use crate::hid::{Ak820RgbStream, Ak820RgbStreamResult, HidDevice};
+use crate::hid::{Ak820RgbRestoreResult, Ak820RgbStream, Ak820RgbStreamResult, HidDevice};
 use chrono::Timelike;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -13,6 +15,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 struct Playback {
     scene: Scene,
+    input: Input,
     started: Instant,
     last_tick: Instant,
     last_wall_tick: SystemTime,
@@ -21,6 +24,60 @@ struct Playback {
     demo: bool,
     owned: Option<Ak820RgbStream>,
     once: bool,
+}
+
+enum Input {
+    Scene,
+    Music {
+        capture: Capture,
+        options: AudioOptions,
+    },
+    MusicDemo(AudioOptions),
+    OpenRgb {
+        bridge: Bridge,
+        last: Option<Frame>,
+    },
+}
+
+impl Input {
+    fn frame(&mut self, scene: &Scene, elapsed: u64, minute: u16) -> Result<Option<Frame>, String> {
+        let brightness = scene.brightness_at(minute);
+        match self {
+            Self::Scene => scene
+                .render(elapsed, minute)
+                .map(Some)
+                .map_err(str::to_owned),
+            Self::Music { capture, options } => capture
+                .poll()
+                .map(|bars| bars.map(|bars| audio::render(&bars, options, brightness))),
+            Self::MusicDemo(options) => Ok(Some(audio::render(
+                &audio::demo_bars(elapsed),
+                options,
+                brightness,
+            ))),
+            Self::OpenRgb { bridge, last } => {
+                let snapshot = bridge.poll();
+                match snapshot.status {
+                    BridgeStatus::Listening | BridgeStatus::Connected => {
+                        if snapshot.frame.is_some() {
+                            *last = snapshot.frame;
+                        }
+                        Ok(last.map(|frame| {
+                            frame.map(|rgb| {
+                                rgb.map(|value| {
+                                    (u16::from(value) * u16::from(brightness) / 255) as u8
+                                })
+                            })
+                        }))
+                    }
+                    BridgeStatus::Fault(error) => Err(format!("OpenRGB: {error}")),
+                    BridgeStatus::Disconnected | BridgeStatus::Stopped => {
+                        Err("OpenRGB source disconnected".into())
+                    }
+                }
+            }
+        }
+    }
 }
 
 struct FrameResult {
@@ -43,12 +100,33 @@ struct OffRequest {
     wall_requested: SystemTime,
 }
 
+struct RestoreRequest {
+    generation: u64,
+    owned: Option<Ak820RgbStream>,
+    requested: Instant,
+    wall_requested: SystemTime,
+}
+
+struct RestoreResult {
+    hid: HidDevice,
+    generation: u64,
+    outcome: Result<Ak820RgbRestoreResult, String>,
+}
+
+struct RestoreTask {
+    receiver: mpsc::Receiver<RestoreResult>,
+    cancel: Arc<AtomicBool>,
+    generation: u64,
+}
+
 pub(super) struct Runtime {
     clock: Instant,
     playback: Option<Playback>,
     scheduler: FrameScheduler,
     task: Option<FrameTask>,
     off: Option<OffRequest>,
+    restore: Option<RestoreRequest>,
+    restore_task: Option<RestoreTask>,
     preview: Option<Frame>,
     last_frame_ms: Option<u64>,
 }
@@ -61,6 +139,8 @@ impl Default for Runtime {
             scheduler: FrameScheduler::default(),
             task: None,
             off: None,
+            restore: None,
+            restore_task: None,
             preview: None,
             last_frame_ms: None,
         }
@@ -69,7 +149,7 @@ impl Default for Runtime {
 
 impl EntropyApp {
     pub(super) fn ak820_rgb_scene_owns_hid(&self) -> bool {
-        self.ak820_rgb_runtime.task.is_some()
+        self.ak820_rgb_runtime.task.is_some() || self.ak820_rgb_runtime.restore_task.is_some()
     }
 
     pub(crate) fn ak820_rgb_scene_running(&self) -> bool {
@@ -95,7 +175,10 @@ impl EntropyApp {
     }
 
     pub(crate) fn ak820_rgb_scene_can_start(&self) -> bool {
-        if self.headless || self.ak820_rgb_scene_owns_hid() || self.ak820_rgb_runtime.off.is_some()
+        if self.headless
+            || self.ak820_rgb_scene_owns_hid()
+            || self.ak820_rgb_runtime.off.is_some()
+            || self.ak820_rgb_runtime.restore.is_some()
         {
             return false;
         }
@@ -134,6 +217,7 @@ impl EntropyApp {
         let now = Instant::now();
         self.ak820_rgb_runtime.playback = Some(Playback {
             scene,
+            input: Input::Scene,
             started: now,
             last_tick: now,
             last_wall_tick: SystemTime::now(),
@@ -152,6 +236,150 @@ impl EntropyApp {
         );
     }
 
+    pub(super) fn ak820_rgb_music_start(
+        &mut self,
+        scene: Scene,
+        options: AudioOptions,
+        test: bool,
+    ) {
+        if scene.validate().is_err()
+            || options.validate().is_err()
+            || !self.ak820_rgb_scene_can_start()
+        {
+            self.ak820_rgb_status(
+                "Музыка недоступна: проверьте подключение и параметры.",
+                "Music is unavailable: check connection and settings.",
+            );
+            return;
+        }
+        // Demo always remains device-free; system capture is still explicit
+        // and separate from the no-capture test spectrum.
+        let input = if test {
+            Input::MusicDemo(options)
+        } else {
+            match Capture::start(&options) {
+                Ok(capture) => Input::Music { capture, options },
+                Err(error) => {
+                    self.ak820_rgb_status(
+                        "Не удалось включить захват системного звука.",
+                        "Could not start system audio capture.",
+                    );
+                    self.status_msg.push_str(&format!(" {error}"));
+                    return;
+                }
+            }
+        };
+        self.ak820_rgb_scene_start(scene);
+        if let Some(playback) = self.ak820_rgb_runtime.playback.as_mut() {
+            playback.input = input;
+        }
+        self.ak820_rgb_status(
+            if test {
+                "Тестовый спектр включён; звук не захватывается."
+            } else {
+                "Музыка включена: захватывается системный звук, без записи и передачи."
+            },
+            if test {
+                "Test spectrum started; no audio is captured."
+            } else {
+                "Music started: system audio capture is active, without recording or transmission."
+            },
+        );
+    }
+
+    pub(super) fn ak820_rgb_openrgb_start(&mut self, scene: Scene, port: u16) {
+        if scene.validate().is_err() || port == 0 || !self.ak820_rgb_scene_can_start() {
+            self.ak820_rgb_status(
+                "OpenRGB недоступен: проверьте подключение и порт.",
+                "OpenRGB is unavailable: check connection and port.",
+            );
+            return;
+        }
+        let bridge = match Bridge::start(port) {
+            Ok(bridge) => bridge,
+            Err(error) => {
+                self.ak820_rgb_status(
+                    "Не удалось открыть локальный порт OpenRGB.",
+                    "Could not open the local OpenRGB port.",
+                );
+                self.status_msg.push_str(&format!(" {error}"));
+                return;
+            }
+        };
+        self.ak820_rgb_scene_start(scene);
+        if let Some(playback) = self.ak820_rgb_runtime.playback.as_mut() {
+            playback.input = Input::OpenRgb { bridge, last: None };
+        }
+        self.ak820_rgb_status(
+            "Ожидание локального источника OpenRGB.",
+            "Waiting for a local OpenRGB source.",
+        );
+    }
+
+    pub(super) fn ak820_rgb_input_label(&self, ru: bool) -> Option<String> {
+        if self.ak820_rgb_runtime.restore.is_some() || self.ak820_rgb_runtime.restore_task.is_some()
+        {
+            return Some(
+                if ru {
+                    "Возврат предыдущего эффекта…"
+                } else {
+                    "Restoring previous effect…"
+                }
+                .into(),
+            );
+        }
+        self.ak820_rgb_runtime
+            .playback
+            .as_ref()
+            .map(|p| match &p.input {
+                Input::Scene => if ru { "Сцена" } else { "Scene" }.into(),
+                Input::Music { .. } => if ru {
+                    "Захват системного звука включён"
+                } else {
+                    "System audio capture is active"
+                }
+                .into(),
+                Input::MusicDemo(_) => if ru {
+                    "Тестовый спектр — без захвата звука"
+                } else {
+                    "Test spectrum — no audio capture"
+                }
+                .into(),
+                Input::OpenRgb { bridge, .. } => format!("OpenRGB · 127.0.0.1:{}", bridge.port()),
+            })
+    }
+
+    pub(super) fn ak820_rgb_can_restore(&self) -> bool {
+        !self.ak820_demo
+            && self.ak820_rgb_runtime.playback.as_ref().is_some_and(|p| {
+                p.generation == self.connection_generation
+                    && (p
+                        .owned
+                        .as_ref()
+                        .is_some_and(Ak820RgbStream::can_restore_builtin)
+                        || (p.owned.is_none() && self.ak820_rgb_runtime.task.is_some()))
+            })
+    }
+
+    /// This explicit action waits for an intact frame. Ordinary Stop, errors,
+    /// settings actions and disconnects continue to cancel without any restore.
+    pub(super) fn ak820_rgb_stop_and_restore(&mut self) {
+        if !self.ak820_rgb_can_restore() {
+            return;
+        }
+        let playback = self.ak820_rgb_runtime.playback.take().unwrap();
+        self.ak820_rgb_runtime.scheduler.pause();
+        self.ak820_rgb_runtime.off = None;
+        self.ak820_rgb_runtime.restore = Some(RestoreRequest {
+            generation: playback.generation,
+            owned: playback.owned,
+            requested: Instant::now(),
+            wall_requested: SystemTime::now(),
+        });
+        // Dropping playback closes capture/the bridge. An in-flight HID frame
+        // finishes once, and its fresh ownership observation is used below.
+    }
+
     pub(crate) fn ak820_rgb_scene_update(&mut self, scene: Scene) {
         if scene.validate().is_err() {
             self.ak820_rgb_scene_stop();
@@ -167,8 +395,12 @@ impl EntropyApp {
     pub(crate) fn ak820_rgb_scene_stop(&mut self) {
         self.ak820_rgb_runtime.playback = None;
         self.ak820_rgb_runtime.off = None;
+        self.ak820_rgb_runtime.restore = None;
         self.ak820_rgb_runtime.scheduler.pause();
         if let Some(task) = &self.ak820_rgb_runtime.task {
+            task.cancel.store(true, Ordering::Release);
+        }
+        if let Some(task) = &self.ak820_rgb_runtime.restore_task {
             task.cancel.store(true, Ordering::Release);
         }
     }
@@ -214,6 +446,7 @@ impl EntropyApp {
     /// Poll before settings work so its handle is returned before another
     /// operation is selected. A stale result never replaces a newer handle.
     pub(super) fn poll_ak820_rgb_task(&mut self) {
+        self.poll_ak820_rgb_restore();
         let received = match self.ak820_rgb_runtime.task.as_ref() {
             Some(t) => t.receiver.try_recv(),
             None => return,
@@ -252,6 +485,9 @@ impl EntropyApp {
                 if let Some(off) = self.ak820_rgb_runtime.off.as_mut() {
                     off.owned = Some(owned.clone());
                 }
+                if let Some(restore) = self.ak820_rgb_runtime.restore.as_mut() {
+                    restore.owned = Some(owned.clone());
+                }
                 if let Some(p) = self.ak820_rgb_runtime.playback.as_mut() {
                     p.owned = Some(owned);
                     if p.once {
@@ -264,16 +500,20 @@ impl EntropyApp {
                 }
             }
             Ok(Ak820RgbStreamResult::Cancelled) => {
-                // A cancelled initial frame never acquired Direct ownership.
-                // Resuming it after a settings action could overwrite that
-                // action's mode, so require a new explicit start instead.
-                if self
-                    .ak820_rgb_runtime
-                    .playback
-                    .as_ref()
-                    .is_some_and(|p| p.owned.is_none())
-                {
-                    self.ak820_rgb_scene_stop();
+                self.ak820_rgb_runtime.restore = None;
+                // The transport retires its ownership observation on any
+                // cancelled frame, including a later partial frame. Drop the
+                // input too; never resume it with a stale ownership token.
+                self.ak820_rgb_runtime.playback = None;
+                self.ak820_rgb_runtime.scheduler.pause();
+                if let Some(off) = self.ak820_rgb_runtime.off.as_mut() {
+                    // Explicit Off can start a new checked black frame.
+                    off.owned = None;
+                } else {
+                    self.ak820_rgb_status(
+                        "RGB остановлен при передаче управления. Запустите источник снова.",
+                        "RGB stopped while yielding control. Start the source again.",
+                    );
                 }
             }
             Ok(Ak820RgbStreamResult::OwnershipLost) => {
@@ -289,6 +529,109 @@ impl EntropyApp {
             }
         }
         self.resume_pending_device_connect();
+    }
+
+    fn poll_ak820_rgb_restore(&mut self) {
+        let Some(task) = self.ak820_rgb_runtime.restore_task.as_ref() else {
+            return;
+        };
+        let result = match task.receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let task = self.ak820_rgb_runtime.restore_task.take().unwrap();
+                if task.generation == self.connection_generation {
+                    self.ak820_rgb_status(
+                        "Возврат эффекта прерван. Подключитесь заново.",
+                        "Effect restoration interrupted. Connect again.",
+                    );
+                }
+                self.resume_pending_device_connect();
+                return;
+            }
+        };
+        self.ak820_rgb_runtime.restore_task = None;
+        if result.generation != self.connection_generation {
+            self.resume_pending_device_connect();
+            return;
+        }
+        self.hid_device = Some(result.hid);
+        match result.outcome {
+            Ok(Ak820RgbRestoreResult::Restored(mode)) => {
+                self.rgb_settings.effect = u16::from(mode[0]);
+                if mode[0] != 0 { self.rgb_settings.last_enabled_effect = u16::from(mode[0]); }
+                self.rgb_settings.speed = mode[2];
+                self.rgb_settings.hue = mode[3];
+                self.rgb_settings.saturation = mode[4];
+                self.rgb_settings.brightness = mode[5];
+                self.ak820_rgb_runtime.preview = None;
+                self.ak820_rgb_status("Предыдущий встроенный эффект возвращён; память не перезаписывалась.", "Previous built-in effect restored; persistent memory was not rewritten.");
+            }
+            Ok(_) => self.ak820_rgb_status("RGB остановлен. Возврат отменён: состояние изменилось или прежняя палитра недоступна.", "RGB stopped. Restoration cancelled: state changed or the previous palette is unavailable."),
+            Err(error) => {
+                log::warn!("AK820 RGB explicit restore failed: {error}");
+                self.ak820_rgb_status("Возврат эффекта не выполнен. Прочитайте устройство заново.", "Effect restoration failed. Read the device again.");
+            }
+        }
+        self.resume_pending_device_connect();
+    }
+
+    fn dispatch_ak820_rgb_restore(&mut self, ctx: &egui::Context, now: Instant, wall: SystemTime) {
+        if self.ak820_rgb_scene_owns_hid() {
+            return;
+        }
+        let Some(request) = self.ak820_rgb_runtime.restore.take() else {
+            return;
+        };
+        let backup_open = ctx.data(|d| {
+            d.get_temp::<bool>(egui::Id::new(super::ak820_backup_inspection::OPEN_ID))
+                .unwrap_or(false)
+        });
+        if request.generation != self.connection_generation
+            || now.saturating_duration_since(request.requested).as_millis()
+                > u128::from(SUSPEND_GAP_MS)
+            || wall
+                .duration_since(request.wall_requested)
+                .map_or(true, |d| d.as_millis() > u128::from(SUSPEND_GAP_MS))
+            || !self.ak820_rgb_scene_can_start()
+            || backup_open
+            || self.modal_or_popup_open(ctx)
+        {
+            self.ak820_rgb_status(
+                "Возврат эффекта отменён: состояние изменилось.",
+                "Effect restoration cancelled: state changed.",
+            );
+            return;
+        }
+        let Some(owned) = request.owned.filter(Ak820RgbStream::can_restore_builtin) else {
+            return;
+        };
+        let Some(hid) = self.hid_device.take() else {
+            return;
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancel);
+        let (sender, receiver) = mpsc::channel();
+        let repaint = ctx.clone();
+        let generation = request.generation;
+        std::thread::spawn(move || {
+            #[cfg(target_os = "macos")]
+            let _hid_lock = hid.macos_hid_operation_lock();
+            let outcome = hid
+                .ak820_restore_rgb_stream(&owned, &flag)
+                .map_err(|e| format!("{e:#}"));
+            let _ = sender.send(RestoreResult {
+                hid,
+                generation,
+                outcome,
+            });
+            repaint.request_repaint();
+        });
+        self.ak820_rgb_runtime.restore_task = Some(RestoreTask {
+            receiver,
+            cancel,
+            generation,
+        });
     }
 
     /// Called after all normal native tasks. UI demo calls this too, with no
@@ -311,6 +654,12 @@ impl EntropyApp {
             self.ak820_rgb_scene_stop();
             return;
         }
+        self.dispatch_ak820_rgb_restore(ctx, now, wall_now);
+        if self.ak820_rgb_runtime.restore.is_some() || self.ak820_rgb_runtime.restore_task.is_some()
+        {
+            ctx.request_repaint_after(Duration::from_millis(20));
+            return;
+        }
         if self.ak820_rgb_runtime.off.is_some() && !self.ak820_rgb_scene_owns_hid() {
             let off = self.ak820_rgb_runtime.off.take().unwrap();
             if off.generation == self.connection_generation
@@ -323,6 +672,7 @@ impl EntropyApp {
             {
                 self.ak820_rgb_runtime.playback = Some(Playback {
                     scene: Scene::default(),
+                    input: Input::Scene,
                     started: now,
                     last_tick: now,
                     last_wall_tick: wall_now,
@@ -388,20 +738,28 @@ impl EntropyApp {
             self.ak820_rgb_scene_stop();
             return;
         }
-        let p = self.ak820_rgb_runtime.playback.as_ref().unwrap();
-        let frame = match p.scene.render(
+        let p = self.ak820_rgb_runtime.playback.as_mut().unwrap();
+        let frame = match p.input.frame(
+            &p.scene,
             now.saturating_duration_since(p.started)
                 .as_millis()
                 .min(u128::from(u64::MAX)) as u64,
             minute,
         ) {
             Ok(frame) => frame,
-            Err(_) => {
+            Err(error) => {
                 self.ak820_rgb_scene_stop();
+                self.ak820_rgb_status(
+                    "Источник RGB остановлен. Для продолжения запустите его заново.",
+                    "RGB source stopped. Start it again to continue.",
+                );
+                self.status_msg.push_str(&format!(" {error}"));
                 return;
             }
         };
-        self.ak820_rgb_runtime.preview = Some(frame);
+        if let Some(frame) = frame {
+            self.ak820_rgb_runtime.preview = Some(frame);
+        }
         if self.ak820_demo {
             return;
         }
@@ -410,7 +768,7 @@ impl EntropyApp {
             .as_millis()
             .min(u128::from(u64::MAX)) as u64;
         self.ak820_rgb_runtime.scheduler.resume(ms);
-        if self.ak820_rgb_runtime.scheduler.submit(frame).is_err() {
+        if frame.is_some_and(|frame| self.ak820_rgb_runtime.scheduler.submit(frame).is_err()) {
             self.ak820_rgb_scene_stop();
             return;
         }
@@ -728,5 +1086,176 @@ mod tests {
             assert!(!app.ak820_rgb_scene_owns_hid());
             assert!(log.requests().is_empty());
         }
+    }
+
+    #[test]
+    fn rgb_runtime_music_demo_has_no_capture_and_obeys_quiet_hours() {
+        let mut app = EntropyApp::new_inert_for_test();
+        app.ak820_demo = true;
+        app.ak820_demo_profile = Some(ProfileId::Main);
+        let mut scene = Scene::default();
+        scene.quiet_hours = Some(crate::ak820_rgb_compositor::QuietHours {
+            start_minute: 60,
+            end_minute: 120,
+            brightness: 7,
+        });
+        app.ak820_rgb_music_start(scene, AudioOptions::default(), true);
+        assert!(matches!(
+            app.ak820_rgb_runtime.playback.as_ref().unwrap().input,
+            Input::MusicDemo(_)
+        ));
+        let p = app.ak820_rgb_runtime.playback.as_ref().unwrap();
+        let (now, wall) = (p.started, p.last_wall_tick);
+        app.tick_ak820_rgb_scene_at(&egui::Context::default(), now, wall, 90);
+        assert!(app
+            .ak820_rgb_scene_preview()
+            .unwrap()
+            .iter()
+            .flatten()
+            .all(|&c| c <= 7));
+        assert!(app.hid_device.is_none());
+        app.ak820_rgb_scene_stop();
+        assert!(!app.ak820_rgb_scene_running());
+    }
+
+    #[test]
+    fn rgb_runtime_explicit_restore_waits_for_frame_then_restores_once() {
+        let (mut app, log) = live_app(false);
+        let ctx = egui::Context::default();
+        app.ak820_rgb_scene_start(Scene::default());
+        app.tick_ak820_rgb_scene(&ctx);
+        app.ak820_rgb_stop_and_restore();
+        assert!(!app.ak820_rgb_scene_running());
+        assert!(app.ak820_rgb_runtime.restore.is_some());
+        finish_frame(&mut app);
+        app.tick_ak820_rgb_scene(&ctx);
+        finish_frame(&mut app);
+        assert_eq!(app.rgb_settings.effect, 2);
+        assert_eq!(
+            (
+                app.rgb_settings.speed,
+                app.rgb_settings.hue,
+                app.rgb_settings.saturation,
+                app.rgb_settings.brightness
+            ),
+            (50, 90, 255, 160)
+        );
+        let requests = log.requests();
+        assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x41]).count(), 2);
+        assert!(!requests.iter().any(|p| p[0] == 9));
+        app.tick_ak820_rgb_scene(&ctx);
+        assert_eq!(log.requests().len(), requests.len());
+    }
+
+    #[test]
+    fn rgb_runtime_normal_stop_does_not_restore_and_pending_restore_expires() {
+        for explicit in [false, true] {
+            let (mut app, log) = live_app(false);
+            let ctx = egui::Context::default();
+            app.ak820_rgb_scene_start(Scene::default());
+            app.tick_ak820_rgb_scene(&ctx);
+            finish_frame(&mut app);
+            if explicit {
+                app.ak820_rgb_stop_and_restore();
+                app.tick_ak820_rgb_scene_at(
+                    &ctx,
+                    Instant::now() + Duration::from_secs(3),
+                    SystemTime::now() + Duration::from_secs(3),
+                    720,
+                );
+            } else {
+                app.ak820_rgb_scene_stop();
+                app.tick_ak820_rgb_scene(&ctx);
+            }
+            assert!(!app.ak820_rgb_scene_running());
+            assert_eq!(
+                log.requests()
+                    .iter()
+                    .filter(|p| p[..2] == [7, 0x41])
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn rgb_runtime_restore_yields_to_backup_modal_without_writing() {
+        let (mut app, log) = live_app(false);
+        let ctx = egui::Context::default();
+        app.ak820_rgb_scene_start(Scene::default());
+        app.tick_ak820_rgb_scene(&ctx);
+        finish_frame(&mut app);
+        app.ak820_rgb_stop_and_restore();
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new(super::super::ak820_backup_inspection::OPEN_ID),
+                true,
+            )
+        });
+        let before = log.requests().len();
+        app.tick_ak820_rgb_scene(&ctx);
+        assert_eq!(log.requests().len(), before);
+        assert!(app.ak820_rgb_runtime.restore.is_none());
+    }
+
+    #[test]
+    fn rgb_runtime_retained_openrgb_colors_follow_live_caps_without_new_packets() {
+        let bridge = Bridge::start(0).unwrap();
+        let mut input = Input::OpenRgb {
+            bridge,
+            last: Some([[255, 128, 0]; crate::ak820_rgb::LED_COUNT]),
+        };
+        let mut scene = Scene::default();
+        scene.quiet_hours = Some(crate::ak820_rgb_compositor::QuietHours {
+            start_minute: 60,
+            end_minute: 120,
+            brightness: 10,
+        });
+        assert_eq!(
+            input.frame(&scene, 0, 30).unwrap().unwrap()[0],
+            [160, 80, 0]
+        );
+        assert_eq!(input.frame(&scene, 0, 90).unwrap().unwrap()[0], [10, 5, 0]);
+        scene.base.brightness = 4;
+        assert_eq!(input.frame(&scene, 0, 30).unwrap().unwrap()[0], [4, 2, 0]);
+    }
+
+    #[test]
+    fn rgb_runtime_cancelled_owned_frame_is_terminal_and_drops_source() {
+        let (mut app, log) = live_app(false);
+        let ctx = egui::Context::default();
+        app.ak820_rgb_music_start(Scene::default(), AudioOptions::default(), true);
+        app.tick_ak820_rgb_scene(&ctx);
+        finish_frame(&mut app);
+        assert!(app
+            .ak820_rgb_runtime
+            .playback
+            .as_ref()
+            .unwrap()
+            .owned
+            .is_some());
+        // A cancellation result from a later frame must never keep playback
+        // alive with an ownership token retired by the HID layer.
+        let (sender, receiver) = mpsc::channel();
+        let hid = app.hid_device.take().unwrap();
+        app.ak820_rgb_runtime.task = Some(FrameTask {
+            receiver,
+            cancel: Arc::new(AtomicBool::new(true)),
+            generation: app.connection_generation,
+        });
+        sender
+            .send(FrameResult {
+                hid,
+                generation: app.connection_generation,
+                outcome: Ok(Ak820RgbStreamResult::Cancelled),
+                elapsed_ms: 1,
+            })
+            .ok()
+            .unwrap();
+        app.poll_ak820_rgb_task();
+        assert!(!app.ak820_rgb_scene_running());
+        let count = log.requests().len();
+        app.tick_ak820_rgb_scene(&ctx);
+        assert_eq!(log.requests().len(), count);
     }
 }

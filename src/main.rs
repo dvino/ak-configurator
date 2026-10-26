@@ -11,10 +11,14 @@ mod ak820_install_plan;
 mod ak820_installer;
 mod ak820_loader;
 mod ak820_offline_project;
+#[cfg(not(target_arch = "wasm32"))]
+mod ak820_openrgb_bridge;
 mod ak820_os_indicator;
 mod ak820_release;
 mod ak820_restore_plan;
 mod ak820_rgb;
+#[cfg(not(target_arch = "wasm32"))]
+mod ak820_rgb_audio;
 mod ak820_rgb_compositor;
 mod ak820_rgb_scheduler;
 mod ak820_settings_backup;

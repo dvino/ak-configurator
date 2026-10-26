@@ -2,6 +2,47 @@
 
 # Desktop adaptation and review
 
+## P1 RGB reuse and integration — 2026-10-26
+
+This continuation starts from `8b1f67f41628a7ec564c97c8cfa3b156655bbdd0` on `desktop-dev`. Application version remains `0.1.0-beta.2`; firmware remains the exact `v0.6.0-beta.2` catalog. Firmware code, image identities and preset/backup formats are unchanged. Application-side music, OpenRGB interoperability and explicit previous built-in effect restoration are implemented. Direct palette readback and atomic frame commit remain firmware-dependent open items.
+
+### Reuse and independent findings
+
+Music uses bundled CAVA 1.0.0 at `15f89867908fa66baaaec8d4b9a2d684a329a0fb`. CAVA owns capture, FFT, frequency bands, sensitivity and smoothing. The configurator manages one hidden process, validates sixteen bounded bar values and maps them to the existing keyboard geometry. The optional loopback OpenRGB endpoint adapts the upstream SDK 0/1 wire format and never opens its own HID connection. Explicit restore preserves the actual prior built-in mode, speed and HSV in an ownership token and uses a checked volatile setter once.
+
+Independent RGB and delivery reviewers inspected source and matching EN/RU documents. The following findings were corrected and rereviewed:
+
+- Retained OpenRGB colors are rescaled each tick, so brightness and quiet hours still affect a client that sends one static frame. Clean idle clients are allowed; incomplete requests and blocked replies retain bounded deadlines.
+- The actual Python SDK's Direct-mode update command 1101 is accepted only for the advertised descriptor. Persistent mode save 1102 remains rejected.
+- Cancellation of an in-flight HID frame is terminal for its source and token. An explicit pending Off cannot reuse the retired token. Restore waits for an intact frame, yields to backup/modal work and expires across suspension or ownership changes.
+- Hiding the GUI in the tray no longer stops explicit RGB playback. The existing eframe background logic provides the tick; actual GUI teardown, lightweight layout-helper handoff and Quit still stop the source. No separate RGB daemon or automatic restart was added.
+- Source delivery now includes the exact helper build script and reconstructable instructions, including installed macOS Resources. Final review also caught the upstream explicit registry overriding that intended pin. The manifest, explicit registry and Windows tool now use `64810c6bf2bdc91ebcd75f140aec77580113f219`, with FFTW `3.3.10#10` and pthreads `3.0.0#14`. The unused moving artifact registry is removed. The builder checks registry agreement on every platform and the actual Windows tool/archived port recipe versions before compilation.
+- All 155 files from the complete pinned CAVA archive are retained, including files hidden by upstream ignore rules. Exactly seven source files differ for the documented integration patches. Git attributes preserve source bytes across platform newline settings and retain whitespace only in specifically identified unmodified upstream files.
+
+### Verification
+
+| Check | Result and scope |
+| --- | --- |
+| Final focused RGB suite | **74 passed, 0 failed**, 10.82 s. Includes strict audio output/configuration, synthetic helper lifetime/reaping, bridge admission and loopback sessions, restore ownership, source cancellation, live quiet hours, hidden-window playback, and RU/EN controls. |
+| Existing AK820 HID suite | **51 passed, 0 failed**, 0.31 s, against simulated devices. It overlaps the RGB subset; these counts are not additive. The full historical P0 suite was not rerun. |
+| Final test build | Offline test executable built in 37.79 s with Rust 1.97.0, 187 warnings. |
+| Original OpenRGB client | Unmodified `jath03/openrgb-python` at `7b23654ff7e0fb2e705ea5262fcc24ae2b8bf7fd` passed against the actual Rust bridge. Negotiation **4 → 1**, one controller/zone, 82 LEDs, 6×17 matrix, Direct mode 1101, controller/zone/single-LED updates and disconnect cleanup all passed. The standalone probe has no HID code. |
+| Actual CAVA helper | Native Linux helper produced **24 frames × 16 bounded values** for synthetic sine followed by silence through FIFO. No system capture was opened. Rebuilding the helper from the shipped source kit with the previously built pinned static dependency prefix produced an identical binary and passed the same FIFO check. After the registry correction, the final builder again produced that identical helper, which passed FIFO and installed-package checks. |
+| Package/workflow regressions | **3 dependency-pin tests, 3 package tests and 15 workflow tests passed**; the final frozen workflow run took 130.927 s. Six-platform synthetic packages do not prove native platform execution. |
+| Final native Linux build and UI | Development build passed in 23.66 s, 160 warnings. Isolated Xvfb demo showed animated no-capture music preview and working source stop; controls fit 800×500 with scrolling. No real device or audio capture was opened. |
+| Final full Windows check | Production/test code passed offline `cargo check --target x86_64-pc-windows-gnu --tests` with real MinGW dependencies in 20.80 s, 284 warnings. This is typechecking, not Windows execution, MSVC or ARM64 qualification. |
+| Actual Linux installation | A **57-member** development trial with dirty-source provenance passed isolated install, reinstall, installed application self-check, bundled CAVA `-v`/hash verification, source/license retention and uninstall. Separate preference data survived. |
+| Localization and source hygiene | Localization checker, 82 changed-document relative links, Python compilation, workflow YAML parsing and Git whitespace checks passed. No assertion was weakened or newly ignored. |
+
+Final test executable SHA256: `98004003e2f43e8b1fbbe0d6f1f5006a41397dd119ee7e4842601e54e5b4bba6`. Native application: `9d3597f3c7ca3a35aab34b9e6205be5bd474d6383b3ceb0f091807b829192504`. CAVA helper: `7cca67854a611f1d80a030f1e0892a92c45ec1e83031a2a6ee8260074bd1527f`. The Linux trial is 43,775,173 bytes, SHA256 `8343b2e76e2fbb4c737c541d33c6617add32cdf60742d3e6b0f5ab88d878a473`. It is test evidence, not a published release. The supplied original SDK source aggregate SHA256 is `5cfc125bc13ccb3e4639429d99b7f82f3c6d971846431ceb5777eeb8cfdc118a`; the reproducible probe/test scripts are in `scripts/`.
+
+### Acceptance limits
+
+Real system-loopback capture, macOS permission consent, native Windows/macOS/ARM64 helper builds and execution, tray behavior on those operating systems, physical RGB timing/reconnect/retention and resource use remain unexecuted. The six-target workflow has not run remotely for these changes. No keyboard operation, firmware change, push, tag, signing or public release occurred. Beta2 has no getter for the current Direct palette and no atomic frame commit; cached requested colors are not substituted for either feature.
+
+Final independent integration and delivery reviews approved a local commit and cumulative Git bundle from `c207ad1`, with reviewed staged patch SHA256 `34fb9e7b87ff00090d6305b814d53202f1a921275384619e729a797eba3e43c2`. Only this acceptance record and its Russian counterpart were replaced after review. The completed checks support source delivery, not hardware or release qualification.
+
+
 ## P0 application delivery — 2026-10-26
 
 This work starts from `8e8ff0cd9d29956dd83d9fa9736a68d402d8c201` on `desktop-dev`. Application version remains `0.1.0-beta.2`, with the unchanged exact firmware `v0.6.0-beta.2` catalog. The work implements application update delivery, per-user installation and stronger native CI gates. It does not declare all hardware/platform release gates passed.

@@ -11,7 +11,7 @@ AK Configurator v0.1.0-beta.2 находится на этапе подгото�
 ```sh
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-  build-essential pkg-config libdbus-1-dev libgtk-3-dev libudev-dev \
+  build-essential pkg-config libdbus-1-dev libgtk-3-dev libudev-dev libpulse-dev \
   libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
   libxkbcommon-dev libxkbcommon-x11-0 libgl1-mesa-dev zenity
 ```
@@ -22,6 +22,7 @@ sudo apt-get install -y --no-install-recommends \
 
 ```sh
 cargo build --release --locked
+python3 scripts/build_cava_helper.py --output-dir target/release/audio
 cargo test --locked --all-targets -- --test-threads=1
 ```
 
@@ -34,6 +35,12 @@ cargo run --locked -- --demo-ak820
 Демонстрационный режим не ищет и не открывает HID-устройства. Примеры не являются копиями настроек устройства. Исполняемый файл находится в `target/release/ak-configurator` для Linux/macOS и `target/release/ak-configurator.exe` для Windows. Сборка и host-тесты не подтверждают физическую работу клавиатуры.
 
 Текущие доказательства сборки исходников относятся к Ubuntu 24.04 и Rust 1.97.0. Успешный запуск старого артефакта в Debian 12 не подтверждает совместимость текущей сборки. Alpine/musl не квалифицирован. Для Linux нужны системные графические библиотеки и portal или Zenity для диалогов файлов.
+
+### Встроенный музыкальный компонент
+
+Полный пакет кандидата содержит `audio/cava` (`audio/cava.exe` в Windows) рядом с приложением; в macOS он находится в `Contents/MacOS/audio`. Каталог нужно сохранять рядом с бинарником. Установщик для пользователя копирует его автоматически. Для музыки не требуется отдельная установка OpenRGB или CAVA. В пакет также входят точные архивы сторонних исходников и уведомления; при распространении их необходимо сохранять.
+
+Команда выше собирает закреплённый CAVA и статические FFTW/iniparser. Для Linux дополнительно нужны клиентская библиотека PulseAudio (`libpulse0`) и работающий PulseAudio либо PipeWire-Pulse. При разработке через `cargo run` используйте `--output-dir target/debug/audio`. Windows-компонент собирается CMake/MSVC с закреплённым манифестом vcpkg и статическими зависимостями; задайте `VCPKG_ROOT` для его checkout. В macOS нужны инструменты командной строки Xcode и SDK 14.2+ для звукового компонента. Системный захват macOS требует 14.2+ и согласия пользователя; остальные функции приложения имеют отдельные требования. См. [THIRD-PARTY-AUDIO.md](THIRD-PARTY-AUDIO.md).
 
 ## Доступ к устройству в Linux
 
@@ -64,6 +71,7 @@ mkdir -p target/candidate
 target/release/ak-configurator --self-check --output target/candidate/runtime-self-check.json
 python3 scripts/package_ak820_candidate.py \
   --binary target/release/ak-configurator \
+  --cava-helper target/release/audio/cava \
   --platform linux-x86_64 \
   --runtime-check target/candidate/runtime-self-check.json \
   --output-dir target/candidate

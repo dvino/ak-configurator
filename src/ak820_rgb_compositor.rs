@@ -188,6 +188,12 @@ impl Scene {
                 }
             }
         }
+        let brightness = self.brightness_at(local_minute);
+        Ok(frame.map(|rgb| rgb.map(|v| (u16::from(v) * u16::from(brightness) / 255) as u8)))
+    }
+
+    /// Shared cap for native scenes, CAVA bars and OpenRGB input.
+    pub(crate) fn brightness_at(&self, local_minute: u16) -> u8 {
         let mut brightness = self.base.brightness;
         if let Some(q) = &self.quiet_hours {
             let active = if q.start_minute < q.end_minute {
@@ -199,7 +205,7 @@ impl Scene {
                 brightness = brightness.min(q.brightness);
             }
         }
-        Ok(frame.map(|rgb| rgb.map(|v| (u16::from(v) * u16::from(brightness) / 255) as u8)))
+        brightness.min(RGB_MAX_BRIGHTNESS)
     }
     pub(crate) fn encode_preset(&self) -> Result<String, &'static str> {
         self.validate()?;
@@ -243,7 +249,7 @@ impl Scene {
 // Exact physical LED centers, aligned by index with the beta2 SLOT_MAP. Source:
 // firmware v0.6.0-beta.2 keymap.c ak820_led_points[] at commit
 // 2990ef877c5c6c54013b8821450c5a91878b8c3a.
-const LED_POINTS: [(u16, u16); LED_COUNT] = [
+pub(crate) const LED_POINTS: [(u16, u16); LED_COUNT] = [
     (7, 0),
     (25, 0),
     (39, 0),

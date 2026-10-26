@@ -41,17 +41,26 @@ class CandidateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 candidate.check_architecture(data[:20], platform)
 
+    def test_missing_helper_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "CAVA helper is required"):
+            candidate.build_package("unused", "linux-x86_64", "unused")
+
     def test_candidate_contents_identity_hashes_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             binary = root / "synthetic"
             binary.write_bytes(header("linux-x86_64"))
-            archive = candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True)
+            archive = candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True, cava_helper=binary)
             with tarfile.open(archive, "r:gz") as package:
                 contents = {item.name.split("/", 1)[1]: package.extractfile(item).read() for item in package.getmembers()}
                 self.assertTrue({"ak-configurator", "INSTALL.en.md", "INSTALL.ru.md", "RGB-PLAN.en.md", "RGB-PLAN.ru.md", "manifest.json", "firmware-provenance.json", "SHA256SUMS", "LICENSE", "FONT-LICENSES.txt", "LUCIDE-LICENSE.txt", "eframe-LICENSE-MIT", "eframe-LICENSE-APACHE", "offline/firmware-beta2/main/application.ihx", "offline/firmware-beta2/main/application.map", "offline/capability-catalog.json"}.issubset(contents))
+                self.assertEqual(contents["audio/cava"], binary.read_bytes())
+                self.assertIn("audio-sources/fftw-3.3.10.tar.gz", contents)
+                self.assertIn("audio-sources/cava-patched-source.tar.gz", contents)
                 self.assertEqual(contents["LICENSE"], (candidate.ROOT / "LICENSE").read_bytes())
                 manifest = json.loads(contents["manifest.json"])
+                self.assertEqual(manifest["audio_helper"]["sha256"], hashlib.sha256(binary.read_bytes()).hexdigest())
+                self.assertEqual(manifest["audio_helper"]["path"], "audio/cava")
                 self.assertEqual(manifest["firmware_release"], "v0.6.0-beta.2")
                 provenance = json.loads(contents["firmware-provenance.json"])
                 self.assertEqual(provenance["tag_object"], "2e0b28b384872c482e0e358a4b353f00ddd976a7")
@@ -67,7 +76,7 @@ class CandidateTests(unittest.TestCase):
             expected = Path(str(archive) + ".sha256").read_text().split()[0]
             self.assertEqual(expected, hashlib.sha256(archive.read_bytes()).hexdigest())
             with self.assertRaisesRegex(ValueError, "already exists"):
-                candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True)
+                candidate.build_package(binary, "linux-x86_64", root / "out", allow_dirty=True, cava_helper=binary)
 
 
 if __name__ == "__main__":

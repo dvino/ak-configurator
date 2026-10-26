@@ -115,6 +115,16 @@ def exercise(archive, platform, report_path):
         expected_binary_hash = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))["binary_sha256"]
         if hashlib.sha256(installed.read_bytes()).hexdigest() != expected_binary_hash:
             raise ValueError("Installed executable digest differs from the verified archive manifest")
+        helper = installed.parent / "audio" / ("cava.exe" if platform.startswith("windows-") else "cava")
+        expected_helper_hash = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))["audio_helper"]["sha256"]
+        if not helper.is_file() or hashlib.sha256(helper.read_bytes()).hexdigest() != expected_helper_hash:
+            raise ValueError("Installed CAVA helper differs from package identity")
+        helper_version = run([str(helper), "-v"], env=env).stdout.strip()
+        if helper_version != "cava 1.0.0":
+            raise ValueError("Installed CAVA helper did not execute its device-free version probe")
+        legal_root = installed.parent.parent / "Resources" if platform.startswith("macos-") else installed.parent
+        if not (legal_root / "CAVA-LICENSE").is_file() or not (legal_root / "audio-sources/cava-patched-source.tar.gz").is_file():
+            raise ValueError("Installer did not preserve CAVA license and corresponding source")
         data.parent.mkdir(parents=True, exist_ok=True)
         data.write_text("preserve", encoding="utf-8")
         installer = bundle / ("install-user.ps1" if platform.startswith("windows-") else "install-user.sh")
@@ -145,6 +155,7 @@ def exercise(archive, platform, report_path):
         report = {"format": "ak-configurator-installed-smoke-1", "platform": platform,
                   "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                   "binary_sha256": expected_binary_hash,
+                  "audio_helper_sha256": expected_helper_hash, "audio_helper_version": helper_version,
                   "installed_self_check": check, "user_data_preserved": True,
                   "upgrade_verified": True, "uninstalled": True}
         report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

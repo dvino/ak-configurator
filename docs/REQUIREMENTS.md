@@ -4,7 +4,7 @@
 
 **Status:** agreed requirements for future work
 
-**Version:** 0.6
+**Version:** 0.7
 
 **Date:** 2026-10-26
 
@@ -82,7 +82,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** match the firmware's `BUILD-PROFILES.md`, `MODULE-MATRIX.md`, `MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md` at the beta.2 source commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`). Validate ranges, reserved bytes, CRC, defaults and per-entry terms before writing. Typed setters verify ACK, getter and complete NVM readback including adjacent bytes. Unchanged effective defaults preserve blank storage. Temporary Dynamic Macros, session modes and VialRGB Direct colors are identified as volatile. Unsupported controls remain unavailable in both the editor and key picker.
 
-**AKW-025 · Desktop RGB.** The companion provides a physical keyboard lighting editor with individual-key and group selection, color/brightness controls and local presets. Add native effects, music visualization, useful host indicators, game events and optional OpenRGB SDK interoperability in the phases defined in [RGB-PLAN.md](RGB-PLAN.md). Use the existing VialRGB protocol and one HID owner; SDK networking does not replace image verification. Direct mode is available only on profiles that advertise it.
+**AKW-025 · Desktop RGB.** The companion provides a physical keyboard lighting editor with individual-key and group selection, color/brightness controls and local presets. Add native effects, music visualization, useful host indicators, game events and optional OpenRGB SDK interoperability in the phases defined in [RGB-PLAN.md](RGB-PLAN.md). Prefer complete existing open-source components and compatible plugins over new audio analysis or general effects engines. Manage bundled components from the configurator so ordinary keyboard lighting does not require launching several applications. Use the existing VialRGB protocol and one HID owner; SDK networking does not replace image verification. Direct mode is available only on profiles that advertise it.
 
 **Acceptance:** validate all 82 LED mappings and exclude the unlit encoder press. Keep 83 key positions distinct from LED count. Bound HSV V to 160 and packets to nine LEDs. Local presets, acknowledged RAM writes, readback and persistent settings are separate states; no Direct palette getter or persistence is assumed. No per-frame NVM writes. Audio/screen capture is local and opt-in; actual game events require a supported event source. Unknown external input and a device error cannot bypass fail-stop or operation ownership.
 
@@ -182,7 +182,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** no data is sent unless a feature is enabled. Each connected provider is checked separately for its terms and data handling. Encryption and provider security are not promised before verification.
 
-**AKW-071 · Web/Desktop.** Without cloud features, network access is used for releases, the catalog, help, and application updates. The application contains no GitHub tokens. Downloads are checked; arbitrary HTML is not executed, and external links are not treated as firmware sources without project rules. A hash from the same source detects corruption but not compromise of that source.
+**AKW-071 · Web/Desktop.** Without cloud features, network access is used for releases, the catalog, help, and application updates. An explicitly enabled OpenRGB SDK source may listen on loopback only; it accepts bounded lighting input through the existing verified device owner. The application contains no GitHub tokens. Downloads are checked; arbitrary HTML is not executed, and external links are not treated as firmware sources without project rules. A hash from the same source detects corruption but not compromise of that source.
 
 **Acceptance:** incoming files and the absence of client-side secrets are checked; published firmware is tied to a verified catalog.
 

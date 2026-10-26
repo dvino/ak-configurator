@@ -1,0 +1,21 @@
+{
+  "name": "cava",
+  "version": "1.0.0",
+  "dependencies": [
+    "fftw3",
+    "pthreads"
+  ],
+  "builtin-baseline": "64810c6bf2bdc91ebcd75f140aec77580113f219",
+  "overrides": [
+    {
+      "name": "fftw3",
+      "version": "3.3.10",
+      "port-version": 10
+    },
+    {
+      "name": "pthreads",
+      "version": "3.0.0",
+      "port-version": 14
+    }
+  ]
+}

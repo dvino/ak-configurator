@@ -22,6 +22,9 @@ mod ak820_os_indicator;
 #[path = "ui/ak820_restore_request.rs"]
 mod ak820_restore_request;
 #[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_rgb_inputs.rs"]
+mod ak820_rgb_inputs;
+#[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_rgb_palette.rs"]
 mod ak820_rgb_palette;
 #[cfg(not(target_arch = "wasm32"))]

@@ -33,6 +33,14 @@ This local candidate is prepared for AK Configurator's AK820 companion work. It 
 - Keep scene selection valid after import/undo and make layer controls accessible at the minimum 800-pixel window width
 - Record the peeled firmware commit separately from its annotated tag object in provenance and candidate manifests
 
+### P1 RGB integration
+
+- Reuse bundled CAVA 1.0.0 for system capture, FFT, logarithmic bands, sensitivity and smoothing; all controls and process lifecycle stay in the configurator.
+- Add spectrum/pulse/bass, no-capture test input, local-only OpenRGB SDK 0/1 bridge, shared latest-frame scheduling and live brightness/quiet-hours caps.
+- Add explicit Stop and restore effect with a session-bound original built-in mode and checked one-attempt restoration; failures and ordinary Stop never restore automatically.
+- Package the helper and corresponding source/license inputs for all targets. Native capture and six-target execution remain separately qualified.
+- Direct palette getter and atomic frame commit remain unavailable in beta2 and are not marked complete.
+
 ### Candidate Notes
 
 - Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification

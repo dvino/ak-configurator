@@ -1,0 +1,20 @@
+{
+  "iniparser-4.2.6.tar.gz": {
+    "sha256": "a0bd370713a744b1fa8ec27bba889ebf9dbd43060ec92e07fbe91fb43e3cb3ac",
+    "size": 39062,
+    "source_url": "https://codeload.github.com/ndevilla/iniparser/tar.gz/refs/tags/v4.2.6",
+    "license": "MIT"
+  },
+  "fftw-3.3.10.tar.gz": {
+    "sha256": "56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467",
+    "size": 4144100,
+    "source_url": "https://www.fftw.org/fftw-3.3.10.tar.gz",
+    "license": "GPL-2.0-or-later"
+  },
+  "pthreads4w-code-v3.0.0.zip": {
+    "sha256": "b81136effb7185c77601fe2e0e6ac19bd996912e4814cebdd3010b0fac9e259b",
+    "size": 862409,
+    "source_url": "https://downloads.sourceforge.net/project/pthreads4w/pthreads4w-code-v3.0.0.zip",
+    "license": "Apache-2.0"
+  }
+}
