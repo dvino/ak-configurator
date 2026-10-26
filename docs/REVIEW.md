@@ -2,6 +2,50 @@
 
 # Desktop adaptation and review
 
+## Beta2 desktop candidate — 2026-10-26
+
+The reviewed work starts at `c207ad13f3529bebccdbb8df15a7c38cfd96c1eb` on `desktop-dev` and prepares application `0.1.0-beta.2` for firmware [v0.6.0-beta.2](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2), commit `2e0b28b384872c482e0e358a4b353f00ddd976a7`, published at 04:52:40 UTC. The five bundled JSON catalogs are byte-identical to the published release assets. Their sizes, hashes and URLs are recorded in `assets/ak820/beta2-provenance.json`; the prequalification catalogs in the firmware tag are not substituted for those assets.
+
+The packet adds ten exact schema03 profile contracts, complete read-only connection/reconciliation, profile-aware typed writes and keycode choices, project v2, exact historical backup sources and RGB-mode migration, the static 82-LED palette editor, bilingual help/research/requirements, and versioned six-platform candidate packaging. The exceptional architecture handoff requested in the prior checkpoint was completed before this packet; it is no longer a prerequisite for the next agent. Earlier handoff instructions below describe historical checkpoints.
+
+### Independent findings and closure
+
+A separate GPT-6.1 Sol reviewer inspected code, firmware contracts and matching EN/RU documentation without authoring the changes or operating a device. Findings corrected and re-reviewed:
+
+- The first historical schema02 source (`f1c434…` IHX / `6ff7b1…` packed CODE) has no Combo module. Its explicit registry flag now drives decoding and restore policy. Nonzero reserved Combo bytes are not silently reinterpreted during raw migration.
+- Candidate ZIPs now use a separate workflow artifact, preserving the raw binary artifact's extraction layout and existing install commands.
+- Requirements, help and status now describe ten beta2 profiles, the actual active QSIDs, source-only historical identities, and 82 Direct colors in ten packets.
+- The inherited Key Override all-layer mask is normalized to six bits. Intentional trigger clearing produces a completely zero record. Incomplete drafts remain local; prevalidation of all eight rows prevents frame-driven flushes from reading NVM or sending siblings while a draft is incomplete. Regression checks exercise eight rows and repeated pending flushes.
+- Tap Dance output choices and tapping-term limits follow the typed firmware contract. Invalid selections leave the entry and undo history unchanged. The palette is shown only for the four Direct profiles, with an independent transport gate.
+
+### Host verification
+
+| Check | Result and scope |
+| --- | --- |
+| Full default offline suite, sequential | **1650 passed, 0 failed, 14 ignored**, 793.91 s. This test executable precedes only the final eight-row Key Override preflight correction; the latest AK820 run below covers that correction. No ignored device/manual checks were enabled. |
+| Latest AK820 tests | **136 passed, 0 failed**, 15.83 s, after the final batch-preflight correction. Covers exact profiles, modeled connection failures, typed full-NVM preservation, historical restore, Direct packets/fault latching, presets, offline projects and picker regressions. |
+| Private-directory umask test | Passed in the full suite. The test executable was copied to a traversable temporary directory, with its digest verified, and the privilege-changing child ran outside the restricted execution sandbox. No test assertion was weakened. |
+| Python candidate packager | **2 passed**. Tests header/architecture mismatch rejection, package contents and retained licenses, provenance/checksums, executable mode and refusal to overwrite output. Synthetic headers do not establish runnable cross-platform binaries. |
+| Existing workflow policy tests | **45 passed**. |
+| Native optimized build | `cargo build --release --locked --offline` succeeded with Rust 1.97.0 on Ubuntu 24.04 x86_64 in 4m 37s. Warnings remain; this is not a warning-free build. |
+| Native offline UI | The final release binary launched with `--demo-ak820` on Xvfb/software rendering. Keyboard geometry, group selection, color editing, explicit demo apply, preset save and reload were inspected. Main shows the palette; switching to Typing hides it and retains built-in RGB controls. The saved preset contains exactly 82 colors and only the four WASD slots changed. `docs/images/ak820-beta2-rgb-demo.png` records the final binary's local preview. |
+| Real Linux candidate archive | Built from the final native binary, with `--allow-dirty` during review. All 13 archive members and the outer ZIP checksum were checked; manifest records the dirty local trial explicitly. Final clean-source packaging is performed after commit. |
+| Whitespace | `git diff --check` passed. |
+
+The full-suite executable SHA256 was `f3d10584c5e789d1c3f73b414051c0dc8df58923a5f5b532e02b82cb70108d9b`; the latest AK820 test executable is `91b346315602e3dab8aeaa4ba8d41191f7984046a3558159b59e1cc750f6a898`. The native release binary SHA256 is `4ec909b4a3b39df2e02ba9a570517ff55cd54561557c39f33bd0704c8259e1d6`. These distinguish the broad run from the bounded final correction rather than presenting both as one identical binary.
+
+The inherited helper tests can time out under parallel suite contention; the workflow now runs them sequentially. The initial restricted-sandbox umask failure was an execution-environment limitation. Neither issue was suppressed by changing assertions or adding test ignores.
+
+### Remaining release evidence
+
+There is no positive released packed-image/full-ROM fixture: public Intel HEX lacks the OEM erase-helper bytes required by the packer. Private OEM data is excluded. Synthetic verified sessions and digest-admission tests establish host rules, not acceptance of a physical keyboard. No hardware writes, reset, loader transition or flashing were performed. HID timing, retention, physical input, real backup/restore and installer execution remain open. Direct palettes have no getter or persistence and are not included in firmware backup data.
+
+The workflow and package script cover six architecture targets; this session built and launched Linux x86_64 only. Windows, macOS, arm64 runtime checks, current-tree six-target CI, installers and signing remain open. The Linux binary uses the Ubuntu 24.04 runtime; older Debian compatibility is not implied. Candidate packaging is not a fully qualified first release.
+
+Final independent review approved this local candidate commit and incremental bundle from `c207ad1`, with the stated release limits. The reviewed staged patch SHA256 was `3486ef281eaecf15d2cfff1e1d35adabf11e127ba047289d38e4320cd8924749`; replacing this approval sentence was the only permitted closure edit after that review.
+
+## Historical evidence before this packet
+
 Date: 2026-10-24. Milestone: AK Configurator `0.1.0-alpha.1`, `desktop-dev`.
 
 ## Source and scope

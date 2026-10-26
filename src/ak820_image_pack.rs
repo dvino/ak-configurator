@@ -141,7 +141,7 @@ fn validate_startup(data: &Code, s: &Symbols) -> BackupResult<()> {
     need(
         symbol(s, "l_PSEG")? == 0
             && length == symbol(s, "l_XISEG")?
-            && xseg == 0x400
+            && matches!(xseg, 0x400 | 0x440)
             && xseg.checked_add(xlen) == Some(destination)
             && destination
                 .checked_add(length)
@@ -473,11 +473,32 @@ mod tests {
             let payload = pack_core(&data, &s, &stock, &nvm, mode, 0x082002).unwrap();
             assert_eq!(sha256(&payload), digest);
             assert_eq!(verify_payload(&payload, 0x082002).unwrap(), mode);
-            assert!(validate_catalog_payload(&payload, ProfileId::Work).is_err());
+            assert!(validate_catalog_payload(&payload, ProfileId::Main).is_err());
             assert_eq!(
                 &payload[0x2830 - APP_START..0x2887 - APP_START],
                 &stock[0xe650..0xe6a7]
             );
+        }
+    }
+    #[test]
+    fn startup_accepts_only_beta2_xram_starts() {
+        // Synthetic startup only; no OEM bytes or packed release proof involved.
+        for start in [0x400, 0x440] {
+            let (mut data, mut symbols, _, _) = fixture();
+            symbols.insert("s_XSEG".into(), start);
+            symbols.insert("l_XSEG".into(), 0xa00 - start);
+            symbols.insert("s_XISEG".into(), 0xa00);
+            // Relocated startup operands: destination low/high bytes.
+            data.insert(0x3100 + 14, 0x00);
+            data.insert(0x3100 + 16, 0x0a);
+            assert!(validate_startup(&data, &symbols).is_ok());
+        }
+        for start in [0x3c0, 0x420, 0x1000] {
+            let (data, mut symbols, _, _) = fixture();
+            symbols.insert("s_XSEG".into(), start);
+            symbols.insert("l_XSEG".into(), 0xa00usize.saturating_sub(start));
+            symbols.insert("s_XISEG".into(), 0xa00);
+            assert!(validate_startup(&data, &symbols).is_err());
         }
     }
     #[test]
@@ -561,7 +582,7 @@ mod tests {
             &stock,
             &nvm,
             EntryMode::Permanent,
-            ProfileId::Essential
+            ProfileId::Game
         )
         .is_err());
     }

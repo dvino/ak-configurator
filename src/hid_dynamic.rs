@@ -264,6 +264,11 @@ impl HidDevice {
         if resp[0] != 0 {
             anyhow::bail!("tap dance set error: {}", resp[0]);
         }
+        if self.is_ak820_session() {
+            // The AK820 transaction checked the getter and complete NVM while
+            // holding its session lock. Do not add an unlatched extra read.
+            return Ok(());
+        }
         let readback = self.get_tap_dance(idx)?;
         verify_tap_dance_writeback(idx, requested, readback)
     }

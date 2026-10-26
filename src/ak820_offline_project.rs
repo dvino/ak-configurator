@@ -17,8 +17,10 @@ const MAX_JSON: usize = 2 * 1024 * 1024;
 struct Project {
     format: String,
     version: u32,
+    target_release: String,
     profile_id: String,
     source_catalog_sha256: String,
+    source_ihx_sha256: String,
     physical_keys: Vec<[u8; 2]>,
     encoder_directions: Vec<[u8; 2]>,
     layers: Vec<Vec<u16>>,
@@ -97,16 +99,30 @@ fn vial(value: KeyBinding) -> Result<u16> {
 fn parse(raw: &[u8]) -> Result<Project> {
     require(raw.len() <= MAX_JSON, "Project exceeds size limit")?;
     let value = crate::ak820_settings_backup::parse_json(raw)?;
+    if value.get("format").and_then(serde_json::Value::as_str) == Some(FORMAT)
+        && value.get("version").and_then(serde_json::Value::as_u64) == Some(1)
+    {
+        return Err("Offline project version 1 is a beta.1 format and cannot be migrated automatically; open an existing v1 file in a compatible beta.1 application and export its contents manually".into());
+    }
     let project: Project = serde_json::from_value(value).map_err(|e| e.to_string())?;
     require(
-        project.format == FORMAT && project.version == 1,
-        "Unsupported offline project format/version",
+        project.format == FORMAT,
+        "Unsupported offline project format",
+    )?;
+    require(project.version == 2, "Unsupported offline project version")?;
+    require(
+        project.target_release == beta::BETA_RELEASE,
+        "Offline project targets a different firmware release",
     )?;
     require(
         project.source_catalog_sha256 == beta::SOURCE_CATALOG_SHA256,
         "Project firmware catalog identity differs",
     )?;
-    id(&project.profile_id)?;
+    let profile = id(&project.profile_id)?;
+    require(
+        project.source_ihx_sha256 == beta::profile(profile).build_identity.ihx_sha256,
+        "Project image identity differs from this profile",
+    )?;
     require(
         serde_json::to_vec_pretty(&project)
             .map_err(|e| e.to_string())?
@@ -354,11 +370,17 @@ impl Project {
                 "Unsupported Combo record",
             )?;
         }
-        let effects = [0, 1, 2, 6, 13, 14, 31];
+        let effects = beta::rgb_modes(profile)
+            .iter()
+            .map(|(_, wire)| *wire)
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
         require(
             self.rgb.brightness <= 160
                 && effects.contains(&self.rgb.effect)
-                && effects[1..].contains(&self.rgb.last_enabled_effect),
+                && effects
+                    .iter()
+                    .any(|mode| *mode != 0 && *mode == self.rgb.last_enabled_effect),
             "Invalid saved RGB values",
         )?;
         require(
@@ -391,9 +413,11 @@ pub(crate) fn export_project(p: &Ak820OfflineProfileProject) -> Result<Vec<u8>> 
     )?;
     let doc = Project {
         format: FORMAT.into(),
-        version: 1,
+        version: 2,
+        target_release: beta::BETA_RELEASE.into(),
         profile_id: p.profile.as_str().into(),
         source_catalog_sha256: beta::SOURCE_CATALOG_SHA256.into(),
+        source_ihx_sha256: beta::profile(p.profile).build_identity.ihx_sha256.clone(),
         physical_keys: p.layout.keys.iter().map(|k| [k.row, k.col]).collect(),
         encoder_directions: p
             .layout
@@ -542,6 +566,12 @@ mod tests {
             assert_eq!(restored.macro_texts, p.macro_texts);
             assert_eq!(restored.macro_actions, p.macro_actions);
             assert_eq!(export_project(&restored).unwrap(), bytes);
+            if let Some(other) = beta::profiles()
+                .iter()
+                .find(|candidate| candidate.profile != image.profile)
+            {
+                assert!(import_project(&bytes, fixture(other.profile)).is_err());
+            }
             for mutation in 0..8 {
                 let mut v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
                 match mutation {
@@ -567,25 +597,36 @@ mod tests {
         assert!(profile_id(b"{} {}").is_err());
         assert!(profile_id(br#"{"format":"ak820-settings-backup"}"#).is_err());
         assert!(profile_id(&vec![b' '; MAX_JSON + 1]).is_err());
+        let mut legacy: serde_json::Value =
+            serde_json::from_slice(&export_project(&fixture(ProfileId::Main)).unwrap()).unwrap();
+        legacy["version"] = 1.into();
+        legacy.as_object_mut().unwrap().remove("targetRelease");
+        legacy.as_object_mut().unwrap().remove("sourceIhxSha256");
+        assert!(parse(&serde_json::to_vec(&legacy).unwrap())
+            .unwrap_err()
+            .contains("cannot be migrated automatically"));
+        let mut current: serde_json::Value =
+            serde_json::from_slice(&export_project(&fixture(ProfileId::Main)).unwrap()).unwrap();
+        current["targetRelease"] = "v0.6.0-beta.1".into();
+        assert!(parse(&serde_json::to_vec(&current).unwrap()).is_err());
+        current["targetRelease"] = beta::BETA_RELEASE.into();
+        current["sourceIhxSha256"] = "bad".into();
+        assert!(parse(&serde_json::to_vec(&current).unwrap()).is_err());
     }
     #[test]
     fn macros_validate_sources_and_wire_limits() {
-        assert!(validate_stream(ProfileId::Work, b"ASCII").is_ok());
-        assert!(validate_stream(ProfileId::Work, &[128]).is_err());
-        assert!(validate_stream(ProfileId::Work, &[0]).is_err());
-        assert!(validate_stream(ProfileId::Work, &[1, 9]).is_err());
-        assert!(validate_stream(ProfileId::Work, &[1, 1, 4]).is_ok());
-        assert!(validate_stream(ProfileId::Work, &[1, 5, 0, 0x52]).is_err());
-        assert!(check_code(ProfileId::Work, 0x5700, KeycodeSource::Encoder).is_err());
+        assert!(validate_stream(ProfileId::Main, b"ASCII").is_ok());
+        assert!(validate_stream(ProfileId::Main, &[128]).is_err());
+        assert!(validate_stream(ProfileId::Main, &[0]).is_err());
+        assert!(validate_stream(ProfileId::Main, &[1, 9]).is_err());
+        assert!(validate_stream(ProfileId::Main, &[1, 1, 4]).is_ok());
+        assert!(validate_stream(ProfileId::Main, &[1, 5, 0, 0x52]).is_err());
+        assert!(check_code(ProfileId::Main, 0x5700, KeycodeSource::Encoder).is_err());
         assert!(Action::Delay(65025).bytes().is_err());
     }
     #[test]
     fn typed_records_roundtrip_and_inactive_fields_fail_closed() {
-        for profile in [
-            ProfileId::Settings,
-            ProfileId::TapDance,
-            ProfileId::KeyOverrides,
-        ] {
+        for profile in [ProfileId::Mmo, ProfileId::Shortcuts, ProfileId::Creative] {
             let original = carrier();
             let records = Records::from_nvm(&original).unwrap();
             let json = serde_json::to_vec(&records).unwrap();
@@ -602,7 +643,7 @@ mod tests {
         let mut settings = QmkSettings::default();
         settings.set(4, 123).unwrap();
         records.settings = settings.encode().to_vec();
-        assert!(records.candidate(ProfileId::Settings).is_err());
+        assert!(records.candidate(ProfileId::Main).is_err());
     }
 }
 
@@ -613,13 +654,13 @@ mod size_boundary_tests {
     #[test]
     fn normalized_import_and_export_share_the_same_size_boundary() {
         // Use the same full project fixture as the codec roundtrip tests.
-        let mut project = super::tests::fixture(ProfileId::Work);
+        let mut project = super::tests::fixture(ProfileId::Main);
         let baseline = export_project(&project).unwrap();
         let text_room = MAX_JSON - baseline.len();
         project.layer_names[0] = "a".repeat(text_room + "Layer".len());
         let exact = export_project(&project).unwrap();
         assert_eq!(exact.len(), MAX_JSON);
-        let reopened = import_project(&exact, super::tests::fixture(ProfileId::Work)).unwrap();
+        let reopened = import_project(&exact, super::tests::fixture(ProfileId::Main)).unwrap();
         assert_eq!(export_project(&reopened).unwrap(), exact);
         project.layer_names[0].push('a');
         assert!(export_project(&project).is_err());
@@ -628,6 +669,6 @@ mod size_boundary_tests {
         doc["layerNames"][0] = format!("{}a", doc["layerNames"][0].as_str().unwrap()).into();
         let compact = serde_json::to_vec(&doc).unwrap();
         assert!(compact.len() < MAX_JSON);
-        assert!(import_project(&compact, super::tests::fixture(ProfileId::Work)).is_err());
+        assert!(import_project(&compact, super::tests::fixture(ProfileId::Main)).is_err());
     }
 }

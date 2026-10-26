@@ -1,4 +1,4 @@
-//! Offline contract for the reviewed wired AK820 alpha.3 firmware.
+//! Exact installed-image contracts for the wired AK820.
 //!
 //! Pinned to `ak820-firmware` alpha.3 (`8ffa3e6`, 2026-10-24),
 //! `tools/installer/settings_backup.py`,
@@ -55,7 +55,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, ManifestError> {
         return Err(ManifestError::Reserved);
     }
     let schema = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
-    if schema != 0x0008_2002 {
+    if !matches!(schema, 0x0008_2002 | 0x0008_2003) {
         return Err(ManifestError::Schema);
     }
     Ok(Manifest {
@@ -69,13 +69,138 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, ManifestError> {
 /// Exact image recognition requires independently extracted CODE bytes to
 /// match both the manifest and the reviewed alpha.3 image pin.
 pub fn recognize_image(manifest: &[u8], computed_code_hash: &[u8; 32]) -> bool {
-    parse_manifest(manifest)
-        .map(|m| {
-            m.permanent
-                && m.code_sha256 == *computed_code_hash
-                && hex(&m.code_sha256) == CODE_SHA256
+    identify_image(manifest, computed_code_hash).is_some()
+}
+
+/// A verified image determines every later setting and protocol permission.
+/// Catalog membership is not device verification: callers must first hash the
+/// complete installed CODE range and compare it with the manifest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ImageContract {
+    Alpha3,
+    Beta2(crate::app::ak820_beta1_profiles::ProfileId),
+}
+
+impl ImageContract {
+    pub(crate) fn schema(self) -> u32 {
+        match self {
+            Self::Alpha3 => 0x082002,
+            Self::Beta2(_) => 0x082003,
+        }
+    }
+
+    pub(crate) fn profile(self) -> Option<crate::app::ak820_beta1_profiles::ProfileId> {
+        match self {
+            Self::Alpha3 => None,
+            Self::Beta2(profile) => Some(profile),
+        }
+    }
+
+    pub(crate) fn label(self) -> String {
+        match self {
+            Self::Alpha3 => "v0.6.0-alpha.3 / full".into(),
+            Self::Beta2(profile) => format!("v0.6.0-beta.2 / {}", profile.as_str()),
+        }
+    }
+
+    pub(crate) fn rgb_modes(self) -> &'static [u8] {
+        match self {
+            Self::Alpha3 => CAPABILITIES.rgb_modes,
+            Self::Beta2(profile) => {
+                let row = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+                if row.capabilities.optional_modules.get("vialrgb-direct") == Some(&true) {
+                    &[0, 1, 2, 6, 13, 14, 31]
+                } else {
+                    &[0, 2, 6, 13, 14, 31]
+                }
+            }
+        }
+    }
+
+    pub(crate) fn qsid_ids(self) -> &'static [u16] {
+        match self {
+            Self::Alpha3 => &[],
+            Self::Beta2(profile) => {
+                &crate::app::ak820_beta1_profiles::matrix_profile(profile)
+                    .capabilities
+                    .runtime_qmk_settings_ids
+            }
+        }
+    }
+
+    pub(crate) fn saved_rgb_mode(self, saved: u8) -> Option<u8> {
+        let modes: &[(u8, u16)] = match self {
+            Self::Alpha3 => &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)],
+            Self::Beta2(profile) => crate::app::ak820_beta1_profiles::rgb_modes(profile),
+        };
+        modes
+            .iter()
+            .find_map(|&(id, wire)| (id == saved).then_some(wire as u8))
+    }
+
+    pub(crate) fn dynamic_counts(self) -> (u8, u8, u8, u8, u8) {
+        match self {
+            Self::Alpha3 => (0, 8, 0, 0, 1),
+            Self::Beta2(profile) => {
+                let counts = &crate::app::ak820_beta1_profiles::matrix_profile(profile)
+                    .capabilities
+                    .dynamic_entries;
+                (counts.tap_dance, counts.combos, counts.key_overrides, 0, 1)
+            }
+        }
+    }
+
+    pub(crate) fn supports_keycode(
+        self,
+        code: u16,
+        source: crate::app::ak820_beta1_profiles::KeycodeSource,
+    ) -> bool {
+        match self {
+            Self::Alpha3 => supports_keycode(code),
+            Self::Beta2(profile) => {
+                crate::app::ak820_beta1_profiles::supports_keycode(profile, code, source)
+            }
+        }
+    }
+
+    pub(crate) fn assignable(
+        self,
+        code: u16,
+        source: crate::app::ak820_beta1_profiles::KeycodeSource,
+    ) -> bool {
+        !(0x7C00..=0x7C03).contains(&code) && self.supports_keycode(code, source)
+    }
+}
+
+pub(crate) fn contract_for_hash(schema: u32, code_hash: &str) -> Option<ImageContract> {
+    if schema == 0x082002 && code_hash == CODE_SHA256 {
+        return Some(ImageContract::Alpha3);
+    }
+    if schema != 0x082003 {
+        return None;
+    }
+    crate::app::ak820_beta1_profiles::firmware_matrix()
+        .profiles
+        .iter()
+        .find_map(|row| {
+            row.settings_identity
+                .as_ref()
+                .filter(|identity| {
+                    identity.nvm_schema == schema && identity.code_sha256 == code_hash
+                })
+                .map(|_| ImageContract::Beta2(row.profile))
         })
-        .unwrap_or(false)
+}
+
+pub(crate) fn identify_image(
+    manifest: &[u8],
+    computed_code_hash: &[u8; 32],
+) -> Option<ImageContract> {
+    let parsed = parse_manifest(manifest).ok()?;
+    if !parsed.permanent || parsed.code_sha256 != *computed_code_hash {
+        return None;
+    }
+    contract_for_hash(parsed.schema, &hex(computed_code_hash))
 }
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -231,6 +356,30 @@ mod tests {
         let mut fake = m;
         fake[16] ^= 1;
         assert!(!recognize_image(&fake, &h));
+    }
+    #[test]
+    fn beta2_contract_requires_schema_and_exact_packed_code_digest() {
+        use crate::app::ak820_beta1_profiles::{firmware_matrix, profile};
+        for row in &firmware_matrix().profiles {
+            let identity = row.settings_identity.as_ref().unwrap();
+            let hash: [u8; 32] = decode(&identity.code_sha256).try_into().unwrap();
+            let mut m = manifest();
+            m[12..16].copy_from_slice(&identity.nvm_schema.to_le_bytes());
+            m[16..48].copy_from_slice(&hash);
+            assert_eq!(
+                identify_image(&m, &hash),
+                Some(ImageContract::Beta2(row.profile))
+            );
+            // This checks admission logic with supplied digest values. It is
+            // not a successful hash of public IHX or a physical packed ROM.
+            assert_eq!(contract_for_hash(0x082002, &identity.code_sha256), None);
+            let mut mismatch = hash;
+            mismatch[0] ^= 1;
+            assert!(identify_image(&m, &mismatch).is_none());
+            let linked = &profile(row.profile).code_identity.sha256;
+            assert_ne!(linked, &identity.code_sha256);
+            assert_eq!(contract_for_hash(0x082003, linked), None);
+        }
     }
     #[test]
     fn manifest_rejects_trial_schema_and_reserved() {

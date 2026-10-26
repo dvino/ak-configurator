@@ -4,9 +4,9 @@
 
 **Status:** agreed requirements for future work
 
-**Version:** 0.5
+**Version:** 0.6
 
-**Date:** 2026-10-25
+**Date:** 2026-10-26
 
 This document sets requirements for AK Configurator, maintained in the separate `dvino/ak-configurator` repository. It reuses Entropy, whose pinned upstream source is [5b222b5d6349fb351f53b36c66169095b3039fc1](https://github.com/ergohaven/entropy/tree/5b222b5d6349fb351f53b36c66169095b3039fc1). AK820 firmware remains in `dvino/ak820`. It does not confirm that these features have been implemented or authorize operations on a physical keyboard. Current source files, built artifacts, and installed firmware are checked separately.
 
@@ -22,9 +22,9 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** flashing is available only for the listed model and a confirmed revision. An unknown device or protected area blocks the write and explains why.
 
-**AKW-003 · Web/Desktop.** The companion uses the `v0.6.0-beta.1` nine-profile catalog: `work`, `essential`, `typing`, `mouse`, `mouse-typing`, `system`, `tap-dance`, `key-overrides`, and `settings`. `work` is the default. Profiles are selected as complete images; there is no all-module image, arbitrary module switching, or compilation on demand. The companion replaces the standalone installer only after safe installation and verification are qualified for every supported profile.
+**AKW-003 · Web/Desktop.** The companion uses the published `v0.6.0-beta.2` ten-profile catalog: `main`, `game`, `mmo`, `typing`, `code`, `pointer`, `onehand`, `creative`, `shortcuts`, and `multios`. `main` is the default. Profiles are selected as complete images; there is no all-module image, arbitrary module switching, or compilation on demand. The companion replaces the standalone installer only after safe installation and verification are qualified for every supported profile.
 
-**Acceptance:** profile membership, limits and measured resources agree with the firmware matrix and module descriptions. Catalog availability, release approval, standalone-installer inclusion, settings support and companion installation support are shown separately. Beta.1 includes only `work` in standalone installers; the other eight profiles remain catalog candidates. A profile name or a successful offline test does not enable writes.
+**Acceptance:** profile membership, limits and measured resources agree with the firmware matrix and module descriptions. Catalog availability, release approval, standalone-installer inclusion, settings support and companion installation support are shown separately. Beta.2 includes all ten profiles in standalone installers; this does not establish companion installation or physical qualification. A profile name or a successful offline test does not enable writes.
 
 **AKW-004 · Foundation.** Reuse Entropy as the foundation in the separate configurator repository. Develop and stabilize its native Rust application first. Begin browser/WebAssembly feasibility and implementation only after the desktop editor is reasonably working. Demonstrate browser feasibility before promising browser flashing. Keep any alternative as a separate future decision if Entropy cannot meet a required need; do not silently switch foundations.
 
@@ -56,9 +56,9 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** after a disconnect, the interface does not show success or continue without a new check and confirmation.
 
-**AKW-015 · Image contract.** Join the beta.1 capability catalog, firmware matrix and RU/EN module descriptions by stable IDs and exact IHX identity. Preserve configuration, schema, enabled modules, table counts, active QMK Settings IDs, keycode source restrictions, settings identity and allowed transitions. Distinguish the linked CODE-window fingerprint from permanent packed CODE SHA256 over `[0x2800, 0xC700)`. Only a separately trusted exact packed identity can authorize settings matching; missing identity blocks mutation while leaving catalog preview available.
+**AKW-015 · Image contract.** Join the beta.2 capability catalog, firmware matrix and RU/EN module descriptions by stable IDs and exact IHX identity. Preserve configuration, schema, enabled modules, table counts, active QMK Settings IDs, keycode source restrictions, settings identity and allowed transitions. Distinguish the linked CODE-window fingerprint from permanent packed CODE SHA256 over `[0x2800, 0xC700)`. Only a separately trusted exact packed identity can authorize settings matching; missing identity blocks mutation while leaving catalog preview available.
 
-**Acceptance:** fixtures reject mismatched catalogs, duplicate or unknown contract fields, missing/changed image identity, unsupported modules and invalid transitions. Runtime data is not inferred from a profile title. All nine profiles can be selected in the offline editor without selecting a device or changing its active image.
+**Acceptance:** fixtures reject mismatched catalogs, duplicate or unknown contract fields, missing/changed image identity, unsupported modules and invalid transitions. Runtime data is not inferred from a profile title. All ten profiles can be selected in the offline editor without selecting a device or changing its active image.
 
 ## 3. Settings and help
 
@@ -78,9 +78,13 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** after caching, the editor and help open offline. Availability of a new release offline is not promised.
 
-**AKW-024 · Profile editors.** Expose the common layer, matrix, encoder, macro, Combo and RGB controls and all actions supported by the selected exact image. Preserve source restrictions: physical matrix, encoder, Combo and macro tap/down/up are distinct contexts. Optional modules are controlled by the image contract, including NKRO control, One Shot, Space Cadet, Leader, Dynamic Macros, Mouse Keys, Auto Shift, GUI lock, modifier swaps and OS indicators. Tap Dance and Key Overrides each have eight typed entries only in their matching schema03 profiles. QMK Settings exposes only active advertised IDs in `settings`; reserved storage never enables a control.
+**AKW-024 · Profile editors.** Expose the common layer, matrix, encoder, macro, Combo and RGB controls and all actions supported by the selected exact image. Preserve source restrictions: physical matrix, encoder, Combo and macro tap/down/up are distinct contexts. Optional modules are controlled by the image contract, including NKRO control, One Shot, Space Cadet, Leader, Dynamic Macros, Mouse Keys, Auto Shift, GUI lock, modifier swaps and OS indicators. Tap Dance and Key Overrides each have eight typed entries only in their matching schema03 profiles. QMK Settings exposes active advertised IDs in every profile; QSID 4 is active only in Typing. Reserved storage never enables a control.
 
-**Acceptance:** match the firmware's `BUILD-PROFILES.md`, `MODULE-MATRIX.md`, `MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md` at the pinned beta.1 source. Validate ranges, reserved bytes, CRC, defaults and per-entry terms before writing. Typed setters verify ACK, getter and complete NVM readback including adjacent bytes. Unchanged effective defaults preserve blank storage. Temporary Dynamic Macros, session modes and VialRGB Direct colors are identified as volatile. Unsupported controls remain unavailable in both the editor and key picker.
+**Acceptance:** match the firmware's `BUILD-PROFILES.md`, `MODULE-MATRIX.md`, `MODULE-STORAGE.md` and `web/docs/FIRMWARE-HANDOFF.md` at the beta.2 source pinned at `2e0b28b384872c482e0e358a4b353f00ddd976a7`. Validate ranges, reserved bytes, CRC, defaults and per-entry terms before writing. Typed setters verify ACK, getter and complete NVM readback including adjacent bytes. Unchanged effective defaults preserve blank storage. Temporary Dynamic Macros, session modes and VialRGB Direct colors are identified as volatile. Unsupported controls remain unavailable in both the editor and key picker.
+
+**AKW-025 · Desktop RGB.** The companion provides a physical keyboard lighting editor with individual-key and group selection, color/brightness controls and local presets. Add native effects, music visualization, useful host indicators, game events and optional OpenRGB SDK interoperability in the phases defined in [RGB-PLAN.md](RGB-PLAN.md). Use the existing VialRGB protocol and one HID owner; SDK networking does not replace image verification. Direct mode is available only on profiles that advertise it.
+
+**Acceptance:** validate all 82 LED mappings and exclude the unlit encoder press. Keep 83 key positions distinct from LED count. Bound HSV V to 160 and packets to nine LEDs. Local presets, acknowledged RAM writes, readback and persistent settings are separate states; no Direct palette getter or persistence is assumed. No per-frame NVM writes. Audio/screen capture is local and opt-in; actual game events require a supported event source. Unknown external input and a device error cannot bypass fail-stop or operation ownership.
 
 ## 4. Releases and image compatibility
 
@@ -208,7 +212,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** CI checks shared model, protocol, format, help, and exact firmware compatibility across both targets. A coordinated release uses common metadata and compatibility identifiers and tests both targets; hardware qualification remains separate. Native releases are not blocked by website readiness.
 
-**AKW-085 · Offline completion.** Complete every development and acceptance step that does not need a keyboard: nine-profile offline editors, typed codecs, backups/migration, release and revocation rules, packer parity, operation state machines, localized help, negative fixtures, and six-target builds/packages. Use fake transports and approved non-sensitive fixtures; unavailable OEM inputs must not be replaced with invented acceptance evidence.
+**AKW-085 · Offline completion.** Complete every development and acceptance step that does not need a keyboard: ten-profile offline editors, typed codecs, backups/migration, release and revocation rules, packer parity, operation state machines, localized help, negative fixtures, and six-target builds/packages. Use fake transports and approved non-sensitive fixtures; unavailable OEM inputs must not be replaced with invented acceptance evidence.
 
 **Acceptance:** the report maps every applicable requirement to code and tests with passed, failed, missing, skipped or hardware-gated status. Cover complete successful image verification through full settings loading, both encoder mappings, every capability/source context and failure at every mutation stage. Hardware-only gates name the exact remaining operation: identity/USB behavior, fresh unlock, flash/readback, physical input or persistence. Offline preparation is not blocked merely because hardware qualification remains open.
 

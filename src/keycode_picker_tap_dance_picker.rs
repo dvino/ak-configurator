@@ -264,7 +264,7 @@ impl KeycodePicker {
         td_idx: usize,
         field: u8,
     ) {
-        if !Self::tap_dance_custom_keycodes_allowed_in_field(field) {
+        if self.ak820_profile || !Self::tap_dance_custom_keycodes_allowed_in_field(field) {
             return;
         }
         if let Some(value) = self.show_custom_keycode_choice_section(ui) {
@@ -274,7 +274,8 @@ impl KeycodePicker {
     }
 
     fn show_tap_dance_macro_section(&mut self, ui: &mut egui::Ui, td_idx: usize, field: u8) {
-        if !Self::tap_dance_macros_allowed_in_field(field)
+        if self.ak820_profile
+            || !Self::tap_dance_macros_allowed_in_field(field)
             || !self.supports_macro
             || self.macro_count == 0
         {
@@ -303,6 +304,9 @@ impl KeycodePicker {
     }
 
     fn show_tap_dance_layer_section(&mut self, ui: &mut egui::Ui, td_idx: usize, field: u8) {
+        if self.ak820_profile {
+            return;
+        }
         let Some(kind) = Self::tap_dance_layer_key_pick_kind(field) else {
             return;
         };
@@ -351,6 +355,7 @@ impl KeycodePicker {
         KEYCODES
             .iter()
             .filter(|kc| is_mod_key_tap_key_choice(kc) && !kc.name.starts_with("RGB_"))
+            .filter(|kc| !self.ak820_profile || (4..=0xA4).contains(&kc.value))
             .collect()
     }
 
@@ -400,6 +405,16 @@ impl KeycodePicker {
     }
 
     fn set_tap_dance_field(&mut self, n: usize, field: u8, value: u16) {
+        if self.ak820_profile
+            && (crate::ak820_typed_storage::TapDance {
+                outputs: [value, 0, 0, 0],
+                term: 0,
+            })
+            .encode()
+            .is_err()
+        {
+            return;
+        }
         self.set_tap_dance_binding(
             n,
             field,
@@ -443,6 +458,32 @@ impl KeycodePicker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ak820_tap_dance_picker_rejects_non_output_actions_without_mutating_entry() {
+        let mut picker = KeycodePicker {
+            ak820_profile: true,
+            tap_dance_entries: vec![TapDanceEntry::default()],
+            ..Default::default()
+        };
+        for value in [4, 0x104, 0xe1, 0x1fe7] {
+            picker.set_tap_dance_field(0, 0, value);
+            assert_eq!(picker.tap_dance_entries[0].on_tap, value.into());
+        }
+        let original = picker.tap_dance_entries[0].clone();
+        let undo_count = picker.tap_dance_undo_stack.len();
+        for value in [1, 0xa5, 0x2004, 0x4104, 0x5221, 0x7700] {
+            picker.set_tap_dance_field(0, 0, value);
+            assert_eq!(picker.tap_dance_entries[0], original);
+            assert_eq!(picker.tap_dance_undo_stack.len(), undo_count);
+        }
+        picker.set_tap_dance_field(0, 0, 0);
+        assert_eq!(picker.tap_dance_entries[0].on_tap, 0u16.into());
+        assert!(picker
+            .tap_dance_regular_key_choices()
+            .iter()
+            .all(|kc| (4..=0xa4).contains(&kc.value)));
+    }
 
     #[test]
     fn tap_dance_custom_keycodes_are_available_for_all_fields() {

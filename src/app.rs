@@ -8,6 +8,9 @@ pub(crate) mod ak820_offline_extensions;
 mod ak820_offline_files;
 #[path = "ui/ak820_backup_inspection.rs"]
 mod ak820_backup_inspection;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/ak820_rgb_palette.rs"]
+mod ak820_rgb_palette;
 #[cfg(test)]
 #[path = "ui/ak820_offline_project_tests.rs"]
 mod ak820_offline_project_tests;

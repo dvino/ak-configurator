@@ -486,7 +486,7 @@ mod tests {
         // Private model fixture bypasses packer identity, not public preparation.
         let source = vec![0; 65536];
         PreparedInstall::prepare(
-            Action::Firmware(ProfileId::Work),
+            Action::Firmware(ProfileId::Main),
             &vec![1; APP_END - APP_START],
             InputOrigin::Bundled,
             &source,
@@ -764,7 +764,7 @@ mod tests {
             (&source[..], &source[..], &payload[..0]),
         ] {
             assert!(PreparedInstall::prepare(
-                Action::Firmware(ProfileId::Work),
+                Action::Firmware(ProfileId::Main),
                 image,
                 InputOrigin::Local,
                 src,
@@ -799,7 +799,7 @@ mod tests {
         for mut r in [release(), release(), release()] {
             r.revoked_images.push(sha256(&payload));
             assert!(PreparedInstall::prepare(
-                Action::Firmware(ProfileId::Work),
+                Action::Firmware(ProfileId::Main),
                 &payload,
                 InputOrigin::Local,
                 &source,
@@ -835,7 +835,7 @@ mod tests {
         let mut r = release();
         r.prerelease = true;
         assert!(PreparedInstall::prepare(
-            Action::Firmware(ProfileId::Work),
+            Action::Firmware(ProfileId::Main),
             &payload,
             InputOrigin::Local,
             &source,
@@ -846,21 +846,9 @@ mod tests {
             10
         )
         .is_err());
-        for id in [
-            ProfileId::Work,
-            ProfileId::Essential,
-            ProfileId::Typing,
-            ProfileId::Mouse,
-            ProfileId::MouseTyping,
-            ProfileId::System,
-            ProfileId::TapDance,
-            ProfileId::KeyOverrides,
-            ProfileId::Settings,
-        ] {
-            // Absent catalog packed identities stay absent; no synthetic qualification.
-            if matrix_profile(id).settings_identity.is_none() {
-                assert!(validate_catalog_payload(&payload, id).is_err());
-            }
+        for row in crate::app::ak820_beta1_profiles::profiles() {
+            // Catalog flags and identities are metadata; none qualifies a packed image.
+            assert!(validate_catalog_payload(&payload, row.profile).is_err());
         }
     }
     #[test]

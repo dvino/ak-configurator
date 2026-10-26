@@ -147,6 +147,7 @@ enum PickerValuePolicy {
     #[default]
     Any,
     KeyOverrideTrigger,
+    Ak820KeyOverrideReplacement,
     Ak820ComboTrigger,
     Ak820ComboOutput,
 }
@@ -164,13 +165,13 @@ pub struct KeycodePicker {
     pub result: Option<crate::keyboard::KeyBinding>,
     pub custom_keycodes: Vec<(String, String, String, u16)>,
     pub supports_rgb: bool,
-    /// Exact AK820 alpha.3 action allowlist, independent of Vial version.
+    /// AK820 action policy, independent of the shared Vial protocol version.
     pub(crate) ak820_profile: bool,
-    /// Exact source-specific beta.1 allowlists for the current offline demo profile.
+    /// Exact source-specific beta.2 allowlists for the live or offline profile.
     pub(crate) ak820_beta1_keycodes: Option<BTreeMap<Ak820Beta1KeycodeSource, BTreeSet<u16>>>,
     pub(crate) ak820_beta1_source: Ak820Beta1KeycodeSource,
     pub(crate) ak820_beta1_profile_revision: u64,
-    /// Beta.1 optional features; only an exact catalog image may enable them.
+    /// Optional features; only an exact image contract may enable them.
     pub supports_compact_leader: bool,
     pub supports_compact_dynamic_macros: bool,
     pub supports_macro: bool,
@@ -931,6 +932,29 @@ mod tests {
         picker.open_full_key_picker(KeycodeTab::Basic);
         assert!(picker.picker_value_supported(0x00E1));
     }
+
+    #[test]
+    fn ak820_key_override_picker_limits_trigger_and_replacement_to_firmware_contract() {
+        let mut picker = KeycodePicker {
+            ak820_profile: true,
+            ..Default::default()
+        };
+        picker.open_key_override_trigger_picker(4);
+        assert!(picker.picker_value_supported(4));
+        for value in [0xe1, 0x104, 0x4104, 0x5221] {
+            assert!(!picker.picker_value_supported(value), "trigger {value:#x}");
+        }
+        picker.open_regular_key_picker_with_mod_key(true);
+        picker.constrain_ak820_override_replacement();
+        for value in [0, 4, 0x104] {
+            assert!(picker.picker_value_supported(value), "replacement {value:#x}");
+        }
+        for value in [0xe1, 0xa5, 0x4104, 0x5221] {
+            assert!(!picker.picker_value_supported(value), "replacement {value:#x}");
+        }
+        picker.open_full_key_picker(KeycodeTab::Basic);
+        assert!(picker.picker_value_supported(0xe1));
+    }
 }
 
 /// Universal Symbols as a section inside another chooser (e.g. the Tap Dance
@@ -1253,8 +1277,11 @@ impl KeycodePicker {
         match self.value_policy {
             PickerValuePolicy::Any => true,
             PickerValuePolicy::KeyOverrideTrigger => {
-                !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7)
+                if self.ak820_profile { value == 0 || (4..=0xA4).contains(&value) }
+                else { !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7) }
             }
+            PickerValuePolicy::Ak820KeyOverrideReplacement => value == 0
+                || (value < 0x2000 && (4..=0xA4).contains(&(value & 255))),
             PickerValuePolicy::Ak820ComboTrigger => value == 0 || (4..=0xA4).contains(&value),
             PickerValuePolicy::Ak820ComboOutput => {
                 value == 0 || crate::ak820::valid_combo([4, 5, 0, 0], value)
@@ -1548,6 +1575,10 @@ impl KeycodePicker {
                 PickerValuePolicy::Ak820ComboTrigger
             };
         }
+    }
+
+    pub(crate) fn constrain_ak820_override_replacement(&mut self) {
+        if self.ak820_profile { self.value_policy = PickerValuePolicy::Ak820KeyOverrideReplacement; }
     }
 
     pub(crate) fn select_tab_for_keycode(&mut self, value: u16) {

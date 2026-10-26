@@ -2,13 +2,14 @@
 //! Offline restore planning from pinned settings_backup.py/settings_workflow.py.
 //! No transport or execution API. A successful plan grants no write permission.
 use crate::ak820_settings_backup::{
-    canonical, macro_chunks, rgb_wire, sha256, transition_allowed, BackupResult, ImageIdentity,
-    ValidatedArchive,
+    canonical, macro_chunks, rgb_wire, rgb_wire_for_profile, sha256, transition_allowed,
+    translate_rgb, BackupResult, ImageIdentity, ValidatedArchive,
 };
 use crate::ak820_settings_model::{settings_from_nvm, validate_nvm};
 use crate::ak820_typed_storage::{slot_offset, Extensions, QmkSettings, SCHEMA};
 use crate::app::ak820_beta1_profiles::{
-    firmware_matrix, matrix_profile, supports_keycode, KeycodeSource, ProfileId,
+    firmware_matrix, historical_settings_identities, historical_settings_identity, matrix_profile,
+    supports_keycode, KeycodeSource, ProfileId,
 };
 use serde_json::{json, Value};
 
@@ -154,6 +155,35 @@ fn identity(profile: ProfileId) -> BackupResult<ImageIdentity> {
         schema: exact.nvm_schema,
     })
 }
+const DEFINITION_SHA: &str = "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e";
+fn historical_identity(id: &ImageIdentity) -> bool {
+    id.definition_sha256 == DEFINITION_SHA
+        && historical_settings_identity(&id.ihx_sha256, &id.code_sha256, id.schema).is_some()
+}
+fn trusted_identities() -> Vec<ImageIdentity> {
+    let mut result: Vec<_> = firmware_matrix()
+        .profiles
+        .iter()
+        .filter_map(|r| identity(r.profile).ok())
+        .collect();
+    result.extend(
+        historical_settings_identities()
+            .iter()
+            .map(|h| ImageIdentity {
+                ihx_sha256: h.ihx_sha256.into(),
+                code_sha256: h.code_sha256.into(),
+                definition_sha256: DEFINITION_SHA.into(),
+                schema: h.nvm_schema,
+            }),
+    );
+    result
+}
+fn source_rgb(raw: &[u8], selected: bool, profile: Option<ProfileId>) -> BackupResult<[u8; 6]> {
+    match profile {
+        Some(p) => rgb_wire_for_profile(raw, selected, p),
+        None => rgb_wire(raw, selected),
+    }
+}
 /// Production registry and transition pairs come only from the bundled exact
 /// settings catalog. Linked CODE identities and profile names grant nothing.
 /// The source NVM is bound again to the archive manifest and derived settings.
@@ -166,11 +196,7 @@ pub(crate) fn plan_restore(
     target_nvm: &[u8],
 ) -> BackupResult<RestorePlan> {
     let matrix = firmware_matrix();
-    let trusted: Vec<_> = matrix
-        .profiles
-        .iter()
-        .filter_map(|r| identity(r.profile).ok())
-        .collect();
+    let trusted = trusted_identities();
     let pairs: Vec<_> = matrix
         .settings_transitions
         .iter()
@@ -184,12 +210,28 @@ pub(crate) fn plan_restore(
         .profiles
         .iter()
         .find(|r| identity(r.profile).ok().as_ref() == Some(&archive.source))
-        .ok_or("Unknown exact source image")?
-        .profile;
+        .map(|r| r.profile);
+    require(
+        source_profile.is_some() || historical_identity(&archive.source),
+        "Unknown exact source image",
+    )?;
+    let source_combo = match source_profile {
+        Some(profile) => matrix_profile(profile).capabilities.dynamic_entries.combos > 0,
+        None => {
+            historical_settings_identity(
+                &archive.source.ihx_sha256,
+                &archive.source.code_sha256,
+                archive.source.schema,
+            )
+            .ok_or("Unknown historical Combo contract")?
+            .combos
+        }
+    };
     plan_with_registry(
         archive,
         source_nvm,
         source_profile,
+        source_combo,
         target_profile,
         target_identity,
         target_nvm,
@@ -202,7 +244,8 @@ pub(crate) fn plan_restore(
 fn plan_with_registry(
     archive: &ValidatedArchive,
     source_nvm: &[u8],
-    source_profile: ProfileId,
+    source_profile: Option<ProfileId>,
+    source_combo: bool,
     target_profile: ProfileId,
     target: &ImageIdentity,
     before: &[u8],
@@ -225,11 +268,6 @@ fn plan_with_registry(
             && archive.manifest["files"]["saved-nvm.bin"]["size"] == source_nvm.len(),
         "Source NVM differs from validated archive",
     )?;
-    let source_combo = matrix_profile(source_profile)
-        .capabilities
-        .dynamic_entries
-        .combos
-        > 0;
     let target_combo = matrix_profile(target_profile)
         .capabilities
         .dynamic_entries
@@ -237,7 +275,7 @@ fn plan_with_registry(
         > 0;
     let settings = settings_from_nvm(
         source_nvm,
-        &rgb_wire(&source_nvm[24..32], false)?,
+        &source_rgb(&source_nvm[24..32], false, source_profile)?,
         source_combo,
     )?;
     require(
@@ -253,9 +291,10 @@ fn plan_with_registry(
             ));
         }
     }
-    let rgb = &source_nvm[24..32];
-    let selected = rgb_wire(rgb, true)?;
-    let effective = rgb_wire(rgb, false)?;
+    let translated_rgb = translate_rgb(&source_nvm[24..32], source_profile, target_profile)?;
+    let rgb = translated_rgb.as_slice();
+    let selected = rgb_wire_for_profile(rgb, true, target_profile)?;
+    let effective = rgb_wire_for_profile(rgb, false, target_profile)?;
     if selected[0] == 1 {
         blockers.push("Direct RGB palette has no getter".into());
     }
@@ -330,7 +369,11 @@ fn plan_with_registry(
         blockers.push("Target has no Combo setters".into());
     }
     if !source_combo && target_combo {
-        let target_settings = settings_from_nvm(before, &rgb_wire(&before[24..32], false)?, true)?;
+        let target_settings = settings_from_nvm(
+            before,
+            &rgb_wire_for_profile(&before[24..32], false, target_profile)?,
+            true,
+        )?;
         require(
             target_settings["combos"]["entries_hex"]
                 .as_array()
@@ -541,7 +584,7 @@ fn plan_with_registry(
     validate_nvm(&plan.expected, target.schema)?;
     plan.final_getters = settings_from_nvm(
         &plan.expected,
-        &rgb_wire(&plan.expected[24..32], false)?,
+        &rgb_wire_for_profile(&plan.expected[24..32], false, target_profile)?,
         target_combo,
     )?;
     plan.final_extensions = if target.schema == SCHEMA {
@@ -585,13 +628,12 @@ impl RestorePlan {
 /// Schema01 remains unsupported: its semantic migration gate is unavailable.
 pub(crate) fn migrate_schema02_to03(
     source: &[u8],
-    source_profile: ProfileId,
     from: &ImageIdentity,
     target_profile: ProfileId,
     to: &ImageIdentity,
 ) -> BackupResult<Vec<u8>> {
     require(
-        identity(source_profile)? == *from,
+        historical_identity(from),
         "Source differs from exact profile identity",
     )?;
     require(
@@ -599,17 +641,26 @@ pub(crate) fn migrate_schema02_to03(
         "Target differs from exact profile identity",
     )?;
     let matrix = firmware_matrix();
-    let trusted: Vec<_> = matrix
-        .profiles
-        .iter()
-        .filter_map(|row| identity(row.profile).ok())
-        .collect();
+    let trusted = trusted_identities();
     let pairs: Vec<_> = matrix
         .settings_transitions
         .iter()
         .map(|pair| (pair.source.clone(), pair.target.clone()))
         .collect();
-    migrate_with_registry(source, from, to, &trusted, &pairs)
+    validate_nvm(source, from.schema)?;
+    let rgb = translate_rgb(&source[24..32], None, target_profile)?;
+    if !historical_settings_identity(&from.ihx_sha256, &from.code_sha256, from.schema)
+        .ok_or("Unknown historical Combo contract")?
+        .combos
+    {
+        require(
+            source[0x658..0x6a8].iter().all(|&byte| byte == 0),
+            "Legacy reserved Combo bytes are nonempty; explicit migration cannot interpret them",
+        )?;
+    }
+    let mut candidate = migrate_with_registry(source, from, to, &trusted, &pairs)?;
+    candidate[24..32].copy_from_slice(&rgb);
+    Ok(candidate)
 }
 // Private transform permits synthetic fixtures, never caller-supplied trust.
 fn migrate_with_registry(
@@ -667,7 +718,12 @@ mod tests {
             manifest: json!({"files":{"saved-nvm.bin":{"sha256":sha256(raw),"size":raw.len()}}}),
             settings: settings_from_nvm(
                 raw,
-                &rgb_wire(&raw[24..32], false).unwrap(),
+                &(if source.schema == SCHEMA {
+                    rgb_wire_for_profile(&raw[24..32], false, profile)
+                } else {
+                    rgb_wire(&raw[24..32], false)
+                })
+                .unwrap(),
                 matrix_profile(profile).capabilities.dynamic_entries.combos > 0,
             )
             .unwrap(),
@@ -676,17 +732,111 @@ mod tests {
     }
     fn plan(raw: &[u8], target: &[u8]) -> BackupResult<RestorePlan> {
         let image = image('a', 0x082002);
-        let a = archive(raw, image.clone(), ProfileId::Work);
+        let a = archive(raw, image.clone(), ProfileId::Main);
         plan_with_registry(
             &a,
             raw,
-            ProfileId::Work,
-            ProfileId::Work,
+            None,
+            true,
+            ProfileId::Main,
             &image,
             target,
             &[image.clone()],
             &[],
         )
+    }
+    #[test]
+    fn exact_historical_migration_and_rgb_translation() {
+        let h = &historical_settings_identities()[1];
+        let from = ImageIdentity {
+            ihx_sha256: h.ihx_sha256.into(),
+            code_sha256: h.code_sha256.into(),
+            definition_sha256: DEFINITION_SHA.into(),
+            schema: h.nvm_schema,
+        };
+        let mut raw = nvm(0x082002);
+        raw[24] = (6 << 2) | 1; // Legacy Reactive.
+        let snapshot = raw.clone();
+        let to = identity(ProfileId::Code).unwrap();
+        let migrated = migrate_schema02_to03(&raw, &from, ProfileId::Code, &to).unwrap();
+        assert_eq!(raw, snapshot);
+        assert_eq!(migrated[24], (5 << 2) | 1);
+        let saved_archive = archive(&raw, from.clone(), ProfileId::Main);
+        let before = nvm(SCHEMA);
+        let plan = plan_restore(&saved_archive, &raw, ProfileId::Code, &to, &before).unwrap();
+        assert_eq!(plan.expected_nvm()[24], (5 << 2) | 1);
+        let fixed = super::tests::archive(plan.expected_nvm(), to.clone(), ProfileId::Code);
+        assert!(plan_restore(
+            &fixed,
+            plan.expected_nvm(),
+            ProfileId::Code,
+            &to,
+            plan.expected_nvm()
+        )
+        .unwrap()
+        .steps()
+        .is_empty());
+        let mut unknown = from.clone();
+        unknown.definition_sha256 = "0".repeat(64);
+        assert!(migrate_schema02_to03(&raw, &unknown, ProfileId::Code, &to).is_err());
+        assert!(migrate_schema02_to03(&migrated, &to, ProfileId::Code, &from).is_err());
+        raw[24] = (5 << 2) | 1; // Historical Direct is unavailable on Code.
+        assert!(migrate_schema02_to03(&raw, &from, ProfileId::Code, &to)
+            .unwrap_err()
+            .contains("RGB effect"));
+        let direct = archive(&raw, from.clone(), ProfileId::Main);
+        assert!(plan_restore(&direct, &raw, ProfileId::Code, &to, &before).is_err());
+        assert_eq!(before, nvm(SCHEMA));
+    }
+    #[test]
+    fn current_reactive_mode_five_is_never_direct() {
+        let mut raw = nvm(SCHEMA);
+        raw[24] = (5 << 2) | 1;
+        let from = identity(ProfileId::Code).unwrap();
+        let to = identity(ProfileId::Main).unwrap();
+        let archive = archive(&raw, from, ProfileId::Code);
+        let plan = plan_restore(&archive, &raw, ProfileId::Main, &to, &nvm(SCHEMA)).unwrap();
+        assert_eq!(plan.expected_nvm()[24], (6 << 2) | 1);
+        assert_eq!(
+            plan.final_getters()["rgb"]["current_mode_hex"],
+            "1f0000000050"
+        );
+    }
+    #[test]
+    fn historical_source_without_combo_never_interprets_reserved_bytes_or_clears_target() {
+        let h = &historical_settings_identities()[0];
+        assert!(!h.combos);
+        let from = ImageIdentity {
+            ihx_sha256: h.ihx_sha256.into(),
+            code_sha256: h.code_sha256.into(),
+            definition_sha256: DEFINITION_SHA.into(),
+            schema: h.nvm_schema,
+        };
+        let mut raw = nvm(0x082002);
+        raw[0x658..0x6a8].fill(0xa5); // Captured evidence, never a Combo record.
+        let mut saved = archive(&nvm(0x082002), from.clone(), ProfileId::Main);
+        saved.manifest["files"]["saved-nvm.bin"]["sha256"] = json!(sha256(&raw));
+        saved.settings =
+            settings_from_nvm(&raw, &rgb_wire(&raw[24..32], false).unwrap(), false).unwrap();
+        assert!(saved.settings.get("combos").is_none());
+        let target = identity(ProfileId::Main).unwrap();
+        let mut before = nvm(SCHEMA);
+        let plan = plan_restore(&saved, &raw, ProfileId::Main, &target, &before).unwrap();
+        assert_eq!(plan.expected_nvm(), before);
+        before[0x658..0x65c].copy_from_slice(&[4, 0, 5, 0]);
+        before[0x660..0x662].copy_from_slice(&[6, 0]);
+        let snapshot = before.clone();
+        assert!(
+            plan_restore(&saved, &raw, ProfileId::Main, &target, &before)
+                .unwrap_err()
+                .contains("preserve existing nonempty Combos")
+        );
+        assert_eq!(before, snapshot);
+        assert!(migrate_schema02_to03(&raw, &from, ProfileId::Main, &target)
+            .unwrap_err()
+            .contains("reserved Combo"));
+        raw[0x658..0x6a8].fill(0);
+        assert!(migrate_schema02_to03(&raw, &from, ProfileId::Main, &target).is_ok());
     }
     #[test]
     fn no_op_and_key_plan_preserve_unaddressable_neighbors() {
@@ -706,7 +856,7 @@ mod tests {
         assert!(p
             .preconditions()
             .contains(&RestorePrecondition::QueriedActiveQsid {
-                expected: matrix_profile(ProfileId::Work)
+                expected: matrix_profile(ProfileId::Main)
                     .capabilities
                     .runtime_qmk_settings_ids
                     .clone()
@@ -721,7 +871,7 @@ mod tests {
         assert!(p
             .preconditions()
             .contains(&RestorePrecondition::SelectedTarget {
-                profile: ProfileId::Work,
+                profile: ProfileId::Main,
                 identity: image('a', 0x082002),
                 nvm: before.clone()
             }));
@@ -740,7 +890,7 @@ mod tests {
             .all(|step| step.preconditions() == p.preconditions()));
         assert_eq!(
             p.final_getters(),
-            &archive(&saved, image('a', 0x082002), ProfileId::Work).settings
+            &archive(&saved, image('a', 0x082002), ProfileId::Main).settings
         );
         assert!(p.final_extensions().is_none());
         assert_eq!(p.steps().len(), 1);
@@ -816,12 +966,13 @@ mod tests {
         let raw = nvm(0x082002);
         let a = image('a', 0x082002);
         let b = image('b', 0x082002);
-        let archive = archive(&raw, a.clone(), ProfileId::Work);
+        let archive = archive(&raw, a.clone(), ProfileId::Main);
         assert!(plan_with_registry(
             &archive,
             &raw,
-            ProfileId::Work,
-            ProfileId::Work,
+            None,
+            true,
+            ProfileId::Main,
             &b,
             &raw,
             &[a.clone(), b.clone()],
@@ -831,8 +982,9 @@ mod tests {
         assert!(plan_with_registry(
             &archive,
             &raw,
-            ProfileId::Work,
-            ProfileId::Work,
+            None,
+            true,
+            ProfileId::Main,
             &b,
             &raw,
             &[a.clone(), b.clone()],
@@ -844,8 +996,9 @@ mod tests {
         assert!(plan_with_registry(
             &archive,
             &altered,
-            ProfileId::Work,
-            ProfileId::Work,
+            None,
+            true,
+            ProfileId::Main,
             &a,
             &raw,
             &[a.clone()],
@@ -856,38 +1009,13 @@ mod tests {
         assert!(plan_with_registry(
             &archive,
             &raw,
-            ProfileId::Work,
-            ProfileId::Work,
+            None,
+            true,
+            ProfileId::Main,
             &a,
             &raw,
             &[a.clone(), a.clone()],
             &[]
-        )
-        .is_err());
-    }
-    #[test]
-    fn production_migration_rejects_unqualified_schema03_catalog_identity() {
-        let raw = nvm(0x082002);
-        for profile in [
-            ProfileId::TapDance,
-            ProfileId::KeyOverrides,
-            ProfileId::Settings,
-        ] {
-            assert!(matrix_profile(profile).settings_identity.is_none());
-            let target = image('b', SCHEMA);
-            let source = identity(ProfileId::Work).unwrap();
-            assert!(
-                migrate_schema02_to03(&raw, ProfileId::Work, &source, profile, &target).is_err()
-            );
-        }
-        let a = image('a', 0x082001);
-        let b = image('b', SCHEMA);
-        assert!(migrate_with_registry(
-            &nvm(0x082001),
-            &a,
-            &b,
-            &[a.clone(), b.clone()],
-            &[(a.ihx_sha256.clone(), b.ihx_sha256.clone())]
         )
         .is_err());
     }
@@ -920,12 +1048,13 @@ mod tests {
     fn inaccessible_typed_fields_reject_and_default_blanks_remain_byte_exact() {
         let before = nvm(SCHEMA);
         let id = image('a', SCHEMA);
-        let archive = archive(&before, id.clone(), ProfileId::Settings);
+        let archive = archive(&before, id.clone(), ProfileId::Code);
         let p = plan_with_registry(
             &archive,
             &before,
-            ProfileId::Settings,
-            ProfileId::Settings,
+            Some(ProfileId::Code),
+            true,
+            ProfileId::Code,
             &id,
             &before,
             &[id.clone()],
@@ -940,7 +1069,7 @@ mod tests {
         assert!(p
             .preconditions()
             .contains(&RestorePrecondition::QueriedActiveQsid {
-                expected: matrix_profile(ProfileId::Settings)
+                expected: matrix_profile(ProfileId::Code)
                     .capabilities
                     .runtime_qmk_settings_ids
                     .clone()
@@ -949,12 +1078,13 @@ mod tests {
         let mut extensions = Extensions::decode_nvm(&source).unwrap();
         extensions.settings.set(4, 321).unwrap();
         source[0x6a8..0x6c0].copy_from_slice(&extensions.settings.encode());
-        let changed = super::tests::archive(&source, id.clone(), ProfileId::Settings);
+        let changed = super::tests::archive(&source, id.clone(), ProfileId::Code);
         assert!(plan_with_registry(
             &changed,
             &source,
-            ProfileId::Settings,
-            ProfileId::Settings,
+            Some(ProfileId::Code),
+            true,
+            ProfileId::Code,
             &id,
             &before,
             &[id.clone()],
@@ -967,8 +1097,9 @@ mod tests {
         let p = plan_with_registry(
             &archive,
             &before,
-            ProfileId::Settings,
-            ProfileId::Settings,
+            Some(ProfileId::Code),
+            true,
+            ProfileId::Code,
             &id,
             &blank,
             &[id.clone()],

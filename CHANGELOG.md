@@ -5,6 +5,23 @@ All notable public changes to Entropy are tracked here.
 Entropy uses public release versions for GitHub releases and internal build versions
 for development history. The first public beta is `v0.1.0-beta.1`.
 
+## v0.1.0-beta.2 — Unreleased desktop candidate
+
+This local candidate is prepared for AK Configurator's AK820 companion work. It is not a published public release.
+
+### Main Features
+
+- Add exact beta2 contracts for ten AK820 firmware profiles, full-image/settings checks, and guarded profile-specific settings editing
+- Add version 2 offline projects pinned to the target release, catalog, and Intel HEX image; reject beta1 version 1 projects pending explicit manual migration
+- Add typed schema03 module controls and Direct RGB palette editing for Main, Game, Mmo, and Creative, with volatile RAM-only behavior documented
+- Add a separate unsigned desktop-candidate ZIP and SHA-256 artifact for each of six platform targets, including localized installation/RGB guides and firmware provenance
+
+### Candidate Notes
+
+- Candidate packages are unsigned trials; package architecture and checksum validation do not establish platform runtime or physical keyboard qualification
+- Full backup capture/history/restoration, installer execution, OEM ownership, platform qualification, and signing remain open
+- Existing Entropy release history below is retained unchanged
+
 ## v0.5.0 - Public Beta
 
 ### Main Features

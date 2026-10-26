@@ -345,7 +345,7 @@ impl KeycodePicker {
                                         {
                                             if let Ok(parsed) = value.parse::<u16>() {
                                                 edited_entry.tapping_term =
-                                                    parsed.clamp(10, 3000);
+                                                    if self.ak820_profile { parsed.min(32767) } else { parsed.clamp(10, 3000) };
                                             }
                                         }
                                     },

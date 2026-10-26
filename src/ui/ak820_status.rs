@@ -21,7 +21,9 @@ impl EntropyApp {
                     "DEMO · no keyboard connection",
                 ));
             } else if self.keycode_picker.ak820_profile {
-                ui.label("AK820 · v0.6.0-alpha.3/full");
+                if let Some(image) = self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image) {
+                    ui.label(format!("AK820 · {}", image.label()));
+                }
                 if ui
                     .add_enabled(
                         !self.hid_write_task_owner_active()

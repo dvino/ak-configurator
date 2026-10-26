@@ -342,29 +342,32 @@ pub fn macro_logical_length(stream: &[u8]) -> BackupResult<usize> {
     )?;
     Ok(logical)
 }
-pub fn rgb_wire(raw: &[u8], selected: bool) -> BackupResult<[u8; 6]> {
+/// Legacy schema02 RGB layout. Production callers must establish an exact
+/// historical settings identity before selecting this contract.
+pub(crate) fn rgb_wire(raw: &[u8], selected: bool) -> BackupResult<[u8; 6]> {
+    rgb_wire_modes(raw, selected, &[(1,2),(2,6),(3,13),(4,14),(5,1),(6,31)])
+}
+pub(crate) fn rgb_wire_for_profile(raw: &[u8], selected: bool, profile: crate::app::ak820_beta1_profiles::ProfileId) -> BackupResult<[u8; 6]> {
+    rgb_wire_modes(raw, selected, crate::app::ak820_beta1_profiles::rgb_modes(profile))
+}
+fn rgb_wire_modes(raw: &[u8], selected: bool, modes: &[(u8,u16)]) -> BackupResult<[u8;6]> {
     ensure(raw.len() == 8, "RGB config requires eight saved bytes")?;
-    let mode = match raw[0] >> 2 {
-        1 => 2,
-        2 => 6,
-        3 => 13,
-        4 => 14,
-        5 => 1,
-        6 => 31,
-        _ => return Err("Unsupported saved RGB mode".into()),
-    };
-    ensure(
-        raw[0] & 3 <= 1 && raw[3] <= 160,
-        "Invalid saved RGB enable/brightness",
-    )?;
-    Ok([
-        if selected || raw[0] & 3 == 1 { mode } else { 0 },
-        0,
-        raw[4],
-        raw[1],
-        raw[2],
-        raw[3],
-    ])
+    let mode = modes.iter().find(|(saved,_)| *saved == raw[0] >> 2)
+        .map(|(_,wire)| *wire).ok_or("Unsupported saved RGB mode")?;
+    ensure(raw[0] & 3 <= 1 && raw[3] <= 160, "Invalid saved RGB enable/brightness")?;
+    let effect = if selected || raw[0] & 3 == 1 { mode } else { 0 };
+    Ok([effect as u8, (effect >> 8) as u8, raw[4], raw[1], raw[2], raw[3]])
+}
+/// Translate by semantic wire effect, preserving enable and all other bytes.
+pub(crate) fn translate_rgb(raw: &[u8], source: Option<crate::app::ak820_beta1_profiles::ProfileId>, target: crate::app::ak820_beta1_profiles::ProfileId) -> BackupResult<[u8;8]> {
+    let selected = match source { Some(p) => rgb_wire_for_profile(raw,true,p)?, None => rgb_wire(raw,true)? };
+    let effect = u16::from_le_bytes([selected[0],selected[1]]);
+    let saved = crate::app::ak820_beta1_profiles::rgb_modes(target).iter()
+        .find(|(_,wire)| *wire == effect).map(|(saved,_)| *saved)
+        .ok_or("Target does not support saved RGB effect")?;
+    let mut result: [u8;8] = raw.try_into().map_err(|_| "RGB config requires eight saved bytes")?;
+    result[0] = (saved << 2) | (raw[0] & 3);
+    Ok(result)
 }
 
 #[cfg(test)]

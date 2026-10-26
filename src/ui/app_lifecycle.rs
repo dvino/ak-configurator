@@ -1961,7 +1961,8 @@ impl eframe::App for EntropyApp {
                         .max_height((ctx.content_rect().height() - 64.0).max(100.0))
                         .vscroll(true)
                         .show(ctx, |ui| {
-                            if profile == super::ak820_beta1_profiles::ProfileId::TapDance {
+                            if super::ak820_beta1_profiles::matrix_profile(profile)
+                                .capabilities.dynamic_entries.tap_dance > 0 {
                                 let tap_count = super::ak820_beta1_profiles::matrix_profile(profile)
                                     .capabilities
                                     .dynamic_entries

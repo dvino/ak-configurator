@@ -65,11 +65,36 @@ impl EntropyApp {
     }
 
     fn write_all_key_overrides(&mut self) -> bool {
+        // A local incomplete row keeps the global dirty flag set. Preflight
+        // the entire batch so the frame-driven flush does not repeatedly read
+        // NVM for the other seven entries while that draft is incomplete.
+        if self.keycode_picker.ak820_profile
+            && !self.key_override_entries.iter().all(Self::ak820_key_override_entry_valid)
+        {
+            return false;
+        }
         let mut saved = true;
         for idx in 0..self.key_override_entries.len() {
             saved &= self.write_key_override(idx);
         }
         saved
+    }
+
+    fn ak820_key_override_entry_valid(entry: &KeyOverrideEntry) -> bool {
+        let mut entry = entry.clone();
+        Self::normalize_key_override_entry(&mut entry);
+        if entry.layers == u16::MAX {
+            entry.layers = 0x3f;
+        }
+        (crate::ak820_typed_storage::KeyOverride {
+            trigger: entry.trigger,
+            replacement: entry.replacement,
+            layers: entry.layers,
+            mods: entry.trigger_mods,
+            negative: entry.negative_mod_mask,
+            suppressed: entry.suppressed_mods,
+            options: entry.options.bits(),
+        }).encode().is_ok()
     }
 
     fn key_override_entry_exists(entry: &KeyOverrideEntry) -> bool {
@@ -110,7 +135,25 @@ impl EntropyApp {
             return true;
         };
         Self::normalize_key_override_entry(entry);
+        if self.keycode_picker.ak820_profile && entry.layers == u16::MAX {
+            // The inherited editor represents "all layers" as 16 bits. AK820
+            // has exactly six layers and rejects any other layer bits.
+            entry.layers = 0x3F;
+        }
         let entry = entry.clone();
+        if self.keycode_picker.ak820_profile
+            && !Self::ak820_key_override_entry_valid(&entry)
+        {
+            // Keep an incomplete editor draft local. Even a read must not
+            // begin a typed transaction until the whole candidate is valid.
+            self.key_override_dirty = true;
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Черновик Key Override: выберите исходную клавишу, слои и условие активации перед применением."
+            } else {
+                "Key Override draft: choose a trigger, active layers and an activation condition before applying."
+            }.to_owned();
+            return false;
+        }
         if self.hid_write_task_active() {
             self.key_override_dirty = true;
             return false;
@@ -166,6 +209,9 @@ impl EntropyApp {
                 .keycode_picker
                 .open_regular_key_picker_with_mod_key(true),
         }
+        if matches!(target, KeyOverridePickField::Replacement) {
+            self.keycode_picker.constrain_ak820_override_replacement();
+        }
     }
 
     fn key_override_mod_mask_summary(language: crate::i18n::Language, mask: u8) -> String {
@@ -194,6 +240,7 @@ impl EntropyApp {
         ui: &mut egui::Ui,
         layers: &mut u16,
         language: crate::i18n::Language,
+        layer_count: usize,
     ) -> bool {
         let mut changed = false;
         let dark = ui.visuals().dark_mode;
@@ -207,11 +254,14 @@ impl EntropyApp {
 
         ui.set_min_width(popup_width);
         ui.spacing_mut().item_spacing = Vec2::new(button_gap, button_gap);
-        for row in 0..4 {
+        let layer_count = layer_count.clamp(1, 16);
+        let all_layers = ((1u32 << layer_count) - 1) as u16;
+        for row in 0..layer_count.div_ceil(4) {
             ui.horizontal(|ui| {
                 ui.add_space(layer_row_inset);
                 for col in 0..4 {
                     let idx = row * 4 + col;
+                    if idx >= layer_count { break; }
                     let bit = 1u16 << idx;
                     let selected = (*layers & bit) != 0;
                     let label = idx.to_string();
@@ -300,8 +350,8 @@ impl EntropyApp {
                 metrics.size(112.0, 30.0),
                 true,
             );
-            if all_resp.clicked() && *layers != u16::MAX {
-                *layers = u16::MAX;
+            if all_resp.clicked() && *layers != all_layers {
+                *layers = all_layers;
                 changed = true;
             }
             let none_resp = crate::ui_style::modern_button(
@@ -757,7 +807,7 @@ impl EntropyApp {
                                                     ui.style_mut().visuals.window_stroke = crate::ui_style::modal_outline_stroke(dark);
                                                     ui.style_mut().visuals.window_fill = app_surface_fill(dark);
                                                     crate::ui_style::popup_below_widget(ui, popup_id, &resp, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
-                                                        Self::draw_key_override_layers_modern(ui, &mut edited.layers, self.app_settings.language);
+                                                        Self::draw_key_override_layers_modern(ui, &mut edited.layers, self.app_settings.language, if self.keycode_picker.ak820_profile { 6 } else { 16 });
                                                     });
                                                 },
                                             );
@@ -796,6 +846,8 @@ impl EntropyApp {
                         ui.spacing_mut().item_spacing.x = 8.0 * scale;
                         let clear_enabled =
                             Self::key_override_entry_exists(&self.key_override_entries[idx])
+                                || (self.keycode_picker.ak820_profile
+                                    && self.key_override_entries[idx] != KeyOverrideEntry::default())
                                 || self
                                     .key_override_names
                                     .get(idx)
@@ -871,6 +923,34 @@ impl EntropyApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ak820_key_override_new_entry_uses_exact_six_layer_mask_before_any_transport() {
+        let ctx = egui::Context::default();
+        let creation_context = eframe::CreationContext::_new_kittest(ctx);
+        let mut app = EntropyApp::new(&creation_context);
+        app.keycode_picker.ak820_profile = true;
+        let mut entry = KeyOverrideEntry::default();
+        EntropyApp::initialize_key_override_entry(&mut entry);
+        entry.trigger = 4;
+        entry.replacement = 0x104;
+        app.key_override_entries = vec![entry];
+        app.hid_device = None;
+
+        assert!(!app.write_key_override(0));
+        let entry = &app.key_override_entries[0];
+        assert_eq!(entry.layers, 0x3f);
+        assert!(crate::ak820_typed_storage::KeyOverride {
+            trigger: entry.trigger,
+            replacement: entry.replacement,
+            layers: entry.layers,
+            mods: entry.trigger_mods,
+            negative: entry.negative_mod_mask,
+            suppressed: entry.suppressed_mods,
+            options: entry.options.bits(),
+        }.encode().is_ok());
+        assert!(app.key_override_dirty);
+    }
 
     #[test]
     fn new_key_override_uses_vial_and_rmk_fork_defaults() {

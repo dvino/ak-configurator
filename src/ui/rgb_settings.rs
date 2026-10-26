@@ -224,6 +224,7 @@ impl EntropyApp {
         };
 
         crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
+            egui::ScrollArea::vertical().id_salt("rgb_page_scroll").show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(18.0);
                 ui.label(
@@ -268,7 +269,20 @@ impl EntropyApp {
                     return;
                 }
 
-                self.draw_rgb_editor_content(ui, dark, &RgbModalLayout::responsive(ui.ctx()));
+                let can_write = self.ak820_demo || (!self.hid_write_task_owner_active()
+                    && matches!(self.connect_state, ConnectState::Idle)
+                    && self.hid_device.as_ref().is_some_and(|h| !h.is_ak820_session() || h.ak820_editing_ready()));
+                ui.add_enabled_ui(can_write, |ui| {
+                    self.draw_rgb_editor_content(ui, dark, &RgbModalLayout::responsive(ui.ctx()));
+                });
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.ak820_demo_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "vialrgb-direct"))
+                    || self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image)
+                        .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1)) {
+                    ui.separator();
+                    self.draw_ak820_rgb_palette(ui);
+                }
+            });
             });
         });
     }
@@ -421,6 +435,12 @@ impl EntropyApp {
         let Some(hid) = &self.hid_device else {
             return;
         };
+        if hid.is_ak820_session() && (self.rgb_settings.effect == 1
+            || (self.rgb_settings.effect == 0 && self.rgb_settings.last_enabled_effect == 1)) {
+            // Direct palettes have no NVM representation. Keep the previous
+            // saved built-in effect rather than persisting an empty palette.
+            return;
+        }
         if let Err(e) = hid.save_rgb() {
             self.status_msg = format!("Failed to save RGB settings: {}", e);
             log::warn!("save_rgb failed: {e}");

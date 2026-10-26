@@ -5,16 +5,9 @@ use crate::app::ak820_beta1_profiles::{self as beta1, ProfileId};
 use crate::app::ak820_offline_extensions::OfflineExtensions;
 use crate::keycode_picker::{Ak820Beta1KeycodeSource, MacroAction};
 
-const PROFILES: [ProfileId; 9] = [
-    ProfileId::Work,
-    ProfileId::Essential,
-    ProfileId::Typing,
-    ProfileId::Mouse,
-    ProfileId::MouseTyping,
-    ProfileId::System,
-    ProfileId::TapDance,
-    ProfileId::KeyOverrides,
-    ProfileId::Settings,
+const PROFILES: [ProfileId; 10] = [
+    ProfileId::Main, ProfileId::Game, ProfileId::Mmo, ProfileId::Typing, ProfileId::Code,
+    ProfileId::Pointer, ProfileId::Onehand, ProfileId::Creative, ProfileId::Shortcuts, ProfileId::Multios,
 ];
 fn app() -> (EntropyApp, egui::Context) {
     let ctx = egui::Context::default();
@@ -36,33 +29,22 @@ fn assert_inert(app: &EntropyApp) {
 fn mark_extensions(app: &mut EntropyApp, profile: ProfileId) -> Option<Vec<u8>> {
     let old = app.ak820_offline_extensions.as_ref()?;
     let mut model = Extensions::decode_nvm(old.nvm()).unwrap();
-    match profile {
-        ProfileId::TapDance => {
-            model.tap_dance[7] = TapDance {
-                outputs: [4, 5, 6, 7],
-                term: 123,
-            }
-        }
-        ProfileId::KeyOverrides => {
-            model.key_overrides[7] = KeyOverride {
-                trigger: 4,
-                replacement: 5,
-                layers: 1,
-                mods: 2,
-                negative: 4,
-                suppressed: 8,
-                options: 0x81,
-            }
-        }
-        ProfileId::Settings => model.settings.set(2, 73).unwrap(),
-        _ => panic!("schema03 data leaked into a schema02 profile"),
+    let matrix = beta1::matrix_profile(profile);
+    if matrix.capabilities.dynamic_entries.tap_dance > 0 {
+        model.tap_dance[7] = TapDance { outputs: [4, 5, 6, 7], term: 123 };
+    }
+    if matrix.capabilities.dynamic_entries.key_overrides > 0 {
+        model.key_overrides[7] = KeyOverride { trigger: 4, replacement: 5, layers: 1, mods: 2, negative: 4, suppressed: 8, options: 0x81 };
+    }
+    if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) {
+        model.settings.set(2, 73).unwrap();
     }
     let candidate = model.apply_to_nvm(old.nvm(), profile).unwrap();
     app.ak820_offline_extensions = Some(OfflineExtensions::from_nvm(&candidate).unwrap());
     Some(candidate)
 }
 #[test]
-fn nine_real_offline_projects_retain_independent_edits() {
+fn ten_real_offline_projects_retain_independent_edits() {
     let (mut app, ctx) = app();
     assert_inert(&app);
     let mut extensions = Vec::new();
@@ -153,7 +135,7 @@ fn switching_projects_clears_pending_picker_and_undo_before_they_can_apply() {
     app.keycode_picker.constrain_ak820_combo_picker(false);
     assert!(!app.keycode_picker.picker_value_supported(0x5200));
     app.keycode_picker.vial_layer_pending = Some(0x5200);
-    app.configure_ak820_offline_profile(ProfileId::Essential);
+    app.configure_ak820_offline_profile(ProfileId::Game);
     let target = app.layout.as_ref().unwrap().layers[0][0];
     assert!(app.undo_stack.is_empty());
     assert!(!app.pending_layout_undo);
@@ -170,7 +152,7 @@ fn switching_projects_clears_pending_picker_and_undo_before_they_can_apply() {
     app.maybe_start_pending_layout_undo(&ctx);
     app.undo(&ctx);
     assert_eq!(app.layout.as_ref().unwrap().layers[0][0], target);
-    app.configure_ak820_offline_profile(ProfileId::Work);
+    app.configure_ak820_offline_profile(ProfileId::Main);
     assert_eq!(app.layout.as_ref().unwrap().layers[0][0].vial_keycode(), 4);
     assert_inert(&app);
 }
@@ -188,7 +170,7 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
         for code in 0x5700..=0x5707 {
             assert_eq!(
                 app.keycode_picker.picker_value_supported(code),
-                profile == ProfileId::TapDance
+                beta1::supports_keycode(profile, code, beta1::KeycodeSource::Matrix)
             );
         }
         assert!(!app.keycode_picker.picker_value_supported(0x5708));
@@ -198,7 +180,8 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
         app.keycode_picker
             .set_ak820_beta1_source(Ak820Beta1KeycodeSource::Matrix);
     }
-    app.configure_ak820_offline_profile(ProfileId::TapDance);
+    let td_profile = PROFILES.into_iter().find(|p| beta1::matrix_profile(*p).capabilities.dynamic_entries.tap_dance > 0).unwrap();
+    app.configure_ak820_offline_profile(td_profile);
     app.selected_key = Some((0, 0));
     app.keycode_picker.result = Some(0x5707u16.into());
     app.apply_picker_results(&ctx);
@@ -206,12 +189,12 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
         app.layout.as_ref().unwrap().layers[0][0].vial_keycode(),
         0x5707
     );
-    app.configure_ak820_offline_profile(ProfileId::Work);
+    app.configure_ak820_offline_profile(ProfileId::Main);
     assert_ne!(
         app.layout.as_ref().unwrap().layers[0][0].vial_keycode(),
         0x5707
     );
-    app.configure_ak820_offline_profile(ProfileId::TapDance);
+    app.configure_ak820_offline_profile(td_profile);
     assert_eq!(
         app.layout.as_ref().unwrap().layers[0][0].vial_keycode(),
         0x5707
@@ -223,7 +206,8 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
 fn tap_dance_button_seam_checks_profile_slot_and_target_bounds() {
     let (mut app, _) = app();
     assert!(!app.assign_offline_tap_dance(0, 0, 0));
-    app.configure_ak820_offline_profile(ProfileId::TapDance);
+    let td_profile = PROFILES.into_iter().find(|p| beta1::matrix_profile(*p).capabilities.dynamic_entries.tap_dance > 0).unwrap();
+    app.configure_ak820_offline_profile(td_profile);
     let before = app.layout.as_ref().unwrap().layers.clone();
     for (layer, key, slot) in [
         (0, 0, 8),
@@ -240,7 +224,7 @@ fn tap_dance_button_seam_checks_profile_slot_and_target_bounds() {
         app.layout.as_ref().unwrap().layers[5][82].vial_keycode(),
         0x5707
     );
-    app.configure_ak820_offline_profile(ProfileId::Essential);
+    app.configure_ak820_offline_profile(ProfileId::Game);
     assert!(!app.assign_offline_tap_dance(0, 0, 0));
     assert_inert(&app);
 }

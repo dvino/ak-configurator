@@ -3,10 +3,10 @@
 //! settings_backup.py and pack_ak820.py. No HID, OEM bytes or write operations.
 //! NVM-only parsing proves storage structure, not a running firmware identity.
 use crate::ak820_settings_backup::{
-    macro_logical_length, rgb_wire, sha256, BackupResult, ImageIdentity,
+    macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256, BackupResult, ImageIdentity,
 };
 use crate::ak820_typed_storage::{Extensions, SCHEMA};
-use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use crate::app::ak820_beta1_profiles::{matrix_profile, historical_settings_identity, ProfileId};
 use serde_json::{json, Map, Value};
 
 const MASK: [u8; 16] = [
@@ -209,6 +209,10 @@ pub(crate) fn decode_trusted_rom(
     identity: &ImageIdentity,
     profile: ProfileId,
 ) -> BackupResult<Value> {
+    decode_catalog_rom(rom, nvm, identity, Some(profile))
+}
+fn decode_catalog_rom(rom: &[u8], nvm: &[u8], identity: &ImageIdentity, profile: Option<ProfileId>) -> BackupResult<Value> {
+    if let Some(profile) = profile {
     let contract = matrix_profile(profile);
     let exact = contract
         .settings_identity
@@ -231,6 +235,11 @@ pub(crate) fn decode_trusted_rom(
                 },
         "Unsupported typed contract version",
     )?;
+    } else {
+        require(identity.definition_sha256 == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
+            && historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema).is_some(),
+            "Unknown exact historical settings contract")?;
+    }
     require(
         rom.len() == 65536 && nvm.len() == 0x2800,
         "Incomplete ROM/NVM",
@@ -267,8 +276,13 @@ pub(crate) fn decode_trusted_rom(
     )?;
     require(&rom[0xc700..0xef00] == nvm, "Saved NVM differs from ROM")?;
     validate_nvm(nvm, identity.schema)?;
-    let rgb = rgb_wire(&nvm[24..32], false)?;
-    settings_from_nvm(nvm, &rgb, true)
+    let rgb = match profile { Some(p) => rgb_wire_for_profile(&nvm[24..32], false, p)?, None => rgb_wire(&nvm[24..32], false)? };
+    let combos = match profile {
+        Some(p) => matrix_profile(p).capabilities.dynamic_entries.combos > 0,
+        None => historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema)
+            .ok_or("Unknown historical Combo contract")?.combos,
+    };
+    settings_from_nvm(nvm, &rgb, combos)
 }
 
 /// Catalog-bound archive entry point. This validates local evidence; it does
@@ -296,6 +310,19 @@ pub(crate) fn validate_profile_archive(
         expected_manifest,
         |rom, nvm, image| decode_trusted_rom(rom, nvm, image, profile),
     )
+}
+
+/// Source-only historical backup admission, with the same full ROM checks as
+/// current images. No historical profile alias or target is introduced.
+pub(crate) fn validate_historical_archive(
+    manifest: &[u8], files: &std::collections::BTreeMap<String, Vec<u8>>,
+    identity: &ImageIdentity, expected_manifest: Option<&str>,
+) -> BackupResult<crate::ak820_settings_backup::ValidatedArchive> {
+    require(identity.definition_sha256 == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
+        && historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema).is_some(),
+        "Unknown exact historical settings contract")?;
+    crate::ak820_settings_backup::validate_archive(manifest, files, &[identity.clone()], expected_manifest,
+        |rom,nvm,image| decode_catalog_rom(rom,nvm,image,None))
 }
 
 #[cfg(test)]
@@ -432,7 +459,7 @@ mod tests {
     }
     #[test]
     fn synthesized_rom_never_qualifies() {
-        let id = ProfileId::Work;
+        let id = ProfileId::Main;
         let exact = matrix_profile(id).settings_identity.as_ref().unwrap();
         let identity = ImageIdentity {
             ihx_sha256: exact.ihx_sha256.clone(),

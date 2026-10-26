@@ -124,7 +124,7 @@ impl EntropyApp {
         app.ak820_demo_seed = Some(layout.clone());
         app.layout = Some(layout);
         app.status_msg = "Демонстрационный режим. Настройки устройства не считывались.".to_owned();
-        app.configure_ak820_offline_profile(crate::app::ak820_beta1_profiles::ProfileId::Work);
+        app.configure_ak820_offline_profile(crate::app::ak820_beta1_profiles::ProfileId::Main);
         app
     }
 
@@ -254,10 +254,10 @@ impl EntropyApp {
                 hue: 0,
                 saturation: 0,
                 max_brightness: limits.rgb_maximum_brightness,
-                supported_effects: crate::ak820::CAPABILITIES
-                    .rgb_modes
+                supported_effects: beta1::rgb_modes(profile)
                     .iter()
-                    .map(|mode| *mode as u16)
+                    .map(|(_, wire)| *wire)
+                    .chain(std::iter::once(0))
                     .collect(),
                 last_enabled_effect: 2,
             };

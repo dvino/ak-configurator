@@ -90,7 +90,7 @@ jobs:
 
       - name: Test all targets
         if: startsWith(matrix.platform, 'linux-')
-        run: cargo test --locked --all-targets
+        run: cargo test --locked --all-targets -- --test-threads=1
 
       - name: Build development binary (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
@@ -118,6 +118,13 @@ jobs:
           $hash = (Get-FileHash $env:BINARY -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $(Split-Path $env:BINARY -Leaf)" | Set-Content -Encoding ascii (Join-Path (Split-Path $env:BINARY) 'SHA256SUMS')
 
+      - name: Package unsigned beta2 desktop candidate
+        shell: bash
+        env:
+          CANDIDATE_BINARY: ${{ matrix.binary }}
+          CANDIDATE_PLATFORM: ${{ matrix.platform }}
+        run: python scripts/package_ak820_candidate.py --binary "$CANDIDATE_BINARY" --platform "$CANDIDATE_PLATFORM" --output-dir target/candidate
+
       - name: Upload development binary and checksum
         uses: actions/upload-artifact@v7
         with:
@@ -125,5 +132,15 @@ jobs:
           path: |
             ${{ matrix.binary }}
             ${{ matrix.checksum }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload candidate package and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-candidate-${{ matrix.platform }}
+          path: |
+            target/candidate/*.zip
+            target/candidate/*.sha256
           if-no-files-found: error
           retention-days: 7

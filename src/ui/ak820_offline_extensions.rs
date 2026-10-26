@@ -88,12 +88,11 @@ pub(crate) fn show(
     profile: ProfileId,
     state: &mut OfflineExtensions,
 ) -> bool {
-    if !matches!(
-        profile,
-        ProfileId::TapDance | ProfileId::KeyOverrides | ProfileId::Settings
-    ) {
-        return false;
-    }
+    let matrix = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+    let has_td = matrix.capabilities.dynamic_entries.tap_dance > 0;
+    let has_ko = matrix.capabilities.dynamic_entries.key_overrides > 0;
+    let has_qs = !matrix.capabilities.runtime_qmk_settings_ids.is_empty();
+    if !has_td && !has_ko && !has_qs { return false; }
     ui.heading(text(
         language,
         "Offline module settings",
@@ -103,8 +102,7 @@ pub(crate) fn show(
         "Changes affect this example project in memory. Live module reads, writes and physical behavior are not verified. Pending Tap Dance actions and the active override are volatile runtime state; they are not saved here.",
         "Изменения действуют в памяти этого примера. Чтение и запись модулей на клавиатуре и физическое поведение не проверены. Ожидающие действия Tap Dance и активная замена — временное состояние прошивки, здесь оно не сохраняется."));
     let mut edited = false;
-    match profile {
-        ProfileId::TapDance => {
+    if has_td {
             ui.label(text(language,
                 "Assign TD(0)…TD(7) on a key separately. Outputs use hexadecimal keycodes: 0000 uses the firmware fallback; otherwise below 2000, low byte 04…A4 or E0…E7. Term: 0 uses 200 ms; 1…32767 ms is explicit. Zero hold falls back to tap; zero double tap repeats tap; zero tap-then-hold uses hold or tap. Invalid combinations keep the previous candidate.",
                 "Назначьте TD(0)…TD(7) на клавишу отдельно. Выходы — шестнадцатеричные коды: 0000 использует резервный выход прошивки; остальные ниже 2000 с младшим байтом 04…A4 или E0…E7. Интервал 0 означает 200 мс; явное значение — 1…32767 мс. Нулевое удержание использует одиночное нажатие; нулевое двойное — повтор одиночного; нулевое нажатие с удержанием — удержание или одиночное. При ошибке прежний вариант сохраняется."));
@@ -139,8 +137,8 @@ pub(crate) fn show(
                         }
                     });
             }
-        }
-        ProfileId::KeyOverrides => {
+    }
+    if has_ko {
             ui.label(text(language,
                 "All-zero rows are empty. Other rows require trigger 04…A4, replacement 0000 or below 2000 with low byte 04…A4, layers 01…3F. Modifier masks: 01 left Ctrl, 02 left Shift, 04 left Alt, 08 left GUI; 10/20/40/80 are their right counterparts. Layer bits 01/02/04/08/10/20 select layers 0…5. Options: 01 trigger-down, 02 required-mod-down, 04 negative-mod-up, 08 one required mod suffices, 10 no re-registration, 20 no unregister on another key, 80 enabled. At least one of 01/02/04 is required; 40 is forbidden. Hexadecimal fields are validated together.",
                 "Нулевая строка пуста. Иначе: исходная клавиша 04…A4, замена 0000 или ниже 2000 с младшим байтом 04…A4, слои 01…3F. Маски модификаторов: 01 левый Ctrl, 02 левый Shift, 04 левый Alt, 08 левый GUI; 10/20/40/80 — соответствующие правые. Биты слоёв 01/02/04/08/10/20 выбирают слои 0…5. Флаги: 01 нажатие клавиши, 02 нажатие нужного модификатора, 04 отпускание запрещённого модификатора, 08 достаточно одного нужного модификатора, 10 без повторной регистрации, 20 без отмены другой клавишей, 80 включено. Нужен хотя бы один из 01/02/04; 40 запрещён. Шестнадцатеричные поля проверяются вместе."));
@@ -197,14 +195,15 @@ pub(crate) fn show(
                     }
                 });
             }
-        }
-        ProfileId::Settings => {
+    }
+    if has_qs {
             ui.label(text(language,
-                "Only active QSIDs are editable. Auto Shift timeout (QSID 4) is inactive and preserved. Grave Escape mask: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift. A blank default record remains byte-exact until an effective setting changes.",
-                "Доступны только активные QSID. Интервал Auto Shift (QSID 4) неактивен и сохраняется. Маска Grave Escape: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift. Пустая запись значений по умолчанию сохраняется побайтно до изменения действующего значения."));
+                "Only advertised QSIDs are editable; inactive values are preserved. Auto Shift timeout (QSID 4) is editable only where advertised (Typing). Grave Escape mask: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift.",
+                "Редактируются только объявленные QSID; неактивные значения сохраняются. Интервал Auto Shift (QSID 4) доступен только в профиле Typing. Маска Grave Escape: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift."));
             for (id, en, ru, low, high) in [
                 (1, "Grave Escape flags", "Флаги Grave Escape", 0, 15),
                 (2, "Combo term (ms)", "Интервал Combo (мс)", 1, 1000),
+                (4, "Auto Shift timeout (ms)", "Интервал Auto Shift (мс)", 1, 1000),
                 (7, "Tapping term (ms)", "Интервал нажатия (мс)", 1, 1000),
                 (18, "Tap delay (ms)", "Задержка нажатия (мс)", 0, 100),
                 (
@@ -214,7 +213,7 @@ pub(crate) fn show(
                     0,
                     100,
                 ),
-            ] {
+            ].into_iter().filter(|(id, _, _, _, _)| matrix.capabilities.runtime_qmk_settings_ids.contains(id)) {
                 let mut value = state.draft.settings.get(id).expect("known QSID");
                 if number(ui, text(language, en, ru), &mut value, low..=high, id == 1) {
                     if state.draft.settings.set(id, value).is_ok() {
@@ -222,8 +221,6 @@ pub(crate) fn show(
                     }
                 }
             }
-        }
-        _ => {}
     }
     let changed = edited && state.apply(profile);
     if state.invalid {
@@ -256,14 +253,14 @@ mod tests {
         let mut state = fixture(0);
         let before = state.nvm().to_vec();
         state.draft.tap_dance[0].outputs[0] = 1;
-        assert!(!state.apply(ProfileId::TapDance));
+        assert!(!state.apply(ProfileId::Mmo));
         assert!(state.invalid);
         assert_eq!(state.nvm(), before);
         state.discard();
         assert!(!state.invalid);
         assert_eq!(state.draft.tap_dance[0], TapDance::default());
         state.draft.tap_dance[0].outputs[0] = 4;
-        assert!(state.apply(ProfileId::TapDance));
+        assert!(state.apply(ProfileId::Mmo));
         assert_eq!(
             Extensions::decode_nvm(state.nvm()).unwrap().tap_dance[0].outputs[0],
             4
@@ -275,38 +272,58 @@ mod tests {
             let mut state = fixture(blank);
             let before = state.nvm().to_vec();
             for profile in [
-                ProfileId::TapDance,
-                ProfileId::KeyOverrides,
-                ProfileId::Settings,
+                ProfileId::Mmo,
+                ProfileId::Shortcuts,
+                ProfileId::Creative,
             ] {
                 assert!(!state.apply(profile));
                 assert!(!state.invalid);
                 assert_eq!(state.nvm(), before);
             }
             state.draft.settings.set(2, 41).unwrap();
-            assert!(!state.apply(ProfileId::TapDance));
-            assert_eq!(state.nvm(), before);
-            assert!(state.apply(ProfileId::Settings));
+            assert!(state.apply(ProfileId::Mmo));
+            assert!(!state.apply(ProfileId::Creative));
             assert_eq!(&state.nvm()[..0x6a8], &before[..0x6a8]);
             assert_eq!(&state.nvm()[0x6c0..], &before[0x6c0..]);
             state.draft.settings.set(4, 176).unwrap();
             let current = state.nvm().to_vec();
-            assert!(!state.apply(ProfileId::Settings));
+            assert!(!state.apply(ProfileId::Creative));
             assert_eq!(state.nvm(), current);
         }
+    }
+    #[test]
+    fn autos_shift_timeout_is_editable_only_in_typing() {
+        let mut typing = fixture(0);
+        typing.draft.settings.set(4, 176).unwrap();
+        assert!(typing.apply(ProfileId::Typing));
+        assert_eq!(
+            Extensions::decode_nvm(typing.nvm())
+                .unwrap()
+                .settings
+                .get(4)
+                .unwrap(),
+            176
+        );
+
+        let mut other = fixture(0);
+        other.draft.settings.set(4, 176).unwrap();
+        let before = other.nvm().to_vec();
+        assert!(!other.apply(ProfileId::Creative));
+        assert!(other.invalid);
+        assert_eq!(other.nvm(), before);
     }
     #[test]
     fn key_override_partial_draft_requires_complete_valid_row() {
         let mut state = fixture(0);
         let before = state.nvm().to_vec();
         state.draft.key_overrides[7].trigger = 4;
-        assert!(!state.apply(ProfileId::KeyOverrides));
+        assert!(!state.apply(ProfileId::Shortcuts));
         assert_eq!(state.nvm(), before);
         state.draft.key_overrides[7].layers = 1;
         state.draft.key_overrides[7].options = 0x81;
-        assert!(!state.apply(ProfileId::Settings));
+        assert!(!state.apply(ProfileId::Creative));
         assert_eq!(state.nvm(), before);
-        assert!(state.apply(ProfileId::KeyOverrides));
+        assert!(state.apply(ProfileId::Shortcuts));
         assert_eq!(&state.nvm()[..0x78a], &before[..0x78a]);
         assert_eq!(&state.nvm()[0x794..], &before[0x794..]);
     }

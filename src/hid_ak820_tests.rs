@@ -1,6 +1,71 @@
 //! Offline transaction checks; scripted saved bytes do not prove physical durability.
 use super::*;
 
+fn palette_device(fail_at: Option<u8>) -> (HidDevice, super::super::TestHidRecorder) {
+    let (hid, log) = HidDevice::test_beta2_ak820_device(crate::app::ak820_beta1_profiles::ProfileId::Main, true);
+    let mut mode = [2, 0, 42, 80, 200, 100];
+    log.respond_by(move |p| {
+        let mut reply = [0; 32];
+        match (p[0], p[1]) {
+            (0xFD, 1) => reply[..4].copy_from_slice(&[0xFD, 1, 1, 0xA8]),
+            (8, 0x41) => { reply[..2].copy_from_slice(&[8, 0x41]); reply[2..8].copy_from_slice(&mode); }
+            (7, 0x42) => {
+                if fail_at == Some(p[2]) { return Some(Err("scripted Direct timeout".into())); }
+                reply = *p;
+            }
+            (7, 0x41) => { mode.copy_from_slice(&p[2..8]); reply = *p; }
+            _ => return Some(Err(format!("unexpected palette request {p:02x?}"))),
+        }
+        Some(Ok(reply))
+    });
+    (hid, log)
+}
+
+#[test]
+fn static_palette_is_bounded_and_never_saves_nvm() {
+    let (hid, log) = palette_device(None);
+    hid.ak820_apply_palette(&[[160, 0, 0]; 82]).unwrap();
+    let requests = log.requests();
+    let packets: Vec<_> = requests.iter().filter(|p| p[..2] == [7, 0x42]).collect();
+    assert_eq!(packets.len(), 10);
+    assert_eq!(packets.iter().map(|p| p[4] as usize).sum::<usize>(), 82);
+    for (index, p) in packets.iter().enumerate() {
+        assert_eq!(p[2] as usize, index * 9);
+        for hsv in p[5..5 + p[4] as usize * 3].chunks_exact(3) { assert_eq!(hsv, [0, 255, 160]); }
+    }
+    assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
+    assert!(!requests.iter().any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F));
+    assert!(hid.ak820_editing_ready());
+}
+
+#[test]
+fn palette_timeout_stops_frame_once_and_latches_without_restore() {
+    let (hid, log) = palette_device(Some(27));
+    assert!(hid.ak820_apply_palette(&[[0, 160, 0]; 82]).is_err());
+    let requests = log.requests();
+    assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x42]).count(), 4);
+    assert!(!requests.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
+    assert!(hid.ak820_apply_palette(&[[0, 0, 160]; 82]).is_err());
+    assert_eq!(log.requests().len(), requests.len());
+    assert!(!hid.ak820_editing_ready());
+}
+
+#[test]
+fn palette_rejects_unavailable_profiles_partial_reads_and_invalid_values_before_transport() {
+    use crate::app::ak820_beta1_profiles::ProfileId;
+    for (profile, ready) in [(ProfileId::Code, true), (ProfileId::Main, false)] {
+        let (hid, log) = HidDevice::test_beta2_ak820_device(profile, ready);
+        assert!(hid.ak820_apply_palette(&[[0, 0, 0]; 82]).is_err());
+        assert!(log.requests().is_empty());
+    }
+    let (hid, log) = palette_device(None);
+    assert!(hid.ak820_apply_palette(&[[161, 0, 0]; 82]).is_err());
+    assert!(log.requests().is_empty());
+    let (hid, log) = HidDevice::test_ak820_device(true);
+    assert!(hid.ak820_apply_palette(&[[0, 0, 0]; 82]).is_err());
+    assert!(log.requests().is_empty());
+}
+
 fn stream(first: &[u8]) -> Vec<u8> {
     let mut bytes = first.to_vec();
     bytes.extend([0; 16]);

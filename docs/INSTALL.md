@@ -2,14 +2,11 @@
 
 # Installation and development
 
-The first milestone is the native desktop configurator. Current build and test
-evidence is recorded in [Status](STATUS.md). Browser support follows the native
-desktop milestone.
+AK Configurator v0.1.0-beta.2 is in release preparation. Current source checks and limits are recorded in [Status](STATUS.md) and [Review](REVIEW.md). The six-target workflow defines development binaries; the historical CI run does not verify the current source tree. Browser support follows the native desktop milestone.
 
 ## Build from source
 
-Install Rust 1.97 and the platform build dependencies. On Ubuntu 24.04, install
-the native Linux dependencies used by the `desktop-dev` workflow:
+Use Rust 1.97 and the platform build dependencies. On Ubuntu 24.04, install the Linux dependencies used by `desktop-dev`:
 
 ```sh
 sudo apt-get update
@@ -19,80 +16,54 @@ sudo apt-get install -y --no-install-recommends \
   libxkbcommon-dev libxkbcommon-x11-0 libgl1-mesa-dev zenity
 ```
 
-On Linux, Save/Open dialogs use an available XDG desktop portal or the `zenity`
-fallback. Minimal desktop/container environments may provide neither; install
-`zenity` or the desktop portal implementation for the session before using
-file dialogs.
+Linux Save/Open dialogs use an available XDG desktop portal or the `zenity` fallback. Minimal desktop/container environments may provide neither; install one before using file dialogs.
 
-From the repository root, build the release executable and run host tests with:
+From the repository root, build and test serially:
 
 ```sh
 cargo build --release --locked
-cargo test --locked --all-targets
+cargo test --locked --all-targets -- --test-threads=1
 ```
 
-For an offline UI preview with example AK820 data, run:
+The serial test setting avoids shared-resource HID process-test flakes. An offline UI preview is available with:
 
 ```sh
 cargo run --locked -- --demo-ak820
 ```
 
-The demo does not discover or open HID devices. Its example layout is not a
-backup of settings from a physical keyboard. The release executable is
-`target/release/ak-configurator` on Linux and macOS, or
-`target/release/ak-configurator.exe` on Windows. Builds and host tests do not
-prove behavior with a physical keyboard.
+The demo does not discover or open HID devices. Its examples are not device backups. The executable is `target/release/ak-configurator` on Linux/macOS and `target/release/ak-configurator.exe` on Windows. A build or host test does not prove physical-keyboard behavior.
 
-
-Linux CI binaries are built on Ubuntu 24.04. The checked x86_64 binary requires
-glibc 2.39; its actual launch on Debian 12 was rejected for missing GLIBC_2.38/2.39. The separately
-provided Debian 12 x86_64 trial build was built and launched there; select it
-for that environment. Neither Linux build is a native Alpine/musl executable.
-Both need the desktop runtime libraries and a portal or Zenity for file dialogs.
+Current source build evidence is for Ubuntu 24.04 with Rust 1.97.0. Older Debian 12 runtime success belongs to a prior artifact and does not establish compatibility for the current build. Alpine/musl is not qualified. Linux builds require desktop runtime libraries and a portal or Zenity for file dialogs.
 
 ## Linux device access
 
-If Linux denies access to the keyboard's HID interface, explicitly install the
-AK820 udev rule from the repository root:
+If Linux denies HID access, install the AK820 udev rule explicitly from the repository root:
 
 ```sh
 sh linux/udev/install-vial-rules.sh
 ```
 
-The script requests elevation through `pkexec` or `sudo` when needed and writes
-`/etc/udev/rules.d/59-ak820.rules`. The rule grants access only to the AK820
-USB vendor/product IDs. This system change is optional and is not performed by
-building or running the demo.
+The script requests elevation through `pkexec` or `sudo` and writes `/etc/udev/rules.d/59-ak820.rules`. The rule is limited to the AK820 USB vendor/product IDs. This optional system change is not performed by building or running the demo.
 
 ## Supported device and packages
 
-This alpha accepts only a wired AK820 running the verified full permanent
-v0.6.0-alpha.3 image. The verified ROM range is 0x2800–0xC700, SHA-256 is
-`01f0f7a979d8cfa8217b3bba333758ae3509cf7f3f8e35fbffb1ed034b808e5d`, and the
-manifest is at 0xEF80. Unknown, custom and trial images are rejected. Read the
-[desktop guide](DESKTOP.md) before editing settings.
+The beta2 source contract supports ten exact v0.6.0-beta.2 packed profile images: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The application verifies packed CODE/settings identity and required settings before enabling edits. Unknown, custom, trial and mismatched images are rejected. See the [desktop guide](DESKTOP.md).
 
-The `desktop-dev` workflow defines raw development binaries for Linux and
-Windows x86_64/arm64, and macOS arm64/x86_64. After a successful run, its six
-platform artifacts are available from the [desktop-dev Actions runs](https://github.com/dvino/ak-configurator/actions/workflows/desktop-dev.yml?query=branch%3Adesktop-dev);
-each contains a binary and `SHA256SUMS`. These are unsigned development
-binaries, not installers. Check that every platform job passed before relying
-on its artifact. With `--demo-ak820`, the bundled beta.1 profiles open editable local example
-projects with Save/Open/Undo. Outside demo mode the catalog remains a preview;
-beta firmware settings writes and flashing stay disabled. The current application
-still recognizes only the exact alpha.3 device image.
-OEM recovery and the OS LED helper are not included in this desktop milestone.
+The `desktop-dev` workflow defines raw development binaries for Linux and Windows x86_64/arm64 and macOS x86_64/arm64. Each artifact contains a binary and `SHA256SUMS`; they are unsigned development binaries, not installers. A successful workflow run for the current source is required before downloading its artifacts. The known successful six-target run at commit `1afd0f1` is historical and is not evidence for beta2 source.
 
-Choose the artifact matching both your operating system and processor:
-`development-binary-linux-x86_64`, `development-binary-linux-arm64`,
-`development-binary-windows-x86_64`, `development-binary-windows-arm64`,
-`development-binary-macos-arm64`, or `development-binary-macos-x86_64`.
-Download that artifact ZIP from the successful workflow run and extract it.
-Verify the extracted executable against the included `SHA256SUMS` before
-launching it. On Linux, run `sha256sum -c SHA256SUMS`, then
-`chmod +x ak-configurator && ./ak-configurator`. On macOS, run
-`shasum -a 256 -c SHA256SUMS`, then `chmod +x ak-configurator` and
-`./ak-configurator`. On Windows PowerShell, compare
-`(Get-FileHash .\ak-configurator.exe -Algorithm SHA256).Hash.ToLowerInvariant()`
-with the hash on the line in `SHA256SUMS`, then launch
-`Start-Process .\ak-configurator.exe`.
+Choose the matching artifact name: `development-binary-linux-x86_64`, `development-binary-linux-arm64`, `development-binary-windows-x86_64`, `development-binary-windows-arm64`, `development-binary-macos-arm64`, or `development-binary-macos-x86_64`. Download its ZIP from a successful current run and extract it. Verify the executable against `SHA256SUMS` before launch. On Linux run `sha256sum -c SHA256SUMS`, then `chmod +x ak-configurator && ./ak-configurator`. On macOS run `shasum -a 256 -c SHA256SUMS`, then `chmod +x ak-configurator` and `./ak-configurator`. In Windows PowerShell compare `(Get-FileHash .\ak-configurator.exe -Algorithm SHA256).Hash.ToLowerInvariant()` with the line in `SHA256SUMS`, then launch `Start-Process .\ak-configurator.exe`.
+
+## Desktop candidate packages
+
+The same `desktop-dev` run also uploads a separate `desktop-candidate-${platform}` artifact for each of the six platform IDs above. It contains `ak-configurator-0.1.0-beta.2-${platform}.zip` and its adjacent `.zip.sha256` file; the archive includes the platform executable, EN/RU installation and RGB guides, retained application/font/icon/eframe licenses, firmware provenance, a source/binary manifest and an internal `SHA256SUMS`. This candidate ZIP is separate from the existing raw development binary and checksum artifacts.
+
+The optional local packager uses only Python 3.11+ standard-library modules:
+
+```sh
+python3 scripts/package_ak820_candidate.py \
+  --binary target/release/ak-configurator \
+  --platform linux-x86_64 \
+  --output-dir target/candidate
+```
+
+Select the binary path and `--platform` value matching the target: `linux-x86_64`, `linux-arm64`, `windows-x86_64`, `windows-arm64`, `macos-x86_64`, or `macos-arm64`. It checks the native executable format and architecture, pinned firmware catalog files, source commit and application version. A clean Git source tree is required by default. `--allow-dirty` is for a clearly labeled local trial only; the manifest records the dirty-source state. Verify the outer checksum with `sha256sum -c ak-configurator-0.1.0-beta.2-${platform}.zip.sha256` on Linux or `shasum -a 256 -c ak-configurator-0.1.0-beta.2-${platform}.zip.sha256` on macOS, then check the archive's internal `SHA256SUMS` before launching. Candidate packages are unsigned trials; architecture and hash checks do not qualify platform behavior or physical keyboard behavior.

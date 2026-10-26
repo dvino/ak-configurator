@@ -282,7 +282,7 @@ mod tests {
             .unwrap()
     }
     #[test]
-    fn real_app_all_nine_projects_transfer_between_instances() {
+    fn real_app_all_ten_projects_transfer_between_instances() {
         for (index, entry) in beta::profiles().iter().enumerate() {
             let mut original = app();
             original.configure_ak820_offline_profile(entry.profile);
@@ -301,27 +301,10 @@ mod tests {
                 use crate::ak820_typed_storage::{Extensions, KeyOverride, TapDance};
                 use crate::app::ak820_beta1_profiles::ProfileId;
                 let mut records = Extensions::decode_nvm(extensions.nvm()).unwrap();
-                match entry.profile {
-                    ProfileId::Settings => records.settings.set(2, 73).unwrap(),
-                    ProfileId::TapDance => {
-                        records.tap_dance[7] = TapDance {
-                            outputs: [4, 5, 6, 7],
-                            term: 123,
-                        }
-                    }
-                    ProfileId::KeyOverrides => {
-                        records.key_overrides[7] = KeyOverride {
-                            trigger: 4,
-                            replacement: 5,
-                            layers: 1,
-                            mods: 2,
-                            negative: 4,
-                            suppressed: 8,
-                            options: 0x81,
-                        }
-                    }
-                    _ => panic!("Unexpected typed profile"),
-                }
+                let matrix = beta::matrix_profile(entry.profile);
+                if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) { records.settings.set(2, 73).unwrap(); }
+                if matrix.capabilities.dynamic_entries.tap_dance > 0 { records.tap_dance[7] = TapDance { outputs: [4, 5, 6, 7], term: 123 }; }
+                if matrix.capabilities.dynamic_entries.key_overrides > 0 { records.key_overrides[7] = KeyOverride { trigger: 4, replacement: 5, layers: 1, mods: 2, negative: 4, suppressed: 8, options: 0x81 }; }
                 let bytes = records
                     .apply_to_nvm(extensions.nvm(), entry.profile)
                     .unwrap();
@@ -401,7 +384,7 @@ mod import_undo_tests {
     fn same_profile_import_can_restore_complete_previous_project() {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
-        app.configure_ak820_offline_profile(ProfileId::Settings);
+        app.configure_ak820_offline_profile(ProfileId::Creative);
         app.rename_ak820_offline_layer(0, "Before");
         let original = crate::ak820_offline_project::export_project(
             &app.snapshot_current_ak820_project().unwrap(),
@@ -438,13 +421,13 @@ mod ak820_local_profile_ui_tests {
         let app = EntropyApp::new_ak820_demo(&cc);
         let mut harness = Harness::new_state(|ctx, app| show(app, ctx), app);
         harness.run();
-        harness.get_by_value("Профиль: work").click();
+        harness.get_by_value("Профиль: main").click();
         harness.run();
-        harness.get_by_label("Настройки").click();
+        harness.get_by_label("Монтаж и графика").click();
         harness.run();
         assert_eq!(
             harness.state().ak820_demo_profile,
-            Some(super::super::ak820_beta1_profiles::ProfileId::Settings)
+            Some(super::super::ak820_beta1_profiles::ProfileId::Creative)
         );
         assert!(harness.state().ak820_offline_extensions.is_some());
         assert!(harness.state().hid_device.is_none());

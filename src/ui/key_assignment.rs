@@ -52,10 +52,19 @@ impl EntropyApp {
                     .min(self.key_override_entries.len().saturating_sub(1));
                 self.push_key_override_undo();
                 if let Some(entry) = self.key_override_entries.get_mut(idx) {
-                    Self::initialize_key_override_entry(entry);
-                    match field {
-                        KeyOverridePickField::Trigger => entry.trigger = kc_value,
-                        KeyOverridePickField::Replacement => entry.replacement = kc_value,
+                    if self.keycode_picker.ak820_profile
+                        && matches!(field, KeyOverridePickField::Trigger)
+                        && kc_value == 0
+                    {
+                        // An intentional trigger clear removes the whole typed
+                        // record. A partial zero-trigger record is not valid.
+                        *entry = KeyOverrideEntry::default();
+                    } else {
+                        Self::initialize_key_override_entry(entry);
+                        match field {
+                            KeyOverridePickField::Trigger => entry.trigger = kc_value,
+                            KeyOverridePickField::Replacement => entry.replacement = kc_value,
+                        }
                     }
                     Self::normalize_key_override_entry(entry);
                 }
@@ -911,6 +920,62 @@ mod tests {
             .find(|request| request[..4] == [0xFE, 0x0D, 0x06, 0])
             .expect("Key Override write should reach the Vial transport");
         assert_eq!(&request[4..6], &0x2204u16.to_le_bytes());
+    }
+
+    #[test]
+    fn ak820_clearing_override_trigger_writes_a_completely_empty_record() {
+        let ctx = egui::Context::default();
+        let creation_context = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new(&creation_context);
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        app.hid_device = Some(hid);
+        app.keycode_picker.ak820_profile = true;
+        let mut entry = KeyOverrideEntry::default();
+        EntropyApp::initialize_key_override_entry(&mut entry);
+        entry.trigger = 4;
+        entry.replacement = 0x104;
+        app.key_override_entries = vec![entry];
+        app.key_override_pick_target = Some(KeyOverridePickField::Trigger);
+        app.keycode_picker.result = Some(0u16.into());
+
+        app.apply_picker_results(&ctx);
+
+        assert_eq!(app.key_override_entries[0], KeyOverrideEntry::default());
+        let requests = recorder.requests();
+        let request = requests.iter().find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
+            .expect("intentional clear should send the empty record");
+        assert_eq!(&request[4..14], &[0; 10]);
+    }
+
+    #[test]
+    fn ak820_replacement_first_override_draft_stays_local_until_trigger_is_chosen() {
+        let ctx = egui::Context::default();
+        let creation_context = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new(&creation_context);
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        app.hid_device = Some(hid);
+        app.keycode_picker.ak820_profile = true;
+        app.key_override_entries = vec![KeyOverrideEntry::default(); 8];
+        app.key_override_pick_target = Some(KeyOverridePickField::Replacement);
+        app.keycode_picker.result = Some(0x104u16.into());
+
+        app.apply_picker_results(&ctx);
+        // The actual page has eight rows; a partial draft must not make its
+        // per-frame batch flusher send/read the other seven unchanged rows.
+        for _ in 0..3 {
+            app.flush_pending_key_override_writes();
+        }
+
+        assert!(recorder.requests().is_empty());
+        assert_eq!(app.key_override_entries[0].replacement, 0x104);
+        assert!(app.key_override_dirty);
+        app.key_override_pick_target = Some(KeyOverridePickField::Trigger);
+        app.keycode_picker.result = Some(4u16.into());
+        app.apply_picker_results(&ctx);
+        let requests = recorder.requests();
+        let request = requests.iter().find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
+            .expect("complete draft should send one typed-compatible record");
+        assert_eq!(&request[4..10], &[4, 0, 4, 1, 0x3f, 0]);
     }
 
     #[test]

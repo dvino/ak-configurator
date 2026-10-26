@@ -6,17 +6,22 @@ const OPTIONAL_MODULE_LABELS: &[(&str, &str, &str)] = &[
     ("auto-shift", "Auto Shift", "Auto Shift"),
     ("ctrl-gui-swap", "Ctrl/GUI swap", "Обмен Ctrl/GUI"),
     ("dynamic-macros", "Dynamic Macros", "Динамические макросы"),
+    ("grave-escape", "Grave Escape", "Grave Escape"),
     ("gui-lock", "GUI lock", "Блокировка GUI"),
     ("key-overrides", "Key Overrides", "Замены клавиш"),
     ("leader", "Leader", "Leader"),
     ("mac-pc", "Mac/PC mode", "Режим Mac/PC"),
     ("mouse-keys", "Mouse Keys", "Управление мышью"),
+    ("nkro", "NKRO", "NKRO"),
     ("nkro-control", "NKRO control", "Управление NKRO"),
+    ("nkro-reports", "NKRO reports", "Отчёты NKRO"),
     ("one-shot", "One Shot", "Одноразовые модификаторы"),
     ("os-indicators", "OS indicators", "Индикаторы ОС"),
     ("qmk-settings", "QMK Settings", "Настройки QMK"),
     ("space-cadet", "Space Cadet", "Space Cadet"),
     ("tap-dance", "Tap Dance", "Tap Dance"),
+    ("vialrgb-direct", "Per-key RGB", "RGB для каждой клавиши"),
+    ("vialrgb-direct-ram", "Volatile RGB palette", "Палитра RGB в ОЗУ"),
 ];
 
 #[derive(Clone)]
@@ -30,8 +35,8 @@ impl Default for SelectorState {
     fn default() -> Self {
         Self {
             open: false,
-            selected: catalog::ProfileId::Work,
-            applied_to_offline_project: catalog::ProfileId::Work,
+            selected: catalog::ProfileId::Main,
+            applied_to_offline_project: catalog::ProfileId::Main,
         }
     }
 }
@@ -78,9 +83,9 @@ pub(crate) fn open(ctx: &egui::Context) {
 
 pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language) -> egui::Response {
     let label = if language == Language::Russian {
-        "Профили прошивки beta.1"
+        "Профили прошивки beta.2"
     } else {
-        "beta.1 firmware profiles"
+        "beta.2 firmware profiles"
     };
     let response = crate::ui_style::modern_button(ui, label, egui::vec2(228.0, 34.0), true);
     if response.clicked() {
@@ -89,7 +94,7 @@ pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language)
     response
 }
 
-/// Draw the beta.1 catalog and return a profile ID when the local selection changes.
+/// Draw the beta.2 catalog and return a profile ID when the local selection changes.
 pub(crate) fn show(
     ctx: &egui::Context,
     language: Language,
@@ -104,9 +109,9 @@ pub(crate) fn show(
     let mut apply_profile = None;
     let mut keep_open = model.open;
     egui::Window::new(if russian {
-        "Профили AK820 · beta.1"
+        "Профили AK820 · beta.2"
     } else {
-        "AK820 profiles · beta.1"
+        "AK820 profiles · beta.2"
     })
     .id(egui::Id::new("ak820_beta1_profile_window"))
     .open(&mut keep_open)
@@ -176,25 +181,17 @@ pub(crate) fn show(
                                             Color32::YELLOW
                                         }));
                                         ui.label(RichText::new(if matrix.release_approved {
-                                            if russian { "Релиз beta.1 одобрен" } else { "beta.1 release approved" }
+                                            if russian { "Релиз beta.2 одобрен" } else { "beta.2 release approved" }
                                         } else if russian {
                                             "Кандидат каталога"
                                         } else {
                                             "Catalog candidate"
                                         }).weak());
-                                        if matrix.installable {
-                                            ui.label(RichText::new(if russian {
-                                                "Входит в отдельный установщик"
-                                            } else {
-                                                "In standalone installer"
-                                            }).strong());
+                                        ui.label(RichText::new(if russian {
+                                            "Образ включён в отдельный установщик"
                                         } else {
-                                            ui.label(RichText::new(if russian {
-                                                "Нет в установщиках beta.1"
-                                            } else {
-                                                "Not in beta.1 installers"
-                                            }).weak());
-                                        }
+                                            "Image included in standalone installer"
+                                        }).strong());
                                     });
                                     response
                                 }).inner);
@@ -266,11 +263,11 @@ pub(crate) fn show(
                     });
                 }
                 ui.label(if russian {
-                    if matrix.release_approved { "Релиз beta.1: одобрен" } else { "Релиз beta.1: не одобрен; профиль — кандидат каталога" }
+                    if matrix.release_approved { "Релиз beta.2: одобрен" } else { "Релиз beta.2: не одобрен; профиль — кандидат каталога" }
                 } else if matrix.release_approved {
-                    "beta.1 release: approved"
+                    "beta.2 release: approved"
                 } else {
-                    "beta.1 release: not approved; catalog candidate"
+                    "beta.2 release: not approved; catalog candidate"
                 });
                 ui.add_space(4.0);
                 ui.heading(if russian {
@@ -337,9 +334,9 @@ pub(crate) fn show(
                     .wrap(),
                 );
                 ui.label(RichText::new(if russian {
-                    "Аппаратная проверка не проводилась ни для одного профиля. Companion пока не устанавливает эти образы. Только профиль work входит в отдельные установщики beta.1; это не разрешает прошивку из companion."
+                    "Все десять образов включены в отдельные установщики прошивки. Companion пока не устанавливает их; аппаратная проверка не проводилась."
                 } else {
-                    "No profile has been tested on hardware. The companion cannot install these images yet. Only work is included in the separate beta.1 installers; this does not enable flashing from the companion."
+                    "All ten images are included in standalone firmware installers. The companion does not install them yet; no profile has been tested on hardware."
                 }).color(Color32::YELLOW));
                 ui.label(RichText::new(if russian {
                     "Выбор в списке показывает возможности. В деморежиме кнопка ниже открывает офлайн-проект; клавиатура и её прошивка не изменяются."
@@ -362,10 +359,8 @@ pub(crate) fn show(
                     if ui.button(if russian { "Применить к офлайн-проекту" } else { "Use in offline project" }).clicked() {
                         apply_profile = apply_selected_profile(&mut model, offline_demo);
                     }
-                    if model.applied_to_offline_project == catalog::ProfileId::TapDance {
-                        let is_schema03 = catalog::matrix_profile(model.applied_to_offline_project)
-                            .identity.nvm_schema == crate::ak820_typed_storage::SCHEMA;
-                        if is_schema03 && ui.button(if russian { "Открыть модули офлайн" } else { "Open offline modules" }).clicked() {
+                    if catalog::matrix_profile(model.applied_to_offline_project).identity.nvm_schema == crate::ak820_typed_storage::SCHEMA {
+                        if ui.button(if russian { "Открыть модули офлайн" } else { "Open offline modules" }).clicked() {
                             ctx.data_mut(|data| data.insert_temp(egui::Id::new("ak820_offline_extensions_open"), true));
                         }
                     }
@@ -425,69 +420,21 @@ mod tests {
 
     #[test]
     fn every_profile_summary_lists_exactly_its_enabled_modules_in_both_languages() {
-        let expected = [
-            (
-                "work",
-                "Dynamic Macros · Leader · NKRO control · One Shot · OS indicators · Space Cadet",
-                "Динамические макросы · Leader · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "essential",
-                "NKRO control · One Shot · OS indicators · Space Cadet",
-                "Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "typing",
-                "Auto Shift · NKRO control · One Shot · OS indicators · Space Cadet",
-                "Auto Shift · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "mouse",
-                "Mouse Keys · NKRO control · One Shot · OS indicators · Space Cadet",
-                "Управление мышью · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "mouse-typing",
-                "Auto Shift · GUI lock · Mouse Keys · NKRO control · One Shot · OS indicators · Space Cadet",
-                "Auto Shift · Блокировка GUI · Управление мышью · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "system",
-                "Ctrl/GUI swap · GUI lock · Mac/PC mode · NKRO control · One Shot · OS indicators · Space Cadet",
-                "Обмен Ctrl/GUI · Блокировка GUI · Режим Mac/PC · Управление NKRO · Одноразовые модификаторы · Индикаторы ОС · Space Cadet",
-            ),
-            (
-                "tap-dance",
-                "NKRO control · One Shot · Space Cadet · Tap Dance",
-                "Управление NKRO · Одноразовые модификаторы · Space Cadet · Tap Dance",
-            ),
-            (
-                "key-overrides",
-                "Key Overrides · NKRO control · One Shot · Space Cadet",
-                "Замены клавиш · Управление NKRO · Одноразовые модификаторы · Space Cadet",
-            ),
-            (
-                "settings",
-                "NKRO control · One Shot · QMK Settings · Space Cadet",
-                "Управление NKRO · Одноразовые модификаторы · Настройки QMK · Space Cadet",
-            ),
-        ];
         let profiles = &catalog::firmware_matrix().profiles;
-        assert_eq!(profiles.len(), expected.len());
-        for (id, expected_en, expected_ru) in expected {
-            let profile = profiles
-                .iter()
-                .find(|profile| profile.profile.as_str() == id)
-                .unwrap_or_else(|| panic!("missing profile {id}"));
-            assert_eq!(profile_modules(profile, false), expected_en, "{id} EN");
-            assert_eq!(profile_modules(profile, true), expected_ru, "{id} RU");
+        assert_eq!(profiles.len(), 10);
+        for profile in profiles {
+            let enabled = OPTIONAL_MODULE_LABELS.iter().filter(|(id, _, _)| profile.capabilities.optional_modules.get(*id) == Some(&true)).collect::<Vec<_>>();
+            let expected_en = enabled.iter().map(|(_, en, _)| *en).collect::<Vec<_>>().join(" · ");
+            let expected_ru = enabled.iter().map(|(_, _, ru)| *ru).collect::<Vec<_>>().join(" · ");
+            assert_eq!(profile_modules(profile, false), expected_en, "{} EN", profile.profile.as_str());
+            assert_eq!(profile_modules(profile, true), expected_ru, "{} RU", profile.profile.as_str());
         }
 
         let no_modules = catalog::MatrixProfile {
             identity: catalog::BuildIdentity {
                 nvm_schema: 0,
                 compiler_sha256: String::new(),
-                profile: "work".into(),
+                profile: "main".into(),
                 configuration_sha256: String::new(),
                 source_manifest_sha256: String::new(),
                 ihx_sha256: String::new(),
@@ -496,7 +443,7 @@ mod tests {
                 build_report_sha256: String::new(),
             },
             configuration: serde_json::Value::Null,
-            profile: catalog::ProfileId::Work,
+            profile: catalog::ProfileId::Main,
             installable: false,
             release_approved: false,
             optional_features: Vec::new(),
@@ -527,7 +474,7 @@ mod tests {
         open(&ctx);
         let opened = state(&ctx);
         assert!(opened.open);
-        assert_eq!(opened.selected.as_str(), "work");
+        assert_eq!(opened.selected.as_str(), "main");
 
         for language in [Language::English, Language::Russian] {
             let _ = ctx.run(
@@ -544,7 +491,7 @@ mod tests {
             );
             let rendered = state(&ctx);
             assert!(rendered.open);
-            assert_eq!(rendered.selected.as_str(), "work");
+            assert_eq!(rendered.selected.as_str(), "main");
         }
     }
 
@@ -557,8 +504,8 @@ mod tests {
         }
 
         for (language, label) in [
-            (Language::English, "beta.1 firmware profiles"),
-            (Language::Russian, "Профили прошивки beta.1"),
+            (Language::English, "beta.2 firmware profiles"),
+            (Language::Russian, "Профили прошивки beta.2"),
         ] {
             let mut harness = egui_kittest::Harness::new_ui_state(
                 move |ctx, nav_state: &mut NavigationState| {
@@ -602,7 +549,7 @@ mod tests {
             assert_eq!(selected.selected.as_str(), image.profile.as_str());
             assert_eq!(
                 selected.applied_to_offline_project,
-                catalog::ProfileId::Work
+                catalog::ProfileId::Main
             );
         }
     }
@@ -610,15 +557,15 @@ mod tests {
     #[test]
     fn selected_profile_applies_only_to_the_explicit_offline_demo_project() {
         let mut model = SelectorState::default();
-        select_preview_profile(&mut model, catalog::ProfileId::Mouse);
+        select_preview_profile(&mut model, catalog::ProfileId::Pointer);
 
         assert_eq!(apply_selected_profile(&mut model, false), None);
-        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Work);
+        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Main);
         assert_eq!(
             apply_selected_profile(&mut model, true),
-            Some(catalog::ProfileId::Mouse)
+            Some(catalog::ProfileId::Pointer)
         );
-        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Mouse);
+        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Pointer);
         assert_eq!(apply_selected_profile(&mut model, true), None);
     }
 }

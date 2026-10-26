@@ -1,4 +1,4 @@
-//! Exact profile identities from the verified AK820 beta.1 capability catalog.
+//! Exact profile identities from the verified AK820 beta.2 capability catalog.
 //!
 //! The catalog describes development images. It does not grant flashing support.
 
@@ -6,42 +6,44 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
 
-pub(crate) const BETA_RELEASE: &str = "v0.6.0-beta.1";
+pub(crate) const BETA_RELEASE: &str = "v0.6.0-beta.2";
 pub(crate) const SOURCE_CATALOG_SHA256: &str =
-    "b5c1f29e7e3bf074e098cc489b0e8ea84e9085d530bf41313e4dde21353a5302";
+    "9b1f5270a6a0bffdfc415e28ec8bac633b5c441f187c0e3012947d892e2d5353";
 pub(crate) const SOURCE_ARCHIVE_SHA256: &str =
-    "ccf180581fd092a8180940b3af4445c548c6f4f1a195277f32e20c3fcefdea06";
+    "84b210c85b5c77e4c027aa9bfe6ed8121cacccb8d0100fda01fd5767f4cec57e";
 pub(crate) const SOURCE_MATRIX_SHA256: &str =
-    "6d46bf505a4d076e5eba4abaa94799ea724234b9f63ff84e1333a53f409eeabd";
+    "e646cb3cb58c50c55a184538b77674db92e0d54750b1a9734d1b092a6c20a08e";
 pub(crate) const SOURCE_MODULE_DESCRIPTIONS_SHA256: &str =
-    "ea8186c100e771aadbe829118cfd3fa95794bcc7cbad14eb5dac48f1f5dbc460";
+    "4da879c27fb543dc3879de37df2f3bd52364a2b80cd0025e93c2f0241ed98782";
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ProfileId {
-    Work,
-    Essential,
+    Main,
+    Game,
+    Mmo,
     Typing,
-    Mouse,
-    MouseTyping,
-    System,
-    TapDance,
-    KeyOverrides,
-    Settings,
+    Code,
+    Pointer,
+    Onehand,
+    Creative,
+    Shortcuts,
+    Multios,
 }
 
 impl ProfileId {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::Work => "work",
-            Self::Essential => "essential",
+            Self::Main => "main",
+            Self::Game => "game",
+            Self::Mmo => "mmo",
             Self::Typing => "typing",
-            Self::Mouse => "mouse",
-            Self::MouseTyping => "mouse-typing",
-            Self::System => "system",
-            Self::TapDance => "tap-dance",
-            Self::KeyOverrides => "key-overrides",
-            Self::Settings => "settings",
+            Self::Code => "code",
+            Self::Pointer => "pointer",
+            Self::Onehand => "onehand",
+            Self::Creative => "creative",
+            Self::Shortcuts => "shortcuts",
+            Self::Multios => "multios",
         }
     }
 }
@@ -99,6 +101,8 @@ pub(crate) struct CodeIdentity {
 #[derive(Debug, Deserialize)]
 pub(crate) struct FirmwareMatrix {
     pub(crate) settings_transitions: Vec<SettingsTransition>,
+    pub(crate) historical_sources: Vec<HistoricalSource>,
+    pub(crate) feature_pairs: Vec<FeaturePair>,
     pub(crate) format: String,
     pub(crate) default_profile: String,
     pub(crate) base_features: Vec<String>,
@@ -230,6 +234,7 @@ pub(crate) fn supports_keycode(id: ProfileId, code: u16, source: KeycodeSource) 
 
 fn keycode_supported(code: u16, enabled: impl Fn(&str) -> bool) -> bool {
     let optional = match code {
+        0x7c16 => Some("grave-escape"),
         0x7011..=0x7013 => Some("nkro-control"),
         0x7c1a | 0x7c1b | 0x7c1e => Some("space-cadet"),
         0x7009..=0x700b => Some("gui-lock"),
@@ -256,9 +261,7 @@ fn keycode_supported(code: u16, enabled: impl Fn(&str) -> bool) -> bool {
         0x5000..=0x51ff => ((code - 0x5000) >> 5) < 6,
         0x5200..=0x527f | 0x52c0..=0x52df => (code & 31) < 6,
         0x52a0..=0x52bf | 0x7700..=0x770f | 0x7820..=0x782a => true,
-        0x7c00 | 0x7c01 | 0x7c02 | 0x7c03 | 0x7c16 | 0x7c73 | 0x7c77 | 0x7c78 | 0x7c79 | 0x7c7a => {
-            true
-        }
+        0x7c00 | 0x7c01 | 0x7c02 | 0x7c03 | 0x7c73 | 0x7c77 | 0x7c78 | 0x7c79 | 0x7c7a => true,
         _ => false,
     }
 }
@@ -270,10 +273,17 @@ pub(crate) fn settings_transition_allowed(source: &str, target: &str) -> bool {
         matrix.profiles.iter().any(|row| {
             row.settings_identity
                 .as_ref()
-                .is_some_and(|identity| identity.ihx_sha256 == hash)
-        })
+                .is_some_and(|id| id.ihx_sha256 == hash)
+        }) || historical_settings_identities()
+            .iter()
+            .any(|id| id.ihx_sha256 == hash)
     };
+    let current_target = matrix
+        .profiles
+        .iter()
+        .any(|row| row.identity.ihx_sha256 == target);
     known(source)
+        && current_target
         && known(target)
         && (source == target
             || matrix
@@ -317,7 +327,11 @@ pub(crate) struct LocalizedText {
 
 impl LocalizedText {
     pub(crate) fn for_language(&self, russian: bool) -> &str {
-        if russian { &self.ru } else { &self.en }
+        if russian {
+            &self.ru
+        } else {
+            &self.en
+        }
     }
 }
 
@@ -327,12 +341,12 @@ static MODULE_DESCRIPTIONS: OnceLock<ModuleDescriptionCatalog> = OnceLock::new()
 
 pub(crate) fn catalog() -> &'static CapabilityCatalog {
     CATALOG.get_or_init(|| {
-        let source = include_str!("../assets/ak820/beta1-capability-catalog.json");
-        assert_sha256(source, SOURCE_CATALOG_SHA256, "beta.1 capability catalog");
+        let source = include_str!("../assets/ak820/beta2-capability-catalog.json");
+        assert_sha256(source, SOURCE_CATALOG_SHA256, "beta.2 capability catalog");
         let catalog: CapabilityCatalog = serde_json::from_str(source)
-            .expect("bundled beta.1 profile catalog must be valid JSON");
+            .expect("bundled beta.2 profile catalog must be valid JSON");
         assert_eq!(catalog.format, "ak820-development-capability-catalog-1");
-        assert_eq!(catalog.images.len(), 9, "beta.1 has nine curated profiles");
+        assert_eq!(catalog.images.len(), 10, "beta.2 has ten curated profiles");
         assert!(!catalog.hardware_validated);
         assert!(!catalog.flashing_authorized);
         assert!(!catalog.settings_writes_authorized);
@@ -350,7 +364,7 @@ pub(crate) fn profile(id: ProfileId) -> &'static ProfileImage {
         .images
         .iter()
         .find(|image| image.profile == id)
-        .expect("every curated beta.1 profile must occur in the catalog")
+        .expect("every curated beta.2 profile must occur in the catalog")
 }
 
 pub(crate) fn profiles() -> &'static [ProfileImage] {
@@ -359,14 +373,14 @@ pub(crate) fn profiles() -> &'static [ProfileImage] {
 
 pub(crate) fn firmware_matrix() -> &'static FirmwareMatrix {
     FIRMWARE_MATRIX.get_or_init(|| {
-        let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
-        assert_sha256(source, SOURCE_MATRIX_SHA256, "beta.1 firmware matrix");
+        let source = include_str!("../assets/ak820/beta2-firmware-matrix.json");
+        assert_sha256(source, SOURCE_MATRIX_SHA256, "beta.2 firmware matrix");
         let matrix = parse_trusted_matrix(source)
-            .expect("bundled beta.1 firmware matrix must be valid and pinned");
+            .expect("bundled beta.2 firmware matrix must be valid and pinned");
         assert_eq!(matrix.format, "ak820-firmware-matrix-1");
-        assert_eq!(matrix.default_profile, "work");
-        assert_eq!(matrix.profiles.len(), 9, "beta.1 matrix has nine profiles");
-        validate_contracts(&matrix).expect("bundled beta.1 contracts must agree");
+        assert_eq!(matrix.default_profile, "main");
+        assert_eq!(matrix.profiles.len(), 10, "beta.2 matrix has ten profiles");
+        validate_contracts(&matrix).expect("bundled beta.2 contracts must agree");
         matrix
     })
 }
@@ -375,7 +389,7 @@ pub(crate) fn firmware_matrix() -> &'static FirmwareMatrix {
 /// including duplicate/unknown fields, before deserialization can discard data.
 pub(crate) fn parse_trusted_matrix(source: &str) -> Result<FirmwareMatrix, String> {
     if format!("{:x}", Sha256::digest(source.as_bytes())) != SOURCE_MATRIX_SHA256 {
-        return Err("matrix differs from the pinned beta.1 source".into());
+        return Err("matrix differs from the pinned beta.2 source".into());
     }
     let matrix = serde_json::from_str(source).map_err(|error| format!("{error}"))?;
     validate_contracts(&matrix)?;
@@ -384,7 +398,7 @@ pub(crate) fn parse_trusted_matrix(source: &str) -> Result<FirmwareMatrix, Strin
 
 fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
     use std::collections::BTreeSet;
-    let fail = || "beta.1 contract mismatch".to_string();
+    let fail = || "beta.2 contract mismatch".to_string();
     let ids: BTreeSet<_> = matrix
         .profiles
         .iter()
@@ -401,11 +415,8 @@ fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
     let mut packed = BTreeSet::new();
     for row in &matrix.profiles {
         let image = profile(row.profile);
-        let schema03 = matches!(
-            row.profile,
-            ProfileId::TapDance | ProfileId::KeyOverrides | ProfileId::Settings
-        );
-        let schema = if schema03 { 0x082003 } else { 0x082002 };
+        let schema03 = true;
+        let schema = 0x082003;
         let flags = &row.capabilities.optional_modules;
         let flag = |id: &str| flags.get(id) == Some(&true);
         let features: BTreeSet<_> = row.optional_features.iter().map(String::as_str).collect();
@@ -414,7 +425,11 @@ fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
             .filter_map(|(id, &on)| on.then_some(id.as_str()))
             .collect();
         let all_modules: BTreeSet<_> = matrix.modules.iter().map(|m| m.feature.as_str()).collect();
-        if features != enabled
+        if !row.installable
+            || !row.release_approved
+            || !image.release_approved
+            || row.settings_identity.is_none()
+            || features != enabled
             || features.len() != row.optional_features.len()
             || flags.keys().map(String::as_str).collect::<BTreeSet<_>>() != all_modules
             || row.identity.ihx_sha256 != image.build_identity.ihx_sha256
@@ -444,7 +459,11 @@ fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
             || counts.key_overrides != if flag("key-overrides") { 8 } else { 0 }
             || row.capabilities.runtime_qmk_settings_ids
                 != if flag("qmk-settings") {
-                    vec![1, 2, 7, 18, 19]
+                    if row.profile == ProfileId::Typing {
+                        vec![1, 2, 4, 7, 18, 19]
+                    } else {
+                        vec![1, 2, 7, 18, 19]
+                    }
                 } else {
                     vec![]
                 }
@@ -515,18 +534,79 @@ fn validate_contracts(matrix: &FirmwareMatrix) -> Result<(), String> {
         }
     }
     let mut pairs = BTreeSet::new();
-    let known = |hash: &str| {
-        matrix.profiles.iter().any(|row| {
-            row.settings_identity
-                .as_ref()
-                .is_some_and(|id| id.ihx_sha256 == hash)
+    let historical = historical_settings_identities();
+    if matrix.historical_sources.len() != historical.len()
+        || matrix
+            .historical_sources
+            .iter()
+            .map(|id| &id.ihx_sha256)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != historical.len()
+        || matrix.historical_sources.iter().any(|source| {
+            !historical.iter().any(|id| {
+                id.ihx_sha256 == source.ihx_sha256 && id.code_sha256 == source.code_sha256
+            })
         })
+    {
+        return Err(fail());
+    }
+    let known = |hash: &str| {
+        matrix
+            .profiles
+            .iter()
+            .any(|row| row.identity.ihx_sha256 == hash)
+            || historical.iter().any(|id| id.ihx_sha256 == hash)
     };
     for pair in &matrix.settings_transitions {
         if !known(&pair.source)
-            || !known(&pair.target)
+            || !matrix
+                .profiles
+                .iter()
+                .any(|row| row.identity.ihx_sha256 == pair.target)
             || pair.source == pair.target
             || !pairs.insert((&pair.source, &pair.target))
+        {
+            return Err(fail());
+        }
+    }
+    if pairs.len() != 120 {
+        return Err(fail());
+    }
+    if matrix.feature_pairs.len() != 136 {
+        return Err(fail());
+    }
+    let mut feature_pairs = BTreeSet::new();
+    for pair in &matrix.feature_pairs {
+        if pair.features.len() != 2
+            || pair.features[0] == pair.features[1]
+            || !feature_pairs.insert(
+                pair.features
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<BTreeSet<_>>(),
+            )
+        {
+            return Err(fail());
+        }
+        let expected: BTreeSet<_> = matrix
+            .profiles
+            .iter()
+            .filter(|row| {
+                pair.features
+                    .iter()
+                    .all(|feature| row.optional_features.contains(feature))
+            })
+            .map(|row| row.profile.as_str())
+            .collect();
+        if expected != pair.profiles.iter().map(String::as_str).collect()
+            || expected.len() != pair.profiles.len()
+            || pair.status
+                != if expected.is_empty() {
+                    "no-catalog-profile"
+                } else {
+                    "catalog-supported"
+                }
         {
             return Err(fail());
         }
@@ -540,37 +620,39 @@ fn assert_sha256(source: &str, expected: &str, name: &str) {
 }
 
 pub(crate) fn matrix_profile(id: ProfileId) -> &'static MatrixProfile {
-    let matrix_profile = firmware_matrix()
+    firmware_matrix()
         .profiles
         .iter()
-        .find(|profile| profile.profile == id)
-        .expect("every curated profile must occur in the firmware matrix");
-    let image = profile(id);
-    assert_eq!(matrix_profile.release_approved, image.release_approved);
-    assert_eq!(matrix_profile.installable, id == ProfileId::Work);
-    if let Some(settings_identity) = &matrix_profile.settings_identity {
-        assert_eq!(id, ProfileId::Work);
-        assert_eq!(
-            settings_identity.ihx_sha256,
-            image.build_identity.ihx_sha256
-        );
-        assert_eq!(settings_identity.nvm_schema, image.settings_schema);
-        assert_eq!(settings_identity.code_sha256.len(), 64);
+        .find(|row| row.profile == id)
+        .expect("every active profile is in the firmware matrix")
+}
+
+pub(crate) fn has_feature(id: ProfileId, feature: &str) -> bool {
+    matrix_profile(id)
+        .capabilities
+        .optional_modules
+        .get(feature)
+        == Some(&true)
+}
+
+/// Saved enum to VialRGB wire effect, exact to each profile's compiled enum.
+pub(crate) fn rgb_modes(id: ProfileId) -> &'static [(u8, u16)] {
+    if has_feature(id, "vialrgb-direct") {
+        &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)]
     } else {
-        assert_ne!(id, ProfileId::Work);
+        &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 31)]
     }
-    matrix_profile
 }
 
 pub(crate) fn module_descriptions() -> &'static ModuleDescriptionCatalog {
     MODULE_DESCRIPTIONS.get_or_init(|| {
-        let source = include_str!("../assets/ak820/beta1-module-descriptions.json");
+        let source = include_str!("../assets/ak820/beta2-module-descriptions.json");
         let source_sha256 = format!("{:x}", Sha256::digest(source.as_bytes()));
         assert_eq!(source_sha256, SOURCE_MODULE_DESCRIPTIONS_SHA256);
         let descriptions: ModuleDescriptionCatalog = serde_json::from_str(source)
-            .expect("bundled beta.1 module descriptions must be valid JSON");
+            .expect("bundled beta.2 module descriptions must be valid JSON");
         assert_eq!(descriptions.schema, 1);
-        assert_eq!(descriptions.profiles.len(), 9);
+        assert_eq!(descriptions.profiles.len(), 10);
         descriptions
     })
 }
@@ -592,370 +674,143 @@ pub(crate) fn profile_description(id: ProfileId) -> &'static ProfileDescription 
 
 pub(crate) fn display_name(id: ProfileId) -> &'static str {
     match id {
-        ProfileId::Work => "Work",
-        ProfileId::Essential => "Essential",
+        ProfileId::Main => "Main",
+        ProfileId::Game => "Game",
+        ProfileId::Mmo => "MMO",
         ProfileId::Typing => "Typing",
-        ProfileId::Mouse => "Mouse",
-        ProfileId::MouseTyping => "Mouse + Typing",
-        ProfileId::System => "System",
-        ProfileId::TapDance => "Tap Dance",
-        ProfileId::KeyOverrides => "Key Overrides",
-        ProfileId::Settings => "Settings",
+        ProfileId::Code => "Code",
+        ProfileId::Pointer => "Pointer",
+        ProfileId::Onehand => "Onehand",
+        ProfileId::Creative => "Creative",
+        ProfileId::Shortcuts => "Shortcuts",
+        ProfileId::Multios => "MultiOS",
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HistoricalSource {
+    pub(crate) ihx_sha256: String,
+    pub(crate) code_sha256: String,
+}
+#[derive(Debug, Deserialize)]
+pub(crate) struct FeaturePair {
+    pub(crate) features: Vec<String>,
+    pub(crate) profiles: Vec<String>,
+    pub(crate) status: String,
+}
+/// Historical identities are source-only; they do not add active profile aliases.
+#[derive(Debug)]
+pub(crate) struct HistoricalSettingsIdentity {
+    pub(crate) ihx_sha256: &'static str,
+    pub(crate) code_sha256: &'static str,
+    pub(crate) nvm_schema: u32,
+    pub(crate) combos: bool,
+}
+pub(crate) fn historical_settings_identities() -> &'static [HistoricalSettingsIdentity] {
+    &[
+        HistoricalSettingsIdentity {
+            ihx_sha256: "f1c4347e60ca5f7ea6c557debe60272259f4ddf9acfac9897fa992210bf7ef2e",
+            code_sha256: "6ff7b1653925da7dc12bdb6f7ef5fc1dc4319c5b931def50c68b9cf45c4054d7",
+            nvm_schema: 0x082002,
+            combos: false,
+        },
+        HistoricalSettingsIdentity {
+            ihx_sha256: "652ee9b583a285cea779d3937b8bcd84035e391d823d71d8ea1d34db2fdef880",
+            code_sha256: "a7ad972f47acff20f3492ed846f5c6ca0825d43de263f26cc9328069a27cdd10",
+            nvm_schema: 0x082002,
+            combos: true,
+        },
+        HistoricalSettingsIdentity {
+            ihx_sha256: "d505d4f420f745dbd5e98a0e3638c8f3ae6d7719c8729dad274595b71b641f18",
+            code_sha256: "01f0f7a979d8cfa8217b3bba333758ae3509cf7f3f8e35fbffb1ed034b808e5d",
+            nvm_schema: 0x082002,
+            combos: true,
+        },
+    ]
+}
+pub(crate) fn historical_settings_identity(
+    ihx: &str,
+    code: &str,
+    schema: u32,
+) -> Option<&'static HistoricalSettingsIdentity> {
+    historical_settings_identities()
+        .iter()
+        .find(|id| id.ihx_sha256 == ihx && id.code_sha256 == code && id.nvm_schema == schema)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeSet;
-
-    const PROFILE_IDS: [&str; 9] = [
-        "work",
-        "essential",
-        "typing",
-        "mouse",
-        "mouse-typing",
-        "system",
-        "tap-dance",
-        "key-overrides",
-        "settings",
+    const IDS: [ProfileId; 10] = [
+        ProfileId::Main,
+        ProfileId::Game,
+        ProfileId::Mmo,
+        ProfileId::Typing,
+        ProfileId::Code,
+        ProfileId::Pointer,
+        ProfileId::Onehand,
+        ProfileId::Creative,
+        ProfileId::Shortcuts,
+        ProfileId::Multios,
     ];
-    const BASE_FEATURE_IDS: [&str; 14] = [
-        "six-layers",
-        "sixteen-vial-macros",
-        "eight-two-key-combos",
-        "compact-tap-hold",
-        "encoder-map",
-        "media-keys",
-        "nkro-reports",
-        "caps-word",
-        "repeat",
-        "alternate-repeat",
-        "grave-escape",
-        "tri-layer",
-        "rgb-effects",
-        "vialrgb-direct-ram",
-    ];
-    const OPTIONAL_MODULE_IDS: [&str; 14] = [
-        "nkro-control",
-        "one-shot",
-        "space-cadet",
-        "leader",
-        "mouse-keys",
-        "auto-shift",
-        "dynamic-macros",
-        "gui-lock",
-        "ctrl-gui-swap",
-        "os-indicators",
-        "mac-pc",
-        "tap-dance",
-        "key-overrides",
-        "qmk-settings",
-    ];
-
-    fn exact_unique_ids<'a>(
-        ids: impl IntoIterator<Item = &'a str>,
-        expected: &[&str],
-        label: &str,
-    ) {
-        let ids: Vec<_> = ids.into_iter().collect();
-        let unique: BTreeSet<_> = ids.iter().copied().collect();
-        assert_eq!(ids.len(), unique.len(), "duplicate {label} IDs");
-        assert_eq!(
-            unique,
-            expected.iter().copied().collect(),
-            "unexpected {label} IDs"
-        );
-    }
-
-    fn assert_localized_help(text: &LocalizedText, label: &str) {
-        assert!(!text.en.trim().is_empty(), "missing English {label}");
-        assert!(!text.ru.trim().is_empty(), "missing Russian {label}");
-    }
-
     #[test]
-    fn all_beta1_profile_sources_have_the_same_exact_unique_id_set() {
-        assert_eq!(SOURCE_ARCHIVE_SHA256.len(), 64);
-        exact_unique_ids(
-            profiles().iter().map(|image| image.profile.as_str()),
-            &PROFILE_IDS,
-            "catalog profile",
-        );
-        exact_unique_ids(
-            firmware_matrix()
-                .profiles
-                .iter()
-                .map(|profile| profile.profile.as_str()),
-            &PROFILE_IDS,
-            "matrix profile",
-        );
-        exact_unique_ids(
-            module_descriptions()
-                .profiles
-                .iter()
-                .map(|profile| profile.id.as_str()),
-            &PROFILE_IDS,
-            "description profile",
-        );
-    }
-
-    #[test]
-    fn profile_default_approval_and_installability_are_exactly_work_only() {
-        assert_eq!(firmware_matrix().default_profile, "work");
-        for id in PROFILE_IDS {
-            let profile_id: ProfileId = serde_json::from_str(&format!("\"{id}\""))
-                .unwrap_or_else(|_| panic!("profile ID {id} must deserialize"));
-            let image = profile(profile_id);
-            let matrix = matrix_profile(profile_id);
-            let description = profile_description(profile_id);
-            let is_work = id == "work";
-            assert_eq!(description.default, is_work, "{id} default flag");
-            assert_eq!(image.release_approved, is_work, "{id} catalog approval");
-            assert_eq!(matrix.release_approved, is_work, "{id} matrix approval");
-            assert_eq!(matrix.installable, is_work, "{id} installability");
+    fn all_ten_exact_identities_and_descriptions_agree() {
+        assert_eq!(profiles().len(), 10);
+        assert_eq!(firmware_matrix().default_profile, "main");
+        for id in IDS {
+            let image = profile(id);
+            let row = matrix_profile(id);
+            assert_eq!(image.build_identity.ihx_sha256, row.identity.ihx_sha256);
+            assert_eq!(image.settings_schema, 0x082003);
+            assert!(row.installable && row.release_approved && image.release_approved);
+            assert!(
+                !image.flashing_authorized
+                    && !image.settings_writes_authorized
+                    && !image.hardware_validated
+            );
+            let identity = row.settings_identity.as_ref().unwrap();
+            assert_eq!(identity.ihx_sha256, row.identity.ihx_sha256);
+            assert_ne!(identity.code_sha256, image.code_identity.sha256);
+            let help = profile_description(id);
+            assert_eq!(help.default, id == ProfileId::Main);
+            assert!(!help.summary.en.is_empty() && !help.summary.ru.is_empty());
+            assert_eq!(
+                row.optional_features
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>(),
+                help.optional_features.iter().collect()
+            );
+            assert!(settings_transition_allowed(
+                &identity.ihx_sha256,
+                &identity.ihx_sha256
+            ));
         }
-    }
-
-    #[test]
-    fn optional_features_match_module_flags_and_profile_help_exactly() {
-        let matrix = firmware_matrix();
-        let descriptions = module_descriptions();
-        exact_unique_ids(
-            matrix.base_features.iter().map(String::as_str),
-            &BASE_FEATURE_IDS,
-            "base feature",
-        );
-        let module_ids: BTreeSet<_> = matrix
-            .modules
-            .iter()
-            .map(|module| module.feature.as_str())
-            .collect();
-        assert_eq!(
-            module_ids.len(),
-            matrix.modules.len(),
-            "duplicate optional module IDs"
-        );
-        exact_unique_ids(
-            matrix.modules.iter().map(|module| module.feature.as_str()),
-            &OPTIONAL_MODULE_IDS,
-            "optional module",
-        );
-
-        for profile in &matrix.profiles {
-            let id = profile.profile.as_str();
-            let description = descriptions
-                .profiles
-                .iter()
-                .find(|candidate| candidate.id == id)
-                .unwrap_or_else(|| panic!("missing profile description for {id}"));
-            let feature_set: BTreeSet<_> = profile
-                .optional_features
-                .iter()
-                .map(String::as_str)
-                .collect();
-            let description_set: BTreeSet<_> = description
-                .optional_features
-                .iter()
-                .map(String::as_str)
-                .collect();
-            assert_eq!(
-                feature_set.len(),
-                profile.optional_features.len(),
-                "duplicate matrix feature for {id}"
-            );
-            assert_eq!(
-                description_set.len(),
-                description.optional_features.len(),
-                "duplicate help feature for {id}"
-            );
-            assert_eq!(
-                feature_set, description_set,
-                "matrix/help features differ for {id}"
-            );
-
-            let flags = &profile.capabilities.optional_modules;
-            exact_unique_ids(
-                flags.keys().map(String::as_str),
-                &module_ids.iter().copied().collect::<Vec<_>>(),
-                "profile module flag",
-            );
-            let enabled: BTreeSet<_> = flags
-                .iter()
-                .filter_map(|(module, enabled)| enabled.then_some(module.as_str()))
-                .collect();
-            assert_eq!(
-                enabled, feature_set,
-                "enabled module flags differ from optional_features for {id}"
-            );
-            for module in &module_ids {
-                assert_eq!(
-                    flags.get(*module).copied(),
-                    Some(feature_set.contains(module)),
-                    "module presence flag {module} for {id}"
-                );
-            }
-            for module in &matrix.modules {
-                let declared_profiles: BTreeSet<_> =
-                    module.profiles.iter().map(String::as_str).collect();
-                assert_eq!(
-                    declared_profiles.len(),
-                    module.profiles.len(),
-                    "duplicate profile in {} module membership",
-                    module.feature
-                );
-                assert_eq!(
-                    declared_profiles.contains(id),
-                    feature_set.contains(module.feature.as_str()),
-                    "{} module membership disagrees for {id}",
-                    module.feature
-                );
-                assert!(
-                    !module.make_switch.trim().is_empty(),
-                    "{} module has no build switch",
-                    module.feature
-                );
-            }
-        }
-        for module in &matrix.modules {
-            let declared: BTreeSet<_> = module.profiles.iter().map(String::as_str).collect();
-            let expected: BTreeSet<_> = matrix
-                .profiles
-                .iter()
-                .filter(|profile| {
-                    profile
-                        .capabilities
-                        .optional_modules
-                        .get(&module.feature)
-                        .copied()
-                        .unwrap_or_else(|| panic!("missing {} module flag", module.feature))
-                })
-                .map(|profile| profile.profile.as_str())
-                .collect();
-            assert_eq!(
-                declared, expected,
-                "{} module profile membership is not exact",
-                module.feature
-            );
-        }
-    }
-
-    #[test]
-    fn every_optional_module_and_base_feature_has_bilingual_help_and_guides() {
-        let matrix = firmware_matrix();
-        let catalog = module_descriptions();
-        exact_unique_ids(
-            catalog.features.iter().map(|feature| feature.id.as_str()),
-            &catalog
-                .features
-                .iter()
-                .map(|feature| feature.id.as_str())
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>(),
-            "feature description",
-        );
-        let described: BTreeSet<_> = catalog
-            .features
-            .iter()
-            .map(|feature| feature.id.as_str())
-            .collect();
-        let required: BTreeSet<_> = matrix
-            .base_features
-            .iter()
-            .map(String::as_str)
-            .chain(matrix.modules.iter().map(|module| module.feature.as_str()))
-            .collect();
-        assert_eq!(
-            required, described,
-            "feature help must exactly cover base features and optional modules"
-        );
-        for feature in &catalog.features {
-            assert_eq!(
-                feature.kind,
-                if BASE_FEATURE_IDS.contains(&feature.id.as_str()) {
-                    "base"
-                } else {
-                    "optional"
-                },
-                "incorrect help classification for {}",
-                feature.id
-            );
-            for (kind, text) in [
-                ("title", &feature.title),
-                ("summary", &feature.summary),
-                ("guide", &feature.guide),
-                ("limits", &feature.limits),
-            ] {
-                assert_localized_help(text, &format!("{} {kind}", feature.id));
-            }
-        }
-    }
-
-    #[test]
-    fn catalog_image_features_must_resolve_to_described_features() {
-        let matrix = firmware_matrix();
-        let described: BTreeSet<_> = module_descriptions()
-            .features
-            .iter()
-            .map(|feature| feature.id.as_str())
-            .collect();
-        for image in profiles() {
-            let features: BTreeSet<_> = image.features.iter().map(String::as_str).collect();
-            assert_eq!(
-                features.len(),
-                image.features.len(),
-                "duplicate feature in {} image",
-                image.profile.as_str()
-            );
-            let matrix_profile = matrix_profile(image.profile);
-            let expected: BTreeSet<_> = matrix
-                .base_features
-                .iter()
-                .map(String::as_str)
-                .chain(matrix_profile.optional_features.iter().map(String::as_str))
-                .collect();
-            assert_eq!(
-                features,
-                expected,
-                "{} image feature list differs from base plus optional features",
-                image.profile.as_str()
-            );
-            for feature in features {
-                assert!(
-                    described.contains(feature),
-                    "{} image references undocumented feature {feature}",
-                    image.profile.as_str()
-                );
-            }
-        }
-    }
-    #[test]
-    fn pinned_matrix_rejects_duplicate_unknown_and_changed_fields() {
-        let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
-        assert!(parse_trusted_matrix(source).is_ok());
-        for changed in [
-            source.replacen("{", "{\"unknown\":true,", 1),
-            source.replacen("{", "{\"format\":\"ak820-firmware-matrix-1\",", 1),
-            source.replacen("532482", "532483", 1),
+        for old in [
+            "work",
+            "essential",
+            "mouse",
+            "mouse-typing",
+            "system",
+            "tap-dance",
+            "key-overrides",
+            "settings",
         ] {
-            assert!(parse_trusted_matrix(&changed).is_err());
+            assert!(serde_json::from_str::<ProfileId>(&format!("\"{old}\"")).is_err());
         }
     }
-
     #[test]
-    fn counts_qsids_and_packed_identity_remain_separate() {
-        for row in &firmware_matrix().profiles {
+    fn counts_settings_direct_and_pairs_follow_exact_modules() {
+        for id in IDS {
+            let row = matrix_profile(id);
+            assert_eq!(row.capabilities.dynamic_entries.combos, 8);
             assert_eq!(
                 row.capabilities.dynamic_entries.tap_dance,
-                if row.profile == ProfileId::TapDance {
-                    8
-                } else {
-                    0
-                }
+                if has_feature(id, "tap-dance") { 8 } else { 0 }
             );
             assert_eq!(
                 row.capabilities.dynamic_entries.key_overrides,
-                if row.profile == ProfileId::KeyOverrides {
+                if has_feature(id, "key-overrides") {
                     8
                 } else {
                     0
@@ -963,57 +818,97 @@ mod tests {
             );
             assert_eq!(
                 row.capabilities.runtime_qmk_settings_ids,
-                if row.profile == ProfileId::Settings {
-                    vec![1, 2, 7, 18, 19]
+                if id == ProfileId::Typing {
+                    vec![1, 2, 4, 7, 18, 19]
                 } else {
-                    vec![]
+                    vec![1, 2, 7, 18, 19]
                 }
             );
             assert_eq!(
-                row.settings_identity.is_some(),
-                row.profile == ProfileId::Work
+                has_feature(id, "vialrgb-direct"),
+                matches!(
+                    id,
+                    ProfileId::Main | ProfileId::Game | ProfileId::Mmo | ProfileId::Creative
+                )
             );
-            let ihx = &row.identity.ihx_sha256;
             assert_eq!(
-                settings_transition_allowed(ihx, ihx),
-                row.profile == ProfileId::Work
+                rgb_modes(id).iter().any(|(_, wire)| *wire == 1),
+                has_feature(id, "vialrgb-direct")
             );
-            assert!(!settings_transition_allowed(ihx, "unknown"));
         }
+        assert!(
+            has_feature(ProfileId::Shortcuts, "tap-dance")
+                && has_feature(ProfileId::Shortcuts, "key-overrides")
+        );
+        assert_eq!(firmware_matrix().feature_pairs.len(), 136);
     }
-
     #[test]
-    fn source_admission_matches_compact_processor_boundaries() {
+    fn historical_registry_and_explicit_transition_direction_are_exact() {
+        assert_eq!(historical_settings_identities().len(), 3);
+        for source in historical_settings_identities() {
+            assert!(historical_settings_identity(
+                source.ihx_sha256,
+                source.code_sha256,
+                source.nvm_schema
+            )
+            .is_some());
+            assert!(
+                historical_settings_identity(source.ihx_sha256, source.code_sha256, 0x082003)
+                    .is_none()
+            );
+            for id in IDS {
+                let target = &matrix_profile(id).identity.ihx_sha256;
+                assert!(settings_transition_allowed(source.ihx_sha256, target));
+                assert!(!settings_transition_allowed(target, source.ihx_sha256));
+            }
+        }
+        assert!(!settings_transition_allowed(
+            "unknown",
+            &matrix_profile(ProfileId::Main).identity.ihx_sha256
+        ));
+    }
+    #[test]
+    fn source_and_optional_keycode_semantics_are_conservative() {
         use KeycodeSource::*;
-        for source in [Encoder, Macro, MacroTap, MacroDown, MacroUp] {
-            assert!(!supports_keycode(ProfileId::TapDance, 0x5700, source));
-            assert!(!supports_keycode(ProfileId::Typing, 0x7c13, source));
-            assert!(!supports_keycode(ProfileId::Work, 0x7c53, source));
-            assert!(!supports_keycode(ProfileId::Work, 0x7c58, source));
+        for id in IDS {
+            for (code, feature) in [
+                (0x7c16, "grave-escape"),
+                (0x7011, "nkro-control"),
+                (0x5700, "tap-dance"),
+                (0x7c5d, "key-overrides"),
+                (0xcd, "mouse-keys"),
+            ] {
+                assert_eq!(supports_keycode(id, code, Matrix), has_feature(id, feature));
+            }
+            for source in [Encoder, Macro, MacroTap, MacroDown, MacroUp] {
+                for code in [0x5700, 0x7c13, 0x7c53, 0x7c58] {
+                    assert!(!supports_keycode(id, code, source));
+                }
+            }
+            for source in [Macro, MacroDown, MacroUp] {
+                assert!(!supports_keycode(id, 0x7c5d, source));
+            }
+            for code in [0x4604, 0x52c6, 0xffff] {
+                assert!(!supports_keycode(id, code, Matrix));
+            }
         }
-        assert!(supports_keycode(ProfileId::TapDance, 0x5707, Matrix));
-        assert!(!supports_keycode(ProfileId::TapDance, 0x5708, Matrix));
-        assert!(!supports_keycode(ProfileId::Work, 0x5700, Matrix));
-        assert!(supports_keycode(ProfileId::Mouse, 0xcd, Encoder));
-        assert!(!supports_keycode(ProfileId::Essential, 0xcd, Matrix));
-        assert!(supports_keycode(ProfileId::KeyOverrides, 0x7c5d, MacroTap));
-        for source in [Macro, MacroDown, MacroUp] {
-            assert!(!supports_keycode(ProfileId::KeyOverrides, 0x7c5d, source));
-        }
-        assert!(supports_keycode(ProfileId::Work, 0x7c1a, Encoder));
-        assert!(!supports_keycode(ProfileId::Work, 0x7c1a, MacroTap));
-        for id in [ProfileId::Work, ProfileId::Settings] {
-            assert!(!supports_keycode(id, 0x4604, Matrix));
-            assert!(!supports_keycode(id, 0x52c6, Matrix));
-            assert!(!supports_keycode(id, 0xffff, Matrix));
-        }
+        assert!(supports_keycode(ProfileId::Shortcuts, 0x7c5d, MacroTap));
+        assert!(supports_keycode(ProfileId::Code, 0x7c16, Encoder));
+        assert!(!supports_keycode(ProfileId::Code, 0x7c1a, MacroTap));
     }
-
     #[test]
-    fn semantic_validation_rejects_bad_counts_qsids_identity_and_transitions() {
-        let source = include_str!("../assets/ak820/beta1-firmware-matrix.json");
-        let mutations: [fn(&mut FirmwareMatrix); 5] = [
-            |m| m.profiles[0].capabilities.dynamic_entries.tap_dance = 8,
+    fn pinned_bytes_and_semantic_tampering_are_rejected() {
+        let source = include_str!("../assets/ak820/beta2-firmware-matrix.json");
+        assert!(parse_trusted_matrix(source).is_ok());
+        for changed in [
+            format!("{source} "),
+            source.replacen("{", "{\"unknown\":true,", 1),
+            source.replacen("{", "{\"format\":\"duplicate\",", 1),
+        ] {
+            assert!(parse_trusted_matrix(&changed).is_err());
+        }
+        let changes: [fn(&mut FirmwareMatrix); 6] = [
+            |m| m.profiles[0].capabilities.dynamic_entries.combos = 7,
             |m| m.profiles[0].capabilities.runtime_qmk_settings_ids.push(4),
             |m| {
                 m.profiles[0]
@@ -1024,16 +919,12 @@ mod tests {
                     .push(65535)
             },
             |m| m.profiles[0].identity.ihx_sha256 = "0".repeat(64),
-            |m| {
-                m.settings_transitions.push(SettingsTransition {
-                    source: "unknown".into(),
-                    target: "unknown".into(),
-                })
-            },
+            |m| m.settings_transitions[0].target = "unknown".into(),
+            |m| m.feature_pairs[0].profiles.push("main".into()),
         ];
-        for mutate in mutations {
+        for change in changes {
             let mut matrix: FirmwareMatrix = serde_json::from_str(source).unwrap();
-            mutate(&mut matrix);
+            change(&mut matrix);
             assert!(validate_contracts(&matrix).is_err());
         }
     }

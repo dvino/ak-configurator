@@ -1,12 +1,14 @@
 //! AK820's checked settings path. The proxy owns transport; this parent-side
 //! session serializes a setter with its storage check and exact readback.
 use super::{padded_request, HidDevice, MSG_LEN};
+use crate::ak820::ImageContract;
+use crate::app::ak820_beta1_profiles::KeycodeSource;
 use anyhow::{bail, ensure, Context, Result};
 use sha2::{Digest, Sha256};
 
 #[derive(Default)]
 pub(super) struct Ak820Session {
-    verified: bool,
+    image: Option<ImageContract>,
     loaded: bool,
     failure: Option<String>,
 }
@@ -66,7 +68,11 @@ pub(crate) fn macro_stream_length(stream: &[u8]) -> Result<usize> {
 
 /// The firmware's macro operands can encode the same actions as the keymap.
 /// Apply the assignment policy to decoded operands before the first setter.
-fn validate_macro_upload(stream: &[u8]) -> Result<usize> {
+fn validate_macro_upload(stream: &[u8], image: ImageContract) -> Result<usize> {
+    validate_macro_actions(stream, image, true)
+}
+
+fn validate_macro_actions(stream: &[u8], image: ImageContract, assignment: bool) -> Result<usize> {
     let length = macro_stream_length(stream)?;
     let mut offset = 0;
     while offset < length {
@@ -84,7 +90,12 @@ fn validate_macro_upload(stream: &[u8]) -> Result<usize> {
                     keycode = (keycode & 255) << 8;
                 }
             }
-            ensure!(crate::ak820::is_assignable_keycode(keycode),
+            let source = match opcode {
+                1 | 5 => KeycodeSource::MacroTap,
+                2 | 6 => KeycodeSource::MacroDown,
+                _ => KeycodeSource::MacroUp,
+            };
+            ensure!(if assignment { image.assignable(keycode, source) } else { image.supports_keycode(keycode, source) },
                 "Macro keycode {keycode:#06X} is unavailable in the AK820 editor; nothing was written");
         }
         offset += 2 + operands;
@@ -94,7 +105,7 @@ fn validate_macro_upload(stream: &[u8]) -> Result<usize> {
 
 /// Whitelist the application's existing settings protocol. No reset, loader,
 /// factory erase, unknown extensions or speculative QMK setters reach HID.
-fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
+fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bool> {
     let tail = |at: usize| p[at..].iter().all(|&b| b == 0);
     let be = |at| u16::from_be_bytes([p[at], p[at + 1]]) as usize;
     let matrix = || p[1] < 6 && p[2] < 16 && p[3] < 8;
@@ -103,22 +114,31 @@ fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
         0x02 => ((p[1] == 2 || p[1] == 3) && tail(2), false),
         0x04 => (matrix() && tail(4), false),
         0x05 => (
-            matrix() && tail(6) && crate::ak820::is_assignable_keycode(be(4) as u16),
+            matrix()
+                && tail(6)
+                && crate::ak820::MATRIX_MASK[p[2] as usize] & (1 << p[3]) != 0
+                && image.is_some_and(|i| i.assignable(be(4) as u16, KeycodeSource::Matrix)),
             true,
         ),
         0x07 => (
             p[1] == 0x41
                 && tail(8)
-                && crate::ak820::CAPABILITIES.rgb_modes.contains(&p[2])
+                && image.is_some_and(|i| i.rgb_modes().contains(&p[2]))
                 && p[3] == 0
                 && p[7] <= 160,
             true,
         ),
         0x08 => (
             match p[1] {
-                0x40 | 0x41 | 0x43 => tail(2),
+                0x40 | 0x41 => tail(2),
+                0x43 => tail(2) && image.is_some_and(|i| i.rgb_modes().contains(&1)),
                 0x42 => tail(4),
-                0x44 => p[2] < 82 && p[3] == 0 && tail(4),
+                0x44 => {
+                    p[2] < 82
+                        && p[3] == 0
+                        && tail(4)
+                        && image.is_some_and(|i| i.rgb_modes().contains(&1))
+                }
                 _ => false,
             },
             false,
@@ -146,7 +166,25 @@ fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
             false,
         ),
         0xFE => match p[1] {
-            0 | 1 | 5 | 9 => (tail(2), false),
+            0 | 1 | 5 => (tail(2), false),
+            9 => (tail(4), false),
+            10 => {
+                let id = u16::from_le_bytes([p[2], p[3]]);
+                (
+                    tail(4) && image.is_some_and(|i| i.qsid_ids().contains(&id)),
+                    false,
+                )
+            }
+            11 => {
+                let id = u16::from_le_bytes([p[2], p[3]]);
+                let value = u16::from_le_bytes([p[4], p[5]]);
+                let valid = image.is_some_and(|i| i.qsid_ids().contains(&id))
+                    && tail(if id == 1 { 5 } else { 6 })
+                    && crate::ak820_typed_storage::QmkSettings::default()
+                        .set(id, value)
+                        .is_ok();
+                (valid, true)
+            }
             2 => (p[4] == 0 && p[5] == 0 && tail(6), false),
             3 => (p[2] < 6 && p[3] == 0 && tail(4), false),
             4 => (
@@ -154,7 +192,7 @@ fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
                     && p[3] == 0
                     && p[4] <= 1
                     && tail(7)
-                    && crate::ak820::is_assignable_keycode(be(5) as u16),
+                    && image.is_some_and(|i| i.assignable(be(5) as u16, KeycodeSource::Encoder)),
                 true,
             ),
             // Unlock is available only as an explicit UI action; connection is
@@ -164,6 +202,35 @@ fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
                 0 => (tail(3), false),
                 3 => (p[3] < 8 && tail(4), false),
                 4 => (tail(14) && crate::ak820::valid_combo_record(&p[..14]), true),
+                1 | 5 => {
+                    let count = image
+                        .map(|i| {
+                            if p[2] == 1 {
+                                i.dynamic_counts().0
+                            } else {
+                                i.dynamic_counts().2
+                            }
+                        })
+                        .unwrap_or(0);
+                    (p[3] < count && tail(4), false)
+                }
+                2 | 6 => {
+                    let count = image
+                        .map(|i| {
+                            if p[2] == 2 {
+                                i.dynamic_counts().0
+                            } else {
+                                i.dynamic_counts().2
+                            }
+                        })
+                        .unwrap_or(0);
+                    let record_ok = if p[2] == 2 {
+                        crate::ak820_typed_storage::TapDance::decode(&p[4..14]).is_ok()
+                    } else {
+                        crate::ak820_typed_storage::KeyOverride::decode(&p[4..14]).is_ok()
+                    };
+                    (p[3] < count && tail(14) && record_ok, true)
+                }
                 _ => (false, true),
             },
             _ => (false, true),
@@ -172,14 +239,131 @@ fn allowed_request(p: &[u8; MSG_LEN]) -> Result<bool> {
     };
     ensure!(
         valid,
-        "This command or value is unavailable in AK820 alpha.3"
+        "This command or value is unavailable in the verified AK820 image"
     );
     Ok(write)
 }
 
+fn typed_setter(p: &[u8; MSG_LEN]) -> bool {
+    p[0] == 0xFE && (p[1] == 11 || (p[1] == 13 && matches!(p[2], 2 | 6)))
+}
+
+fn typed_candidate(p: &[u8; MSG_LEN], image: ImageContract, before: &[u8]) -> Result<Vec<u8>> {
+    use crate::ak820_typed_storage::{Extensions, KeyOverride, TapDance};
+    let profile = image
+        .profile()
+        .context("Typed settings require a beta.2 contract")?;
+    crate::ak820_settings_model::validate_nvm(before, image.schema())
+        .map_err(anyhow::Error::msg)?;
+    let mut model = Extensions::decode_nvm(before).map_err(anyhow::Error::msg)?;
+    match (p[1], p[2]) {
+        (11, _) => model
+            .settings
+            .set(
+                u16::from_le_bytes([p[2], p[3]]),
+                u16::from_le_bytes([p[4], p[5]]),
+            )
+            .map_err(anyhow::Error::msg)?,
+        (13, 2) => {
+            model.tap_dance[p[3] as usize] =
+                TapDance::decode(&p[4..14]).map_err(anyhow::Error::msg)?
+        }
+        (13, 6) => {
+            model.key_overrides[p[3] as usize] =
+                KeyOverride::decode(&p[4..14]).map_err(anyhow::Error::msg)?
+        }
+        _ => bail!("Unknown typed setting"),
+    }
+    model
+        .apply_to_nvm(before, profile)
+        .map_err(anyhow::Error::msg)
+}
+
 impl HidDevice {
+    pub(crate) fn ak820_validate_macro_snapshot(&self, data: &[u8]) -> Result<()> {
+        let image = self.ak820_image().context("AK820 image is not verified")?;
+        validate_macro_actions(data, image, false)?;
+        Ok(())
+    }
+
+    /// Confirm the pinned matrix-to-LED mapping using read-only VialRGB metadata.
+    /// This is available only on the four beta.2 profiles with Direct support.
+    pub(crate) fn ak820_validate_led_map(&self) -> Result<()> {
+        use crate::ak820_rgb::{LED_COUNT, SLOT_MAP};
+        let image = self.ak820_image().context("AK820 image is not verified")?;
+        ensure!(
+            image.profile().is_some() && image.rgb_modes().contains(&1),
+            "This image has no beta.2 Direct RGB contract"
+        );
+        let count = self.usb_send(&[8, 0x43])?;
+        ensure!(
+            count[..4] == [8, 0x43, LED_COUNT as u8, 0],
+            "AK820 LED count differs from the image contract"
+        );
+        for (index, &slot) in SLOT_MAP.iter().enumerate() {
+            let info = self.usb_send(&[8, 0x44, index as u8, 0])?;
+            ensure!(
+                info[..2] == [8, 0x44] && info[4..7] == [4, slot >> 3, slot & 7],
+                "AK820 LED {index} mapping differs from the image contract"
+            );
+        }
+        Ok(())
+    }
+
+    /// Explicit static palette apply. The session lock prevents interleaved
+    /// settings traffic. Fast-set replies are acknowledgements, not color
+    /// readback: firmware provides no such getter and no atomic frame commit.
+    pub(crate) fn ak820_apply_palette(
+        &self,
+        frame: &[[u8; 3]; crate::ak820_rgb::LED_COUNT],
+    ) -> Result<()> {
+        let packets = crate::ak820_rgb::frame_packets(frame).map_err(anyhow::Error::msg)?;
+        let state = self.ak820.as_ref().context("Not an AK820 session")?;
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        let image = state.image.context("AK820 image is not verified")?;
+        ensure!(
+            image.profile().is_some() && image.rgb_modes().contains(&1),
+            "Direct RGB is unavailable in this beta.2 profile"
+        );
+        ensure!(
+            state.loaded && state.failure.is_none(),
+            "Read complete AK820 settings before applying RGB"
+        );
+        let result = (|| {
+            storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+            let previous = self.usb_send_traced(&[8, 0x41])?;
+            ensure!(
+                previous[..2] == [8, 0x41]
+                    && previous[3] == 0
+                    && image.rgb_modes().contains(&previous[2])
+                    && previous[7] <= 160,
+                "AK820 current RGB mode is invalid"
+            );
+            for packet in packets {
+                let reply = self.usb_send_traced(&packet)?;
+                ensure!(
+                    reply == padded_request(&packet),
+                    "AK820 Direct RGB packet was not acknowledged"
+                );
+            }
+            let mut mode = previous;
+            mode[0] = 7;
+            mode[2] = 1;
+            mode[8..].fill(0);
+            let reply = self.usb_send_traced(&mode)?;
+            self.ak820_verify_write(&mode, &reply, image)?;
+            storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            state.failure = Some(format!("{error:#}"));
+        }
+        result
+    }
+
     pub(super) fn ak820_set_macro_buffer(&self, data: &[u8]) -> Result<()> {
-        let logical = validate_macro_upload(data)?;
+        let image = self.ak820_image().context("AK820 image is not verified")?;
+        let logical = validate_macro_upload(data, image)?;
         // Only the complete logical stream is published. No padding can cause
         // a later chunk to be mistaken for a new upload after terminator 16.
         let data = &data[..logical];
@@ -219,6 +403,12 @@ impl HidDevice {
         self.ak820.is_some()
     }
 
+    pub(crate) fn ak820_image(&self) -> Option<ImageContract> {
+        self.ak820
+            .as_ref()
+            .and_then(|state| state.lock().unwrap_or_else(|e| e.into_inner()).image)
+    }
+
     pub(crate) fn ak820_editing_ready(&self) -> bool {
         self.ak820.as_ref().is_some_and(|state| {
             let state = state.lock().unwrap_or_else(|e| e.into_inner());
@@ -250,7 +440,7 @@ impl HidDevice {
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
         ensure!(
-            state.verified && state.failure.is_none(),
+            state.image.is_some() && state.failure.is_none(),
             "AK820 image is not verified"
         );
         state.loaded = true;
@@ -300,7 +490,7 @@ impl HidDevice {
             .map(|b| format!("{b:02x}"))
             .collect();
         ensure!(
-            expected == crate::ak820::CODE_SHA256,
+            crate::ak820::contract_for_hash(parsed.schema, &expected).is_some(),
             "This AK820 build has no reviewed capability entry; settings remain read-only"
         );
         let mut hash = Sha256::new();
@@ -313,17 +503,16 @@ impl HidDevice {
             hash.update(self.ak820_read_rom(start, (0xC700 - start).min(27 * 32))?);
         }
         let digest: [u8; 32] = hash.finalize().into();
-        ensure!(
-            crate::ak820::recognize_image(&manifest, &digest),
-            "AK820 CODE differs from the catalog or manifest; settings remain read-only"
-        );
+        let image = crate::ak820::identify_image(&manifest, &digest).context(
+            "AK820 CODE differs from the catalog or manifest; settings remain read-only",
+        )?;
         self.ak820_storage_check()?;
         self.ak820
             .as_ref()
             .unwrap()
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .verified = true;
+            .image = Some(image);
         Ok(())
     }
 
@@ -336,41 +525,86 @@ impl HidDevice {
             "Malformed AK820 HID request"
         );
         let p = padded_request(data);
-        let write = allowed_request(&p)?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(reason) = &state.failure {
             bail!("AK820 operation stopped: {reason}. Select Read settings again before editing");
         }
+        let write = allowed_request(&p, state.image)?;
         if write {
             ensure!(
-                state.verified && state.loaded,
+                state.image.is_some() && state.loaded,
                 "AK820 settings remain read-only until the complete device state is read"
             );
         }
-        let operation = (|| {
-            let unlock = p[0] == 0xFE && (6..=8).contains(&p[1]);
-            if write && !unlock {
-                storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
-            }
-            let reply = self.usb_send_traced(data)?;
-            if !super::response_matches_command(data, &reply) {
-                bail!("AK820 reply does not match the request");
-            }
-            if write {
-                self.ak820_verify_write(&p, &reply)?;
-                if !unlock {
+        let operation =
+            (|| {
+                let unlock = p[0] == 0xFE && (6..=8).contains(&p[1]);
+                if write && !unlock {
                     storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
                 }
-            }
-            Ok(reply)
-        })();
+                let expected_nvm = if write && typed_setter(&p) {
+                    let image = state.image.context("AK820 image is not verified")?;
+                    let before = self.ak820_read_rom_traced(0xC700, 0x2800)?;
+                    let candidate = typed_candidate(&p, image, &before)?;
+                    if candidate == before {
+                        // An unchanged effective value must not materialize blank
+                        // default storage or wear flash. No setter was sent.
+                        let mut unchanged = p;
+                        unchanged[0] = 0;
+                        return Ok(unchanged);
+                    }
+                    Some(candidate)
+                } else {
+                    None
+                };
+                let reply = self.usb_send_traced(data)?;
+                if !super::response_matches_command(data, &reply) {
+                    bail!("AK820 reply does not match the request");
+                }
+                if write {
+                    self.ak820_verify_write(&p, &reply, state.image.unwrap())?;
+                    if !unlock {
+                        storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+                    }
+                    if let Some(expected) = expected_nvm {
+                        let actual = self.ak820_read_rom_traced(0xC700, 0x2800)?;
+                        ensure!(actual == expected,
+                        "AK820 full NVM readback differs after module setting; operation stopped");
+                    }
+                }
+                Ok(reply)
+            })();
         if let Err(error) = &operation {
             state.failure = Some(format!("{error:#}"));
         }
         operation
     }
 
-    fn ak820_verify_write(&self, p: &[u8; MSG_LEN], reply: &[u8; MSG_LEN]) -> Result<()> {
+    /// Internal ROM reader used while the session lock is held. It cannot
+    /// recurse through usb_send or perform a mutation.
+    fn ak820_read_rom_traced(&self, start: usize, length: usize) -> Result<Vec<u8>> {
+        ensure!(
+            start <= 65536 && length <= 65536 - start,
+            "Invalid ROM range"
+        );
+        let mut data = Vec::with_capacity(length);
+        while data.len() < length {
+            let at = start + data.len();
+            let count = (length - data.len()).min(27);
+            let request = [0xFD, 0, (at >> 8) as u8, at as u8, count as u8];
+            let reply = self.usb_send_traced(&request)?;
+            ensure!(reply[..5] == request, "AK820 ROM reply range differs");
+            data.extend_from_slice(&reply[5..5 + count]);
+        }
+        Ok(data)
+    }
+
+    fn ak820_verify_write(
+        &self,
+        p: &[u8; MSG_LEN],
+        reply: &[u8; MSG_LEN],
+        image: ImageContract,
+    ) -> Result<()> {
         match (p[0], p[1]) {
             (0x05, _) => {
                 ensure!(reply == p, "AK820 key setter was rejected");
@@ -389,15 +623,24 @@ impl HidDevice {
                     "AK820 encoder readback differs"
                 );
             }
+            (0xFE, 11) => {
+                ensure!(reply[0] == 0, "AK820 QMK setting was rejected");
+                let actual = self.usb_send_traced(&[0xFE, 10, p[2], p[3]])?;
+                let width = if p[2..4] == [1, 0] { 1 } else { 2 };
+                ensure!(
+                    actual[0] == 0 && actual[1..1 + width] == p[4..4 + width],
+                    "AK820 QMK setting readback differs"
+                );
+            }
             (0xFE, 13) => {
                 ensure!(
                     reply[0] == 0 && reply[1..14] == p[1..14],
-                    "AK820 Combo setter was rejected"
+                    "AK820 dynamic entry setter was rejected"
                 );
-                let actual = self.usb_send_traced(&[0xFE, 13, 3, p[3]])?;
+                let actual = self.usb_send_traced(&[0xFE, 13, p[2] - 1, p[3]])?;
                 ensure!(
                     actual[0] == 0 && actual[1..11] == p[4..14],
-                    "AK820 Combo readback differs"
+                    "AK820 dynamic entry readback differs"
                 );
             }
             (0x07, 0x41) => {
@@ -421,15 +664,9 @@ impl HidDevice {
                     raw[0] & 3 <= 1 && raw[3] <= 160,
                     "AK820 saved RGB configuration is invalid"
                 );
-                let selected = match raw[0] >> 2 {
-                    1 => 2,
-                    2 => 6,
-                    3 => 13,
-                    4 => 14,
-                    5 => 1,
-                    6 => 31,
-                    _ => bail!("AK820 saved RGB mode is invalid"),
-                };
+                let selected = image
+                    .saved_rgb_mode(raw[0] >> 2)
+                    .context("AK820 saved RGB mode is invalid")?;
                 let effective = if raw[0] & 3 == 0 { 0 } else { selected };
                 ensure!(
                     actual[..8] == [8, 0x41, effective, 0, raw[4], raw[1], raw[2], raw[3]],
@@ -447,7 +684,7 @@ impl HidDevice {
     pub(crate) fn test_ak820_device(ready: bool) -> (Self, super::TestHidRecorder) {
         let (mut hid, recorder) = Self::test_device();
         hid.ak820 = Some(std::sync::Mutex::new(Ak820Session {
-            verified: ready,
+            image: ready.then_some(ImageContract::Alpha3),
             loaded: ready,
             failure: None,
         }));
@@ -457,7 +694,17 @@ impl HidDevice {
     #[cfg(test)]
     pub(crate) fn test_verified_ak820_device() -> (Self, super::TestHidRecorder) {
         let (hid, recorder) = Self::test_ak820_device(false);
-        hid.ak820.as_ref().unwrap().lock().unwrap().verified = true;
+        hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Alpha3);
+        (hid, recorder)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_beta2_ak820_device(
+        profile: crate::app::ak820_beta1_profiles::ProfileId,
+        ready: bool,
+    ) -> (Self, super::TestHidRecorder) {
+        let (hid, recorder) = Self::test_ak820_device(ready);
+        hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Beta2(profile));
         (hid, recorder)
     }
 }
@@ -465,6 +712,10 @@ impl HidDevice {
 #[cfg(test)]
 #[path = "hid_ak820_tests.rs"]
 mod transaction_tests;
+
+#[cfg(test)]
+#[path = "hid_ak820_beta2_tests.rs"]
+mod beta2_transaction_tests;
 
 #[cfg(test)]
 mod tests {

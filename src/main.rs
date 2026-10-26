@@ -6,6 +6,7 @@ mod ak820_backup_files;
 mod ak820_image_pack;
 mod ak820_install_plan;
 mod ak820_restore_plan;
+mod ak820_rgb;
 mod ak820_offline_project;
 mod ak820_settings_backup;
 mod ak820_settings_model;

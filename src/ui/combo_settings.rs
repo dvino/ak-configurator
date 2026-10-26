@@ -29,9 +29,8 @@ fn combo_layer_labels(
 
 impl EntropyApp {
     fn ak820_offline_qmk_combo_term(&self) -> Option<u16> {
-        if !self.ak820_demo
-            || self.ak820_demo_profile != Some(super::ak820_beta1_profiles::ProfileId::Settings)
-        {
+        if !self.ak820_demo || !self.ak820_demo_profile.is_some_and(|profile|
+            super::ak820_beta1_profiles::matrix_profile(profile).capabilities.runtime_qmk_settings_ids.contains(&2)) {
             return None;
         }
         let state = self.ak820_offline_extensions.as_ref()?;
@@ -1028,11 +1027,11 @@ mod tests {
 mod ak820_profile_combo_term_tests {
     use super::*;
     #[test]
-    fn settings_profile_combo_description_uses_validated_qsid_two() {
+    fn beta2_combo_description_uses_each_profiles_validated_qsid_two() {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
-        assert_eq!(app.ak820_offline_qmk_combo_term(), None);
-        let profile = super::super::ak820_beta1_profiles::ProfileId::Settings;
+        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(40));
+        let profile = super::super::ak820_beta1_profiles::ProfileId::Code;
         app.configure_ak820_offline_profile(profile);
         let nvm = app.ak820_offline_extensions.as_ref().unwrap().nvm();
         let mut model = crate::ak820_typed_storage::Extensions::decode_nvm(nvm).unwrap();
@@ -1043,8 +1042,8 @@ mod ak820_profile_combo_term_tests {
                 .unwrap(),
         );
         assert_eq!(app.ak820_offline_qmk_combo_term(), Some(73));
-        app.configure_ak820_offline_profile(super::super::ak820_beta1_profiles::ProfileId::Work);
-        assert_eq!(app.ak820_offline_qmk_combo_term(), None);
+        app.configure_ak820_offline_profile(super::super::ak820_beta1_profiles::ProfileId::Main);
+        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(40));
         assert!(app.hid_device.is_none());
     }
 }

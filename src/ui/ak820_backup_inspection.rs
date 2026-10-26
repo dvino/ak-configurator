@@ -185,7 +185,7 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
                 "Это отдельный формат от редактируемого файла .ak820project.json. Операции с устройством не выполняются.",
             ));
 
-            let selected = state.profile.unwrap_or(ProfileId::Work);
+            let selected = state.profile.unwrap_or(ProfileId::Main);
             egui::ComboBox::from_id_salt("ak820_backup_inspection_profile")
                 .selected_text(format!("{}: {}", tr("Profile", "Профиль"), selected.as_str()))
                 .show_ui(ui, |ui| {
@@ -263,7 +263,7 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if choose_directory {
-        let profile = state.profile.unwrap_or(ProfileId::Work);
+        let profile = state.profile.unwrap_or(ProfileId::Main);
         let id = state.request_id.wrapping_add(1);
         state.invalidate();
         state.request_id = id;
@@ -331,26 +331,26 @@ mod tests {
     fn accepts_only_current_request_and_profile() {
         let mut state = WindowState {
             request_id: 5,
-            profile: Some(ProfileId::Work),
+            profile: Some(ProfileId::Main),
             ..Default::default()
         };
         let stale = ResultMessage {
             request_id: 4,
-            profile: ProfileId::Work,
-            result: Some(Ok(fake_summary(ProfileId::Work))),
+            profile: ProfileId::Main,
+            result: Some(Ok(fake_summary(ProfileId::Main))),
         };
         assert!(!state.accept(stale));
         assert!(state.summary.is_none());
         let wrong_profile = ResultMessage {
             request_id: 5,
-            profile: ProfileId::Settings,
-            result: Some(Ok(fake_summary(ProfileId::Settings))),
+            profile: ProfileId::Creative,
+            result: Some(Ok(fake_summary(ProfileId::Creative))),
         };
         assert!(!state.accept(wrong_profile));
         let success = ResultMessage {
             request_id: 5,
-            profile: ProfileId::Work,
-            result: Some(Ok(fake_summary(ProfileId::Work))),
+            profile: ProfileId::Main,
+            result: Some(Ok(fake_summary(ProfileId::Main))),
         };
         assert!(state.accept(success));
         assert_eq!(
@@ -359,7 +359,7 @@ mod tests {
         );
         let failure = ResultMessage {
             request_id: 5,
-            profile: ProfileId::Work,
+            profile: ProfileId::Main,
             result: Some(Err("Backup validation failed".into())),
         };
         assert!(state.accept(failure));
@@ -371,17 +371,17 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let mut state = WindowState {
             request_id: 1,
-            profile: Some(ProfileId::Work),
+            profile: Some(ProfileId::Main),
             pending: Some(PendingRead {
                 request_id: 1,
-                profile: ProfileId::Work,
+                profile: ProfileId::Main,
                 receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
             }),
             ..Default::default()
         };
         assert!(state.accept(ResultMessage {
             request_id: 1,
-            profile: ProfileId::Work,
+            profile: ProfileId::Main,
             result: None
         }));
         assert!(state.pending.is_none());
@@ -389,33 +389,33 @@ mod tests {
         assert!(tx
             .send(ResultMessage {
                 request_id: 1,
-                profile: ProfileId::Work,
+                profile: ProfileId::Main,
                 result: None
             })
             .is_err());
         let (tx, rx) = mpsc::channel();
         state.pending = Some(PendingRead {
             request_id: 1,
-            profile: ProfileId::Work,
+            profile: ProfileId::Main,
             receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
         });
         state.invalidate(); // same operation used by close and profile replacement
         assert!(tx
             .send(ResultMessage {
                 request_id: 1,
-                profile: ProfileId::Work,
+                profile: ProfileId::Main,
                 result: None
             })
             .is_err());
         assert!(!state.accept(ResultMessage {
             request_id: 1,
-            profile: ProfileId::Work,
-            result: Some(Ok(fake_summary(ProfileId::Work)))
+            profile: ProfileId::Main,
+            result: Some(Ok(fake_summary(ProfileId::Main)))
         }));
         assert!(state.accept(ResultMessage {
             request_id: 2,
-            profile: ProfileId::Work,
-            result: Some(Ok(fake_summary(ProfileId::Work)))
+            profile: ProfileId::Main,
+            result: Some(Ok(fake_summary(ProfileId::Main)))
         }));
     }
 
@@ -443,14 +443,14 @@ mod tests {
             let cc = eframe::CreationContext::_new_kittest(ctx.clone());
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
-            let mut summary = fake_summary(ProfileId::Work);
+            let mut summary = fake_summary(ProfileId::Main);
             summary.dimensions = (0..12).map(|i| (format!("synthetic-{i}"), 498)).collect();
             ctx.data_mut(|d| {
                 d.insert_temp(egui::Id::new(OPEN_ID), true);
                 d.insert_temp(
                     egui::Id::new(STATE_ID),
                     WindowState {
-                        profile: Some(ProfileId::Work),
+                        profile: Some(ProfileId::Main),
                         summary: Some(summary),
                         ..Default::default()
                     },
@@ -480,19 +480,19 @@ mod tests {
     fn profile_invalidation_clears_prior_result_and_pending_request() {
         let mut state = WindowState {
             request_id: 8,
-            profile: Some(ProfileId::Work),
-            summary: Some(fake_summary(ProfileId::Work)),
+            profile: Some(ProfileId::Main),
+            summary: Some(fake_summary(ProfileId::Main)),
             ..Default::default()
         };
         state.invalidate();
-        state.profile = Some(ProfileId::Mouse);
+        state.profile = Some(ProfileId::Pointer);
         assert_eq!(state.request_id, 9);
         assert!(state.summary.is_none());
         assert!(state.pending.is_none());
         assert!(!state.accept(ResultMessage {
             request_id: 8,
-            profile: ProfileId::Work,
-            result: Some(Ok(fake_summary(ProfileId::Work)))
+            profile: ProfileId::Main,
+            result: Some(Ok(fake_summary(ProfileId::Main)))
         }));
     }
 }

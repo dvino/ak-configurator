@@ -1394,13 +1394,32 @@ impl EntropyApp {
                 // Populate picker
                 let ak820_profile = r.hid_device.as_ref().is_some_and(crate::hid::HidDevice::is_ak820_session);
                 self.keycode_picker.ak820_profile = ak820_profile;
+                let ak820_image = r.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image);
+                let current_profile = ak820_image.and_then(crate::ak820::ImageContract::profile);
+                self.keycode_picker.ak820_beta1_keycodes = current_profile.map(|profile| {
+                    use crate::app::ak820_beta1_profiles::KeycodeSource as Source;
+                    use crate::keycode_picker::Ak820Beta1KeycodeSource as Picker;
+                    [(Source::Matrix, Picker::Matrix), (Source::Encoder, Picker::Encoder),
+                     (Source::Macro, Picker::Macro), (Source::MacroTap, Picker::MacroTap),
+                     (Source::MacroDown, Picker::MacroDown), (Source::MacroUp, Picker::MacroUp)]
+                        .into_iter().map(|(source, picker)| {
+                            let codes = (u16::MIN..=u16::MAX).filter(|&code| {
+                                crate::ak820::ImageContract::Beta2(profile).assignable(code, source)
+                            }).collect();
+                            (picker, codes)
+                        }).collect()
+                });
+                self.keycode_picker.set_ak820_beta1_source(crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix);
+                self.keycode_picker.ak820_beta1_profile_revision = self.keycode_picker.ak820_beta1_profile_revision.wrapping_add(1);
+                self.keycode_picker.supports_compact_leader = current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "leader"));
+                self.keycode_picker.supports_compact_dynamic_macros = current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "dynamic-macros"));
                 self.keycode_picker.supports_rgb =
                     r.layout.supports_rgb || self.rgb_settings.supported;
                 self.keycode_picker.supports_macro = self.keycode_picker.macro_count > 0;
                 self.keycode_picker.supports_tap_dance = !r.tap_dance_entries.is_empty();
                 // Mouse keycodes are assignable through the keymap even when a
                 // firmware does not expose Vial/QMK mouse-key settings.
-                self.keycode_picker.supports_mouse_keys = !ak820_profile;
+                self.keycode_picker.supports_mouse_keys = !ak820_profile || current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "mouse-keys"));
                 self.keycode_picker.supports_combo = !self.combo_entries.is_empty();
                 self.keycode_picker.supports_auto_shift = r.supported_qmk_settings.contains(&4);
                 self.keycode_picker.supports_caps_word = r.vial_features.caps_word;

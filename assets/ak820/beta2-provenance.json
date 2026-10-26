@@ -1,0 +1,47 @@
+{
+  "format": "ak820-firmware-release-provenance-1",
+  "release": "v0.6.0-beta.2",
+  "tag_commit": "2e0b28b384872c482e0e358a4b353f00ddd976a7",
+  "published_at": "2026-10-26T04:52:40Z",
+  "release_url": "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2",
+  "retrieved_on": "2026-10-26",
+  "source": "published GitHub release assets; tag web catalogs contain prequalification data",
+  "assets": [
+    {
+      "name": "AK820-Beta2-Catalog.zip",
+      "size": 4034329,
+      "sha256": "84b210c85b5c77e4c027aa9bfe6ed8121cacccb8d0100fda01fd5767f4cec57e",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/AK820-Beta2-Catalog.zip"
+    },
+    {
+      "name": "capability-catalog.json",
+      "size": 63130,
+      "sha256": "9b1f5270a6a0bffdfc415e28ec8bac633b5c441f187c0e3012947d892e2d5353",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/capability-catalog.json"
+    },
+    {
+      "name": "firmware-matrix.json",
+      "size": 879783,
+      "sha256": "e646cb3cb58c50c55a184538b77674db92e0d54750b1a9734d1b092a6c20a08e",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/firmware-matrix.json"
+    },
+    {
+      "name": "module-descriptions.json",
+      "size": 60052,
+      "sha256": "4da879c27fb543dc3879de37df2f3bd52364a2b80cd0025e93c2f0241ed98782",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/module-descriptions.json"
+    },
+    {
+      "name": "release-catalog.json",
+      "size": 29522,
+      "sha256": "2ede283a4bf1acfaca237b80d221fc23ba81426ed647aeb4d62474f82e221a73",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/release-catalog.json"
+    },
+    {
+      "name": "release-manifest.json",
+      "size": 29281,
+      "sha256": "999266594b741d92814b454616c2c0266f3515824f294738061066376b1c6ec6",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.2/release-manifest.json"
+    }
+  ]
+}
