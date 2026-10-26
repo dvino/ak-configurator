@@ -648,9 +648,9 @@ it no longer assumes how the operating system spells the same path.
 
 | Check | Result and scope |
 | --- | --- |
-| Audio setup regression tests | 12 passed locally on Linux. Independent GPT-6 Sol Low review approved the exact five-file change with no blocking findings. The next hosted CI run remains pending. |
+| Audio setup regression tests | 12 passed locally on Linux and on all six hosted targets. Independent GPT-6 Sol Low review approved both CI fixes with no blocking findings. |
 | Application/build behavior | Not changed by this test-only correction. |
-| Native Windows/macOS qualification | The initial full workflow exposed an additional Windows candidate smoke failure described below; mocked setup tests are not native execution. |
+| Candidate install smoke | The first full workflow exposed an additional Windows shortcut path failure, corrected and passed in the follow-up run below. CI smoke does not establish broader platform qualification. |
 
 ### Windows installed-candidate smoke follow-up
 
@@ -664,6 +664,13 @@ these spellings as the same Windows path.
 The Windows install and uninstall scripts now canonicalize both shortcut and
 expected executable paths with `GetLongPathName` before the case-insensitive
 comparison. Other targets still fail closed; unresolvable or different paths
-are not accepted as owned shortcuts. The Windows regression is awaiting fresh
-independent review and a new hosted run. The first repair commit `0c28f55` is
-already on `desktop-dev`; this follow-up has not yet been committed or pushed.
+are not accepted as owned shortcuts. Independent GPT-6 Sol Low review approved
+the change. Commit `14ccf77` contains the Windows correction and is on
+`desktop-dev` after the first repair commit `0c28f55`.
+
+The follow-up [run 40377698479](https://github.com/dvino/ak-configurator/actions/runs/40377698479)
+passed all six jobs. The audio setup regression passed on every target, and the
+candidate install/execute/uninstall smoke passed on Windows x64 and arm64. Linux
+x64/arm64 and macOS x64/arm64 jobs also passed. The local release workflow suite
+passed 15 tests. These results establish the stated CI checks only; broader OS
+qualification and physical keyboard behavior remain separate.
