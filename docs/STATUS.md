@@ -70,4 +70,4 @@ The dedicated unsigned candidate workflow and verifier prepare Linux x86_64/arm6
 
 Application version remains `0.1.0-beta.2`; no fully qualified first release or publication is claimed. Browser work remains a later stage. Read the [plan](PLAN.md), [desktop guide](DESKTOP.md) and [installation guide](INSTALL.md).
 
-A follow-up hosted CI run exposed path-spelling assumptions in the mocked audio setup tests on current Windows and macOS runners. Those assertions now compare resolved paths for MSI extraction and build outputs. The exact change passed independent review; a new hosted run remains pending. Results are recorded in [REVIEW.md](REVIEW.md).
+A follow-up hosted CI run exposed path-spelling assumptions in mocked audio setup tests on current Windows and macOS runners. Those assertions now compare resolved paths for MSI extraction and build outputs and passed on all six targets. The full run then exposed a separate Windows install-smoke issue in Start Menu shortcut path comparison; see [REVIEW.md](REVIEW.md). The fix is under independent review; another hosted run remains pending.

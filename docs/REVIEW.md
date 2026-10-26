@@ -650,4 +650,20 @@ it no longer assumes how the operating system spells the same path.
 | --- | --- |
 | Audio setup regression tests | 12 passed locally on Linux. Independent GPT-6 Sol Low review approved the exact five-file change with no blocking findings. The next hosted CI run remains pending. |
 | Application/build behavior | Not changed by this test-only correction. |
-| Native Windows/macOS qualification | Still requires hosted jobs; mocked setup tests are not native execution. |
+| Native Windows/macOS qualification | The initial full workflow exposed an additional Windows candidate smoke failure described below; mocked setup tests are not native execution. |
+
+### Windows installed-candidate smoke follow-up
+
+Run 40372901470 passed the corrected audio setup tests on all six targets, both
+macOS jobs, and both Linux jobs. Windows x64 and arm64 then failed during the
+candidate upgrade smoke test: PowerShell returned the Start Menu shortcut target
+using a long path while the test installation root used an equivalent 8.3 short
+path. The installer correctly refused a literal mismatch, but did not recognize
+these spellings as the same Windows path.
+
+The Windows install and uninstall scripts now canonicalize both shortcut and
+expected executable paths with `GetLongPathName` before the case-insensitive
+comparison. Other targets still fail closed; unresolvable or different paths
+are not accepted as owned shortcuts. The Windows regression is awaiting fresh
+independent review and a new hosted run. The first repair commit `0c28f55` is
+already on `desktop-dev`; this follow-up has not yet been committed or pushed.

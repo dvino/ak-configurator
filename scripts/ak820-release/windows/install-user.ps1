@@ -35,13 +35,31 @@ $linkStage = Join-Path $menu ('.AK Configurator-' + [Guid]::NewGuid().ToString('
 $oldLink = $null
 $hadTarget = Test-Path $target
 $committed = $false
+Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+using System.Text;
+public static class AKConfiguratorWindowsPath {
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint bufferLength);
+}
+'@
+function Get-CanonicalWindowsPath([string]$path) {
+  $fullPath = [IO.Path]::GetFullPath($path)
+  $buffer = New-Object Text.StringBuilder 32768
+  $length = [AKConfiguratorWindowsPath]::GetLongPathName($fullPath, $buffer, $buffer.Capacity)
+  if ($length -eq 0 -or $length -ge $buffer.Capacity) { throw "Cannot resolve Windows path: $path" }
+  return $buffer.ToString().TrimEnd([char]92)
+}
 try {
   New-Item -ItemType Directory -Path $stage -ErrorAction Stop | Out-Null
   Get-ChildItem $source -Force | Copy-Item -Destination $stage -Recurse
   Set-Content -NoNewline -Path (Join-Path $stage '.ak-configurator-owned') -Value 'ak-configurator-desktop-candidate-1'
   if (Test-Path $link) {
     $oldLink = (New-Object -ComObject WScript.Shell).CreateShortcut($link).TargetPath
-    if ($oldLink -ne (Join-Path $target 'ak-configurator.exe')) { throw "Refusing to replace unmanaged Start menu shortcut: $link" }
+    $expectedLinkTarget = Join-Path $target 'ak-configurator.exe'
+    if (-not [StringComparer]::OrdinalIgnoreCase.Equals((Get-CanonicalWindowsPath $oldLink), (Get-CanonicalWindowsPath $expectedLinkTarget))) {
+      throw "Refusing to replace unmanaged Start menu shortcut: $link"
+    }
   }
   if (Test-Path $target) { Move-Item -LiteralPath $target -Destination $backup }
   try { Move-Item -LiteralPath $stage -Destination $target }
