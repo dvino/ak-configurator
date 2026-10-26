@@ -2,6 +2,30 @@
 
 # Desktop adaptation and review
 
+## Bundle acceptance — 2026-10-26
+
+The seven commits from `c207ad1` through `5820455` were imported from a verified
+Git bundle, SHA256
+`470c23ba0dd133ca6bb1ac7217e0ad3680edfbe3e83a14383c1e18b6d6c46820`.
+A fresh independent GPT-6.1 Sol Low review found no blocking issue in the
+inspected installation, restore, ownership, RGB/audio, application-update and
+delivery paths or their documented limits. Source delivery to `desktop-dev`
+is approved; release and physical-device qualification remain open.
+
+Repeated offline checks passed on an Ubuntu WSL checkout with original LF
+endings: 15 release-workflow tests, 3 package tests, 3 dependency-pin tests,
+3 manual-workflow tests and 10 macOS packaging model tests. One native-DMG
+test was skipped. Localization and Git whitespace checks passed.
+These are host/synthetic checks, not native macOS or six-platform execution.
+Initial Windows discovery and Unix tests against the CRLF Windows checkout
+failed on shell, symlink and line-ending assumptions; those runs are not passes.
+Native Windows test compilation with Rust 1.97.0 was blocked by missing
+Visual C++ `link.exe`. No local Rust suite pass is claimed. Earlier results
+below remain imported evidence for their stated checkpoints.
+
+Native CI and hardware gates remain open. No tag, release publication, GUI
+launch, keyboard write, reset or flash is included in this acceptance.
+
 ## P1 RGB reuse and integration — 2026-10-26
 
 This continuation starts from `8b1f67f41628a7ec564c97c8cfa3b156655bbdd0` on `desktop-dev`. Application version remains `0.1.0-beta.2`; firmware remains the exact `v0.6.0-beta.2` catalog. Firmware code, image identities and preset/backup formats are unchanged. Application-side music, OpenRGB interoperability and explicit previous built-in effect restoration are implemented. Direct palette readback and atomic frame commit remain firmware-dependent open items.
