@@ -79,7 +79,9 @@ class WindowsPkgconfTests(unittest.TestCase):
                 def extract(command, **kwargs):
                     self.assertEqual(command[:2], ['msiexec.exe', '/a'])
                     self.assertNotIn('/i', command)
-                    self.assertIn('TARGETDIR=' + str(output / arch), command)
+                    targetdir = next(arg.removeprefix('TARGETDIR=') for arg in command
+                                     if str(arg).startswith('TARGETDIR='))
+                    self.assertEqual(Path(targetdir).resolve(), (output / arch).resolve())
                     self.assertEqual(Path(command[2]).read_bytes(), data)
                     executable.parent.mkdir(parents=True)
                     executable.write_bytes(b'native exe fixture')
@@ -90,7 +92,7 @@ class WindowsPkgconfTests(unittest.TestCase):
                      patch.object(helper.urllib.request, 'urlopen', return_value=io.BytesIO(data)) as download, \
                      patch.object(helper, 'run', side_effect=extract), \
                      patch.object(helper.subprocess, 'check_output', return_value='3.0.10\n'):
-                    self.assertEqual(helper.prepare_windows_pkgconf(output), executable)
+                    self.assertEqual(helper.prepare_windows_pkgconf(output).resolve(), executable.resolve())
                 self.assertEqual(download.call_args.args[0],
                                  f'https://github.com/pkgconf/pkgconf/releases/download/pkgconf-3.0.10/pkgconf-{arch}-3.0.10.msi')
 
@@ -200,7 +202,7 @@ class WindowsPkgconfTests(unittest.TestCase):
                      patch.dict(os.environ, {'PKG_CONFIG': str(executable), 'VCPKG_ROOT': str(vcpkg)}, clear=True), \
                      patch.object(helper.subprocess, 'check_output', return_value='3.0.10\n'), \
                      patch.object(helper, 'run') as run:
-                    self.assertEqual(helper.build(output), output / 'cava.exe')
+                    self.assertEqual(helper.build(output).resolve(), (output / 'cava.exe').resolve())
                 self.assertEqual(run.call_count, 2)
                 configure, build = run.call_args_list
                 self.assertIn('-DVCPKG_TARGET_TRIPLET=' + triplet, configure.args[0])

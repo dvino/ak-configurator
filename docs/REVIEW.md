@@ -630,3 +630,24 @@ notices and checksums. It keeps version 0.1.0-alpha.1 and does not claim a full
 beta release. Source, platform builds, Linux GUI checks and physical keyboard
 qualification remain separate. Work now stops for manual handoff; the next
 agent must first obtain the requested detailed Sol High architecture plan.
+
+## Windows audio CI path normalization — 2026-10-26
+
+The follow-up run [40356707732](https://github.com/dvino/ak-configurator/actions/runs/40356707732)
+failed in the offline audio setup regression suite on all Windows and macOS
+runners, before application compilation. The mocked MSI extraction asserted raw
+path strings. Hosted runners resolve temporary directories differently: macOS
+uses `/private/var` for `/var`, and current Windows runners return long user
+paths where the fixture expected an 8.3 short name. The builder itself was not
+reported failing.
+
+The regression checks now resolve both actual and expected paths before
+comparison for MSI extraction, returned executable paths, and build output.
+The test still checks the exact executable location and MSI target directory;
+it no longer assumes how the operating system spells the same path.
+
+| Check | Result and scope |
+| --- | --- |
+| Audio setup regression tests | 12 passed locally on Linux. Independent GPT-6 Sol Low review approved the exact five-file change with no blocking findings. The next hosted CI run remains pending. |
+| Application/build behavior | Not changed by this test-only correction. |
+| Native Windows/macOS qualification | Still requires hosted jobs; mocked setup tests are not native execution. |
