@@ -6,7 +6,7 @@ A separate offline NVM preparation helper also preserves all non-QS bytes; it ne
 
 An offline metadata projection checks provisional compact-controls and storage version consistency; it is not a complete image or catalog validator.
 
-A separate offline full-settings decoder now combines explicit image versions with structural, macro and non-QS extension checks; current production admission and v1 QS behavior remain unchanged. Provisional media Combo outputs are not yet supported.
+A separate offline full-settings decoder now combines explicit image versions with structural, macro and non-QS extension checks; current production admission and v1 QS behavior remain unchanged. Provisional media Combo outputs are parsed only by the separate offline decoder with an explicit source-image capability; production paths still reject them.
 
 A separate offline QS v1/v2 record model is prepared against provisional compact-controls source. It is not connected to device sessions, image admission, backup restore or installation; no new firmware support is enabled. The final release catalog, image and settings identities and directed transitions are still required.
 

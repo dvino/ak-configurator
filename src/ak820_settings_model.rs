@@ -135,7 +135,7 @@ fn macro_commands(stream: &[u8]) -> BackupResult<Value> {
     }
     Ok(Value::Array(result))
 }
-fn combo_settings(nvm: &[u8]) -> BackupResult<Value> {
+fn combo_settings(nvm: &[u8], combo_media: bool) -> BackupResult<Value> {
     let mut entries = Vec::new();
     for i in 0..8 {
         let at = 0x658 + i * 10;
@@ -157,7 +157,8 @@ fn combo_settings(nvm: &[u8]) -> BackupResult<Value> {
                 || ((4..=0xa4).contains(&a)
                     && (4..=0xa4).contains(&b)
                     && a != b
-                    && (out == 0x7c73
+                    && ((combo_media && (0xa8..=0xc2).contains(&out))
+                        || out == 0x7c73
                         || (out < 0x2000
                             && ((4..=0xa4).contains(&(out & 255))
                                 || (0xe0..=0xe7).contains(&(out & 255)))))),
@@ -179,7 +180,7 @@ pub(crate) fn settings_from_nvm(nvm: &[u8], rgb_mode: &[u8], combos: bool) -> Ba
         "Schema01 requires explicit migration; six-layer derivation is unavailable",
     )?;
     let meta = validate_nvm(nvm, schema)?;
-    derive_settings(nvm, rgb_mode, combos, meta, || {
+    derive_settings(nvm, rgb_mode, combos, false, meta, || {
         if schema != SCHEMA {
             return Ok(None);
         }
@@ -204,22 +205,63 @@ pub(crate) fn settings_from_nvm_for_image_offline(
     source: ImageVersion,
     target: ImageVersion,
 ) -> BackupResult<Value> {
+    settings_from_nvm_for_image_with_capabilities_offline(
+        nvm,
+        rgb_mode,
+        combos,
+        source,
+        target,
+        OfflineSettingsCapabilities::default(),
+    )
+}
+
+/// Caller-supplied provisional format assumptions, never trusted image admission.
+/// Legacy callers default to no media Combo support; image version alone grants none.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct OfflineSettingsCapabilities {
+    pub(crate) combo_media: bool,
+}
+
+/// Decode with an explicit provisional source capability binding. Media Combo
+/// requires a source V2 image contract, including when persisted QS remains v1.
+/// Target normalization does not confer source capabilities. Disabled Combo
+/// storage remains uninterpreted; this capability grants no transport authority.
+#[allow(dead_code)]
+pub(crate) fn settings_from_nvm_for_image_with_capabilities_offline(
+    nvm: &[u8],
+    rgb_mode: &[u8],
+    combos: bool,
+    source: ImageVersion,
+    target: ImageVersion,
+    capabilities: OfflineSettingsCapabilities,
+) -> BackupResult<Value> {
+    require(
+        !capabilities.combo_media || source == ImageVersion::V2,
+        "Media Combo capability requires a source V2 image contract",
+    )?;
     let layout = validate_nvm_structure(nvm, SCHEMA)?;
     let record = SettingsRecord::decode_for_image(&nvm[0x6a8..0x6c0], source, target)?;
     let non_qs = NonQsExtensions::decode_nvm(nvm)?;
     let meta = layout.validate_macros(nvm)?;
-    derive_settings(nvm, rgb_mode, combos, meta, || {
-        let mut settings = Map::new();
-        let ids: &[u16] = if record.version() == RecordVersion::V2 {
-            &[1, 2, 4, 7, 18, 19, 3, 6, 22]
-        } else {
-            &[1, 2, 4, 7, 18, 19]
-        };
-        for &id in ids {
-            settings.insert(id.to_string(), json!(record.get(id)?));
-        }
-        extension_json(settings, &non_qs.tap_dance, &non_qs.key_overrides).map(Some)
-    })
+    derive_settings(
+        nvm,
+        rgb_mode,
+        combos,
+        capabilities.combo_media,
+        meta,
+        || {
+            let mut settings = Map::new();
+            let ids: &[u16] = if record.version() == RecordVersion::V2 {
+                &[1, 2, 4, 7, 18, 19, 3, 6, 22]
+            } else {
+                &[1, 2, 4, 7, 18, 19]
+            };
+            for &id in ids {
+                settings.insert(id.to_string(), json!(record.get(id)?));
+            }
+            extension_json(settings, &non_qs.tap_dance, &non_qs.key_overrides).map(Some)
+        },
+    )
 }
 
 fn extension_json(
@@ -242,6 +284,7 @@ fn derive_settings(
     nvm: &[u8],
     rgb_mode: &[u8],
     combos: bool,
+    combo_media: bool,
     meta: NvmMetadata,
     extensions: impl FnOnce() -> BackupResult<Option<Value>>,
 ) -> BackupResult<Value> {
@@ -270,7 +313,7 @@ fn derive_settings(
         result["extensions"] = extensions;
     }
     if combos {
-        result["combos"] = combo_settings(nvm)?;
+        result["combos"] = combo_settings(nvm, combo_media)?;
     }
     Ok(result)
 }
@@ -547,6 +590,124 @@ mod tests {
         combos: bool,
     ) -> BackupResult<Value> {
         settings_from_nvm_for_image_offline(nvm, &[0; 6], combos, source, target)
+    }
+    #[test]
+    fn provisional_media_combo_requires_explicit_source_capability() {
+        let capable = OfflineSettingsCapabilities { combo_media: true };
+        for output in [0xa7u16, 0xa8, 0xc2, 0xc3, 0x01a8, 0x01c2, 0x1fa8, 0x20a8] {
+            // A V2 image may still contain a v1 QS record; this must not grant
+            // capability by itself or prevent an explicit source binding.
+            let mut nvm = modeled_nvm(SCHEMA);
+            nvm[0x658..0x662].copy_from_slice(&[4, 0, 5, 0, 0x20, 8, 1, 0, 0, 0]);
+            nvm[0x660..0x662].copy_from_slice(&output.to_le_bytes());
+            let original = nvm.clone();
+            assert!(settings_from_nvm(&nvm, &[0; 6], true).is_err());
+            assert!(offline(&nvm, ImageVersion::V2, ImageVersion::V2, true).is_err());
+            let decoded = settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[0; 6],
+                true,
+                ImageVersion::V2,
+                ImageVersion::V2,
+                capable,
+            );
+            assert_eq!(
+                decoded.is_ok(),
+                (0xa8..=0xc2).contains(&output),
+                "output {output:x}"
+            );
+            if let Ok(value) = decoded {
+                assert_eq!(
+                    value["combos"]["entries_hex"][0],
+                    hex(&[4, 0, 5, 0, 0, 0, 0, 0, output as u8, 0])
+                );
+            }
+            assert!(
+                settings_from_nvm_for_image_with_capabilities_offline(
+                    &nvm,
+                    &[0; 6],
+                    true,
+                    ImageVersion::V1,
+                    ImageVersion::V2,
+                    capable,
+                )
+                .is_err()
+            );
+            let disabled = settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[0; 6],
+                false,
+                ImageVersion::V2,
+                ImageVersion::V2,
+                capable,
+            )
+            .unwrap();
+            assert!(disabled.get("combos").is_none());
+            assert_eq!(nvm, original);
+        }
+    }
+    #[test]
+    fn provisional_media_combo_preserves_trigger_marker_and_disabled_storage_rules() {
+        let capable = OfflineSettingsCapabilities { combo_media: true };
+        for (a, b) in [
+            (0u16, 5u16),
+            (3, 5),
+            (4, 4),
+            (4, 0xa5),
+            (0xa8, 5),
+            (0x0104, 5),
+        ] {
+            let mut nvm = modeled_nvm(SCHEMA);
+            nvm[0x658..0x662].copy_from_slice(&[0, 0, 0, 0, 0x20, 8, 1, 0, 0xa8, 0]);
+            nvm[0x658..0x65a].copy_from_slice(&a.to_le_bytes());
+            nvm[0x65a..0x65c].copy_from_slice(&b.to_le_bytes());
+            assert!(
+                settings_from_nvm_for_image_with_capabilities_offline(
+                    &nvm,
+                    &[0; 6],
+                    true,
+                    ImageVersion::V2,
+                    ImageVersion::V2,
+                    capable,
+                )
+                .is_err()
+            );
+            assert!(
+                settings_from_nvm_for_image_with_capabilities_offline(
+                    &nvm,
+                    &[0; 6],
+                    false,
+                    ImageVersion::V2,
+                    ImageVersion::V2,
+                    capable,
+                )
+                .is_ok()
+            );
+        }
+        let mut nvm = modeled_nvm(SCHEMA);
+        nvm[0x658..0x662].fill(255);
+        assert!(
+            settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[0; 6],
+                true,
+                ImageVersion::V2,
+                ImageVersion::V2,
+                capable,
+            )
+            .is_err()
+        );
+        assert!(
+            settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[0; 6],
+                false,
+                ImageVersion::V2,
+                ImageVersion::V2,
+                capable,
+            )
+            .is_ok()
+        );
     }
     #[test]
     fn offline_v1_complete_json_matches_production_and_preserves_input() {
