@@ -1,25 +1,27 @@
 //! AK820's checked settings path. The proxy owns transport; this parent-side
 //! session serializes a setter with its storage check and exact readback.
-use super::{padded_request, HidDevice, MSG_LEN};
+use super::{HidDevice, MSG_LEN, padded_request};
 use crate::ak820::ImageContract;
 use crate::app::ak820_beta1_profiles::KeycodeSource;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// An ownership observation, valid only with the same live HID handle. It is
-/// never serialized and cannot restore a previous Direct palette.
+/// never serialized. Negotiated Direct v1 sessions retain the original RAM palette.
 #[derive(Clone, Debug)]
 pub(crate) struct Ak820RgbStream {
     mode: [u8; MSG_LEN],
     previous: Option<[u8; MSG_LEN]>,
     image: ImageContract,
     owner: std::sync::Arc<()>,
+    direct_previous: Option<crate::ak820_rgb::direct::Snapshot>,
+    direct_generation: Option<u32>,
 }
 
 impl Ak820RgbStream {
     pub(crate) fn can_restore_builtin(&self) -> bool {
-        self.previous.is_some()
+        self.previous.is_some() || self.direct_previous.is_some()
     }
 }
 
@@ -128,8 +130,14 @@ fn validate_macro_actions(stream: &[u8], image: ImageContract, assignment: bool)
                 2 | 6 => KeycodeSource::MacroDown,
                 _ => KeycodeSource::MacroUp,
             };
-            ensure!(if assignment { image.assignable(keycode, source) } else { image.supports_keycode(keycode, source) },
-                "Macro keycode {keycode:#06X} is unavailable in the AK820 editor; nothing was written");
+            ensure!(
+                if assignment {
+                    image.assignable(keycode, source)
+                } else {
+                    image.supports_keycode(keycode, source)
+                },
+                "Macro keycode {keycode:#06X} is unavailable in the AK820 editor; nothing was written"
+            );
         }
         offset += 2 + operands;
     }
@@ -235,7 +243,10 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
             13 => match p[2] {
                 0 => (tail(3), false),
                 3 => (p[3] < 8 && tail(4), false),
-                4 => (tail(14) && crate::ak820::valid_combo_record(&p[..14]), true),
+                4 => (
+                    tail(14) && image.is_some_and(|i| i.valid_combo_record(&p[..14])),
+                    true,
+                ),
                 1 | 5 => {
                     let count = image
                         .map(|i| {
@@ -284,9 +295,9 @@ fn typed_setter(p: &[u8; MSG_LEN]) -> bool {
 
 fn typed_candidate(p: &[u8; MSG_LEN], image: ImageContract, before: &[u8]) -> Result<Vec<u8>> {
     use crate::ak820_typed_storage::{Extensions, KeyOverride, TapDance};
-    let profile = image
-        .profile()
-        .context("Typed settings require a beta.2 contract")?;
+    let contract = image
+        .matrix_profile()
+        .context("Typed settings require an exact matrix image contract")?;
     crate::ak820_settings_model::validate_nvm(before, image.schema())
         .map_err(anyhow::Error::msg)?;
     let mut model = Extensions::decode_nvm(before).map_err(anyhow::Error::msg)?;
@@ -309,7 +320,7 @@ fn typed_candidate(p: &[u8; MSG_LEN], image: ImageContract, before: &[u8]) -> Re
         _ => bail!("Unknown typed setting"),
     }
     model
-        .apply_to_nvm(before, profile)
+        .apply_to_nvm_for_contract(before, contract)
         .map_err(anyhow::Error::msg)
 }
 
@@ -337,7 +348,9 @@ fn capture_reconcile_getters(
     settings: &serde_json::Value,
     send: &mut impl FnMut(&[u8]) -> Result<[u8; MSG_LEN]>,
 ) -> Result<bool> {
-    let contract = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+    let contract = image
+        .matrix_profile()
+        .context("Missing exact image profile")?;
     for key in settings["keys"]
         .as_array()
         .context("Missing captured keys")?
@@ -481,12 +494,11 @@ impl HidDevice {
             state.loaded && state.failure.is_none(),
             "Read AK820 settings before OS indication"
         );
-        let profile = state
+        let image = state
             .image
-            .and_then(ImageContract::profile)
-            .context("Exact beta2 image required for OS indication")?;
+            .context("Exact image required for OS indication")?;
         ensure!(
-            crate::app::ak820_beta1_profiles::has_feature(profile, "os-indicators"),
+            image.has_feature("os-indicators"),
             "Image has no OS indicator module"
         );
         let result = self.usb_send_traced(&request).and_then(|reply| {
@@ -560,7 +572,9 @@ impl HidDevice {
             }
             let rom = read(&mut send, 0, 65536)?;
             let nvm = &rom[0xc700..0xef00];
-            let contract = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+            let contract = image
+                .matrix_profile()
+                .context("Missing exact image profile")?;
             let exact = contract
                 .settings_identity
                 .as_ref()
@@ -608,6 +622,98 @@ impl HidDevice {
         Ok(())
     }
 
+    /// Read the stored RAM palette without selecting Direct or enabling RGB.
+    /// Exact catalog identity and runtime negotiation are both mandatory.
+    pub(crate) fn ak820_direct_snapshot(&self) -> Result<crate::ak820_rgb::direct::Snapshot> {
+        self.ak820_direct_snapshot_with_cancel(&AtomicBool::new(false))
+    }
+
+    pub(crate) fn ak820_direct_snapshot_with_cancel(
+        &self,
+        cancel: &AtomicBool,
+    ) -> Result<crate::ak820_rgb::direct::Snapshot> {
+        let state = self.ak820.as_ref().context("Not an AK820 session")?;
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        let image = state.image.context("AK820 image is not verified")?;
+        ensure!(
+            image.direct_protocol() == Some(1),
+            "This exact image has no Direct v1 palette getter"
+        );
+        ensure!(
+            state.failure.is_none(),
+            "Read AK820 settings again after the failed operation"
+        );
+        let result = crate::ak820_rgb::direct::snapshot(&mut |p: &[u8]| {
+            crate::ak820_rgb::direct::check_cancel(cancel)?;
+            self.usb_send_traced(p)
+        });
+        if let Err(error) = &result {
+            if error
+                .downcast_ref::<crate::ak820_rgb::direct::Cancelled>()
+                .is_none()
+            {
+                state.failure = Some(format!("{error:#}"));
+            }
+        }
+        result
+    }
+
+    /// Explicit separate RAM import. Uses a fresh generation and never selects
+    /// Direct, enables lighting, saves EEPROM, retries or restores after failure.
+    pub(crate) fn ak820_restore_direct_palette(
+        &self,
+        palette: &crate::ak820_rgb::direct::Snapshot,
+    ) -> Result<()> {
+        self.ak820_restore_direct_palette_with_cancel(palette, &AtomicBool::new(false))
+    }
+
+    pub(crate) fn ak820_restore_direct_palette_with_cancel(
+        &self,
+        palette: &crate::ak820_rgb::direct::Snapshot,
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        use crate::ak820_rgb::direct;
+        ensure!(
+            palette.hsv.iter().all(|c| c[2] <= 160),
+            "Direct RAM brightness exceeds contract"
+        );
+        if let Some(read_only) = &self.read_only {
+            return Err(read_only.refuse(&[7, 0x43]));
+        }
+        let state = self.ak820.as_ref().context("Not an AK820 session")?;
+        let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        ensure!(
+            state.image.is_some_and(|i| i.direct_protocol() == Some(1))
+                && state.loaded
+                && state.failure.is_none(),
+            "Read an exact Direct v1 image before restoring its RAM palette"
+        );
+        state.rgb_owner = None;
+        let result: Result<()> = (|| {
+            let mut send = |p: &[u8]| {
+                direct::check_cancel(cancel)?;
+                self.usb_send_traced(p)
+            };
+            storage_ready(&send(&[0xfd, 1])?)?;
+            let fresh = direct::snapshot(&mut send)?;
+            direct::commit(
+                &mut send,
+                &palette.hsv,
+                (fresh.generation as u16).wrapping_add(1).max(1),
+                fresh.generation,
+                cancel,
+            )?;
+            storage_ready(&send(&[0xfd, 1])?)?;
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            if error.downcast_ref::<direct::Cancelled>().is_none() {
+                state.failure = Some(format!("{error:#}"));
+            }
+        }
+        result
+    }
+
     /// Confirm the pinned matrix-to-LED mapping using read-only VialRGB metadata.
     /// This is available only on the four beta.2 profiles with Direct support.
     pub(crate) fn ak820_validate_led_map(&self) -> Result<()> {
@@ -632,9 +738,9 @@ impl HidDevice {
         Ok(())
     }
 
-    /// Explicit static palette apply. The session lock prevents interleaved
-    /// settings traffic. Fast-set replies are acknowledgements, not color
-    /// readback: firmware provides no such getter and no atomic frame commit.
+    /// Explicit static palette apply under the single session owner. Exact
+    /// Direct v1 images commit atomically with readback; legacy fastset images
+    /// provide acknowledgements only.
     pub(crate) fn ak820_apply_palette(
         &self,
         frame: &[[u8; 3]; crate::ak820_rgb::LED_COUNT],
@@ -664,7 +770,11 @@ impl HidDevice {
         let image = state.image.context("AK820 image is not verified")?;
         ensure!(
             image.profile().is_some() && image.rgb_modes().contains(&1),
-            "Direct RGB is unavailable in this beta.2 profile"
+            "Direct RGB is unavailable in this exact image"
+        );
+        ensure!(
+            image.direct_protocol() == Some(1) || matches!(image, ImageContract::Beta2(_)),
+            "This image has neither the exact Direct v1 contract nor the legacy beta.2 contract"
         );
         ensure!(
             state.loaded && state.failure.is_none(),
@@ -699,15 +809,40 @@ impl HidDevice {
             if owned.is_some_and(|stream| previous[2..8] != stream.mode[2..8]) {
                 return Ok(Ak820RgbStreamResult::OwnershipLost);
             }
-            for packet in packets {
-                if cancel.load(Ordering::Acquire) {
-                    return Ok(Ak820RgbStreamResult::Cancelled);
+            let mut direct_previous = owned.and_then(|stream| stream.direct_previous.clone());
+            let mut direct_generation = None;
+            if image.direct_protocol() == Some(1) {
+                use crate::ak820_rgb::direct;
+                let mut send = |p: &[u8]| {
+                    direct::check_cancel(cancel)?;
+                    self.usb_send_traced(p)
+                };
+                let generation = if let Some(generation) = owned.and_then(|s| s.direct_generation) {
+                    if !direct::wait_ready(&mut send, generation, cancel)? {
+                        return Ok(Ak820RgbStreamResult::OwnershipLost);
+                    }
+                    generation
+                } else {
+                    let captured = direct::snapshot(&mut send)?;
+                    let generation = captured.generation;
+                    direct_previous = Some(captured);
+                    generation
+                };
+                let hsv = frame.map(crate::ak820_rgb::rgb_to_hsv);
+                let frame_id = (generation as u16).wrapping_add(1).max(1);
+                let accepted = direct::commit(&mut send, &hsv, frame_id, generation, cancel)?;
+                direct_generation = Some(accepted.generation);
+            } else {
+                for packet in packets {
+                    if cancel.load(Ordering::Acquire) {
+                        return Ok(Ak820RgbStreamResult::Cancelled);
+                    }
+                    let reply = self.usb_send_traced(&packet)?;
+                    ensure!(
+                        reply == padded_request(&packet),
+                        "AK820 Direct RGB packet was not acknowledged"
+                    );
                 }
-                let reply = self.usb_send_traced(&packet)?;
-                ensure!(
-                    reply == padded_request(&packet),
-                    "AK820 Direct RGB packet was not acknowledged"
-                );
             }
             let mut mode = previous;
             mode[2] = 1;
@@ -742,8 +877,20 @@ impl HidDevice {
                 previous,
                 image,
                 owner,
+                direct_previous,
+                direct_generation,
             }))
         })();
+        let result = match result {
+            Err(error)
+                if error
+                    .downcast_ref::<crate::ak820_rgb::direct::Cancelled>()
+                    .is_some() =>
+            {
+                Ok(Ak820RgbStreamResult::Cancelled)
+            }
+            other => other,
+        };
         if !matches!(&result, Ok(Ak820RgbStreamResult::Applied(_))) {
             state.rgb_owner = None;
         }
@@ -753,8 +900,9 @@ impl HidDevice {
         result
     }
 
-    /// Explicit, single-attempt volatile restore. No palette can be recovered
-    /// when playback began in Direct. Errors never trigger a retry or restore.
+    /// Explicit, single-attempt volatile restore. Direct v1 restores the captured
+    /// palette even when playback began in Direct. Legacy images can restore
+    /// built-in modes only. Errors never trigger a retry or automatic restore.
     pub(crate) fn ak820_restore_rgb_stream(
         &self,
         stream: &Ak820RgbStream,
@@ -784,10 +932,13 @@ impl HidDevice {
         if cancel.load(Ordering::Acquire) {
             return Ok(Cancelled);
         }
-        let Some(previous) = stream.previous else {
+        let previous = stream
+            .previous
+            .or_else(|| stream.direct_previous.as_ref().map(|_| stream.mode));
+        let Some(previous) = previous else {
             return Ok(Unavailable);
         };
-        if !stream.image.rgb_modes().contains(&previous[2]) || previous[2] == 1 {
+        if !stream.image.rgb_modes().contains(&previous[2]) {
             return Ok(Unavailable);
         }
         let result = (|| {
@@ -806,6 +957,33 @@ impl HidDevice {
             if current[2..8] != stream.mode[2..8] || current[2] != 1 {
                 return Ok(OwnershipLost);
             }
+            if stream.image.direct_protocol() == Some(1) {
+                use crate::ak820_rgb::direct;
+                let mut send = |p: &[u8]| {
+                    direct::check_cancel(cancel)?;
+                    self.usb_send_traced(p)
+                };
+                let generation = stream
+                    .direct_generation
+                    .context("Missing Direct ownership generation")?;
+                if !direct::wait_ready(&mut send, generation, cancel)? {
+                    return Ok(OwnershipLost);
+                }
+                let captured = stream
+                    .direct_previous
+                    .as_ref()
+                    .context("Missing original Direct palette")?;
+                direct::commit(
+                    &mut send,
+                    &captured.hsv,
+                    (generation as u16).wrapping_add(1).max(1),
+                    generation,
+                    cancel,
+                )?;
+                if previous[2] == 1 {
+                    return Ok(Restored(previous[2..8].try_into().unwrap()));
+                }
+            }
             if cancel.load(Ordering::Acquire) {
                 return Ok(Cancelled);
             }
@@ -817,6 +995,16 @@ impl HidDevice {
             storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
             Ok(Restored(previous[2..8].try_into().unwrap()))
         })();
+        let result = match result {
+            Err(error)
+                if error
+                    .downcast_ref::<crate::ak820_rgb::direct::Cancelled>()
+                    .is_some() =>
+            {
+                Ok(Cancelled)
+            }
+            other => other,
+        };
         if let Err(error) = &result {
             state.failure = Some(format!("{error:#}"));
         }
@@ -1000,44 +1188,45 @@ impl HidDevice {
                 "AK820 settings remain read-only until the complete device state is read"
             );
         }
-        let operation =
-            (|| {
-                let unlock = p[0] == 0xFE && (6..=8).contains(&p[1]);
-                if write && !unlock {
+        let operation = (|| {
+            let unlock = p[0] == 0xFE && (6..=8).contains(&p[1]);
+            if write && !unlock {
+                storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+            }
+            let expected_nvm = if write && typed_setter(&p) {
+                let image = state.image.context("AK820 image is not verified")?;
+                let before = self.ak820_read_rom_traced(0xC700, 0x2800)?;
+                let candidate = typed_candidate(&p, image, &before)?;
+                if candidate == before {
+                    // An unchanged effective value must not materialize blank
+                    // default storage or wear flash. No setter was sent.
+                    let mut unchanged = p;
+                    unchanged[0] = 0;
+                    return Ok(unchanged);
+                }
+                Some(candidate)
+            } else {
+                None
+            };
+            let reply = self.usb_send_traced(data)?;
+            if !super::response_matches_command(data, &reply) {
+                bail!("AK820 reply does not match the request");
+            }
+            if write {
+                self.ak820_verify_write(&p, &reply, state.image.unwrap())?;
+                if !unlock {
                     storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
                 }
-                let expected_nvm = if write && typed_setter(&p) {
-                    let image = state.image.context("AK820 image is not verified")?;
-                    let before = self.ak820_read_rom_traced(0xC700, 0x2800)?;
-                    let candidate = typed_candidate(&p, image, &before)?;
-                    if candidate == before {
-                        // An unchanged effective value must not materialize blank
-                        // default storage or wear flash. No setter was sent.
-                        let mut unchanged = p;
-                        unchanged[0] = 0;
-                        return Ok(unchanged);
-                    }
-                    Some(candidate)
-                } else {
-                    None
-                };
-                let reply = self.usb_send_traced(data)?;
-                if !super::response_matches_command(data, &reply) {
-                    bail!("AK820 reply does not match the request");
+                if let Some(expected) = expected_nvm {
+                    let actual = self.ak820_read_rom_traced(0xC700, 0x2800)?;
+                    ensure!(
+                        actual == expected,
+                        "AK820 full NVM readback differs after module setting; operation stopped"
+                    );
                 }
-                if write {
-                    self.ak820_verify_write(&p, &reply, state.image.unwrap())?;
-                    if !unlock {
-                        storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
-                    }
-                    if let Some(expected) = expected_nvm {
-                        let actual = self.ak820_read_rom_traced(0xC700, 0x2800)?;
-                        ensure!(actual == expected,
-                        "AK820 full NVM readback differs after module setting; operation stopped");
-                    }
-                }
-                Ok(reply)
-            })();
+            }
+            Ok(reply)
+        })();
         if let Err(error) = &operation {
             state.failure = Some(format!("{error:#}"));
         }
@@ -1178,6 +1367,16 @@ impl HidDevice {
     ) -> (Self, super::TestHidRecorder) {
         let (hid, recorder) = Self::test_ak820_device(ready);
         hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Beta2(profile));
+        (hid, recorder)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_beta3_ak820_device(
+        profile: crate::app::ak820_beta1_profiles::ProfileId,
+        ready: bool,
+    ) -> (Self, super::TestHidRecorder) {
+        let (hid, recorder) = Self::test_ak820_device(ready);
+        hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Beta3(profile));
         (hid, recorder)
     }
 }
@@ -1351,4 +1550,4 @@ mod restore_executor;
 
 #[path = "hid_ak820_install.rs"]
 mod install;
-pub(crate) use install::{usb_port, InstallUsb, WireCommand};
+pub(crate) use install::{InstallUsb, WireCommand, usb_port};

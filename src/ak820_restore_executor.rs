@@ -500,19 +500,21 @@ mod tests {
                 |_| Ok(()),
             )
         };
-        assert!(run()
-            .unwrap_err()
-            .to_string()
-            .contains("Published macro getter differs"));
+        assert!(
+            run()
+                .unwrap_err()
+                .to_string()
+                .contains("Published macro getter differs")
+        );
         assert_eq!(writes.get(), 1);
         assert_eq!(macro_reads.get(), 1);
     }
     #[test]
     fn planner_to_wire_keeps_both_encoder_directions_distinct() {
         use crate::ak820_settings_backup::{
-            rgb_wire_for_profile, sha256, ImageIdentity, ValidatedArchive,
+            ImageIdentity, ValidatedArchive, rgb_wire_for_profile, sha256,
         };
-        use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+        use crate::app::ak820_beta1_profiles::{ProfileId, matrix_profile};
         let profile = ProfileId::Main;
         let id = matrix_profile(profile).settings_identity.as_ref().unwrap();
         let identity = ImageIdentity {
@@ -534,12 +536,13 @@ mod tests {
             .copy_from_slice(&crate::ak820_typed_storage::QmkSettings::default().encode());
         let mut wanted = before.clone();
         wanted[0x640..0x644].copy_from_slice(&[0, 4, 0, 5]);
-        let settings = crate::ak820_settings_model::settings_from_nvm(
+        let mut settings = crate::ak820_settings_model::settings_from_nvm(
             &wanted,
             &rgb_wire_for_profile(&wanted[24..32], false, profile).unwrap(),
             true,
         )
         .unwrap();
+        crate::ak820_settings_model::apply_image_limitations(&mut settings, &identity);
         let archive = ValidatedArchive {
             source: identity.clone(),
             manifest_sha256: "synthetic-host-model".into(),
@@ -552,7 +555,7 @@ mod tests {
         let packets: Vec<_> = plan
             .steps()
             .iter()
-            .map(|step| compile(step, ImageContract::Beta2(profile)).unwrap())
+            .map(|step| compile(step, ImageContract::Beta3(profile)).unwrap())
             .collect();
         assert_eq!(packets.len(), 2);
         assert_eq!(packets[0][..7], [0xfe, 4, 0, 0, 0, 0, 5]);

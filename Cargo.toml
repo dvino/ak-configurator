@@ -1,6 +1,6 @@
 [package]
 name = "ak-configurator"
-version = "0.1.0-beta.2"
+version = "0.1.0-alpha.1"
 edition = "2021"
 description = "Native configurator for supported AK820 firmware, based on Entropy"
 authors = ["Ergohaven"]

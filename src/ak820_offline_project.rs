@@ -1,7 +1,7 @@
 //! Portable local example projects. This format is deliberately unrelated to
 //! firmware backup archives: it contains no OEM ROM, device identity or restore
 //! authorization. Canonical geometry comes from the bundled example template.
-use crate::ak820_typed_storage::{Extensions, KeyOverride, QmkSettings, TapDance, SCHEMA};
+use crate::ak820_typed_storage::{Extensions, KeyOverride, QmkSettings, SCHEMA, TapDance};
 use crate::app::ak820_beta1_profiles::{self as beta, KeycodeSource, ProfileId};
 use crate::app::ak820_offline_extensions::OfflineExtensions;
 use crate::app::{Ak820OfflineProfileProject, ComboEntry};
@@ -84,11 +84,7 @@ struct Records {
     key_overrides: Vec<Vec<u8>>,
 }
 fn require(ok: bool, message: &str) -> Result<()> {
-    if ok {
-        Ok(())
-    } else {
-        Err(message.into())
-    }
+    if ok { Ok(()) } else { Err(message.into()) }
 }
 fn vial(value: KeyBinding) -> Result<u16> {
     match value {
@@ -364,9 +360,10 @@ impl Project {
                         || ((4..=0xa4).contains(&a)
                             && (4..=0xa4).contains(&b)
                             && a != b
-                            && c.output < 0x2000
-                            && ((4..=0xa4).contains(&(c.output & 255))
-                                || (0xe0..=0xe7).contains(&(c.output & 255))))),
+                            && (c.output == 0x7c73
+                                || (c.output < 0x2000
+                                    && ((4..=0xa4).contains(&(c.output & 255))
+                                        || (0xe0..=0xe7).contains(&(c.output & 255))))))),
                 "Unsupported Combo record",
             )?;
         }
@@ -602,9 +599,11 @@ mod tests {
         legacy["version"] = 1.into();
         legacy.as_object_mut().unwrap().remove("targetRelease");
         legacy.as_object_mut().unwrap().remove("sourceIhxSha256");
-        assert!(parse(&serde_json::to_vec(&legacy).unwrap())
-            .unwrap_err()
-            .contains("cannot be migrated automatically"));
+        assert!(
+            parse(&serde_json::to_vec(&legacy).unwrap())
+                .unwrap_err()
+                .contains("cannot be migrated automatically")
+        );
         let mut current: serde_json::Value =
             serde_json::from_slice(&export_project(&fixture(ProfileId::Main)).unwrap()).unwrap();
         current["targetRelease"] = "v0.6.0-beta.1".into();
@@ -643,7 +642,8 @@ mod tests {
         let mut settings = QmkSettings::default();
         settings.set(4, 123).unwrap();
         records.settings = settings.encode().to_vec();
-        assert!(records.candidate(ProfileId::Main).is_err());
+        assert!(records.candidate(ProfileId::Creative).is_err());
+        assert!(records.candidate(ProfileId::Main).is_ok());
     }
 }
 

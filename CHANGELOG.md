@@ -3,7 +3,20 @@
 AK Configurator changes are recorded here. The inherited Entropy release history
 is retained below. Russian candidate notes: [Изменения](docs/ru/CHANGELOG.md).
 
-## v0.1.0-beta.2 — Unreleased desktop candidate
+## v0.1.0-alpha.1 — Unpublished source candidate
+
+The first application prerelease naming follows an unpublished `0.1.0-beta.2` development version. No application release or tag for beta.2 exists. Since alpha.1 sorts below beta.2 under SemVer, transitioning from the unpublished development version requires an explicit version change. This alpha records current source work; it is not a qualified or published release.
+
+- Target AK820 firmware source `v0.6.0-beta.3` (tag object `4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit `88d190abb156960915a0f1f8ac7f602bb401eab3`); firmware CI run `40461867751` passed the shared-host job and “Revalidate and assemble all ten profiles”; the profile qualification matrix and publishing jobs were skipped. The [AK820 `v0.6.0-beta.3` release](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was published on 2026-10-27 at 06:50:35 UTC. The release catalog, firmware bundle, five JSON assets and `SHA256SUMS` have been downloaded and their SHA256 values match the GitHub API digests. All ten published IHX/settings identities match reviewed candidates, and all ten map hashes match the published release matrix. Approved release metadata pins every installable image to the exact installer release. This confirms release-input identity, not physical device behavior.
+- Add Direct palette readback, full-frame atomic RAM commit, explicit previous Direct restore and `direct-ram.json` save/restore. This sidecar is volatile RAM data, not durable settings. Retain CAVA 1.0.0 and OpenRGB SDK 0/1.
+- Add beta.3 Combo with CapsWord result and `LT(layer0..5, MC0..15)` profile capabilities; expose AutoShift QSID 4 in Main and Typing while keeping beta.2 Main separate.
+- Make the LT macro action reachable through **Special → Macro → Hold layer / tap macro** and show its macro operand on the assigned key. Keep key-picker windows and edge keys accessible at 800×500 while preserving the original large-window geometry. Correct AK820's two-input Combo description and display its loaded timing setting. Make the Combo page scrollable and keep the compact profile status clear of key hints.
+- Apply base palettes asynchronously through the existing RGB owner; check cancellation before every Direct read/write packet. Keep saved release observations bound to the exact firmware release and catalog, and preserve beta.2 restore/reset rules.
+- Stop preparation on any attempted capture failure, even when defaults or rollback were selected; a fresh install-only/OEM owner without project settings may skip unsupported capture but must pass full-ROM/safety checks. Keep a failed owner blocked until reread; allow exact fresh OEM capture for install-only preparation. Restrict the no-serial warning to the first OEM source path.
+- Localize installer result/status and include localized Desktop/Changelog/Status/Review guides with working package links. Update the native screenshot and exact RU/EN help paths. Preserve the desktop UI and navigation from baseline `5d56538`.
+- Configure six unsigned native candidates. Final six-platform native/runtime/signing checks, physical behavior and publication remain pending. No hardware qualification is claimed.
+
+## v0.1.0-beta.2 — Historical unpublished desktop development baseline
 
 This local candidate is prepared for AK Configurator's AK820 companion work. It is not a published public release.
 

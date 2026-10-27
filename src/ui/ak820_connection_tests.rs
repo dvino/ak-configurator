@@ -200,7 +200,10 @@ fn complete_verified_connection_reads_actual_definition_and_all_settings() {
         ),
         (2, 160, 100)
     );
-    assert_eq!(result.rgb_settings.supported_effects, vec![0, 1, 2, 6, 13, 14, 31]);
+    assert_eq!(
+        result.rgb_settings.supported_effects,
+        vec![0, 1, 2, 6, 13, 14, 31]
+    );
     assert!(result.vial_features.repeat_key && result.vial_features.alt_repeat_key);
     assert!(!result.vial_features.persistent_default_layer);
     assert!(!result.about_info.qmk_settings);

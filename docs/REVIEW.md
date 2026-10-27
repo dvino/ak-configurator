@@ -2,6 +2,123 @@
 
 # Desktop adaptation and review
 
+## P1 beta.3 / alpha.1 integration — 2026-10-27
+
+Baseline: `5d565380b042d3b56f7c94a6393a26e4ff534680`. Application source version
+is `0.1.0-alpha.1`. The previous `0.1.0-beta.2` was unpublished development
+naming; alpha.1 sorts lower under SemVer, so the version transition is explicit.
+Firmware target is AK820 `v0.6.0-beta.3`, tag object
+`4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit
+`88d190abb156960915a0f1f8ac7f602bb401eab3`. GitHub release
+[425114585](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was
+published at 2026-10-27 06:50:35 UTC. Exact published-input provenance is
+recorded in `assets/ak820/beta3-provenance.json`.
+
+The release catalog, firmware bundle, five JSON assets and `SHA256SUMS` were
+downloaded and checked against GitHub API digests. All 230 published catalog
+file-manifest records were verified; all ten IHX/settings identities match the reviewed
+candidates, while all ten maps use published bytes matching the release matrix.
+All ten profiles have release approval pointers, and the approval records pin
+the exact installer-release hashes. The published independent-review file is a
+machine-reproduced CI/source-review record tied to program-policy approval; it
+does not claim a new human review or hardware qualification. Firmware CI
+[40461867751](https://github.com/dvino/ak820/actions/runs/40461867751) passed
+the shared-host and “Revalidate and assemble all ten profiles” jobs; profile
+qualification and publication jobs were skipped. The public release was
+observed later. The independently reconstructed defaults for all ten profiles
+have SHA256 `e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1`.
+
+### Findings and closures
+
+- Apply base palette now uses the existing asynchronous RGB frame worker.
+  Direct v1 palette reads and writes check cancellation before each packet.
+  Transport faults stop without retry or automatic abort; only a getter
+  generation race permits a bounded reread.
+  Seven-LED reads and eight-LED write chunks support coherent palette readback
+  and atomic full-frame commit in firmware RAM. These establish logical data
+  behavior only, not physical LED scan output. The captured prior HSV palette
+  can be returned by **Stop and restore effect** within the same intact session;
+  a separately chosen `direct-ram.json` sidecar restores volatile RAM without
+  changing the selected mode.
+- An attempted settings capture failure blocks preparation even if defaults or
+  OEM rollback were selected, and keeps the owner blocked until a fresh reread.
+  A fresh install-only/OEM owner without loaded project settings may skip an
+  unsupported settings capture, but still must pass exact full-ROM and safety
+  checks. The no-serial warning is limited to the first OEM source path.
+- Installer result and status text is localized. Existing beta.2/alpha.3
+  identities remain separate; the beta.2 backup/reset/restore path retains its
+  historical targets, including its own exact reset defaults. Beta.2 backup
+  migration is available only through an explicit reviewed source-to-target
+  transition, never automatic promotion. The 330 directed settings transitions
+  are preserved; beta.3-to-beta.2 migration and copied NVM are not inferred from
+  a profile name.
+- Release observations bind the exact tag and catalog. Missing or withdrawn
+  beta.3 publication (404/410) blocks beta.3 admission; a beta.2 withdrawal
+  block does not carry over to beta.3.
+- The unreachable `LT(layer0..5, MC0..15)` chooser was placed under
+  **Special → Macro → Hold layer / tap macro**. It offers the 96 valid layer/
+  macro combinations and applies context gates: physical matrix only, not a
+  macro stream, Combo or encoder. Macro key labels retain the MC operand.
+  Combo uses two distinct ordinary-key triggers and supports CapsWord as a
+  result, with the live QSID2 timing/interval hint. Beta.2 Main does not gain
+  AutoShift QSID 4; beta.3 Main and Typing do.
+- The key picker was corrected for clipping at 800×500 while retaining its
+  reviewed larger-window geometry. The Combo page now scrolls inside its page
+  rectangle, keeping its output field and interval above the fixed footer. The
+  compact profile status no longer overlaps centered key hints. Package guide
+  links were rewritten and the verifier checks actual packaged bytes. The README screenshot now reflects the
+  current interface. Entropy remains pinned to
+  `5b222b5d6349fb351f53b36c66169095b3039fc1` with its history and
+  attribution preserved.
+
+Independent reviews covered Direct behavior, release contracts, published
+assets, the existing installer, delivery and the picker. Findings were corrected
+and substantive changes received fresh source review. Native RU/EN screenshots
+also closed the compact picker, footer and Combo findings. Final commit-level
+review includes the source, matching documents and execution evidence below.
+
+### Verification and remaining gates
+
+| Check | Result and scope |
+| --- | --- |
+| Published firmware inputs | API digests checked; all 230 catalog file-manifest records, ten IHX/settings identities, ten published maps and approval pointers verified. The provenance summary separately records 130 per-profile file records. This is public-input identity evidence. |
+| Profile defaults | All ten independently reconstructed in Python; SHA256 `e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1`. |
+| Final offline Rust suite | **1826 passed, 0 failed, 14 existing ignored tests, 1 separately executed test**, in 714.83 s. Rust 1.97.0, locked dependencies, offline Cargo, all targets and serial tests. The ignored cases require dedicated Macropad/native harnesses, export inputs or explicit desktop integration conditions. |
+| Restrictive-umask test | **1 passed, 0 failed** in 0.04 s. The identical final test executable (SHA256 `3b0ae9cb321313ac99debbe6e5c00d0f13a7971287dd16e6af9dbdc4b777f625`) was copied to a traversable temporary directory so its UID/GID 65534 child could run. No test or workspace permissions were weakened. Total successful Rust tests: **1827**. |
+| Focused UI corrections | All 96 LT layer/macro choices and source/policy exclusions passed in the full suite. Separate compact picker checks passed 3 tests; the Combo group passed 6, including actual scrolling/clicking in RU/EN, large-window layout and loaded QSID 2 timing. |
+| Optimized Linux build | Final x86_64 release/LTO build passed in 5 m 11 s. Binary SHA256 `aba64df819a44274519d9cfdc7ec0ab07f6e978a37817e90637758491ac38883`. The build retains 164 compiler warnings; it is not warning-free. |
+| Runtime self-check | Final Linux binary reports application `0.1.0-alpha.1`, firmware `v0.6.0-beta.3`, the pinned catalog and all ten profile inputs/defaults; status passed, hardware/network access false. |
+| Installed package smoke | A pre-commit Linux trial containing that final binary passed installation, replacement, installed self-check and removal, preserving separate user data. Its manifest explicitly records dirty source; it is verification input, not the final release archive. The deliverable is repackaged from the clean reviewed commit and accompanied by its own checksum/installed report. |
+| Native interface | Actual Linux Xvfb demo inspected in RU/EN at 800×500 and 1200×700: picker title/search/close and lower-row scrolling, LT assignment and undo, Combo Caps Word selection, output/interval/clear/undo above the footer, long Russian key hints, RGB controls and offline help. No capture or keyboard operation starts from this inspection. The README screenshot was refreshed from the final binary. |
+| CAVA helper | Actual CAVA 1.0.0 passed 24 FIFO frames × 16 bounded bands from synthetic sine and silence. No system capture was opened. Twelve audio-builder tests also passed. |
+| Packaging and release verifier | Four package tests and 15 aggregate release-verifier tests passed. Six synthetic executable headers check package formats/architectures; they do not establish six native executions. Internal guide links and transformed document bytes are checked. |
+| Localization and source | EN/RU catalog checker, 87 relative links across 18 project documents and `git diff --check` passed. |
+
+The full suite command was:
+
+```sh
+cargo test --locked --offline --all-targets -- --test-threads=1 \
+  --skip ak820_backup_files::tests::restrictive_umasks_are_isolated_and_leave_no_stage_leaks
+```
+
+The single excluded test was run unchanged from the copied executable with
+`--exact --nocapture`. Its initial permission-denied launch from the private
+workspace parent was an environment limitation. The successful isolated run
+replaces the earlier session's restricted-umask limitation recorded below.
+Final logs are `ak-configurator-alpha-release-gate-tests.log`,
+`ak-configurator-alpha-release-gate-umask.log` and
+`ak-configurator-alpha-release-gate-build.log`. Runtime and installed reports
+are included with the delivery evidence.
+
+Linux execution does not qualify the other five targets. The complete six-target
+native workflow, Windows/macOS/ARM64 runtime and capture permissions,
+signing/notarization, positive private packed-ROM fixture, physical settings
+retention/recovery and Direct LED output/timing remain separate qualification.
+No physical keyboard writes, reset, unlock, loader transition, flashing or OEM
+rollback were performed. No actual system-audio or screen capture was started.
+The application is an unpublished alpha candidate, not a six-platform or
+hardware-qualified release.
+
 ## UI integration and interaction — 2026-10-27
 
 Baseline: `3c5fb77199fa7cce090267a9fd7df243f43bcf0b` on `desktop-dev`.

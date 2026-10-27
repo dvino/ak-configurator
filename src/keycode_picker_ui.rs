@@ -193,9 +193,14 @@ const KEY_PICKER_MAIN_CONTENT_HEIGHT: f32 = 455.0;
 
 pub(super) fn responsive_window_size(ctx: &egui::Context, base: Vec2, max: Vec2) -> Vec2 {
     let screen = ctx.content_rect().size();
+    // Leave room around fixed, centered modal windows so their title bar and
+    // close control remain reachable even on compact desktop windows.
+    // Window sizes exclude the outer frame and title bar. Reserve 48 px of
+    // horizontal chrome and 80 px vertically so the whole fixed window fits.
+    let available = (screen - Vec2::new(48.0, 80.0)).max(Vec2::splat(240.0));
     Vec2::new(
-        base.x.max((screen.x * 0.82).min(max.x)),
-        base.y.max((screen.y * 0.78).min(max.y)),
+        base.x.max((screen.x * 0.82).min(max.x)).min(available.x),
+        base.y.max((screen.y * 0.78).min(max.y)).min(available.y),
     )
 }
 
@@ -208,7 +213,11 @@ pub(super) fn key_picker_main_size(ctx: &egui::Context) -> Vec2 {
 }
 
 pub(super) fn key_picker_main_content_height(picker_size: Vec2) -> f32 {
-    (picker_size.y - 105.0).clamp(KEY_PICKER_MAIN_CONTENT_HEIGHT, 700.0)
+    if picker_size.y >= KEY_PICKER_MAIN_HEIGHT {
+        (picker_size.y - 105.0).clamp(KEY_PICKER_MAIN_CONTENT_HEIGHT, 700.0)
+    } else {
+        (picker_size.y - 145.0).clamp(180.0, KEY_PICKER_MAIN_CONTENT_HEIGHT)
+    }
 }
 
 pub(super) fn key_picker_popup_size(ctx: &egui::Context) -> Vec2 {
@@ -220,7 +229,11 @@ pub(super) fn key_picker_popup_size(ctx: &egui::Context) -> Vec2 {
 }
 
 pub(super) fn key_picker_popup_scroll_height(popup_size: Vec2) -> f32 {
-    (popup_size.y - 130.0).clamp(KEY_PICKER_SCROLL_HEIGHT, 620.0)
+    if popup_size.y >= KEY_PICKER_POPUP_HEIGHT {
+        (popup_size.y - 130.0).clamp(KEY_PICKER_SCROLL_HEIGHT, 620.0)
+    } else {
+        (popup_size.y - 155.0).clamp(120.0, KEY_PICKER_SCROLL_HEIGHT)
+    }
 }
 
 pub(super) fn responsive_picker_element_scale(ctx: &egui::Context) -> f32 {
@@ -531,10 +544,56 @@ pub(super) fn picker_slot_button(
 mod tests {
     use super::*;
 
+    fn context_for(size: Vec2) -> egui::Context {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            ..Default::default()
+        };
+        let _ = ctx.run(input, |_| {});
+        ctx
+    }
+
     #[test]
     fn tab_width_fits_the_longest_catalog_labels() {
         // Longest current labels: "Универсальные" (ru), "Universal" (en).
         assert!(picker_tab_width("Универсальные") <= 152.0);
         assert!(picker_tab_width("RGB") >= 64.0);
+    }
+
+    #[test]
+    fn picker_windows_fit_compact_viewport_and_keep_scroll_regions_bounded() {
+        let ctx = context_for(Vec2::new(800.0, 500.0));
+        let main = key_picker_main_size(&ctx);
+        let popup = key_picker_popup_size(&ctx);
+        assert!(main.x <= 752.0 && main.y <= 420.0);
+        assert!(popup.x <= 752.0 && popup.y <= 420.0);
+        assert!(key_picker_main_content_height(main) < main.y);
+        assert!(key_picker_popup_scroll_height(popup) < popup.y);
+        assert!(key_picker_main_content_height(main) >= 180.0);
+        assert!(key_picker_popup_scroll_height(popup) >= 120.0);
+    }
+
+    #[test]
+    fn picker_windows_keep_their_base_size_when_large_viewport_allows_it() {
+        let ctx = context_for(Vec2::new(1200.0, 700.0));
+        assert_eq!(key_picker_main_size(&ctx), Vec2::new(984.0, 560.0));
+        assert_eq!(key_picker_popup_size(&ctx), Vec2::new(984.0, 560.0));
+        assert_eq!(
+            key_picker_main_content_height(Vec2::new(920.0, 560.0)),
+            455.0
+        );
+        assert_eq!(
+            key_picker_main_content_height(Vec2::new(1_260.0, 820.0)),
+            700.0
+        );
+        assert_eq!(
+            key_picker_popup_scroll_height(Vec2::new(760.0, 560.0)),
+            430.0
+        );
+        assert_eq!(
+            key_picker_popup_scroll_height(Vec2::new(1_050.0, 760.0)),
+            620.0
+        );
     }
 }

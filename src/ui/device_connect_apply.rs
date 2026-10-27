@@ -265,7 +265,10 @@ mod tests {
         assert!(app.status_msg.starts_with("Connect failed:"));
         app.apply_device_scan_result(vec![sm62]);
         assert!(app.status_msg.contains("Display settings read failed"));
-        assert!(requests.try_recv().is_err(), "unexpected automatic reconnect");
+        assert!(
+            requests.try_recv().is_err(),
+            "unexpected automatic reconnect"
+        );
     }
 
     #[test]
@@ -447,9 +450,10 @@ mod tests {
         assert_no_applied_connection(&app);
         assert!(app.retiring_connects.is_empty());
         assert!(requests.try_recv().is_err());
-        assert!(tx
-            .send(ConnectTaskMessage::Progress("too late".to_owned()))
-            .is_err());
+        assert!(
+            tx.send(ConnectTaskMessage::Progress("too late".to_owned()))
+                .is_err()
+        );
         b_tx.send(ConnectTaskMessage::Done(Box::new(Ok(connection_result(
             "Current B",
         )))))
@@ -610,7 +614,7 @@ mod tests {
             started_at: std::time::Instant::now(),
             generation: app.connection_generation,
             timeout_logged: false,
-        usb_only: false,
+            usb_only: false,
         };
         scan_tx
             .send(Ok(vec![connection_device("B"), connection_device("A")]))
@@ -643,7 +647,7 @@ mod tests {
             started_at: std::time::Instant::now(),
             generation: app.connection_generation,
             timeout_logged: false,
-        usb_only: false,
+            usb_only: false,
         };
         a_tx.send(ConnectTaskMessage::Done(Box::new(Ok(connection_result(
             "Wrong A",
@@ -698,9 +702,10 @@ mod tests {
                 .map(String::as_str),
             Some("Current B")
         );
-        assert!(!app
-            .device_display_names
-            .contains_key(&connection_device("A").display_name_cache_key()));
+        assert!(
+            !app.device_display_names
+                .contains_key(&connection_device("A").display_name_cache_key())
+        );
         assert!(app.pending_device_connect.is_none());
         assert!(matches!(app.connect_state, ConnectState::Idle));
     }
@@ -1392,34 +1397,61 @@ impl EntropyApp {
                 self.migrate_fixed_encoder_visibility_to_layout(&r.layout);
 
                 // Populate picker
-                let ak820_profile = r.hid_device.as_ref().is_some_and(crate::hid::HidDevice::is_ak820_session);
+                let ak820_profile = r
+                    .hid_device
+                    .as_ref()
+                    .is_some_and(crate::hid::HidDevice::is_ak820_session);
                 self.keycode_picker.ak820_profile = ak820_profile;
-                let ak820_image = r.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image);
+                self.keycode_picker.ak820_combo_caps_word = r
+                    .hid_device
+                    .as_ref()
+                    .and_then(crate::hid::HidDevice::ak820_image)
+                    .is_some_and(|i| i.valid_combo([4, 5, 0, 0], 0x7c73));
+                let ak820_image = r
+                    .hid_device
+                    .as_ref()
+                    .and_then(crate::hid::HidDevice::ak820_image);
                 let current_profile = ak820_image.and_then(crate::ak820::ImageContract::profile);
-                self.keycode_picker.ak820_beta1_keycodes = current_profile.map(|profile| {
+                self.keycode_picker.ak820_beta1_keycodes = current_profile.map(|_| {
                     use crate::app::ak820_beta1_profiles::KeycodeSource as Source;
                     use crate::keycode_picker::Ak820Beta1KeycodeSource as Picker;
-                    [(Source::Matrix, Picker::Matrix), (Source::Encoder, Picker::Encoder),
-                     (Source::Macro, Picker::Macro), (Source::MacroTap, Picker::MacroTap),
-                     (Source::MacroDown, Picker::MacroDown), (Source::MacroUp, Picker::MacroUp)]
-                        .into_iter().map(|(source, picker)| {
-                            let codes = (u16::MIN..=u16::MAX).filter(|&code| {
-                                crate::ak820::ImageContract::Beta2(profile).assignable(code, source)
-                            }).collect();
-                            (picker, codes)
-                        }).collect()
+                    [
+                        (Source::Matrix, Picker::Matrix),
+                        (Source::Encoder, Picker::Encoder),
+                        (Source::Macro, Picker::Macro),
+                        (Source::MacroTap, Picker::MacroTap),
+                        (Source::MacroDown, Picker::MacroDown),
+                        (Source::MacroUp, Picker::MacroUp),
+                    ]
+                    .into_iter()
+                    .map(|(source, picker)| {
+                        let codes = (u16::MIN..=u16::MAX)
+                            .filter(|&code| {
+                                ak820_image.is_some_and(|image| image.assignable(code, source))
+                            })
+                            .collect();
+                        (picker, codes)
+                    })
+                    .collect()
                 });
-                self.keycode_picker.set_ak820_beta1_source(crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix);
-                self.keycode_picker.ak820_beta1_profile_revision = self.keycode_picker.ak820_beta1_profile_revision.wrapping_add(1);
-                self.keycode_picker.supports_compact_leader = current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "leader"));
-                self.keycode_picker.supports_compact_dynamic_macros = current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "dynamic-macros"));
+                self.keycode_picker
+                    .set_ak820_beta1_source(crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix);
+                self.keycode_picker.ak820_beta1_profile_revision = self
+                    .keycode_picker
+                    .ak820_beta1_profile_revision
+                    .wrapping_add(1);
+                self.keycode_picker.supports_compact_leader =
+                    ak820_image.is_some_and(|image| image.has_feature("leader"));
+                self.keycode_picker.supports_compact_dynamic_macros =
+                    ak820_image.is_some_and(|image| image.has_feature("dynamic-macros"));
                 self.keycode_picker.supports_rgb =
                     r.layout.supports_rgb || self.rgb_settings.supported;
                 self.keycode_picker.supports_macro = self.keycode_picker.macro_count > 0;
                 self.keycode_picker.supports_tap_dance = !r.tap_dance_entries.is_empty();
                 // Mouse keycodes are assignable through the keymap even when a
                 // firmware does not expose Vial/QMK mouse-key settings.
-                self.keycode_picker.supports_mouse_keys = !ak820_profile || current_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "mouse-keys"));
+                self.keycode_picker.supports_mouse_keys = !ak820_profile
+                    || ak820_image.is_some_and(|image| image.has_feature("mouse-keys"));
                 self.keycode_picker.supports_combo = !self.combo_entries.is_empty();
                 self.keycode_picker.supports_auto_shift = r.supported_qmk_settings.contains(&4);
                 self.keycode_picker.supports_caps_word = r.vial_features.caps_word;
@@ -1779,45 +1811,87 @@ mod qa_followup_reconnect {
 
     #[test]
     fn uncertain_layer_name_is_not_reused_by_reconnect_snapshot() {
-        let _storage=crate::app::app_storage::ScopedTempConfig::new();
-        let ctx=egui::Context::default();
-        let (mut app,reconnect)=failed_upload(&ctx);
-        let context=DeferredDeviceLoadContext {
-            json:std::sync::Arc::new(serde_json::json!({})),
-            supported_qmk_settings:std::sync::Arc::new(vec![201]),
-            definition_fingerprint:7,layer_count:2,rows:1,cols:1,encoder_count:0,
-            macro_count:0,macro_memory_bytes:Some(0),tap_dance_count:0,combo_count:0,
-            key_override_count:0,alt_repeat_count:0,modules_supported:false,touchpad_supported:false,
-            bluetooth_supported:false,layer_leds_supported:false,rgb_supported:false,lighting_mode:None,
-            supports_rmk_native_key_actions:false,supports_universal_symbols:false,
-            supports_universal_russian_letters:false,supports_rmk_native_combo_output:false,
-            supports_rmk_native_tap_dance_actions:false,supports_rmk_combo_layers:false,
+        let _storage = crate::app::app_storage::ScopedTempConfig::new();
+        let ctx = egui::Context::default();
+        let (mut app, reconnect) = failed_upload(&ctx);
+        let context = DeferredDeviceLoadContext {
+            json: std::sync::Arc::new(serde_json::json!({})),
+            supported_qmk_settings: std::sync::Arc::new(vec![201]),
+            definition_fingerprint: 7,
+            layer_count: 2,
+            rows: 1,
+            cols: 1,
+            encoder_count: 0,
+            macro_count: 0,
+            macro_memory_bytes: Some(0),
+            tap_dance_count: 0,
+            combo_count: 0,
+            key_override_count: 0,
+            alt_repeat_count: 0,
+            modules_supported: false,
+            touchpad_supported: false,
+            bluetooth_supported: false,
+            layer_leds_supported: false,
+            rgb_supported: false,
+            lighting_mode: None,
+            supports_rmk_native_key_actions: false,
+            supports_universal_symbols: false,
+            supports_universal_russian_letters: false,
+            supports_rmk_native_combo_output: false,
+            supports_rmk_native_tap_dance_actions: false,
+            supports_rmk_combo_layers: false,
         };
-        app.deferred_device_load=DeferredDeviceLoadState::staged(context.clone());
-        app.deferred_device_load.set_layer_status(1,DeferredLoadStatus::Loaded);
-        app.layer_names=vec!["Zero".into(),"Stale".into()];
-        let (hid,packets)=crate::hid::HidDevice::test_device();
+        app.deferred_device_load = DeferredDeviceLoadState::staged(context.clone());
+        app.deferred_device_load
+            .set_layer_status(1, DeferredLoadStatus::Loaded);
+        app.layer_names = vec!["Zero".into(), "Stale".into()];
+        let (hid, packets) = crate::hid::HidDevice::test_device();
         packets.respond_by(|r| {
-            if r[..2]==[0xfe,0x0b] {Some(Ok([0;32]))}
-            else if r[..2]==[0xfe,0x0a] {Some(Ok([0xff;32]))} else {None}
+            if r[..2] == [0xfe, 0x0b] {
+                Some(Ok([0; 32]))
+            } else if r[..2] == [0xfe, 0x0a] {
+                Some(Ok([0xff; 32]))
+            } else {
+                None
+            }
         });
-        app.hid_device=Some(hid);
-        let request=super::super::vial_hid_task::LayerNameWrite {
-            device:device("a"),device_key:"reconnect-name".into(),layout_id:"default".into(),
-            generation:app.connection_generation,layer:1,name:"Mutated".into(),
+        app.hid_device = Some(hid);
+        let request = super::super::vial_hid_task::LayerNameWrite {
+            device: device("a"),
+            device_key: "reconnect-name".into(),
+            layout_id: "default".into(),
+            generation: app.connection_generation,
+            layer: 1,
+            name: "Mutated".into(),
         };
-        assert_eq!(app.start_vial_hid_operation(&ctx,VialHidOperation::LayerNameWrite(request)),VialHidTaskStart::Started);
-        poll_upload(&mut app,&ctx);
-        let mut fresh=result(&device("a"),7);
-        fresh.layer_count=2;
-        fresh.layout.layers.resize(2,vec![0u16.into()]);
-        fresh.layout.layer_names=vec!["Zero".into(),"Fresh".into()];
-        fresh.deferred_load=DeferredDeviceLoadState::staged(context);
-        app.preserve_deferred_snapshot_on_reconnect(&mut fresh,&reconnect);
-        assert_eq!(fresh.layout.layer_names[1],"Fresh","reconnect reused uncertain name");
-        assert_eq!(fresh.deferred_load.layer_status(1),DeferredLoadStatus::NotLoaded,
-            "reconnect marked uncertainty confirmed without read-only reload");
-        assert_eq!(packets.requests().iter().filter(|r|r[..2]==[0xfe,0x0b]).count(),1);
+        assert_eq!(
+            app.start_vial_hid_operation(&ctx, VialHidOperation::LayerNameWrite(request)),
+            VialHidTaskStart::Started
+        );
+        poll_upload(&mut app, &ctx);
+        let mut fresh = result(&device("a"), 7);
+        fresh.layer_count = 2;
+        fresh.layout.layers.resize(2, vec![0u16.into()]);
+        fresh.layout.layer_names = vec!["Zero".into(), "Fresh".into()];
+        fresh.deferred_load = DeferredDeviceLoadState::staged(context);
+        app.preserve_deferred_snapshot_on_reconnect(&mut fresh, &reconnect);
+        assert_eq!(
+            fresh.layout.layer_names[1], "Fresh",
+            "reconnect reused uncertain name"
+        );
+        assert_eq!(
+            fresh.deferred_load.layer_status(1),
+            DeferredLoadStatus::NotLoaded,
+            "reconnect marked uncertainty confirmed without read-only reload"
+        );
+        assert_eq!(
+            packets
+                .requests()
+                .iter()
+                .filter(|r| r[..2] == [0xfe, 0x0b])
+                .count(),
+            1
+        );
     }
 
     #[test]

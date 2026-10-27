@@ -12,6 +12,8 @@ import tomllib
 import zipfile
 import io
 import plistlib
+import re
+from urllib.parse import quote, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
@@ -22,6 +24,49 @@ PLATFORMS = {
     "macos-x86_64": ("macho", 0x01000007),
     "macos-arm64": ("macho", 0x0100000C),
 }
+DOCUMENTS = {
+    "INSTALL.en.md": "docs/INSTALL.md",
+    "INSTALL.ru.md": "docs/ru/INSTALL.md",
+    "DESKTOP.en.md": "docs/DESKTOP.md",
+    "DESKTOP.ru.md": "docs/ru/DESKTOP.md",
+    "CHANGELOG.en.md": "CHANGELOG.md",
+    "CHANGELOG.ru.md": "docs/ru/CHANGELOG.md",
+    "RGB-PLAN.en.md": "docs/RGB-PLAN.md",
+    "RGB-PLAN.ru.md": "docs/ru/RGB-PLAN.md",
+    "THIRD-PARTY-AUDIO.en.md": "docs/THIRD-PARTY-AUDIO.md",
+    "THIRD-PARTY-AUDIO.ru.md": "docs/ru/THIRD-PARTY-AUDIO.md",
+    "STATUS.en.md": "docs/STATUS.md",
+    "STATUS.ru.md": "docs/ru/STATUS.md",
+    "REVIEW.en.md": "docs/REVIEW.md",
+    "REVIEW.ru.md": "docs/ru/REVIEW.md",
+}
+
+
+def package_document(source, commit):
+    """Keep delivered guide links local; pin other source links to this checkout."""
+    source = ROOT / source
+    destinations = {(ROOT / path).resolve(): name for name, path in DOCUMENTS.items()}
+    destinations[(ROOT / "vendor/cava-dependencies/REBUILD.md").resolve()] = "audio-sources/REBUILD.md"
+
+    def rewrite(match):
+        target = urlsplit(match[2])
+        if target.scheme or target.netloc or not target.path:
+            return match[0]
+        path = (source.parent / unquote(target.path)).resolve()
+        relative = path.relative_to(ROOT)
+        if not path.exists():
+            raise ValueError(f"Broken documentation link in {source.name}: {match[2]}")
+        link = destinations.get(path)
+        if link is None:
+            link = f"https://github.com/dvino/ak-configurator/blob/{commit}/{quote(relative.as_posix())}"
+        if target.query:
+            link += "?" + target.query
+        if target.fragment:
+            link += "#" + target.fragment
+        return match[1] + link + match[3]
+
+    return re.sub(r"(\[[^\]\n]*\]\()([^\s)]+)(\))", rewrite,
+                  source.read_text(encoding="utf-8")).encode("utf-8")
 
 
 def digest(data):
@@ -59,25 +104,25 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).strip())
     if dirty and not allow_dirty:
         raise ValueError("Source tree is dirty; use --allow-dirty only for a labeled local trial")
-    provenance = (ROOT / "assets/ak820/beta2-provenance.json").read_bytes()
-    release_manifest = json.loads((ROOT / "assets/ak820/beta2-release-manifest.json").read_text(encoding="utf-8"))
+    provenance = (ROOT / "assets/ak820/beta3-provenance.json").read_bytes()
+    release_manifest = json.loads((ROOT / "assets/ak820/beta3-release-manifest.json").read_text(encoding="utf-8"))
     offline_files = {}
-    for asset in sorted((ROOT / "assets/ak820").glob("beta2-*.json")):
-        relative = asset.name.removeprefix("beta2-")
+    for asset in sorted((ROOT / "assets/ak820").glob("beta3-*.json")):
+        relative = asset.name.removeprefix("beta3-")
         offline_files[f"offline/{relative}"] = asset.read_bytes()
-    for asset in sorted((ROOT / "assets/ak820/firmware-beta2").rglob("*")):
+    for asset in sorted((ROOT / "assets/ak820/firmware-beta3").rglob("*")):
         if asset.is_file():
-            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta2").as_posix()
-            offline_files[f"offline/firmware-beta2/{relative}"] = asset.read_bytes()
+            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta3").as_posix()
+            offline_files[f"offline/firmware-beta3/{relative}"] = asset.read_bytes()
             profile, basename = relative.split("/", 1)
             manifest_name = f"profiles/{profile}/firmware/{basename}"
             identity = release_manifest["files"].get(manifest_name)
-            if not identity or len(offline_files[f"offline/firmware-beta2/{relative}"]) != identity["size"] or digest(offline_files[f"offline/firmware-beta2/{relative}"]) != identity["sha256"]:
+            if not identity or len(offline_files[f"offline/firmware-beta3/{relative}"]) != identity["size"] or digest(offline_files[f"offline/firmware-beta3/{relative}"]) != identity["sha256"]:
                 raise ValueError(f"Bundled public firmware asset differs from release manifest: {manifest_name}")
     firmware = json.loads(provenance)
     for asset in firmware["assets"]:
         if asset["name"].endswith(".json"):
-            bundled = (ROOT / "assets/ak820" / ("beta2-" + asset["name"])).read_bytes()
+            bundled = (ROOT / "assets/ak820" / ("beta3-" + asset["name"])).read_bytes()
             if len(bundled) != asset["size"] or digest(bundled) != asset["sha256"]:
                 raise ValueError(f"Bundled firmware catalog differs: {asset['name']}")
     executable = "ak-configurator.exe" if platform.startswith("windows-") else "ak-configurator"
@@ -89,13 +134,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         "audio-sources/build_cava_helper.py": (ROOT / "scripts/build_cava_helper.py").read_bytes(),
         "CAVA-LICENSE": (ROOT / "vendor/cava/LICENSE").read_bytes(),
         "CAVA-PROVENANCE.json": (ROOT / "vendor/cava-provenance.json").read_bytes(),
-        "THIRD-PARTY-AUDIO.en.md": (ROOT / "docs/THIRD-PARTY-AUDIO.md").read_bytes(),
-        "THIRD-PARTY-AUDIO.ru.md": (ROOT / "docs/ru/THIRD-PARTY-AUDIO.md").read_bytes(),
         payload_binary: data,
-        "INSTALL.en.md": (ROOT / "docs/INSTALL.md").read_bytes(),
-        "INSTALL.ru.md": (ROOT / "docs/ru/INSTALL.md").read_bytes(),
-        "RGB-PLAN.en.md": (ROOT / "docs/RGB-PLAN.md").read_bytes(),
-        "RGB-PLAN.ru.md": (ROOT / "docs/ru/RGB-PLAN.md").read_bytes(),
         "firmware-provenance.json": provenance,
         "LICENSE": (ROOT / "LICENSE").read_bytes(),
         "FONT-LICENSES.txt": (ROOT / "assets/FONT-LICENSES.txt").read_bytes(),
@@ -103,6 +142,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         "eframe-LICENSE-MIT": (ROOT / "vendor/eframe/LICENSE-MIT").read_bytes(),
         "eframe-LICENSE-APACHE": (ROOT / "vendor/eframe/LICENSE-APACHE").read_bytes(),
     }
+    files.update({name: package_document(source, commit) for name, source in DOCUMENTS.items()})
     helper_dir = "windows" if platform.startswith("windows-") else ("macos" if app_bundle else "linux")
     files["install-user.ps1" if helper_dir == "windows" else "install-user.sh"] = (ROOT / "scripts/ak820-release" / helper_dir / ("install-user.ps1" if helper_dir == "windows" else "install-user.sh")).read_bytes()
     files["uninstall-user.ps1" if helper_dir == "windows" else "uninstall-user.sh"] = (ROOT / "scripts/ak820-release" / helper_dir / ("uninstall-user.ps1" if helper_dir == "windows" else "uninstall-user.sh")).read_bytes()
@@ -134,8 +174,12 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
                 files["AK-Configurator.app/Contents/Resources/" + filename] = value
     if runtime_check is not None:
         check = json.loads(Path(runtime_check).read_text(encoding="utf-8"))
-        if check.get("format") != "ak-configurator-self-check-1" or check.get("platform") != platform or check.get("status") != "passed" or check.get("hardware_access") is not False or check.get("network_access") is not False:
+        if not isinstance(check, dict) or check.get("format") != "ak-configurator-self-check-1" or check.get("platform") != platform or check.get("status") != "passed" or check.get("hardware_access") is not False or check.get("network_access") is not False:
             raise ValueError("Runtime self-check does not prove a passing, offline, device-free execution for this target")
+        if (check.get("application_version") != version
+                or check.get("firmware_release") != firmware["release"]
+                or check.get("catalog_sha256") != digest(offline_files["offline/capability-catalog.json"])):
+            raise ValueError("Runtime self-check belongs to a different application or firmware catalog")
         files["runtime-self-check.json"] = (json.dumps(check, indent=2, sort_keys=True) + "\n").encode()
     if app_bundle:
         numeric_version = ".".join(version.split("-", 1)[0].split("+")[0].split(".")[:3])

@@ -231,13 +231,14 @@ impl KeycodePicker {
         const COLS: usize = 16;
         const ROWS: usize = 6;
 
-        let scale = responsive_picker_element_scale(ui.ctx());
+        let available_width = ui.available_width();
+        let scale =
+            responsive_picker_element_scale(ui.ctx()).min((available_width / 909.0).max(0.1));
         let cell_w = 54.0 * scale;
         let cell_h = 54.0 * scale;
         let gap = 3.0 * scale;
         let width = COLS as f32 * cell_w + (COLS.saturating_sub(1)) as f32 * gap;
         let height = ROWS as f32 * cell_h + (ROWS.saturating_sub(1)) as f32 * gap;
-        let available_width = ui.available_width();
         let x_offset = ((available_width - width).max(0.0) * 0.5).floor();
 
         ui.horizontal(|ui| {
@@ -340,10 +341,11 @@ impl KeycodePicker {
         const COLS: usize = 16;
         const ROWS: usize = 6;
 
-        let scale = responsive_picker_element_scale(ui.ctx());
-        let gap = 4.0 * scale;
         let available_width = ui.available_width();
-        let key_size = popup_key_button_size(ui, "");
+        let scale =
+            responsive_picker_element_scale(ui.ctx()).min((available_width / 924.0).max(0.1));
+        let gap = 4.0 * scale;
+        let key_size = Vec2::splat(54.0 * scale);
         let cell_w = key_size.x.floor();
         let cell_h = key_size.y.floor();
         let width = COLS as f32 * cell_w + (COLS.saturating_sub(1)) as f32 * gap;

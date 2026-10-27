@@ -3,16 +3,16 @@
 //! settings_backup.py and pack_ak820.py. No HID, OEM bytes or write operations.
 //! NVM-only parsing proves storage structure, not a running firmware identity.
 use crate::ak820_settings_backup::{
-    macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256, BackupResult, ImageIdentity,
+    BackupResult, ImageIdentity, macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256,
 };
 use crate::ak820_typed_storage::{Extensions, SCHEMA};
-use crate::app::ak820_beta1_profiles::{matrix_profile, historical_settings_identity, ProfileId};
-use serde_json::{json, Map, Value};
+use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity, matrix_profile};
+use serde_json::{Map, Value, json};
 
 const MASK: [u8; 16] = [
     0x3f, 0x2f, 0x3f, 0x1f, 0x1f, 0x3f, 0x1f, 0x1f, 0x1f, 0x3f, 0x3f, 0x3f, 0x07, 0x3f, 0x3c, 0x2e,
 ];
-const LIMITATIONS: [&str;6] = [
+const LIMITATIONS: [&str; 6] = [
     "Direct HSV palette: no getter; not exported or restored.",
     "Hidden current RGB mode while off and current RGB flags: no getter; only saved NVM values are preserved.",
     "Unused matrix slots and reserved NVM bytes: captured as evidence, not imported.",
@@ -24,11 +24,7 @@ const LIMITATIONS: [&str;6] = [
 // This is hardware-revision validation, never physical-unit ownership evidence.
 const PROTECTED_SHA: &str = "9c4d481c14fe26b58f0f3eee81e84f45f118e06d755fd051da8d1cea5d78eb33";
 fn require(ok: bool, msg: &str) -> BackupResult<()> {
-    if ok {
-        Ok(())
-    } else {
-        Err(msg.into())
-    }
+    if ok { Ok(()) } else { Err(msg.into()) }
 }
 fn hex(raw: &[u8]) -> String {
     raw.iter().map(|b| format!("{b:02x}")).collect()
@@ -134,8 +130,10 @@ fn combo_settings(nvm: &[u8]) -> BackupResult<Value> {
                 || ((4..=0xa4).contains(&a)
                     && (4..=0xa4).contains(&b)
                     && a != b
-                    && out < 0x2000
-                    && ((4..=0xa4).contains(&(out & 255)) || (0xe0..=0xe7).contains(&(out & 255)))),
+                    && (out == 0x7c73
+                        || (out < 0x2000
+                            && ((4..=0xa4).contains(&(out & 255))
+                                || (0xe0..=0xe7).contains(&(out & 255)))))),
             "Unsupported Combo keys/output",
         )?;
         entries.push(hex(&data));
@@ -211,34 +209,55 @@ pub(crate) fn decode_trusted_rom(
 ) -> BackupResult<Value> {
     decode_catalog_rom(rom, nvm, identity, Some(profile))
 }
-fn decode_catalog_rom(rom: &[u8], nvm: &[u8], identity: &ImageIdentity, profile: Option<ProfileId>) -> BackupResult<Value> {
+fn decode_catalog_rom(
+    rom: &[u8],
+    nvm: &[u8],
+    identity: &ImageIdentity,
+    profile: Option<ProfileId>,
+) -> BackupResult<Value> {
     if let Some(profile) = profile {
-    let contract = matrix_profile(profile);
-    let exact = contract
-        .settings_identity
-        .as_ref()
-        .ok_or("Image lacks qualified packed CODE identity")?;
-    require(
-        identity.ihx_sha256 == exact.ihx_sha256
-            && identity.code_sha256 == exact.code_sha256
-            && identity.definition_sha256 == exact.definition_sha256
-            && identity.schema == exact.nvm_schema,
-        "Archive image differs from exact catalog settings contract",
-    )?;
-    require(
-        exact.combos_version == 1
-            && exact.extensions_version
-                == if identity.schema == SCHEMA {
-                    Some(1)
-                } else {
-                    None
-                },
-        "Unsupported typed contract version",
-    )?;
+        let contract = crate::app::ak820_beta1_profiles::previous_firmware_matrix()
+            .profiles
+            .iter()
+            .find(|r| {
+                r.settings_identity
+                    .as_ref()
+                    .is_some_and(|i| i.ihx_sha256 == identity.ihx_sha256)
+            })
+            .unwrap_or_else(|| matrix_profile(profile));
+        let exact = contract
+            .settings_identity
+            .as_ref()
+            .ok_or("Image lacks qualified packed CODE identity")?;
+        require(
+            identity.ihx_sha256 == exact.ihx_sha256
+                && identity.code_sha256 == exact.code_sha256
+                && identity.definition_sha256 == exact.definition_sha256
+                && identity.schema == exact.nvm_schema,
+            "Archive image differs from exact catalog settings contract",
+        )?;
+        require(
+            exact.combos_version == 1
+                && exact.extensions_version
+                    == if identity.schema == SCHEMA {
+                        Some(1)
+                    } else {
+                        None
+                    },
+            "Unsupported typed contract version",
+        )?;
     } else {
-        require(identity.definition_sha256 == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
-            && historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema).is_some(),
-            "Unknown exact historical settings contract")?;
+        require(
+            identity.definition_sha256
+                == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
+                && historical_settings_identity(
+                    &identity.ihx_sha256,
+                    &identity.code_sha256,
+                    identity.schema,
+                )
+                .is_some(),
+            "Unknown exact historical settings contract",
+        )?;
     }
     require(
         rom.len() == 65536 && nvm.len() == 0x2800,
@@ -276,13 +295,56 @@ fn decode_catalog_rom(rom: &[u8], nvm: &[u8], identity: &ImageIdentity, profile:
     )?;
     require(&rom[0xc700..0xef00] == nvm, "Saved NVM differs from ROM")?;
     validate_nvm(nvm, identity.schema)?;
-    let rgb = match profile { Some(p) => rgb_wire_for_profile(&nvm[24..32], false, p)?, None => rgb_wire(&nvm[24..32], false)? };
+    let historical_profile =
+        historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema)
+            .and_then(|h| h.profile);
+    if historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema)
+        .is_some()
+    {
+        for record in nvm[0x658..0x6a8].chunks_exact(10) {
+            require(
+                le(&record[8..]) != 0x7c73,
+                "Historical image does not support Combo Caps Word action",
+            )?;
+        }
+    }
+    let rgb = match profile.or(historical_profile) {
+        Some(p) => rgb_wire_for_profile(&nvm[24..32], false, p)?,
+        None => rgb_wire(&nvm[24..32], false)?,
+    };
     let combos = match profile {
         Some(p) => matrix_profile(p).capabilities.dynamic_entries.combos > 0,
-        None => historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema)
-            .ok_or("Unknown historical Combo contract")?.combos,
+        None => {
+            historical_settings_identity(
+                &identity.ihx_sha256,
+                &identity.code_sha256,
+                identity.schema,
+            )
+            .ok_or("Unknown historical Combo contract")?
+            .combos
+        }
     };
-    settings_from_nvm(nvm, &rgb, combos)
+    let mut settings = settings_from_nvm(nvm, &rgb, combos)?;
+    apply_image_limitations(&mut settings, identity);
+    Ok(settings)
+}
+/// RAM readback support does not make the durable backup a palette archive.
+pub(crate) fn apply_image_limitations(settings: &mut Value, identity: &ImageIdentity) {
+    let direct = crate::app::ak820_beta1_profiles::firmware_matrix()
+        .profiles
+        .iter()
+        .any(|r| {
+            r.settings_identity.as_ref().is_some_and(|i| {
+                i.ihx_sha256 == identity.ihx_sha256
+                    && i.code_sha256 == identity.code_sha256
+                    && i.direct_protocol == Some(1)
+            })
+        });
+    if direct {
+        settings["limitations"][0] = json!(
+            "Direct RAM palette is separate and is not included in this durable-settings backup."
+        );
+    }
 }
 
 /// Catalog-bound archive entry point. This validates local evidence; it does
@@ -293,7 +355,16 @@ pub(crate) fn validate_profile_archive(
     profile: ProfileId,
     expected_manifest: Option<&str>,
 ) -> BackupResult<crate::ak820_settings_backup::ValidatedArchive> {
-    let exact = matrix_profile(profile)
+    let value: Value = serde_json::from_slice(manifest).map_err(|_| "Invalid archive manifest")?;
+    let row = crate::app::ak820_beta1_profiles::previous_firmware_matrix()
+        .profiles
+        .iter()
+        .find(|r| {
+            r.profile == profile
+                && value["source_ihx_sha256"].as_str() == Some(r.identity.ihx_sha256.as_str())
+        })
+        .unwrap_or_else(|| matrix_profile(profile));
+    let exact = row
         .settings_identity
         .as_ref()
         .ok_or("Image lacks qualified packed CODE identity")?;
@@ -315,14 +386,29 @@ pub(crate) fn validate_profile_archive(
 /// Source-only historical backup admission, with the same full ROM checks as
 /// current images. No historical profile alias or target is introduced.
 pub(crate) fn validate_historical_archive(
-    manifest: &[u8], files: &std::collections::BTreeMap<String, Vec<u8>>,
-    identity: &ImageIdentity, expected_manifest: Option<&str>,
+    manifest: &[u8],
+    files: &std::collections::BTreeMap<String, Vec<u8>>,
+    identity: &ImageIdentity,
+    expected_manifest: Option<&str>,
 ) -> BackupResult<crate::ak820_settings_backup::ValidatedArchive> {
-    require(identity.definition_sha256 == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
-        && historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema).is_some(),
-        "Unknown exact historical settings contract")?;
-    crate::ak820_settings_backup::validate_archive(manifest, files, &[identity.clone()], expected_manifest,
-        |rom,nvm,image| decode_catalog_rom(rom,nvm,image,None))
+    require(
+        identity.definition_sha256
+            == "72b2261e1f7da5ec8ba37b8276bab12f12642e3d6514ec76ca1e4cd9b499fa6e"
+            && historical_settings_identity(
+                &identity.ihx_sha256,
+                &identity.code_sha256,
+                identity.schema,
+            )
+            .is_some(),
+        "Unknown exact historical settings contract",
+    )?;
+    crate::ak820_settings_backup::validate_archive(
+        manifest,
+        files,
+        &[identity.clone()],
+        expected_manifest,
+        |rom, nvm, image| decode_catalog_rom(rom, nvm, image, None),
+    )
 }
 
 #[cfg(test)]
@@ -406,9 +492,11 @@ mod tests {
     fn legacy_nvm_needs_explicit_migration_before_derivation() {
         let nvm = modeled_nvm(0x082001);
         assert!(validate_nvm(&nvm, 0x082001).is_ok());
-        assert!(settings_from_nvm(&nvm, &[], false)
-            .unwrap_err()
-            .contains("explicit migration"));
+        assert!(
+            settings_from_nvm(&nvm, &[], false)
+                .unwrap_err()
+                .contains("explicit migration")
+        );
     }
     #[test]
     fn malformed_nvm_fails_before_derivation() {
@@ -470,14 +558,18 @@ mod tests {
         let n = modeled_nvm(identity.schema);
         let mut rom = vec![0; 65536];
         rom[0xc700..0xef00].copy_from_slice(&n);
-        assert!(decode_trusted_rom(&rom, &n, &identity, id)
-            .unwrap_err()
-            .contains("protected"));
+        assert!(
+            decode_trusted_rom(&rom, &n, &identity, id)
+                .unwrap_err()
+                .contains("protected")
+        );
         assert!(decode_trusted_rom(&rom[..100], &n, &identity, id).is_err());
         let mut wrong = identity.clone();
         wrong.code_sha256 = "0".repeat(64);
-        assert!(decode_trusted_rom(&rom, &n, &wrong, id)
-            .unwrap_err()
-            .contains("catalog"));
+        assert!(
+            decode_trusted_rom(&rom, &n, &wrong, id)
+                .unwrap_err()
+                .contains("catalog")
+        );
     }
 }

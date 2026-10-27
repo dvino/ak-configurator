@@ -3,7 +3,7 @@
 use crate::ak820_image_pack::{APP_END, APP_START};
 use crate::ak820_installer::{CheckedLocalPackage, SnapshotKind};
 use crate::ak820_loader::{self as loader, Command, PayloadReports};
-use crate::ak820_settings_backup::{sha256, BackupResult};
+use crate::ak820_settings_backup::{BackupResult, sha256};
 use crate::app::ak820_beta1_profiles::ProfileId;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -32,9 +32,6 @@ fn preserved_nvm(
     target: ProfileId,
 ) -> BackupResult<Vec<u8>> {
     let source_profile=match source_kind { SnapshotKind::Project(p)=>p,SnapshotKind::Oem=>return Err("Project settings preservation requires a verified project source; select defaults for the initial OEM installation".into()) };
-    if source_profile == target {
-        return Ok(source[0xc700..0xef00].to_vec());
-    }
     let capture = crate::ak820_backup_capture::CapturedBackup::from_rom(
         source_profile,
         source.to_vec(),
@@ -98,6 +95,7 @@ pub(crate) enum InstallSettingsChoice {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct InstallationSummary {
+    pub(crate) source_is_oem: bool,
     pub(crate) action: String,
     pub(crate) source_sha256: String,
     pub(crate) payload_sha256: String,
@@ -184,7 +182,7 @@ impl PreparedInstallation {
         };
         let (payload, action, hold, settings) = match request {
             InstallRequest::BundledFirmware { .. } => {
-                return Err("Bundled request was not normalized".into())
+                return Err("Bundled request was not normalized".into());
             }
             InstallRequest::Firmware {
                 profile,
@@ -275,6 +273,7 @@ impl PreparedInstallation {
                 .map(|a| a.metadata_sha256().to_owned())
                 .unwrap_or_default(),
             summary: InstallationSummary {
+                source_is_oem: source_kind == SnapshotKind::Oem,
                 action,
                 source_sha256,
                 payload_sha256,
@@ -452,6 +451,7 @@ mod tests {
             target: None,
             release_metadata_sha: String::new(),
             summary: InstallationSummary {
+                source_is_oem: false,
                 action: "synthetic".into(),
                 source_sha256: String::new(),
                 payload_sha256: String::new(),
@@ -564,12 +564,14 @@ mod tests {
         // supplied explicitly or selected as a no-archive source candidate.
         assert!(bundled_recovery(SnapshotKind::Oem, &source, None).is_err());
         assert!(bundled_recovery(SnapshotKind::Oem, &source, Some(vec![0; 65536])).is_err());
-        assert!(bundled_recovery(
-            SnapshotKind::Project(ProfileId::Main),
-            &source,
-            Some(vec![])
-        )
-        .is_err());
+        assert!(
+            bundled_recovery(
+                SnapshotKind::Project(ProfileId::Main),
+                &source,
+                Some(vec![])
+            )
+            .is_err()
+        );
         assert!(preserved_nvm(SnapshotKind::Oem, &source, ProfileId::Main).is_err());
         let request = InstallRequest::BundledFirmware {
             profile: ProfileId::Main,

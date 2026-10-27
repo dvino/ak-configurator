@@ -28,9 +28,41 @@ fn combo_layer_labels(
 }
 
 impl EntropyApp {
-    fn ak820_offline_qmk_combo_term(&self) -> Option<u16> {
-        if !self.ak820_demo || !self.ak820_demo_profile.is_some_and(|profile|
-            super::ak820_beta1_profiles::matrix_profile(profile).capabilities.runtime_qmk_settings_ids.contains(&2)) {
+    fn ak820_combo_description(&self) -> &'static str {
+        if self.keycode_picker.ak820_profile {
+            match self.app_settings.language {
+                crate::i18n::Language::Russian => {
+                    "Назначьте две разные исходные клавиши и результат Combo"
+                }
+                crate::i18n::Language::English => {
+                    "Assign two different input keys and the Combo result"
+                }
+            }
+        } else {
+            crate::i18n::tr(
+                self.app_settings.language,
+                crate::i18n::Key::ComboDescription,
+            )
+        }
+    }
+
+    fn ak820_qmk_combo_term(&self) -> Option<u16> {
+        if !self.keycode_picker.ak820_profile {
+            return None;
+        }
+        if !self.ak820_demo {
+            return self
+                .supported_qmk_settings
+                .contains(&2)
+                .then_some(self.combo_term)
+                .flatten();
+        }
+        if !self.ak820_demo_profile.is_some_and(|profile| {
+            super::ak820_beta1_profiles::matrix_profile(profile)
+                .capabilities
+                .runtime_qmk_settings_ids
+                .contains(&2)
+        }) {
             return None;
         }
         let state = self.ak820_offline_extensions.as_ref()?;
@@ -53,23 +85,30 @@ impl EntropyApp {
         let mut combo_keycap_hovered = false;
 
         crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
-            ui.vertical_centered(|ui| {
-                let scale = responsive_settings_editor_scale(ui.ctx());
-                ui.add_space(18.0 * scale);
-                ui.label(
-                    RichText::new(crate::i18n::tr(lang, crate::i18n::Key::ComboTitle))
-                        .size(18.0 * scale)
-                        .strong(),
-                );
-                ui.add_space(6.0 * scale);
-                ui.label(
-                    RichText::new(crate::i18n::tr(lang, crate::i18n::Key::ComboDescription))
-                        .size(13.0 * scale)
-                        .color(app_muted_text(dark)),
-                );
-                ui.add_space(18.0 * scale);
-                combo_keycap_hovered = self.draw_combo_editor_content(ui, false);
-            });
+            egui::ScrollArea::vertical()
+                .id_salt("combo_settings_page_scroll")
+                .max_height(content_rect.height())
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.set_min_size(content_rect.size());
+                    ui.vertical_centered(|ui| {
+                        let scale = responsive_settings_editor_scale(ui.ctx());
+                        ui.add_space(18.0 * scale);
+                        ui.label(
+                            RichText::new(crate::i18n::tr(lang, crate::i18n::Key::ComboTitle))
+                                .size(18.0 * scale)
+                                .strong(),
+                        );
+                        ui.add_space(6.0 * scale);
+                        ui.label(
+                            RichText::new(self.ak820_combo_description())
+                                .size(13.0 * scale)
+                                .color(app_muted_text(dark)),
+                        );
+                        ui.add_space(18.0 * scale);
+                        combo_keycap_hovered = self.draw_combo_editor_content(ui, false);
+                    });
+                });
         });
         combo_keycap_hovered
     }
@@ -123,13 +162,7 @@ impl EntropyApp {
     fn draw_combo_editor_content(&mut self, ui: &mut egui::Ui, show_intro: bool) -> bool {
         let dark = ui.visuals().dark_mode;
         if show_intro {
-            crate::ui_style::modal_hint(
-                ui,
-                crate::i18n::tr(
-                    self.app_settings.language,
-                    crate::i18n::Key::ComboDescription,
-                ),
-            );
+            crate::ui_style::modal_hint(ui, self.ak820_combo_description());
         }
 
         if self.firmware != FirmwareProtocol::Vial {
@@ -694,7 +727,7 @@ impl EntropyApp {
                     }
                 }
 
-                if let Some(term) = self.ak820_offline_qmk_combo_term() {
+                if let Some(term) = self.ak820_qmk_combo_term() {
                     ui.label(match self.app_settings.language {
                         crate::i18n::Language::Russian => format!(
                             "Две клавиши, интервал {term} мс. Изменяется в панели QMK Settings."
@@ -994,6 +1027,210 @@ fn paint_combo_color_chip(
 mod tests {
     use super::*;
 
+    fn render_combo_page(
+        app: &mut EntropyApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
+        render_combo_page_at_size(app, ctx, events, egui::vec2(800.0, 500.0))
+    }
+
+    fn render_combo_page_at_size(
+        app: &mut EntropyApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        size: egui::Vec2,
+    ) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let content_rect = egui::Rect::from_min_max(
+                        egui::pos2(20.0, 100.0),
+                        egui::pos2(size.x - 20.0, size.y - 76.0),
+                    );
+                    app.draw_combo_settings_page(ui, ctx, content_rect);
+                    ui.painter().text(
+                        egui::pos2(size.x * 0.5, size.y - 38.0),
+                        egui::Align2::CENTER_CENTER,
+                        "Footer marker",
+                        egui::FontId::proportional(12.0),
+                        ui.visuals().text_color(),
+                    );
+                });
+            },
+        )
+    }
+
+    fn visible_text_position(output: &egui::FullOutput, contains: &str) -> Option<egui::Pos2> {
+        output.shapes.iter().find_map(|shape| {
+            let egui::Shape::Text(text) = &shape.shape else {
+                return None;
+            };
+            let center = text.pos + text.galley.size() / 2.0;
+            (text.galley.job.text.contains(contains) && shape.clip_rect.contains(center))
+                .then_some(center)
+        })
+    }
+
+    fn output_keycap_rect(
+        output: &egui::FullOutput,
+        row_y: f32,
+        key_size: egui::Vec2,
+    ) -> Option<egui::Rect> {
+        output.shapes.iter().find_map(|shape| {
+            let egui::Shape::Rect(rect) = &shape.shape else {
+                return None;
+            };
+            ((rect.rect.width() - key_size.x).abs() < 1.0
+                && (rect.rect.height() - key_size.y).abs() < 1.0
+                && (rect.rect.center().y - row_y).abs() < 3.0
+                && rect.rect.center().x > 400.0
+                && shape.clip_rect.contains(rect.rect.center()))
+            .then_some(rect.rect)
+        })
+    }
+
+    #[test]
+    fn compact_combo_page_scrolls_output_and_interval_above_footer_in_both_languages() {
+        for language in [
+            crate::i18n::Language::English,
+            crate::i18n::Language::Russian,
+        ] {
+            let ctx = egui::Context::default();
+            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            app.app_settings.ui_scale = 1.0;
+            ctx.set_zoom_factor(1.0);
+            app.combo_entries[0] = ComboEntry {
+                keys: [4, 5, 0, 0],
+                output: 6.into(),
+                layer: None,
+            };
+            app.combo_names[0] = "Viewport check".into();
+
+            let screen =
+                egui::Rect::from_min_max(egui::pos2(20.0, 100.0), egui::pos2(780.0, 424.0));
+            let _ = render_combo_page(&mut app, &ctx, vec![]);
+            let wheel = vec![
+                egui::Event::PointerMoved(egui::pos2(400.0, 300.0)),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -1_200.0),
+                    modifiers: egui::Modifiers::NONE,
+                    phase: egui::TouchPhase::Move,
+                },
+            ];
+            let mut output = render_combo_page(&mut app, &ctx, wheel);
+            for _ in 0..4 {
+                output = render_combo_page(&mut app, &ctx, vec![]);
+            }
+
+            let output_label = crate::i18n::tr_catalog(language, "combo_editor.output_key");
+            let output_pos = visible_text_position(&output, output_label)
+                .expect("output row should scroll into the page viewport");
+            let interval_fragment = match language {
+                crate::i18n::Language::English => "Two keys",
+                crate::i18n::Language::Russian => "Две клавиши",
+            };
+            let interval_pos = visible_text_position(&output, interval_fragment)
+                .expect("Combo interval should scroll into the page viewport");
+            for (name, point) in [("output row", output_pos), ("interval", interval_pos)] {
+                assert!(
+                    screen.contains(point),
+                    "{name} is outside page viewport: {point:?}"
+                );
+                assert!(point.y < 424.0, "{name} overlaps footer: {point:?}");
+            }
+
+            let key_size = crate::ui_style::ResponsiveMetrics::from_ctx(&ctx).size(54.0, 54.0);
+            let key_rect = output_keycap_rect(&output, output_pos.y, key_size)
+                .expect("output keycap should be fully visible in its row");
+            assert!(screen.contains_rect(key_rect));
+            assert!(key_rect.bottom() < 424.0);
+
+            for pressed in [true, false] {
+                let _ = render_combo_page(
+                    &mut app,
+                    &ctx,
+                    vec![
+                        egui::Event::PointerMoved(key_rect.center()),
+                        egui::Event::PointerButton {
+                            pos: key_rect.center(),
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            assert!(
+                app.keycode_picker.open,
+                "output click should open key picker"
+            );
+            assert!(
+                matches!(app.combo_pick_target, Some((0, ComboPickField::Output))),
+                "output keycap should open the constrained Combo output picker"
+            );
+        }
+    }
+
+    #[test]
+    fn large_combo_page_keeps_output_keycap_visible_and_clickable() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.language = crate::i18n::Language::English;
+        app.app_settings.ui_scale = 1.0;
+        ctx.set_zoom_factor(1.0);
+        app.combo_entries[0] = ComboEntry {
+            keys: [4, 5, 0, 0],
+            output: 6.into(),
+            layer: None,
+        };
+        let size = egui::vec2(1_400.0, 900.0);
+        let output = render_combo_page_at_size(&mut app, &ctx, vec![], size);
+        let label =
+            crate::i18n::tr_catalog(crate::i18n::Language::English, "combo_editor.output_key");
+        let output_pos = visible_text_position(&output, label).expect("output label is visible");
+        let key_size = crate::ui_style::ResponsiveMetrics::from_ctx(&ctx).size(54.0, 54.0);
+        let key_rect = output_keycap_rect(&output, output_pos.y, key_size)
+            .expect("output keycap should remain in its established large-window position");
+        let page_rect = egui::Rect::from_min_max(
+            egui::pos2(20.0, 100.0),
+            egui::pos2(size.x - 20.0, size.y - 76.0),
+        );
+        assert!(page_rect.contains_rect(key_rect));
+        assert!(key_rect.bottom() < size.y - 76.0);
+
+        for pressed in [true, false] {
+            render_combo_page_at_size(
+                &mut app,
+                &ctx,
+                vec![
+                    egui::Event::PointerMoved(key_rect.center()),
+                    egui::Event::PointerButton {
+                        pos: key_rect.center(),
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                size,
+            );
+        }
+        assert!(app.keycode_picker.open);
+        assert!(matches!(
+            app.combo_pick_target,
+            Some((0, ComboPickField::Output))
+        ));
+    }
+
     #[test]
     fn native_actions_are_available_only_for_combo_output() {
         assert!(combo_picker_allows_native_actions(
@@ -1027,10 +1264,26 @@ mod tests {
 mod ak820_profile_combo_term_tests {
     use super::*;
     #[test]
+    fn live_ak820_combo_hint_uses_loaded_qsid_two_instead_of_fixed_alpha3_interval() {
+        let mut app = EntropyApp::new_inert_for_test();
+        app.keycode_picker.ak820_profile = true;
+        app.supported_qmk_settings = vec![2];
+        app.combo_term = Some(73);
+        assert_eq!(app.ak820_qmk_combo_term(), Some(73));
+        app.combo_term = Some(120);
+        assert_eq!(app.ak820_qmk_combo_term(), Some(120));
+        app.supported_qmk_settings.clear();
+        assert_eq!(app.ak820_qmk_combo_term(), None);
+        app.supported_qmk_settings = vec![2];
+        app.keycode_picker.ak820_profile = false;
+        assert_eq!(app.ak820_qmk_combo_term(), None);
+    }
+
+    #[test]
     fn beta2_combo_description_uses_each_profiles_validated_qsid_two() {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
-        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(40));
+        assert_eq!(app.ak820_qmk_combo_term(), Some(40));
         let profile = super::super::ak820_beta1_profiles::ProfileId::Code;
         app.configure_ak820_offline_profile(profile);
         let nvm = app.ak820_offline_extensions.as_ref().unwrap().nvm();
@@ -1041,9 +1294,9 @@ mod ak820_profile_combo_term_tests {
             super::super::ak820_offline_extensions::OfflineExtensions::from_nvm(&candidate)
                 .unwrap(),
         );
-        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(73));
+        assert_eq!(app.ak820_qmk_combo_term(), Some(73));
         app.configure_ak820_offline_profile(super::super::ak820_beta1_profiles::ProfileId::Main);
-        assert_eq!(app.ak820_offline_qmk_combo_term(), Some(40));
+        assert_eq!(app.ak820_qmk_combo_term(), Some(40));
         assert!(app.hid_device.is_none());
     }
 }

@@ -334,6 +334,10 @@ impl EntropyApp {
         self.combo_synced_entries = self.combo_entries.clone();
         self.keycode_picker.supports_combo = matrix.capabilities.dynamic_entries.combos > 0;
         self.keycode_picker.reset_offline_profile_context();
+        self.keycode_picker.ak820_combo_caps_word = matrix
+            .settings_identity
+            .as_ref()
+            .is_some_and(|i| i.combo_actions.iter().any(|a| a == "caps-word-toggle"));
         self.keycode_picker.ak820_beta1_keycodes = Some(allowed);
         self.keycode_picker.ak820_beta1_profile_revision = self
             .keycode_picker

@@ -2,34 +2,63 @@
 //! Pinned public release inputs and admission. No device authorization is
 //! implied: fresh per-operation confirmation belongs to the installer.
 use crate::ak820_image_pack::{
-    default_nvm, pack_candidate, read_symbols, validate_catalog_payload, EntryMode,
+    EntryMode, default_nvm, pack_candidate, read_symbols, validate_catalog_payload,
 };
-use crate::ak820_settings_backup::{sha256, BackupResult};
+use crate::ak820_settings_backup::{BackupResult, sha256};
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use serde::{Deserialize, Serialize};
 
-const RELEASE_CATALOG: &str = include_str!("../assets/ak820/beta2-release-catalog.json");
-const RELEASE_SHA256: &str = "2ede283a4bf1acfaca237b80d221fc23ba81426ed647aeb4d62474f82e221a73";
-const RELEASE_API: &str = "https://api.github.com/repos/dvino/ak820/releases/tags/v0.6.0-beta.2";
-const RELEASE_PAGE: &str = "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.2";
-const MANIFEST_SHA256: &str = "999266594b741d92814b454616c2c0266f3515824f294738061066376b1c6ec6";
+const RELEASE_CATALOG: &str = include_str!("../assets/ak820/beta3-release-catalog.json");
+const RELEASE_SHA256: &str = "bf1ce6f0287131bbe9a2d80dbb245c6be9eda3d31436451cda91a4b29e82bb42";
+const RELEASE_API: &str = "https://api.github.com/repos/dvino/ak820/releases/tags/v0.6.0-beta.3";
+const RELEASE_PAGE: &str = "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3";
+const MANIFEST_SHA256: &str = "6495d6c075807362453a4831600b58779da98b0dc1d38f37cff9e9227a6b6159";
 
 /// Block-only observations persist separately from firmware and cannot grant
 /// support to a new image. A network failure never clears a known block.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReleaseObservation {
+    #[serde(default = "legacy_release")]
+    pub(crate) release: String,
+    #[serde(default = "legacy_catalog")]
+    pub(crate) catalog_sha256: String,
+    #[serde(default)]
+    pub(crate) published: bool,
     pub(crate) checked_at: Option<String>,
     pub(crate) blocked: bool,
     pub(crate) reason: Option<String>,
 }
+fn legacy_release() -> String {
+    "v0.6.0-beta.2".into()
+}
+fn legacy_catalog() -> String {
+    "2ede283a4bf1acfaca237b80d221fc23ba81426ed647aeb4d62474f82e221a73".into()
+}
 impl ReleaseObservation {
-    pub(crate) fn apply(&mut self, newer: Self) {
-        self.checked_at = newer.checked_at;
-        if newer.blocked {
-            self.blocked = true;
-            self.reason = newer.reason;
+    pub(crate) fn blocks_current_release(&self) -> bool {
+        self.release == beta::BETA_RELEASE
+            && self.catalog_sha256 == RELEASE_SHA256
+            && self.published
+            && self.blocked
+    }
+    pub(crate) fn apply(&mut self, mut newer: Self) {
+        let same = self.release == newer.release && self.catalog_sha256 == newer.catalog_sha256;
+        if same {
+            newer.published |= self.published;
+            if self.blocked && self.published {
+                newer.blocked = true;
+                newer.reason = self.reason.clone();
+            }
         }
+        // This bundled tag is independently known to be published; absence is withdrawal.
+        if newer.release == beta::BETA_RELEASE && newer.catalog_sha256 == RELEASE_SHA256 {
+            newer.published = true;
+        }
+        if !newer.published {
+            newer.blocked = false;
+        }
+        *self = newer;
     }
 }
 
@@ -76,7 +105,7 @@ impl ReleaseAdmission {
         })
     }
     pub(crate) fn with_observation(self, observation: &ReleaseObservation) -> BackupResult<Self> {
-        if observation.blocked {
+        if observation.blocks_current_release() {
             return Err(
                 "The selected bundled release was withdrawn or changed; installation is blocked"
                     .into(),
@@ -105,42 +134,72 @@ impl ReleaseAdmission {
         beta::BETA_RELEASE
     }
     pub(crate) fn offline_notice(&self) -> &'static str {
-        "Bundled release metadata; a later withdrawal may be unknown offline."
+        "Pinned published beta.3 release metadata; a later withdrawal may be unknown offline."
     }
 }
 
 /// Only these immutable public linked sources are bundled. OEM reference bytes
 /// are supplied locally by the user and never included in the application.
 pub(crate) fn bundled_sources(profile: ProfileId) -> BackupResult<(&'static str, &'static str)> {
+    sources_for_image(crate::ak820::ImageContract::Beta3(profile))
+}
+pub(crate) fn sources_for_image(
+    image: crate::ak820::ImageContract,
+) -> BackupResult<(&'static str, &'static str)> {
+    let profile = image
+        .profile()
+        .ok_or("Image has no supported public defaults")?;
     macro_rules! source {
-        ($name:literal) => {
+        ($dir:literal, $name:literal) => {
             (
                 include_str!(concat!(
-                    "../assets/ak820/firmware-beta2/",
+                    "../assets/ak820/",
+                    $dir,
+                    "/",
                     $name,
                     "/application.ihx"
                 )),
                 include_str!(concat!(
-                    "../assets/ak820/firmware-beta2/",
+                    "../assets/ak820/",
+                    $dir,
+                    "/",
                     $name,
                     "/application.map"
                 )),
             )
         };
     }
-    let (ihx, map) = match profile {
-        ProfileId::Main => source!("main"),
-        ProfileId::Game => source!("game"),
-        ProfileId::Mmo => source!("mmo"),
-        ProfileId::Typing => source!("typing"),
-        ProfileId::Code => source!("code"),
-        ProfileId::Pointer => source!("pointer"),
-        ProfileId::Onehand => source!("onehand"),
-        ProfileId::Creative => source!("creative"),
-        ProfileId::Shortcuts => source!("shortcuts"),
-        ProfileId::Multios => source!("multios"),
+    let (ihx, map) = match image {
+        crate::ak820::ImageContract::Beta2(_) => match profile {
+            ProfileId::Main => source!("firmware-beta2", "main"),
+            ProfileId::Game => source!("firmware-beta2", "game"),
+            ProfileId::Mmo => source!("firmware-beta2", "mmo"),
+            ProfileId::Typing => source!("firmware-beta2", "typing"),
+            ProfileId::Code => source!("firmware-beta2", "code"),
+            ProfileId::Pointer => source!("firmware-beta2", "pointer"),
+            ProfileId::Onehand => source!("firmware-beta2", "onehand"),
+            ProfileId::Creative => source!("firmware-beta2", "creative"),
+            ProfileId::Shortcuts => source!("firmware-beta2", "shortcuts"),
+            ProfileId::Multios => source!("firmware-beta2", "multios"),
+        },
+        crate::ak820::ImageContract::Beta3(_) => match profile {
+            ProfileId::Main => source!("firmware-beta3", "main"),
+            ProfileId::Game => source!("firmware-beta3", "game"),
+            ProfileId::Mmo => source!("firmware-beta3", "mmo"),
+            ProfileId::Typing => source!("firmware-beta3", "typing"),
+            ProfileId::Code => source!("firmware-beta3", "code"),
+            ProfileId::Pointer => source!("firmware-beta3", "pointer"),
+            ProfileId::Onehand => source!("firmware-beta3", "onehand"),
+            ProfileId::Creative => source!("firmware-beta3", "creative"),
+            ProfileId::Shortcuts => source!("firmware-beta3", "shortcuts"),
+            ProfileId::Multios => source!("firmware-beta3", "multios"),
+        },
+        _ => return Err("Unsupported public default image".into()),
     };
-    let identity = &beta::matrix_profile(profile).identity;
+    let identity = &image
+        .matrix_profile()
+        .ok_or("Missing exact default contract")?
+        .identity;
     if sha256(ihx.as_bytes()) != identity.ihx_sha256
         || sha256(map.as_bytes()) != identity.map_sha256
     {
@@ -149,7 +208,10 @@ pub(crate) fn bundled_sources(profile: ProfileId) -> BackupResult<(&'static str,
     Ok((ihx, map))
 }
 pub(crate) fn bundled_defaults(profile: ProfileId) -> BackupResult<Vec<u8>> {
-    let (ihx, map) = bundled_sources(profile)?;
+    defaults_for_image(crate::ak820::ImageContract::Beta3(profile))
+}
+pub(crate) fn defaults_for_image(image: crate::ak820::ImageContract) -> BackupResult<Vec<u8>> {
+    let (ihx, map) = sources_for_image(image)?;
     default_nvm(ihx, &read_symbols(map)?)
 }
 /// Prepare a firmware payload offline, with either explicit settings or factory
@@ -200,12 +262,12 @@ fn observe_api(bytes: &[u8], checked_at: String) -> BackupResult<ReleaseObservat
     }
     let expected = [
         (
-            "AK820-Beta2-Catalog.zip",
-            4034329,
+            "AK820-Beta3-Catalog.zip",
+            5564922,
             beta::SOURCE_ARCHIVE_SHA256,
         ),
-        ("release-catalog.json", 29522, RELEASE_SHA256),
-        ("release-manifest.json", 29281, MANIFEST_SHA256),
+        ("release-catalog.json", 29738, RELEASE_SHA256),
+        ("release-manifest.json", 29497, MANIFEST_SHA256),
     ];
     let mut changed = release.draft || !release.prerelease;
     let mut unknown_digest = false;
@@ -234,6 +296,9 @@ fn observe_api(bytes: &[u8], checked_at: String) -> BackupResult<ReleaseObservat
         return Err("Release API has no asset digest; current status is unknown".into());
     }
     Ok(ReleaseObservation {
+        release: beta::BETA_RELEASE.into(),
+        catalog_sha256: RELEASE_SHA256.into(),
+        published: true,
         checked_at: Some(checked_at),
         blocked: changed,
         reason: changed
@@ -260,10 +325,13 @@ pub(crate) fn check_bundled_release() -> BackupResult<ReleaseObservation> {
         Ok(response) => response,
         Err(ureq::Error::Status(404 | 410, _)) => {
             return Ok(ReleaseObservation {
+                release: beta::BETA_RELEASE.into(),
+                catalog_sha256: RELEASE_SHA256.into(),
+                published: true,
                 checked_at: Some(checked_at),
                 blocked: true,
-                reason: Some("Bundled release is no longer published".into()),
-            })
+                reason: Some("Bundled published release is no longer available".into()),
+            });
         }
         Err(_) => return Err("Release check is unavailable; last known status is retained".into()),
     };
@@ -283,9 +351,42 @@ pub(crate) fn check_bundled_release() -> BackupResult<ReleaseObservation> {
 mod tests {
     use super::*;
     #[test]
+    fn release_observations_bind_tag_catalog_and_publication() {
+        let mut legacy: ReleaseObservation = serde_json::from_str(
+            r#"{"checked_at":null,"blocked":true,"reason":"old beta2 block"}"#,
+        )
+        .unwrap();
+        assert!(!legacy.blocks_current_release());
+        let absent = || ReleaseObservation {
+            release: beta::BETA_RELEASE.into(),
+            catalog_sha256: RELEASE_SHA256.into(),
+            published: false,
+            checked_at: None,
+            blocked: true,
+            reason: Some("absent".into()),
+        };
+        let mut first_missing = ReleaseObservation::default();
+        first_missing.apply(absent());
+        assert!(first_missing.blocks_current_release());
+        let mut unpublished = absent();
+        unpublished.release = "v0.6.0-beta.99".into();
+        legacy.apply(unpublished);
+        assert!(!legacy.blocks_current_release());
+        legacy.apply(observe(&api()).unwrap());
+        assert!(!legacy.blocks_current_release());
+        legacy.apply(absent());
+        assert!(legacy.blocks_current_release());
+        legacy.apply(observe(&api()).unwrap());
+        assert!(legacy.blocks_current_release());
+        let mut foreign = observe(&api()).unwrap();
+        foreign.catalog_sha256 = "0".repeat(64);
+        foreign.blocked = true;
+        assert!(!foreign.blocks_current_release());
+    }
+    #[test]
     fn all_ten_public_sources_and_default_settings_are_validated() {
         let expected: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/ak820-beta2-defaults.json"))
+            serde_json::from_str(include_str!("../tests/fixtures/ak820-beta3-defaults.json"))
                 .unwrap();
         for image in beta::profiles() {
             let profile = image.profile;
@@ -294,9 +395,11 @@ mod tests {
             assert_eq!(admission.version(), beta::BETA_RELEASE);
             let nvm = bundled_defaults(profile).unwrap();
             assert_eq!(sha256(&nvm), expected[profile.as_str()].as_str().unwrap());
-            assert!(admission
-                .validate_payload(profile, &vec![0; 51136])
-                .is_err());
+            assert!(
+                admission
+                    .validate_payload(profile, &vec![0; 51136])
+                    .is_err()
+            );
             // Public linked files do not substitute for a private OEM source.
             assert!(bundled_payload(profile, &[0; 65536], None).is_err());
         }
@@ -304,9 +407,9 @@ mod tests {
     fn api() -> serde_json::Value {
         serde_json::json!({"tag_name":beta::BETA_RELEASE,"html_url":RELEASE_PAGE,"draft":false,"prerelease":true,
             "assets":[
-                {"name":"AK820-Beta2-Catalog.zip","size":4034329,"state":"uploaded","digest":format!("sha256:{}",beta::SOURCE_ARCHIVE_SHA256),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/AK820-Beta2-Catalog.zip",beta::BETA_RELEASE)},
-                {"name":"release-catalog.json","size":29522,"state":"uploaded","digest":format!("sha256:{RELEASE_SHA256}"),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/release-catalog.json",beta::BETA_RELEASE)},
-                {"name":"release-manifest.json","size":29281,"state":"uploaded","digest":format!("sha256:{MANIFEST_SHA256}"),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/release-manifest.json",beta::BETA_RELEASE)}]})
+                {"name":"AK820-Beta3-Catalog.zip","size":5564922,"state":"uploaded","digest":format!("sha256:{}",beta::SOURCE_ARCHIVE_SHA256),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/AK820-Beta3-Catalog.zip",beta::BETA_RELEASE)},
+                {"name":"release-catalog.json","size":29738,"state":"uploaded","digest":format!("sha256:{RELEASE_SHA256}"),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/release-catalog.json",beta::BETA_RELEASE)},
+                {"name":"release-manifest.json","size":29497,"state":"uploaded","digest":format!("sha256:{MANIFEST_SHA256}"),"browser_download_url":format!("https://github.com/dvino/ak820/releases/download/{}/release-manifest.json",beta::BETA_RELEASE)}]})
     }
     fn observe(value: &serde_json::Value) -> BackupResult<ReleaseObservation> {
         observe_api(
@@ -328,10 +431,12 @@ mod tests {
         assert!(remembered.blocked);
         remembered.apply(observe(&api()).unwrap());
         assert!(remembered.blocked);
-        assert!(ReleaseAdmission::bundled(ProfileId::Main, true)
-            .unwrap()
-            .with_observation(&remembered)
-            .is_err());
+        assert!(
+            ReleaseAdmission::bundled(ProfileId::Main, true)
+                .unwrap()
+                .with_observation(&remembered)
+                .is_err()
+        );
         let mut unknown = api();
         unknown["assets"][0]["digest"] = serde_json::Value::Null;
         assert!(observe(&unknown).is_err());

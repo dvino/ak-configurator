@@ -79,6 +79,7 @@ impl HidDevice {
             self.read_only.is_none() && !std::env::args().any(|a| a == "--demo-ak820"),
             "Installation is unavailable in read-only or demo mode"
         );
+        self.ak820_install_session_ready()?;
         capture_check_cancel(cancel)?;
         let mut io = ParentTransport(self, cancel, false);
         let source = engine::InstallTransport::read_rom(&mut io).map_err(anyhow::Error::msg)?;
@@ -93,6 +94,19 @@ impl HidDevice {
         };
         PreparedInstallation::prepare(request, source, admission, owner_binding)
             .map_err(anyhow::Error::msg)
+    }
+    fn ak820_install_session_ready(&self) -> Result<()> {
+        let state = self
+            .ak820
+            .as_ref()
+            .context("Not an AK820 session")?
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        ensure!(
+            state.failure.is_none(),
+            "Read and verify the device again after a failed operation before preparing installation"
+        );
+        Ok(())
     }
     pub(crate) fn ak820_execute_install(
         &self,
@@ -113,6 +127,10 @@ impl HidDevice {
             .context("Not AK820")?
             .lock()
             .unwrap_or_else(|e| e.into_inner());
+        ensure!(
+            state.failure.is_none(),
+            "Installation is blocked after a failed operation; read and verify the device again"
+        );
         // Keep the settings owner locked for the complete transaction; helper
         // requests are serialized and its lease survives USB mode changes.
         state.loaded = false;
@@ -141,6 +159,39 @@ impl HidDevice {
             }
             _ => Err("Installation requires the exclusive native HID helper".into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod install_session_tests {
+    use super::*;
+
+    #[test]
+    fn failed_capture_owner_cannot_prepare_even_with_defaults_or_rollback() {
+        let (hid, log) = HidDevice::test_ak820_device(true);
+        hid.ak820.as_ref().unwrap().lock().unwrap().failure = Some("storage fault".into());
+        let error = hid
+            .ak820_prepare_install(
+                InstallRequest::BundledFirmware {
+                    profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
+                    recovery: None,
+                    settings: engine::InstallSettingsChoice::Defaults,
+                },
+                None,
+                &AtomicBool::new(false),
+            )
+            .err()
+            .expect("fault must stop before any installation transport");
+        assert!(error.to_string().contains("failed operation"));
+        assert!(log.requests().is_empty());
+        assert!(hid.ak820_install_session_ready().is_err());
+    }
+
+    #[test]
+    fn fresh_install_owner_does_not_require_loaded_project_settings() {
+        let (hid, log) = HidDevice::test_ak820_device(false);
+        assert!(hid.ak820_install_session_ready().is_ok());
+        assert!(log.requests().is_empty());
     }
 }
 struct ParentTransport<'a>(&'a HidDevice, &'a AtomicBool, bool);
@@ -522,7 +573,9 @@ pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
 }
 #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub(crate) fn usb_port(_path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
-    bail!("This platform has no reviewed stable application/loader USB-location binding; installation is blocked")
+    bail!(
+        "This platform has no reviewed stable application/loader USB-location binding; installation is blocked"
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -616,7 +669,7 @@ pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
         fn IOObjectRelease(object: u32) -> i32;
         fn IOObjectConformsTo(object: u32, name: *const c_char) -> u32;
         fn IORegistryEntryGetParentEntry(entry: u32, plane: *const c_char, parent: *mut u32)
-            -> i32;
+        -> i32;
     }
     #[link(name = "CoreFoundation", kind = "framework")]
     extern "C" {

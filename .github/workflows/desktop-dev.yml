@@ -185,7 +185,7 @@ jobs:
           mkdir -p target/candidate
           "$CANDIDATE_BINARY" --self-check --output target/candidate/runtime-self-check.json
 
-      - name: Package unsigned beta2 desktop candidate
+      - name: Package unsigned desktop alpha candidate
         shell: bash
         env:
           CANDIDATE_BINARY: ${{ matrix.binary }}

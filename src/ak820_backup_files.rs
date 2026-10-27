@@ -4,11 +4,11 @@
 //! at firmware revision `bef20f89d3da01d770767919bc7c8fc3c3a1a808`. This module
 //! handles local bytes only: it does not capture a device or perform HID I/O.
 use crate::ak820_settings_backup::{
-    canonical, sha256, BackupResult, ImageIdentity, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
+    BackupResult, FILES, FORMAT, FORMAT_V2, ImageIdentity, ValidatedArchive, canonical, sha256,
 };
 use crate::ak820_settings_model::{validate_historical_archive, validate_profile_archive};
-use crate::app::ak820_beta1_profiles::{historical_settings_identity, matrix_profile, ProfileId};
-use serde_json::{json, Value};
+use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity, matrix_profile};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::fs;
@@ -645,7 +645,20 @@ pub(crate) fn scan_backup_history(_root: &Path) -> BackupResult<BackupHistory> {
 }
 
 fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> BackupResult<Vec<u8>> {
-    let identity = matrix_profile(profile)
+    let rom = files
+        .get("before-full-rom.bin")
+        .ok_or("Missing capture ROM")?;
+    let parsed =
+        crate::ak820::parse_manifest(rom.get(0xef80..0xefc0).ok_or("Incomplete capture ROM")?)
+            .map_err(|_| "Invalid capture manifest")?;
+    let image = crate::ak820::contract_for_hash(parsed.schema, &sha256(&rom[0x2800..0xc700]))
+        .ok_or("Unknown exact capture image")?;
+    if image.profile() != Some(profile) {
+        return Err("Capture profile mismatch".into());
+    }
+    let identity = image
+        .matrix_profile()
+        .ok_or("Missing image profile")?
         .settings_identity
         .as_ref()
         .ok_or_else(|| "Profile has no qualified settings identity".to_owned())?;
@@ -921,7 +934,7 @@ pub fn publish_validated_archive(
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    use std::os::unix::fs::{PermissionsExt, symlink};
     #[test]
     fn installation_snapshots_are_private_verified_and_never_replace_or_mint_ownership() {
         let temp = tempfile::tempdir().unwrap();
@@ -1009,9 +1022,11 @@ mod tests {
         for i in 0..=HISTORY_LIMIT {
             fs::create_dir(root.join(format!("d{i}"))).unwrap();
         }
-        assert!(scan_backup_history(&root)
-            .unwrap_err()
-            .contains("128 backup limit"));
+        assert!(
+            scan_backup_history(&root)
+                .unwrap_err()
+                .contains("128 backup limit")
+        );
     }
     #[test]
     fn history_scan_stays_anchored_after_root_rename_and_replacement() {

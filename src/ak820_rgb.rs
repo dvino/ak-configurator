@@ -1,12 +1,14 @@
-//! Bounded static palette model for the AK820 beta.2 Direct RGB feature.
+//! Bounded static palette model for AK820 Direct RGB.
 //!
 //! The 82 physical LED slot addresses below are copied from
 //! `ak820-firmware/qmk-8051-ak820/keyboards/ajazz/ak820/config.h`,
 //! `AK820_RGB_SLOT_MAP`, at firmware v0.6.0-beta.2. The encoder press key
 //! intentionally has no LED. Values remain an application-local preview until
-//! explicitly applied; firmware Direct mode has no palette readback/persistence.
+//! explicitly applied. Exact Direct v1 palette readback is separate from local
+//! RGB presets and durable settings; the RAM palette has no EEPROM persistence.
 
 use serde::{Deserialize, Serialize};
+pub(crate) mod direct;
 
 pub(crate) const LED_COUNT: usize = 82;
 pub(crate) const RGB_MAX_BRIGHTNESS: u8 = 160;
@@ -132,7 +134,7 @@ pub(crate) fn frame_packets(frame: &[[u8; 3]; LED_COUNT]) -> Result<Vec<Vec<u8>>
     Ok(packets)
 }
 
-fn rgb_to_hsv([r, g, b]: [u8; 3]) -> [u8; 3] {
+pub(crate) fn rgb_to_hsv([r, g, b]: [u8; 3]) -> [u8; 3] {
     let (r, g, b) = (u16::from(r), u16::from(g), u16::from(b));
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);

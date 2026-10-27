@@ -1,0 +1,85 @@
+{
+  "format": "ak820-firmware-release-provenance-1",
+  "release": "v0.6.0-beta.3",
+  "release_id": 425114585,
+  "tag_object": "4cabae9af9bb68492a8cf079c59f8b388c5cf788",
+  "tag_commit": "88d190abb156960915a0f1f8ac7f602bb401eab3",
+  "published_at": "2026-10-27T06:50:35Z",
+  "release_url": "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3",
+  "retrieved_on": "2026-10-27",
+  "source": "Published GitHub release assets; sizes and SHA256 digests verified against GitHub release API. Ten published IHX byte streams and settings identities match prior reviewed candidate; public maps and build provenance replaced with published bytes.",
+  "hardware_validated": false,
+  "comparison": {
+    "ihx_matches_prior_reviewed_candidate": 10,
+    "settings_identity_matches_prior_reviewed_candidate": 10,
+    "maps_replaced_with_published_inputs": 10,
+    "settings_transitions": 330
+  },
+  "assets": [
+    {
+      "name": "AK820-Beta3-Catalog.zip",
+      "size": 5564922,
+      "sha256": "bf4c8d86b59819eb9e5a4f11cbe0bc6f25b89e09a1e668e073e193ed050a3543",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/AK820-Beta3-Catalog.zip"
+    },
+    {
+      "name": "AK820-Beta3-Catalog.zip.sha256",
+      "size": 90,
+      "sha256": "65648a4dfc92e145dbdbd8fb44e518c28723d9a5bc74465fcde02f6cab09bead",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/AK820-Beta3-Catalog.zip.sha256"
+    },
+    {
+      "name": "capability-catalog.json",
+      "size": 64661,
+      "sha256": "cdf03e9fa4a9104ec715e9db58215b1061bfdafb9b239f16461871d278fe241b",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/capability-catalog.json"
+    },
+    {
+      "name": "firmware-bundle.zip",
+      "size": 2719040,
+      "sha256": "829edbc3699814f54344a6ed14581dd6069dd3dfd02c10cb422b75fdd6ae9e98",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/firmware-bundle.zip"
+    },
+    {
+      "name": "firmware-bundle.zip.sha256",
+      "size": 86,
+      "sha256": "c9d3a5fd6725fa12db65767592188d58d7dfaf88fd2dfcda4c048e016a2861db",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/firmware-bundle.zip.sha256"
+    },
+    {
+      "name": "firmware-matrix.json",
+      "size": 2605541,
+      "sha256": "d07cbc6bb562e84193f6de121733d13e21aceb129b653e9ff97ae954da36920c",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/firmware-matrix.json"
+    },
+    {
+      "name": "module-descriptions.json",
+      "size": 60163,
+      "sha256": "2947032a7f53c43d906c3ab909a7fb0beb31d83bae4e44368db422ef18afffc6",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/module-descriptions.json"
+    },
+    {
+      "name": "release-catalog.json",
+      "size": 29738,
+      "sha256": "bf1ce6f0287131bbe9a2d80dbb245c6be9eda3d31436451cda91a4b29e82bb42",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/release-catalog.json"
+    },
+    {
+      "name": "release-manifest.json",
+      "size": 29497,
+      "sha256": "6495d6c075807362453a4831600b58779da98b0dc1d38f37cff9e9227a6b6159",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/release-manifest.json"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 23679,
+      "sha256": "ac431d0e2cf3d082ba6e54e414835ec7c7245527667f0a919bd9bd2fd55bd8fd",
+      "url": "https://github.com/dvino/ak820/releases/download/v0.6.0-beta.3/SHA256SUMS"
+    }
+  ],
+  "approval_origin": {
+    "profile_approval_pointers_verified": 10,
+    "profile_manifest_file_records_verified": 130,
+    "review_record": "Published per-profile independent-review.md is explicitly a reproduced CI machine record tied to program-policy approval; it does not claim a new independent human review or hardware qualification."
+  }
+}

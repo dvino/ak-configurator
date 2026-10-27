@@ -79,20 +79,57 @@ pub fn recognize_image(manifest: &[u8], computed_code_hash: &[u8; 32]) -> bool {
 pub(crate) enum ImageContract {
     Alpha3,
     Beta2(crate::app::ak820_beta1_profiles::ProfileId),
+    Beta3(crate::app::ak820_beta1_profiles::ProfileId),
 }
 
 impl ImageContract {
+    pub(crate) fn matrix_profile(
+        self,
+    ) -> Option<&'static crate::app::ak820_beta1_profiles::MatrixProfile> {
+        use crate::app::ak820_beta1_profiles as beta;
+        match self {
+            Self::Alpha3 => None,
+            Self::Beta2(p) => Some(beta::previous_matrix_profile(p)),
+            Self::Beta3(p) => Some(beta::matrix_profile(p)),
+        }
+    }
+    pub(crate) fn valid_combo_record(self, record: &[u8]) -> bool {
+        if record.len() != 14 || record[..3] != [0xfe, 0x0d, 0x04] || record[3] >= 8 {
+            return false;
+        }
+        let word = |i: usize| u16::from_le_bytes([record[4 + i * 2], record[5 + i * 2]]);
+        self.valid_combo([word(0), word(1), word(2), word(3)], word(4))
+    }
+    pub(crate) fn valid_combo(self, keys: [u16; 4], output: u16) -> bool {
+        valid_combo(keys, output)
+            || (output == 0x7c73
+                && self
+                    .matrix_profile()
+                    .and_then(|r| r.settings_identity.as_ref())
+                    .is_some_and(|i| i.combo_actions.iter().any(|a| a == "caps-word-toggle"))
+                && valid_combo(keys, 4))
+    }
+    pub(crate) fn direct_protocol(self) -> Option<u8> {
+        self.matrix_profile()?
+            .settings_identity
+            .as_ref()?
+            .direct_protocol
+    }
+    pub(crate) fn has_feature(self, feature: &str) -> bool {
+        self.matrix_profile()
+            .is_some_and(|r| r.capabilities.optional_modules.get(feature) == Some(&true))
+    }
     pub(crate) fn schema(self) -> u32 {
         match self {
             Self::Alpha3 => 0x082002,
-            Self::Beta2(_) => 0x082003,
+            Self::Beta2(_) | Self::Beta3(_) => 0x082003,
         }
     }
 
     pub(crate) fn profile(self) -> Option<crate::app::ak820_beta1_profiles::ProfileId> {
         match self {
             Self::Alpha3 => None,
-            Self::Beta2(profile) => Some(profile),
+            Self::Beta2(profile) | Self::Beta3(profile) => Some(profile),
         }
     }
 
@@ -100,14 +137,15 @@ impl ImageContract {
         match self {
             Self::Alpha3 => "v0.6.0-alpha.3 / full".into(),
             Self::Beta2(profile) => format!("v0.6.0-beta.2 / {}", profile.as_str()),
+            Self::Beta3(profile) => format!("v0.6.0-beta.3 / {}", profile.as_str()),
         }
     }
 
     pub(crate) fn rgb_modes(self) -> &'static [u8] {
         match self {
             Self::Alpha3 => CAPABILITIES.rgb_modes,
-            Self::Beta2(profile) => {
-                let row = crate::app::ak820_beta1_profiles::matrix_profile(profile);
+            Self::Beta2(_) | Self::Beta3(_) => {
+                let row = self.matrix_profile().unwrap();
                 if row.capabilities.optional_modules.get("vialrgb-direct") == Some(&true) {
                     &[0, 1, 2, 6, 13, 14, 31]
                 } else {
@@ -120,8 +158,10 @@ impl ImageContract {
     pub(crate) fn qsid_ids(self) -> &'static [u16] {
         match self {
             Self::Alpha3 => &[],
-            Self::Beta2(profile) => {
-                &crate::app::ak820_beta1_profiles::matrix_profile(profile)
+            Self::Beta2(_) | Self::Beta3(_) => {
+                &self
+                    .matrix_profile()
+                    .unwrap()
                     .capabilities
                     .runtime_qmk_settings_ids
             }
@@ -131,7 +171,13 @@ impl ImageContract {
     pub(crate) fn saved_rgb_mode(self, saved: u8) -> Option<u8> {
         let modes: &[(u8, u16)] = match self {
             Self::Alpha3 => &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)],
-            Self::Beta2(profile) => crate::app::ak820_beta1_profiles::rgb_modes(profile),
+            Self::Beta2(_) | Self::Beta3(_) => {
+                if self.has_feature("vialrgb-direct") {
+                    &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)]
+                } else {
+                    &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 31)]
+                }
+            }
         };
         modes
             .iter()
@@ -141,10 +187,8 @@ impl ImageContract {
     pub(crate) fn dynamic_counts(self) -> (u8, u8, u8, u8, u8) {
         match self {
             Self::Alpha3 => (0, 8, 0, 0, 1),
-            Self::Beta2(profile) => {
-                let counts = &crate::app::ak820_beta1_profiles::matrix_profile(profile)
-                    .capabilities
-                    .dynamic_entries;
+            Self::Beta2(_) | Self::Beta3(_) => {
+                let counts = &self.matrix_profile().unwrap().capabilities.dynamic_entries;
                 (counts.tap_dance, counts.combos, counts.key_overrides, 0, 1)
             }
         }
@@ -157,8 +201,12 @@ impl ImageContract {
     ) -> bool {
         match self {
             Self::Alpha3 => supports_keycode(code),
-            Self::Beta2(profile) => {
-                crate::app::ak820_beta1_profiles::supports_keycode(profile, code, source)
+            Self::Beta2(_) | Self::Beta3(_) => {
+                crate::app::ak820_beta1_profiles::supports_keycode_for_row(
+                    self.matrix_profile().unwrap(),
+                    code,
+                    source,
+                )
             }
         }
     }
@@ -179,6 +227,17 @@ pub(crate) fn contract_for_hash(schema: u32, code_hash: &str) -> Option<ImageCon
     if schema != 0x082003 {
         return None;
     }
+    if let Some(row) = crate::app::ak820_beta1_profiles::previous_firmware_matrix()
+        .profiles
+        .iter()
+        .find(|r| {
+            r.settings_identity
+                .as_ref()
+                .is_some_and(|i| i.nvm_schema == schema && i.code_sha256 == code_hash)
+        })
+    {
+        return Some(ImageContract::Beta2(row.profile));
+    }
     crate::app::ak820_beta1_profiles::firmware_matrix()
         .profiles
         .iter()
@@ -188,7 +247,7 @@ pub(crate) fn contract_for_hash(schema: u32, code_hash: &str) -> Option<ImageCon
                 .filter(|identity| {
                     identity.nvm_schema == schema && identity.code_sha256 == code_hash
                 })
-                .map(|_| ImageContract::Beta2(row.profile))
+                .map(|_| ImageContract::Beta3(row.profile))
         })
 }
 
@@ -346,6 +405,46 @@ mod tests {
             .collect()
     }
     #[test]
+    fn beta3_capabilities_are_not_attributed_to_beta2() {
+        use crate::app::ak820_beta1_profiles::{KeycodeSource, ProfileId};
+        let old = ImageContract::Beta2(ProfileId::Main);
+        let new = ImageContract::Beta3(ProfileId::Main);
+        assert_eq!(old.direct_protocol(), None);
+        assert_eq!(new.direct_protocol(), Some(1));
+        assert!(!old.qsid_ids().contains(&4));
+        assert!(new.qsid_ids().contains(&4));
+        assert!(!old.valid_combo([4, 5, 0, 0], 0x7c73));
+        assert!(new.valid_combo([4, 5, 0, 0], 0x7c73));
+        assert!(!new.valid_combo([4, 4, 0, 0], 0x7c73));
+        for code in [0x40f0, 0x45ff] {
+            assert!(!old.assignable(code, KeycodeSource::Matrix));
+            assert!(new.assignable(code, KeycodeSource::Matrix));
+            for source in [
+                KeycodeSource::Encoder,
+                KeycodeSource::MacroTap,
+                KeycodeSource::MacroDown,
+                KeycodeSource::MacroUp,
+            ] {
+                assert!(!new.assignable(code, source));
+            }
+        }
+        for row in &crate::app::ak820_beta1_profiles::previous_firmware_matrix().profiles {
+            let exact = row.settings_identity.as_ref().unwrap();
+            assert_eq!(
+                contract_for_hash(exact.nvm_schema, &exact.code_sha256),
+                Some(ImageContract::Beta2(row.profile))
+            );
+            assert!(
+                crate::app::ak820_beta1_profiles::settings_transition_allowed(
+                    &exact.ihx_sha256,
+                    &crate::app::ak820_beta1_profiles::matrix_profile(row.profile)
+                        .identity
+                        .ihx_sha256
+                )
+            );
+        }
+    }
+    #[test]
     fn image_pin_requires_manifest_and_code() {
         let m = manifest();
         let h: [u8; 32] = decode(CODE_SHA256).try_into().unwrap();
@@ -368,7 +467,7 @@ mod tests {
             m[16..48].copy_from_slice(&hash);
             assert_eq!(
                 identify_image(&m, &hash),
-                Some(ImageContract::Beta2(row.profile))
+                Some(ImageContract::Beta3(row.profile))
             );
             // This checks admission logic with supplied digest values. It is
             // not a successful hash of public IHX or a physical packed ROM.

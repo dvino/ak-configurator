@@ -305,18 +305,20 @@ mod tests {
         }
     }
     #[test]
-    fn autos_shift_timeout_is_editable_only_in_typing() {
-        let mut typing = fixture(0);
-        typing.draft.settings.set(4, 176).unwrap();
-        assert!(typing.apply(ProfileId::Typing));
-        assert_eq!(
-            Extensions::decode_nvm(typing.nvm())
-                .unwrap()
-                .settings
-                .get(4)
-                .unwrap(),
-            176
-        );
+    fn auto_shift_timeout_is_editable_in_beta3_main_and_typing() {
+        for profile in [ProfileId::Main, ProfileId::Typing] {
+            let mut active = fixture(0);
+            active.draft.settings.set(4, 176).unwrap();
+            assert!(active.apply(profile));
+            assert_eq!(
+                Extensions::decode_nvm(active.nvm())
+                    .unwrap()
+                    .settings
+                    .get(4)
+                    .unwrap(),
+                176
+            );
+        }
 
         let mut other = fixture(0);
         other.draft.settings.set(4, 176).unwrap();

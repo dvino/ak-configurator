@@ -386,7 +386,10 @@ impl KeycodePicker {
             PickerAction::PickLayer(base) => self.vial_layer_pending = Some(base),
             PickerAction::PickModKey(base) => self.vial_quantum_pending_mod = Some(base),
             PickerAction::PickModTap(base) => self.vial_quantum_pending_mt = Some(base),
-            PickerAction::ChooseSlot(kind) => self.advanced_slot_picker = Some(kind),
+            PickerAction::ChooseSlot(kind) => {
+                self.advanced_macro_layer = None;
+                self.advanced_slot_picker = Some(kind);
+            }
         }
     }
 

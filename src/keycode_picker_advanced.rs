@@ -14,6 +14,7 @@ impl KeycodePicker {
             .on_hover_text(tooltip);
         set_accessible_description(ui, &response, tooltip);
         if response.clicked() && ready {
+            self.advanced_macro_layer = None;
             self.advanced_slot_picker = Some(kind);
         }
 
@@ -40,8 +41,17 @@ impl KeycodePicker {
         }
     }
 
+    fn layer_macro_assignment_available(&self) -> bool {
+        self.ak820_profile
+            && self.value_policy == PickerValuePolicy::Any
+            && self.ak820_beta1_source == Ak820Beta1KeycodeSource::Matrix
+            && self.ak820_beta1_keycodes.is_some()
+            && self.picker_value_supported(0x40f0)
+    }
+
     pub(super) fn close_advanced_slot_picker(&mut self) {
         self.advanced_slot_picker = None;
+        self.advanced_macro_layer = None;
         self.popup_state.on_close(PopupKey::AdvancedSlotWindow);
     }
 
@@ -94,7 +104,13 @@ impl KeycodePicker {
                 (slot, label, tooltip)
             })
             .collect::<Vec<_>>();
-        let popup_size = advanced_slot_popup_size(ctx, slot_count);
+        let layer_macro =
+            kind == AdvancedSlotKind::Macro && self.layer_macro_assignment_available();
+        let mut popup_size = advanced_slot_popup_size(ctx, slot_count);
+        if layer_macro {
+            popup_size.y =
+                (popup_size.y + 92.0).min((ctx.content_rect().height() - 80.0).max(120.0));
+        }
         crate::ui_style::centered_modal_window(
             ctx,
             title,
@@ -114,6 +130,44 @@ impl KeycodePicker {
             };
             crate::ui_style::modal_intro(ui, intro);
             ui.add_space(crate::ui_style::modal_space_sm());
+            if layer_macro {
+                let plain = match self.language {
+                    crate::i18n::Language::Russian => "Обычный макрос",
+                    _ => "Plain macro",
+                };
+                let held = match self.language {
+                    crate::i18n::Language::Russian => "Удержание слоя / макрос по нажатию",
+                    _ => "Hold layer / tap macro",
+                };
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .selectable_label(self.advanced_macro_layer.is_none(), plain)
+                        .clicked()
+                    {
+                        self.advanced_macro_layer = None;
+                    }
+                    if ui
+                        .selectable_label(self.advanced_macro_layer.is_some(), held)
+                        .clicked()
+                    {
+                        self.advanced_macro_layer = Some(0);
+                    }
+                });
+                if let Some(selected) = self.advanced_macro_layer {
+                    ui.horizontal_wrapped(|ui| {
+                        for layer in 0..self.layer_count.min(6) as u8 {
+                            if ui
+                                .selectable_label(selected == layer, format!("L{layer}"))
+                                .clicked()
+                            {
+                                self.advanced_macro_layer = Some(layer);
+                            }
+                        }
+                    });
+                }
+            } else {
+                self.advanced_macro_layer = None;
+            }
             let mut picked = None;
             egui::ScrollArea::vertical()
                 .id_salt("advanced_slot_choices")
@@ -130,7 +184,15 @@ impl KeycodePicker {
                     });
                 });
             if let Some(slot) = picked {
+                let layer = self.advanced_macro_layer;
                 self.close_advanced_slot_picker();
+                if let Some(layer) = layer {
+                    let code = 0x4000 | (layer as u16) << 8 | 0xf0 | slot as u16;
+                    if layer_macro && layer < 6 && slot < 16 {
+                        self.assign_keycode_value(code);
+                    }
+                    return;
+                }
                 match kind {
                     AdvancedSlotKind::Macro => self.assign_macro_slot(slot),
                     AdvancedSlotKind::TapDance => self.assign_tap_dance_slot(slot),
@@ -148,7 +210,7 @@ fn advanced_slot_popup_size(ctx: &egui::Context, slot_count: usize) -> egui::Vec
     const COLUMNS: usize = 3;
     let rows = slot_count.max(1).div_ceil(COLUMNS);
     let desired_height = (48.0 + rows as f32 * 36.0).max(120.0);
-    let available_height = (ctx.content_rect().height() - 64.0).max(120.0);
+    let available_height = (ctx.content_rect().height() - 80.0).max(120.0);
     egui::vec2(WIDTH, desired_height.min(available_height))
 }
 

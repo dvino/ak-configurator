@@ -2137,6 +2137,11 @@ pub fn keycode_label_with_names(
     if value & 0xF000 == 0x4000 {
         let layer = (value >> 8) & 0xF;
         let kc = value & 0xFF;
+        // AK820 beta.3 reserves these LT tap operands for its sixteen macros.
+        // Admission still depends on the exact image and physical-key context.
+        if layer <= 5 && kc >= 0xF0 {
+            return format!("LT {}\nMC{}", layer_name(layer), kc - 0xF0);
+        }
         return compound_keycode_label(&format!("LT {}", layer_name(layer)), kc);
     }
 
@@ -2605,9 +2610,13 @@ pub fn keycode_tooltip(value: u16, custom: &[CustomKeycode], layer_names: &[Stri
     if value & 0xF000 == 0x4000 {
         let layer = (value >> 8) & 0xF;
         let kc = value & 0xFF;
-        let kc_str = find_keycode(kc)
-            .map(simple_key_name)
-            .unwrap_or_else(|| format!("0x{:02X}", kc));
+        let kc_str = if layer <= 5 && kc >= 0xF0 {
+            format!("MC{}", kc - 0xF0)
+        } else {
+            find_keycode(kc)
+                .map(simple_key_name)
+                .unwrap_or_else(|| format!("0x{:02X}", kc))
+        };
         return format!(
             "Layer Tap — tap for {}, hold to activate {}",
             kc_str,
@@ -2901,6 +2910,32 @@ fn simple_key_tooltip(kc: &Keycode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ak820_layer_tap_macro_displays_the_macro_operand_and_named_layer() {
+        for (value, layer, slot) in [(0x40F0, 0, 0), (0x41F0, 1, 0), (0x45FF, 5, 15)] {
+            assert_eq!(keycode_label(value), format!("LT {layer}\nMC{slot}"));
+            let tooltip = keycode_tooltip(value, &[], &[]);
+            assert_eq!(
+                tooltip,
+                format!("Layer Tap — tap for MC{slot}, hold to activate layer {layer}")
+            );
+            let russian = crate::i18n::tr_text(crate::i18n::Language::Russian, &tooltip);
+            assert!(russian.contains(&format!("MC{slot}")), "{russian}");
+            assert!(!russian.contains("hold to activate"), "{russian}");
+            assert_eq!(printable_output(value, KeyOutputLayout::English), None);
+        }
+        let names = vec!["Base".into(), "Fn".into()];
+        assert_eq!(
+            keycode_label_with_names(0x41F0, &[], &names),
+            "LT Fn(1)\nMC0"
+        );
+        assert!(keycode_tooltip(0x41F0, &[], &names).contains("\"Fn\" (1)"));
+        assert_eq!(keycode_label(0x4104), "LT 1\nA");
+        assert!(!keycode_label(0x46F0).contains("MC"));
+        assert!(!keycode_tooltip(0x46F0, &[], &[]).contains("MC"));
+        assert!(!keycode_label(0x21F0).contains("MC"));
+    }
 
     #[test]
     fn tri_layer_legends_recognize_legacy_and_current_vial_assignments() {

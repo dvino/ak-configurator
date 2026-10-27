@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(result["hardware_access"], false);
         assert_eq!(result["network_access"], false);
         let expected: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/ak820-beta2-defaults.json"))
+            serde_json::from_str(include_str!("../tests/fixtures/ak820-beta3-defaults.json"))
                 .unwrap();
         for profile in result["profiles"].as_array().unwrap() {
             assert_eq!(

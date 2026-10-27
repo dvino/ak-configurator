@@ -1452,9 +1452,17 @@ impl EntropyApp {
         let rect = ui.max_rect();
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // At the minimum width, the centered key hints occupy the old
+            // status position. Keep the status above the left signature so
+            // neither label obscures the other.
+            let compact = rect.width() < 1_040.0;
             let status = egui::Rect::from_min_size(
-                egui::pos2(rect.left() + 310.0, rect.bottom() - 28.0),
-                egui::vec2((rect.width() - 540.0).max(80.0), 20.0),
+                if compact {
+                    egui::pos2(rect.left() + 16.0, rect.bottom() - 52.0)
+                } else {
+                    egui::pos2(rect.left() + 310.0, rect.bottom() - 28.0)
+                },
+                egui::vec2(if compact { 260.0 } else { rect.width() - 540.0 }, 20.0),
             );
             crate::ui_style::allocate_ui_at_rect(ui, status, |ui| self.draw_ak820_status(ui));
         }

@@ -1,6 +1,6 @@
 use super::*;
-use crate::ak820_rgb::{Palette, Rgb, LED_COUNT, SLOT_MAP};
-use crate::ak820_rgb_compositor::{Axis, Effect, Layer, QuietHours, Scene, MAX_SCENE_BYTES};
+use crate::ak820_rgb::{LED_COUNT, Palette, Rgb, SLOT_MAP};
+use crate::ak820_rgb_compositor::{Axis, Effect, Layer, MAX_SCENE_BYTES, QuietHours, Scene};
 use chrono::Timelike;
 use std::io::Read;
 
@@ -1134,16 +1134,7 @@ impl EntropyApp {
             && self.ak820_demo_profile.is_some_and(|p| {
                 crate::app::ak820_beta1_profiles::has_feature(p, "vialrgb-direct")
             });
-        let can_apply = demo_rgb
-            || (!self.ak820_demo
-                && !self.ak820_rgb_scene_running()
-                && !self.hid_write_task_owner_active()
-                && matches!(self.connect_state, ConnectState::Idle)
-                && self.hid_device.as_ref().is_some_and(|h| {
-                    h.ak820_editing_ready()
-                        && h.ak820_image()
-                            .is_some_and(|i| i.profile().is_some() && i.rgb_modes().contains(&1))
-                }));
+        let can_apply = !self.ak820_rgb_scene_running() && self.ak820_rgb_scene_can_start();
         let apply_label = if demo_rgb {
             if ru {
                 "Предпросмотр основы (демо)"
@@ -1156,42 +1147,113 @@ impl EntropyApp {
             "Apply base colors only (RAM)"
         };
         if crate::ui_style::action_button(ui, apply_label, can_apply).clicked() {
-            if demo_rgb {
-                self.status_msg = if ru {
-                    "Демо: предпросмотр обновлён; устройство не затронуто"
+            if let Ok(frame) = e.scene.base.rgb_frame() {
+                self.ak820_rgb_apply_base(frame);
+            }
+        }
+        let direct_ready = !self.ak820_demo
+            && !self.ak820_rgb_scene_running()
+            && self.ak820_rgb_scene_can_start()
+            && self.hid_device.as_ref().is_some_and(|h| {
+                h.ak820_image()
+                    .is_some_and(|i| i.direct_protocol() == Some(1))
+            });
+        ui.separator();
+        ui.label(if ru {
+            "Отдельная палитра Direct в ОЗУ (не резервная копия настроек)"
+        } else {
+            "Separate Direct RAM palette (outside the settings backup)"
+        });
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Прочитать палитру Direct"
                 } else {
-                    "Demo preview updated; no device was contacted"
-                }
-                .into()
-            } else {
-                self.ak820_rgb_scene_stop();
-                if self.hid_write_task_owner_active() {
-                    self.status_msg = if ru {
-                        "Дождитесь завершения операции RGB"
-                    } else {
-                        "Wait for the RGB operation to finish"
-                    }
-                    .into()
-                } else if let Some(hid) = self.hid_device.as_mut() {
-                    if let Ok(frame) = e.scene.base.rgb_frame() {
-                        match hid.ak820_apply_palette(&frame) {
-                            Ok(()) => {
-                                self.rgb_settings.effect = 1;
-                                self.rgb_settings.last_enabled_effect = 1;
-                                self.status_msg=if ru {"Direct RGB отправлен; палитра действует до перезапуска клавиатуры"}else{"Direct RGB sent; palette lasts until the keyboard restarts"}.into()
-                            }
-                            Err(_err) => {
-                                self.status_msg = if ru {
-                                    "Не удалось применить RGB"
-                                } else {
-                                    "RGB apply failed"
-                                }
-                                .into()
+                    "Read Direct palette"
+                },
+                direct_ready,
+            )
+            .clicked()
+            {
+                self.ak820_rgb_palette_request(ui.ctx(), None);
+            }
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Сохранить direct-ram.json…"
+                } else {
+                    "Save direct-ram.json…"
+                },
+                self.ak820_rgb_direct_capture().is_some(),
+            )
+            .clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("JSON", &["json"])
+                    .set_file_name("direct-ram.json")
+                    .save_file()
+                {
+                    let result = self
+                        .ak820_rgb_direct_capture()
+                        .unwrap()
+                        .encode()
+                        .and_then(|text| Ok(std::fs::write(path, text)?));
+                    self.status_msg = match result {
+                        Ok(()) => if ru {
+                            "Отдельная палитра Direct сохранена."
+                        } else {
+                            "Separate Direct RAM palette saved."
+                        }
+                        .into(),
+                        Err(error) => {
+                            if ru {
+                                format!("Не удалось сохранить палитру: {error}")
+                            } else {
+                                format!("Could not save palette: {error}")
                             }
                         }
-                    }
+                    };
                 }
             }
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Восстановить ОЗУ из direct-ram.json…"
+                } else {
+                    "Restore RAM from direct-ram.json…"
+                },
+                direct_ready,
+            )
+            .clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("JSON", &["json"])
+                    .pick_file()
+                {
+                    let result = (|| -> anyhow::Result<_> {
+                        let file = std::fs::File::open(path)?;
+                        let mut text = String::new();
+                        file.take(16 * 1024 + 1).read_to_string(&mut text)?;
+                        crate::ak820_rgb::direct::Snapshot::decode(&text)
+                    })();
+                    match result {
+                        Ok(palette) => self.ak820_rgb_palette_request(ui.ctx(), Some(palette)),
+                        Err(error) => {
+                            self.status_msg = if ru {
+                                format!("Палитра ОЗУ отклонена: {error}")
+                            } else {
+                                format!("RAM palette rejected: {error}")
+                            }
+                        }
+                    };
+                }
+            }
+        });
+        if let Some(snapshot) = self.ak820_rgb_direct_capture() {
+            ui.small(self.ak820_rgb_direct_capture_source().unwrap_or_default());
+            ui.small(if ru { format!("Последнее чтение: поколение {}, флаги {} (RGB/Direct/сон). Это сохранённый снимок.", snapshot.generation, snapshot.flags) }
+                else { format!("Last read: generation {}, flags {} (RGB/Direct/suspend). This is a captured snapshot.", snapshot.generation, snapshot.flags) });
         }
         if changed && e.scene != before {
             if !history_move {

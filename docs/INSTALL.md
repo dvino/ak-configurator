@@ -2,7 +2,7 @@
 
 # Installation and development
 
-AK Configurator v0.1.0-beta.2 is in release preparation. Current source checks and limits are recorded in [Status](STATUS.md) and [Review](REVIEW.md). The six-target workflow defines development binaries and a separate unsigned DRAFT candidate; no candidate publication has been executed. Current local Windows GNU full-application checks and the remaining platform limits are recorded in Review; compilation is separate from execution on Windows. Browser support follows the native desktop milestone.
+AK Configurator `0.1.0-alpha.1` is an unpublished alpha candidate. Current source, Linux execution checks and remaining platform limits are recorded in [Status](STATUS.md) and [Review](REVIEW.md). The workflow prepares six unsigned native packages; the complete six-platform release run and publication are still pending. Historical Windows/macOS or cross-compilation results do not qualify this source. The bundled firmware inputs match the published AK820 beta.3 release. Browser support follows the native desktop milestone.
 
 ## Build from source
 
@@ -54,15 +54,15 @@ The script requests elevation through `pkexec` or `sudo` and writes `/etc/udev/r
 
 ## Supported device and packages
 
-The beta2 source contract supports ten exact v0.6.0-beta.2 packed profile images: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The application verifies packed CODE/settings identity and required settings before enabling edits. Unknown, custom, trial and mismatched images are rejected. See the [desktop guide](DESKTOP.md). Firmware files currently offers local byte checks only; it does not flash a device. A separate native installation window implements exact beta2 release admission, loader transition/port-bound reconnect, durable safety capture, a one-attempt transaction and full-ROM readback with separate firmware/settings outcomes. Initial bundled installation from exactly validated OEM firmware can use the fresh capture locally without a preexisting ROM file, with explicit defaults; project updates and prepared payloads require a supported personal OEM reference. Invalid supplied references never fall back. Required safety data and recorded recovery-manifest trust are synced/reread before erase; failure stops and retains saved paths. These are source workflows: no physical flash, retention or OEM rollback qualification is claimed.
+The beta.3 source contract targets ten exact v0.6.0-beta.3 packed profile images: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The application verifies packed CODE/settings identity and required settings before enabling edits. Unknown, custom, trial and mismatched images are rejected. See the [desktop guide](DESKTOP.md). Firmware files currently offers local byte checks only; it does not flash a device. The native installer supports explicitly opted-in installation from the published beta.3 release after exact identity checks. GitHub API digests for the release catalog, firmware bundle, five JSON assets and `SHA256SUMS` were verified; all ten IHX/settings identities match reviewed candidates, map hashes match the release matrix, and approved metadata pins all ten installable images to the exact installer release. This confirms release-input identity, not physical device behavior. Installation binds the loader transition and reconnect to the USB port, saves and rereads durable safety data, makes one attempt, and checks the full ROM with separate firmware/settings outcomes. A fresh install-only/OEM owner without loaded project settings may skip unsupported settings capture, but must pass exact full-ROM and safety checks. Once settings capture has been attempted, any capture failure stops preparation, including when defaults or rollback were selected. Project updates and prepared payloads require a supported personal OEM reference; invalid supplied references never fall back. Required safety data and recorded recovery-manifest trust are synced/reread before erase; failure stops and retains saved paths. These are source workflows: no physical flash, retention or OEM rollback qualification is claimed.
 
-The `desktop-dev` workflow defines raw development binaries for Linux and Windows x86_64/arm64 and macOS x86_64/arm64. Each artifact contains a binary and `SHA256SUMS`; they are unsigned development binaries, not installers. A successful workflow run for the current source is required before downloading its artifacts. The known successful six-target run at commit `1afd0f1` is historical and is not evidence for beta2 source.
+The `desktop-dev` workflow defines raw development binaries for Linux and Windows x86_64/arm64 and macOS x86_64/arm64. Each artifact contains a binary and `SHA256SUMS`; they are unsigned development binaries, not installers. The final native workflow has not yet been completed for the current source; do not treat historical artifacts as current alpha.1 packages. The known successful six-target run at commit `1afd0f1` is historical and is not evidence for the current alpha.1 source.
 
 Choose the matching artifact name: `development-binary-linux-x86_64`, `development-binary-linux-arm64`, `development-binary-windows-x86_64`, `development-binary-windows-arm64`, `development-binary-macos-arm64`, or `development-binary-macos-x86_64`. Download its ZIP from a successful current run and extract it. Verify the executable against `SHA256SUMS` before launch. On Linux run `sha256sum -c SHA256SUMS`, then `chmod +x ak-configurator && ./ak-configurator`. On macOS run `shasum -a 256 -c SHA256SUMS`, then `chmod +x ak-configurator` and `./ak-configurator`. In Windows PowerShell compare `(Get-FileHash .\ak-configurator.exe -Algorithm SHA256).Hash.ToLowerInvariant()` with the line in `SHA256SUMS`, then launch `Start-Process .\ak-configurator.exe`.
 
 ## Desktop candidate packages
 
-The `desktop-dev` run also uploads a separate `desktop-candidate-${platform}` artifact for each of the six platform IDs above. Linux candidates are `.tar.gz` archives, macOS candidates are `.app.zip` application bundles, and Windows candidates are portable `.zip` archives. Each archive has a neighboring `.sha256` file and contains the localized install/RGB guides, application/font/icon/eframe licenses, firmware provenance, exact beta2 offline catalog and public profile IHX/map assets, source/binary manifest, and an internal `SHA256SUMS`. Help text is also built into the executable. These are unsigned trial packages with explicit per-user installation and removal scripts. They do not provide MSI/DEB/PKG packages or signed/notarized distribution.
+The `desktop-dev` run also uploads a separate `desktop-candidate-${platform}` artifact for each of the six platform IDs above. Linux candidates are `.tar.gz` archives, macOS candidates are `.app.zip` application bundles, and Windows candidates are portable `.zip` archives. Each archive has a neighboring `.sha256` file and contains the localized install/RGB/Desktop/Changelog/Status/Review guides, application/font/icon/eframe licenses, firmware provenance, exact beta.3 offline catalog and public profile IHX/map assets, source/binary manifest, and an internal `SHA256SUMS`. Help text is also built into the executable. These are unsigned trial packages with explicit per-user installation and removal scripts. They do not provide MSI/DEB/PKG packages or signed/notarized distribution.
 
 The optional local packager uses only Python 3.11+ standard-library modules:
 
@@ -87,7 +87,7 @@ Linux x86_64:
 
 ```sh
 set -e
-archive=ak-configurator-0.1.0-beta.2-linux-x86_64.tar.gz
+archive=ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz
 sha256sum -c "${archive}.sha256"
 tar -xzf "$archive"
 cd "${archive%.tar.gz}"
@@ -99,7 +99,7 @@ macOS arm64:
 
 ```sh
 set -e
-archive=ak-configurator-0.1.0-beta.2-macos-arm64.app.zip
+archive=ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip
 shasum -a 256 -c "${archive}.sha256"
 ditto -x -k "$archive" .
 cd "${archive%.app.zip}"
@@ -111,7 +111,7 @@ Windows x86_64, PowerShell:
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$archive = 'ak-configurator-0.1.0-beta.2-windows-x86_64.zip'
+$archive = 'ak-configurator-0.1.0-alpha.1-windows-x86_64.zip'
 $expectedHash = ((Get-Content -LiteralPath "$archive.sha256") -split '\s+', 2)[0]
 $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualHash -ne $expectedHash) { throw 'Archive SHA256 mismatch' }
@@ -141,7 +141,9 @@ To remove the application, run `sh ./uninstall-user.sh` on Linux/macOS or `power
 
 ### Download an application update
 
-Open **About AK Configurator → Application updates**, then choose **Check for updates**. Stable releases are selected by default; enable **Include prereleases** deliberately to select a beta. **Download and verify** appears for a newer version only. The client requires the project's six-target index, valid GitHub asset digests and exact OS/architecture matches; a release without that metadata is unavailable through this path.
+Open **About AK Configurator → Application updates**, then choose **Check for updates**. Stable releases are selected by default; enable **Include prereleases** deliberately to select an alpha or beta. **Download and verify** appears for a newer version only. The client requires the project's six-target index, valid GitHub asset digests and exact OS/architecture matches; a release without that metadata is unavailable through this path.
+
+The earlier unpublished application build `0.1.0-beta.2` sorts above `0.1.0-alpha.1` under SemVer. To move from that development build to the first alpha, download and verify the alpha package manually and use the install/update procedure above. The updater deliberately does not offer it as a newer version.
 
 After verification, copy the displayed archive path, quit the application/helper, extract it and run the matching per-user installer above. A cancelled or failed download is not offered for installation. No installer, firmware flash or keyboard command starts automatically. The cached archive filename includes its SHA256 prefix; the directory inside the archive retains the ordinary `ak-configurator-VERSION-PLATFORM` name. Existing helper preferences are preserved by the application installer.
 
@@ -149,7 +151,7 @@ After verification, copy the displayed archive path, quit the application/helper
 
 `./ak-configurator --self-check --output check.json` validates built-in public sources/defaults and emits a report without reading settings, creating a GUI, accessing a device or using the network. The output path must be new. On Windows use the `.exe`; inside the macOS bundle use `AK-Configurator.app/Contents/MacOS/ak-configurator`. This command is a package execution probe, not a GUI or hardware acceptance test.
 
-The six native workflow jobs run their target binary, package its exact report and run platform-specific tests. Candidate verification checks complete archives and generates `app-update-index.json` alongside `release-manifest.json`. The workflow retains artifacts and does not publish a release. A later published application release must include the exact six archives and `app-update-index.json` under the matching version tag; GitHub must report their SHA256 digests. The index is generated only after aggregate verification. Signing/notarization and physical acceptance remain separate release gates.
+The six native workflow jobs are configured to run their target binary, package its exact report and run platform-specific tests. Candidate verification checks complete archives and generates `app-update-index.json` alongside `release-manifest.json`. The current final six-platform pass and candidate publication have not been completed. A later published application release must include the exact six archives and `app-update-index.json` under the matching version tag; GitHub must report their SHA256 digests. The index is generated only after aggregate verification. Signing/notarization and physical acceptance remain separate release gates.
 
 ### Run the OS layout helper
 

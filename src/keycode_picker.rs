@@ -167,6 +167,7 @@ pub struct KeycodePicker {
     pub supports_rgb: bool,
     /// AK820 action policy, independent of the shared Vial protocol version.
     pub(crate) ak820_profile: bool,
+    pub(crate) ak820_combo_caps_word: bool,
     /// Exact source-specific beta.2 allowlists for the live or offline profile.
     pub(crate) ak820_beta1_keycodes: Option<BTreeMap<Ak820Beta1KeycodeSource, BTreeSet<u16>>>,
     pub(crate) ak820_beta1_source: Ak820Beta1KeycodeSource,
@@ -239,6 +240,7 @@ pub struct KeycodePicker {
     macro_key_pick: Option<(usize, usize)>,
     macro_mod_key_pick: Option<u16>,
     advanced_slot_picker: Option<AdvancedSlotKind>,
+    advanced_macro_layer: Option<u8>,
     popup_state: PopupState,
     pub language: crate::i18n::Language,
     pub key_legend_layout: KeyLegendLayout,
@@ -338,6 +340,346 @@ mod tests {
             );
         harness.run();
         harness
+    }
+
+    fn compact_picker_harness(
+        picker: KeycodePicker,
+    ) -> egui_kittest::Harness<'static, KeycodePicker> {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_state(
+                |ctx, picker: &mut KeycodePicker| {
+                    picker.show(
+                        ctx,
+                        DeferredPickerDataState::Ready,
+                        DeferredPickerDataState::Ready,
+                    );
+                },
+                picker,
+            );
+        harness.run();
+        harness
+    }
+
+    #[test]
+    fn compact_picker_keeps_search_tabs_and_basic_keys_on_screen_in_both_languages() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+
+        for language in [
+            crate::i18n::Language::English,
+            crate::i18n::Language::Russian,
+        ] {
+            let picker = KeycodePicker {
+                open: true,
+                language,
+                ..Default::default()
+            };
+            let mut harness = compact_picker_harness(picker);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+            let basic = picker_tab_label(language, KeycodeTab::Basic);
+            let tab = harness.get_by_role_and_label(Role::Tab, basic);
+            // TabPanel is a semantic accessibility group without its own rectangle.
+            harness.get_by_role(Role::TabPanel);
+            let key_rect = harness.get_by_role_and_label(Role::Button, "Q").rect();
+
+            for (name, rect) in [("basic tab", tab.rect()), ("basic key", key_rect)] {
+                assert!(
+                    screen.contains_rect(rect),
+                    "{name} is outside compact viewport: {rect:?}"
+                );
+            }
+
+            let search = harness.get_by_role(Role::TextInput);
+            assert!(
+                screen.contains_rect(search.rect()),
+                "search input is outside compact viewport"
+            );
+            for label in ["Esc", "Pause"] {
+                let key = harness.get_by_role_and_label(Role::Button, label);
+                assert!(
+                    screen.contains_rect(key.rect()),
+                    "top edge key {label} outside viewport: {:?}",
+                    key.rect()
+                );
+            }
+            // The compact picker deliberately scrolls. Verify the last row is
+            // reachable within its viewport, rather than requiring every row
+            // to be simultaneously visible above the fold.
+            for label in ["➡", "⬇", "Page Down"] {
+                harness
+                    .get_by_role_and_label(Role::Button, label)
+                    .scroll_to_me();
+                harness.run();
+                let rect = harness.get_by_role_and_label(Role::Button, label).rect();
+                assert!(
+                    screen.contains_rect(rect),
+                    "scrolled edge key {label} outside viewport: {rect:?}"
+                );
+            }
+            let close = harness.get_by_role_and_label(Role::Button, "Close window");
+            assert!(
+                screen.contains_rect(close.rect()),
+                "close control is outside compact viewport"
+            );
+            close.click();
+            harness.run();
+            assert!(
+                !harness.state().open,
+                "compact picker close control must remain usable"
+            );
+
+            if language == crate::i18n::Language::English {
+                assert!(harness.state().search.query.is_empty());
+                assert!(key_rect.width() > 0.0 && key_rect.height() > 0.0);
+            }
+        }
+    }
+
+    fn exact_ak820_picker(image: crate::ak820::ImageContract) -> KeycodePicker {
+        use crate::app::ak820_beta1_profiles::KeycodeSource as Source;
+        let allowed = [
+            (Source::Matrix, Ak820Beta1KeycodeSource::Matrix),
+            (Source::Encoder, Ak820Beta1KeycodeSource::Encoder),
+            (Source::Macro, Ak820Beta1KeycodeSource::Macro),
+            (Source::MacroTap, Ak820Beta1KeycodeSource::MacroTap),
+            (Source::MacroDown, Ak820Beta1KeycodeSource::MacroDown),
+            (Source::MacroUp, Ak820Beta1KeycodeSource::MacroUp),
+        ]
+        .into_iter()
+        .map(|(source, picker)| {
+            (
+                picker,
+                (0..=u16::MAX)
+                    .filter(|&code| image.assignable(code, source))
+                    .collect(),
+            )
+        })
+        .collect();
+        KeycodePicker {
+            open: true,
+            language: crate::i18n::Language::English,
+            ak820_profile: true,
+            ak820_combo_caps_word: image.valid_combo([4, 5, 0, 0], 0x7c73),
+            ak820_beta1_keycodes: Some(allowed),
+            layer_count: 6,
+            macro_count: 16,
+            ..Default::default()
+        }
+    }
+    fn click_macro_chooser(harness: &mut egui_kittest::Harness<'static, KeycodePicker>) {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        let tab = picker_tab_label(harness.state().language, KeycodeTab::Special);
+        harness.get_by_role_and_label(Role::Tab, tab).click();
+        harness.run();
+        let label = harness
+            .state()
+            .special_rows()
+            .into_iter()
+            .find(|r| r.action == PickerAction::ChooseSlot(AdvancedSlotKind::Macro))
+            .unwrap()
+            .accessible_name();
+        harness.get_by_role_and_label(Role::Button, &label).click();
+        harness.run();
+        assert_eq!(
+            harness.state().advanced_slot_picker,
+            Some(AdvancedSlotKind::Macro)
+        );
+    }
+    #[test]
+    fn real_special_macro_popup_assigns_all_beta3_layer_macro_pairs() {
+        use egui_kittest::kittest::Queryable;
+        let template = exact_ak820_picker(crate::ak820::ImageContract::Beta3(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+        ));
+        for layer in 0..6u16 {
+            for slot in 0..16u16 {
+                let picker = KeycodePicker {
+                    open: true,
+                    language: template.language,
+                    ak820_profile: true,
+                    ak820_combo_caps_word: true,
+                    ak820_beta1_keycodes: template.ak820_beta1_keycodes.clone(),
+                    layer_count: 6,
+                    macro_count: 16,
+                    ..Default::default()
+                };
+                let mut harness = compact_picker_harness(picker);
+                click_macro_chooser(&mut harness);
+                let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+                assert!(screen.contains_rect(harness.get_by_label("Hold layer / tap macro").rect()));
+                harness.get_by_label("Hold layer / tap macro").click();
+                harness.run();
+                assert!(screen.contains_rect(harness.get_by_label(&format!("L{layer}")).rect()));
+                harness.get_by_label(&format!("L{layer}")).click();
+                harness.run();
+                assert!(screen.contains_rect(harness.get_by_label(&format!("M{slot}")).rect()));
+                harness.get_by_label(&format!("M{slot}")).click();
+                harness.run();
+                assert_eq!(
+                    harness.state().result,
+                    Some(crate::keyboard::KeyBinding::Vial(
+                        0x4000 | layer << 8 | 0xf0 | slot
+                    ))
+                );
+                assert!(!harness.state().open);
+            }
+        }
+    }
+    #[test]
+    fn macro_popup_does_not_offer_layer_macro_for_previous_image_or_other_sources() {
+        use egui_kittest::kittest::Queryable;
+        let current =
+            crate::ak820::ImageContract::Beta3(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        let old =
+            crate::ak820::ImageContract::Beta2(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        for (image, source) in [
+            (old, Ak820Beta1KeycodeSource::Matrix),
+            (current, Ak820Beta1KeycodeSource::Encoder),
+            (current, Ak820Beta1KeycodeSource::Macro),
+            (current, Ak820Beta1KeycodeSource::MacroTap),
+            (current, Ak820Beta1KeycodeSource::MacroDown),
+            (current, Ak820Beta1KeycodeSource::MacroUp),
+        ] {
+            let mut picker = exact_ak820_picker(image);
+            picker.ak820_beta1_source = source;
+            let mut harness = compact_picker_harness(picker);
+            click_macro_chooser(&mut harness);
+            assert!(harness.query_by_label("Hold layer / tap macro").is_none());
+            harness.get_by_label("M0").click();
+            harness.run();
+            assert_eq!(
+                harness.state().result,
+                Some(crate::keyboard::KeyBinding::Vial(0x7700))
+            );
+        }
+    }
+    #[test]
+    fn restrictive_matrix_policies_do_not_offer_layer_macro_assignment() {
+        use egui_kittest::kittest::Queryable;
+        let image =
+            crate::ak820::ImageContract::Beta3(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        for policy in [
+            PickerValuePolicy::Ak820ComboTrigger,
+            PickerValuePolicy::Ak820ComboOutput,
+            PickerValuePolicy::KeyOverrideTrigger,
+            PickerValuePolicy::Ak820KeyOverrideReplacement,
+        ] {
+            let mut picker = exact_ak820_picker(image);
+            picker.value_policy = policy;
+            let mut harness = compact_picker_harness(picker);
+            click_macro_chooser(&mut harness);
+            assert!(
+                harness.query_by_label("Hold layer / tap macro").is_none(),
+                "policy {policy:?}"
+            );
+        }
+    }
+    #[test]
+    fn russian_layer_macro_last_layer_and_slot_are_visible_and_clickable() {
+        use egui_kittest::kittest::Queryable;
+        let mut picker = exact_ak820_picker(crate::ak820::ImageContract::Beta3(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+        ));
+        picker.language = crate::i18n::Language::Russian;
+        let mut harness = compact_picker_harness(picker);
+        click_macro_chooser(&mut harness);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+        let mode = "Удержание слоя / макрос по нажатию";
+        assert!(screen.contains_rect(harness.get_by_label(mode).rect()));
+        harness.get_by_label(mode).click();
+        harness.run();
+        assert!(screen.contains_rect(harness.get_by_label("L5").rect()));
+        harness.get_by_label("L5").click();
+        harness.run();
+        assert!(screen.contains_rect(harness.get_by_label("M15").rect()));
+        harness.get_by_label("M15").click();
+        harness.run();
+        assert_eq!(
+            harness.state().result,
+            Some(crate::keyboard::KeyBinding::Vial(0x45ff))
+        );
+        assert!(!harness.state().open);
+    }
+    #[test]
+    fn real_combo_output_picker_assigns_caps_word_but_old_and_trigger_pickers_do_not_offer_it() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let current =
+            crate::ak820::ImageContract::Beta3(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        let mut picker = exact_ak820_picker(current);
+        picker.open_full_key_picker(KeycodeTab::Basic);
+        picker.constrain_ak820_combo_picker(true);
+        let mut harness = compact_picker_harness(picker);
+        harness.get_by_role_and_label(Role::Tab, "Special").click();
+        harness.run();
+        harness
+            .get_by_role_and_label(Role::Button, "Caps Word")
+            .click();
+        harness.run();
+        assert_eq!(
+            harness.state().result,
+            Some(crate::keyboard::KeyBinding::Vial(0x7c73))
+        );
+        assert!(!harness.state().open);
+        for (image, output) in [
+            (
+                crate::ak820::ImageContract::Beta2(
+                    crate::app::ak820_beta1_profiles::ProfileId::Main,
+                ),
+                true,
+            ),
+            (current, false),
+        ] {
+            let mut picker = exact_ak820_picker(image);
+            picker.open_full_key_picker(KeycodeTab::Basic);
+            picker.constrain_ak820_combo_picker(output);
+            let mut harness = compact_picker_harness(picker);
+            harness.get_by_role_and_label(Role::Tab, "Special").click();
+            harness.run();
+            assert!(!harness.get_all_by_role(Role::Button).any(|n| n
+                .accesskit_node()
+                .label()
+                .as_deref()
+                == Some("Caps Word")));
+        }
+    }
+    #[test]
+    fn compact_basic_far_right_key_is_clickable() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        for (label, value) in [("Pause", 0x48), ("➡", 0x4F)] {
+            let mut harness = compact_picker_harness(english_picker());
+            harness
+                .get_by_role_and_label(Role::Button, label)
+                .scroll_to_me();
+            harness.run();
+            let key = harness.get_by_role_and_label(Role::Button, label);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+            assert!(screen.contains_rect(key.rect()));
+            key.click();
+            harness.run();
+            assert_eq!(
+                harness.state().result,
+                Some(crate::keyboard::KeyBinding::Vial(value))
+            );
+            assert!(!harness.state().open);
+        }
+    }
+    #[test]
+    fn compact_picker_search_keeps_clear_control_inside_viewport() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+
+        let mut picker = english_picker();
+        picker.search.query = "kc_volu".into();
+        let harness = compact_picker_harness(picker);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+        let clear = harness.get_by_role_and_label(Role::Button, "Clear search");
+        assert!(screen.contains_rect(clear.rect()));
+        assert!(harness.state().search.is_active());
+        assert!(!harness.state().search.results().is_empty());
     }
 
     #[test]
@@ -947,10 +1289,16 @@ mod tests {
         picker.open_regular_key_picker_with_mod_key(true);
         picker.constrain_ak820_override_replacement();
         for value in [0, 4, 0x104] {
-            assert!(picker.picker_value_supported(value), "replacement {value:#x}");
+            assert!(
+                picker.picker_value_supported(value),
+                "replacement {value:#x}"
+            );
         }
         for value in [0xe1, 0xa5, 0x4104, 0x5221] {
-            assert!(!picker.picker_value_supported(value), "replacement {value:#x}");
+            assert!(
+                !picker.picker_value_supported(value),
+                "replacement {value:#x}"
+            );
         }
         picker.open_full_key_picker(KeycodeTab::Basic);
         assert!(picker.picker_value_supported(0xe1));
@@ -1154,6 +1502,7 @@ impl Default for KeycodePicker {
             custom_keycodes: vec![],
             supports_rgb: true,
             ak820_profile: false,
+            ak820_combo_caps_word: false,
             ak820_beta1_keycodes: None,
             ak820_beta1_source: Ak820Beta1KeycodeSource::Matrix,
             ak820_beta1_profile_revision: 0,
@@ -1206,6 +1555,7 @@ impl Default for KeycodePicker {
             macro_key_pick: None,
             macro_mod_key_pick: None,
             advanced_slot_picker: None,
+            advanced_macro_layer: None,
             macros_dirty: false,
             macro_edit_revision: 0,
             macro_attempted_revision: None,
@@ -1277,14 +1627,20 @@ impl KeycodePicker {
         match self.value_policy {
             PickerValuePolicy::Any => true,
             PickerValuePolicy::KeyOverrideTrigger => {
-                if self.ak820_profile { value == 0 || (4..=0xA4).contains(&value) }
-                else { !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7) }
+                if self.ak820_profile {
+                    value == 0 || (4..=0xA4).contains(&value)
+                } else {
+                    !matches!(value, 0x0000 | 0x0001 | 0x00E0..=0x00E7)
+                }
             }
-            PickerValuePolicy::Ak820KeyOverrideReplacement => value == 0
-                || (value < 0x2000 && (4..=0xA4).contains(&(value & 255))),
+            PickerValuePolicy::Ak820KeyOverrideReplacement => {
+                value == 0 || (value < 0x2000 && (4..=0xA4).contains(&(value & 255)))
+            }
             PickerValuePolicy::Ak820ComboTrigger => value == 0 || (4..=0xA4).contains(&value),
             PickerValuePolicy::Ak820ComboOutput => {
-                value == 0 || crate::ak820::valid_combo([4, 5, 0, 0], value)
+                value == 0
+                    || crate::ak820::valid_combo([4, 5, 0, 0], value)
+                    || value == 0x7c73 && self.ak820_combo_caps_word
             }
         }
     }
@@ -1363,6 +1719,7 @@ impl KeycodePicker {
         self.macro_key_pick = None;
         self.macro_mod_key_pick = None;
         self.advanced_slot_picker = None;
+        self.advanced_macro_layer = None;
     }
 
     fn macro_layer_key_choices(&self, kind: MacroKeyPickKind) -> Vec<(u16, String, String)> {
@@ -1488,6 +1845,7 @@ impl KeycodePicker {
         self.vial_quantum_pending_mt = None;
         self.vial_layer_pending = None;
         self.advanced_slot_picker = None;
+        self.advanced_macro_layer = None;
         self.macro_key_pick = None;
         self.macro_mod_key_pick = None;
         self.td_key_pick = None;
@@ -1507,6 +1865,7 @@ impl KeycodePicker {
         self.vial_quantum_pending_mt = None;
         self.vial_layer_pending = None;
         self.advanced_slot_picker = None;
+        self.advanced_macro_layer = None;
         self.rmk_native_key_actions_allowed_for_target = false;
         self.value_policy = PickerValuePolicy::Any;
     }
@@ -1557,6 +1916,7 @@ impl KeycodePicker {
         self.macro_key_pick = None;
         self.macro_mod_key_pick = None;
         self.advanced_slot_picker = None;
+        self.advanced_macro_layer = None;
         self.tap_dance_editor_open = None;
         self.tap_dance_undo_stack.clear();
         self.td_key_pick = None;
@@ -1578,7 +1938,9 @@ impl KeycodePicker {
     }
 
     pub(crate) fn constrain_ak820_override_replacement(&mut self) {
-        if self.ak820_profile { self.value_policy = PickerValuePolicy::Ak820KeyOverrideReplacement; }
+        if self.ak820_profile {
+            self.value_policy = PickerValuePolicy::Ak820KeyOverrideReplacement;
+        }
     }
 
     pub(crate) fn select_tab_for_keycode(&mut self, value: u16) {

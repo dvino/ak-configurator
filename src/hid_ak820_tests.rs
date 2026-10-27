@@ -1,6 +1,143 @@
 //! Offline transaction checks; scripted saved bytes do not prove physical durability.
 use super::*;
 
+fn atomic_palette_device(
+    initial_mode: u8,
+    fail_chunk: Option<u8>,
+) -> (HidDevice, super::super::TestHidRecorder) {
+    atomic_palette_device_cancellable(initial_mode, fail_chunk, None)
+}
+
+fn atomic_palette_device_cancellable(
+    initial_mode: u8,
+    fail_chunk: Option<u8>,
+    cancel_on_read: Option<(std::sync::Arc<AtomicBool>, usize)>,
+) -> (HidDevice, super::super::TestHidRecorder) {
+    let (hid, log) =
+        HidDevice::test_beta3_ak820_device(crate::app::ak820_beta1_profiles::ProfileId::Main, true);
+    let mut fake = crate::ak820_rgb::direct::tests::Fake::default();
+    fake.fail_chunk = fail_chunk;
+    let mut mode = [initial_mode, 0, 42, 80, 200, 100];
+    let mut palette_reads = 0;
+    log.respond_by(move |p| {
+        if p[..2] == [8, 0x46] {
+            palette_reads += 1;
+            if let Some((cancel, at)) = &cancel_on_read {
+                if palette_reads == *at {
+                    cancel.store(true, Ordering::Release);
+                }
+            }
+        }
+        let mut r = *p;
+        match (p[0], p[1]) {
+            (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+            (8, 0x41) => r[2..8].copy_from_slice(&mode),
+            (7, 0x41) => mode.copy_from_slice(&p[2..8]),
+            _ => return Some(fake.send(p).map_err(|e| e.to_string())),
+        }
+        Some(Ok(r))
+    });
+    (hid, log)
+}
+
+#[test]
+fn direct_v1_cancellation_during_snapshot_or_commit_readback_stops_at_that_packet() {
+    for read in [1, 13] {
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let (hid, log) = atomic_palette_device_cancellable(1, None, Some((cancel.clone(), read)));
+        assert!(matches!(
+            hid.ak820_stream_rgb_frame(&[[30; 3]; 82], None, &cancel)
+                .unwrap(),
+            Ak820RgbStreamResult::Cancelled
+        ));
+        let sent = log.requests();
+        assert_eq!(&sent.last().unwrap()[..2], &[8, 0x46]);
+        assert_eq!(sent.iter().filter(|p| p[..2] == [8, 0x46]).count(), read);
+        assert_eq!(
+            sent.iter().filter(|p| p[..2] == [7, 0x45]).count(),
+            usize::from(read == 13)
+        );
+        assert!(!sent.iter().any(|p| p[..2] == [7, 0x46] || p[0] == 9));
+        let state = hid.ak820.as_ref().unwrap().lock().unwrap();
+        assert!(state.rgb_owner.is_none());
+        assert!(state.failure.is_none());
+    }
+}
+
+#[test]
+fn direct_v1_restore_cancellation_during_readback_retires_owner_without_more_packets() {
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let (hid, log) = atomic_palette_device_cancellable(2, None, Some((cancel.clone(), 25)));
+    let owned = start_rgb(&hid);
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&owned, &cancel).unwrap(),
+        Ak820RgbRestoreResult::Cancelled
+    );
+    let sent = log.requests();
+    assert_eq!(&sent.last().unwrap()[..2], &[8, 0x46]);
+    assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x45]).count(), 2);
+    assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
+    assert!(!sent.iter().any(|p| p[..2] == [7, 0x46] || p[0] == 9));
+    assert_eq!(
+        hid.ak820_restore_rgb_stream(&owned, &AtomicBool::new(false))
+            .unwrap(),
+        Ak820RgbRestoreResult::OwnershipLost
+    );
+    assert_eq!(log.requests().len(), sent.len());
+}
+
+#[test]
+fn direct_v1_restores_original_palette_including_when_started_in_direct() {
+    for initial_mode in [0, 1, 2] {
+        let (hid, log) = atomic_palette_device(initial_mode, None);
+        let original = hid.ak820_direct_snapshot().unwrap();
+        let first = start_rgb(&hid);
+        let Ak820RgbStreamResult::Applied(next) = hid
+            .ak820_stream_rgb_frame(&[[0; 3]; 82], Some(&first), &AtomicBool::new(false))
+            .unwrap()
+        else {
+            panic!("next frame");
+        };
+        assert!(next.can_restore_builtin());
+        assert_eq!(
+            hid.ak820_restore_rgb_stream(&next, &AtomicBool::new(false))
+                .unwrap(),
+            Ak820RgbRestoreResult::Restored([initial_mode, 0, 42, 80, 200, 100])
+        );
+        assert_eq!(hid.ak820_direct_snapshot().unwrap().hsv, original.hsv);
+        let requests = log.requests();
+        assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x45]).count(), 3);
+        assert!(!requests.iter().any(|p| p[..2] == [7, 0x42] || p[0] == 9));
+    }
+}
+
+#[test]
+fn direct_v1_frame_failure_latches_without_restore_or_fallback() {
+    let (hid, log) = atomic_palette_device(1, Some(24));
+    assert!(hid.ak820_apply_palette(&[[80; 3]; 82]).is_err());
+    let sent = log.requests();
+    assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x44]).count(), 4);
+    assert!(
+        !sent
+            .iter()
+            .any(|p| p[..2] == [7, 0x42] || p[..2] == [7, 0x45] || p[..2] == [7, 0x46])
+    );
+    assert!(hid.ak820_apply_palette(&[[0; 3]; 82]).is_err());
+    assert_eq!(log.requests().len(), sent.len());
+    assert!(!hid.ak820_editing_ready());
+}
+
+#[test]
+fn direct_getter_requires_exact_contract_before_any_transport() {
+    let (hid, log) = palette_device(None);
+    assert!(hid.ak820_direct_snapshot().is_err());
+    assert!(log.requests().is_empty());
+    let (hid, log) = atomic_palette_device(0, None);
+    let captured = hid.ak820_direct_snapshot().unwrap();
+    assert_eq!(captured.hsv, [[17, 99, 73]; 82]);
+    assert!(log.requests().iter().all(|p| p[0] == 8));
+}
+
 fn palette_device(fail_at: Option<u8>) -> (HidDevice, super::super::TestHidRecorder) {
     let (hid, log) =
         HidDevice::test_beta2_ak820_device(crate::app::ak820_beta1_profiles::ProfileId::Main, true);
@@ -45,9 +182,11 @@ fn static_palette_is_bounded_and_never_saves_nvm() {
         }
     }
     assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
-    assert!(!requests
-        .iter()
-        .any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F));
+    assert!(
+        !requests
+            .iter()
+            .any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F)
+    );
     assert!(hid.ak820_editing_ready());
 }
 
@@ -107,9 +246,10 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
     for packet in 0..10 {
         let (hid, log) = palette_device(Some(packet * 9));
         let cancel = AtomicBool::new(false);
-        assert!(hid
-            .ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
-            .is_err());
+        assert!(
+            hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
+                .is_err()
+        );
         let sent = log.requests();
         assert_eq!(
             sent.iter().filter(|p| p[..2] == [7, 0x42]).count(),
@@ -117,9 +257,10 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
         );
         assert!(!sent.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
         assert!(!hid.ak820_editing_ready());
-        assert!(hid
-            .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel)
-            .is_err());
+        assert!(
+            hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel)
+                .is_err()
+        );
         assert_eq!(sent.len(), log.requests().len());
     }
 }
@@ -201,9 +342,10 @@ fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_setti
 fn rgb_stream_rejects_read_only_sessions_before_transport() {
     let (mut hid, log) = palette_device(None);
     hid.read_only = Some(super::super::ReadOnlyHidSession::default());
-    assert!(hid
-        .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false))
-        .is_err());
+    assert!(
+        hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false))
+            .is_err()
+    );
     assert!(log.requests().is_empty());
 }
 
@@ -406,9 +548,10 @@ fn rgb_restore_storage_timeout_or_unknown_mode_stops_and_latches() {
             Some(Ok(r))
         });
         let before = log.requests().len();
-        assert!(hid
-            .ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
-            .is_err());
+        assert!(
+            hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+                .is_err()
+        );
         assert!(!hid.ak820_editing_ready());
         let sent = log.requests();
         assert!(!sent[before..].iter().any(|p| p[0] == 7 || p[0] == 9));
@@ -598,10 +741,11 @@ fn rgb_save_checks_scripted_persistent_bytes_and_latches_mismatch() {
             Some(Ok(r))
         });
         assert_eq!(hid.usb_send(&[9]).is_err(), bad_saved_value);
-        assert!(log
-            .requests()
-            .iter()
-            .any(|p| p[..5] == [0xFD, 0, 0xC7, 0x18, 8]));
+        assert!(
+            log.requests()
+                .iter()
+                .any(|p| p[..5] == [0xFD, 0, 0xC7, 0x18, 8])
+        );
         assert_eq!(hid.ak820_failure().is_some(), bad_saved_value);
         if bad_saved_value {
             let before = log.requests().len();

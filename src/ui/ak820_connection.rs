@@ -15,7 +15,9 @@ fn validate_ak820_layout(layout: &KeyboardLayout) -> Result<(), String> {
     {
         return Err(format!(
             "AK820 layout contract mismatch: expected {EXPECTED_ROWS}x{EXPECTED_COLS} matrix and {EXPECTED_KEYS} physical keys, got {}x{} and {} keys",
-            layout.rows, layout.cols, layout.keys.len()
+            layout.rows,
+            layout.cols,
+            layout.keys.len()
         ));
     }
     let mut coordinates = std::collections::HashSet::with_capacity(layout.keys.len());
@@ -47,7 +49,10 @@ fn validate_ak820_layout(layout: &KeyboardLayout) -> Result<(), String> {
             .any(|encoder| encoder.encoder_idx != 0 || encoder.direction > 1)
         || layout.encoders[0].direction == layout.encoders[1].direction
     {
-        return Err(format!("AK820 layout must describe one encoder with two directions; definition has {} encoder slots", layout.encoders.len()));
+        return Err(format!(
+            "AK820 layout must describe one encoder with two directions; definition has {} encoder slots",
+            layout.encoders.len()
+        ));
     }
     Ok(())
 }
@@ -80,7 +85,9 @@ fn load_verified_ak820(
         .get_keyboard_id()
         .map_err(|e| format!("Vial identity read failed: {e:#}"))?;
     if via_protocol != 9 || vial_protocol != 6 || keyboard_id != crate::ak820::VIAL_UID {
-        return Err(format!("Unsupported AK820 protocol identity (VIA {via_protocol}, Vial {vial_protocol}, UID {keyboard_id:016X}); settings remain read-only."));
+        return Err(format!(
+            "Unsupported AK820 protocol identity (VIA {via_protocol}, Vial {vial_protocol}, UID {keyboard_id:016X}); settings remain read-only."
+        ));
     }
 
     progress("Reading fresh AK820 layout definition…")?;
@@ -101,8 +108,10 @@ fn load_verified_ak820(
     let mut layout =
         KeyboardLayout::from_vial_json(&json).map_err(|e| format!("Layout parse failed: {e:#}"))?;
     validate_ak820_layout(&layout)?;
-    if let Some(profile) = image.profile() {
-        let identity = ak820_beta1_profiles::matrix_profile(profile)
+    if image.profile().is_some() {
+        let identity = image
+            .matrix_profile()
+            .ok_or("Missing exact image profile")?
             .settings_identity
             .as_ref()
             .ok_or("AK820 profile lacks an exact settings identity")?;
@@ -137,7 +146,9 @@ fn load_verified_ak820(
         || macro_memory_bytes != EXPECTED_MACRO_BYTES
         || dynamic != image.dynamic_counts()
     {
-        return Err(format!("AK820 capacity mismatch (layers {layer_count}, macros {macro_count}/{macro_memory_bytes} bytes, dynamic {dynamic:?}); settings remain read-only."));
+        return Err(format!(
+            "AK820 capacity mismatch (layers {layer_count}, macros {macro_count}/{macro_memory_bytes} bytes, dynamic {dynamic:?}); settings remain read-only."
+        ));
     }
 
     progress("Reading all AK820 keymaps…")?;
@@ -204,7 +215,7 @@ fn load_verified_ak820(
         let (keys, output) = dev_conn
             .get_combo(index)
             .map_err(|e| format!("Combo {index} read failed: {e:#}"))?;
-        if !crate::ak820::valid_combo(keys, output) {
+        if !image.valid_combo(keys, output) {
             return Err(format!(
                 "AK820 combo {index} is invalid; settings remain read-only."
             ));
@@ -221,7 +232,9 @@ fn load_verified_ak820(
         .get_vialrgb_info()
         .map_err(|e| format!("VialRGB info read failed: {e:#}"))?;
     if rgb_version != 1 || max_brightness != 160 {
-        return Err(format!("Unsupported AK820 VialRGB info (version {rgb_version}, max brightness {max_brightness}); settings remain read-only."));
+        return Err(format!(
+            "Unsupported AK820 VialRGB info (version {rgb_version}, max brightness {max_brightness}); settings remain read-only."
+        ));
     }
     let (effect, speed, hue, saturation, brightness) = dev_conn
         .get_vialrgb_mode()
@@ -231,7 +244,9 @@ fn load_verified_ak820(
         .map_err(|e| format!("VialRGB mode list read failed: {e:#}"))?;
     let expected_rgb_modes: Vec<u16> = image.rgb_modes().iter().map(|&mode| mode as u16).collect();
     if supported_effects != expected_rgb_modes {
-        return Err(format!("AK820 VialRGB modes mismatch: expected {expected_rgb_modes:?}, got {supported_effects:?}; settings remain read-only."));
+        return Err(format!(
+            "AK820 VialRGB modes mismatch: expected {expected_rgb_modes:?}, got {supported_effects:?}; settings remain read-only."
+        ));
     }
     if !supported_effects.contains(&effect) || brightness > max_brightness {
         return Err("AK820 VialRGB state is outside the verified capability range; settings remain read-only.".to_owned());

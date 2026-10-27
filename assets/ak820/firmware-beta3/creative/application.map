@@ -1,0 +1,1698 @@
+ASxxxx Linker V05.50.4-SDLD,  page 1.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CABS                                00000000    00000000 =           0. bytes (ABS,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00000000  l_CABS                          
+C:   00000000  l_GSINIT1                       
+C:   00000000  l_GSINIT5                       
+C:   00000000  l_IABS                          
+C:   00000000  l_ISEG                          
+C:   00000000  l_PSEG                          
+C:   00000000  l_REG_BANK_1                    
+C:   00000000  l_REG_BANK_2                    
+C:   00000000  l_REG_BANK_3                    
+C:   00000000  l_RSEG                          
+C:   00000000  l_RSEG0                         
+C:   00000000  l_RSEG1                         
+C:   00000000  l_XABS                          
+C:   00000000  l__CODE                         
+C:   00000000  s_BSEG                          
+C:   00000000  s_CABS                          
+C:   00000000  s_DSEG                          
+C:   00000000  s_IABS                          
+C:   00000000  s_ISEG                          
+C:   00000000  s_REG_BANK_0                    
+C:   00000000  s_RSEG                          
+C:   00000000  s_RSEG0                         
+C:   00000000  s_RSEG1                         
+C:   00000000  s_XABS                          
+C:   00000001  l_BIT_BANK                      
+C:   00000003  l_GSFINAL                       
+C:   00000003  l_GSINIT0                       
+C:   00000006  l_OSEG                          
+C:   00000007  l_BSEG_BYTES                    
+C:   00000008  l_REG_BANK_0                    
+C:   00000008  s_REG_BANK_1                    
+C:   0000000A  l_GSINIT2                       
+C:   00000010  s_REG_BANK_2                    
+C:   00000018  s_REG_BANK_3                    
+C:   00000020  s_BSEG_BYTES                    
+C:   00000020  s__CODE                         
+C:   00000027  s_BIT_BANK                      
+C:   00000028  l_GSINIT                        
+C:   0000002A  l_GSINIT4                       
+C:   0000002C  l_GSINIT3                       
+C:   00000033  l_BSEG                          
+C:   00000043  s_OSEG                          
+C:   00000049  s_SSEG                          
+C:   00000065  l_XINIT                         
+C:   00000065  l_XISEG                         
+C:   0000007E  l_HOME                          
+C:   0000007F  l_DSEG                          
+C:   000000B7  l_SSEG                          
+C:   00000100  l_IRAM                          
+C:   00000440  s_PSEG                          
+ASxxxx Linker V05.50.4-SDLD,  page 2.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CABS                                00000000    00000000 =           0. bytes (ABS,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00000440  s_XSEG                          
+C:   00000702  l_CONST                         
+C:   0000075A  l_AK820LOW                      
+C:   00000AD0  l_XSEG                          
+C:   00000F10  s_XISEG                         
+C:   000028A0  s_AK820LOW                      
+C:   00003027  s_HOME                          
+C:   000030A5  s_GSINIT0                       
+C:   000030A8  s_GSINIT1                       
+C:   000030A8  s_GSINIT2                       
+C:   000030B2  s_GSINIT3                       
+C:   000030DE  s_GSINIT4                       
+C:   00003108  s_GSINIT                        
+C:   00003108  s_GSINIT5                       
+C:   00003130  s_GSFINAL                       
+C:   00003133  s_CSEG                          
+C:   00008C17  l_CSEG                          
+C:   0000BD4A  s_CONST                         
+C:   0000C44C  s_XINIT                         
+ASxxxx Linker V05.50.4-SDLD,  page 3.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     00000000  .__.ABS.                           _startup
+     00000080  _AIN8                              usb_descriptor
+     00000080  _P0                                usb_descriptor
+     00000080  _P0_0                              usb_descriptor
+     00000080  _SCL0                              usb_descriptor
+     00000081  _AIN9                              usb_descriptor
+     00000081  _P0_1                              usb_descriptor
+     00000081  _SDA0                              usb_descriptor
+     00000081  _SP                                usb_descriptor
+     00000082  _AIN10                             usb_descriptor
+     00000082  _DPL                               usb_descriptor
+     00000082  _P0_2                              usb_descriptor
+     00000082  _RXD_                              usb_descriptor
+     00000083  _AIN11                             usb_descriptor
+     00000083  _DPH                               usb_descriptor
+     00000083  _P0_3                              usb_descriptor
+     00000083  _TXD_                              usb_descriptor
+     00000084  _AIN12                             usb_descriptor
+     00000084  _P0_4                              usb_descriptor
+     00000084  _ROM_ADDR_L                        usb_descriptor
+     00000085  _AIN13                             usb_descriptor
+     00000085  _P0_5                              usb_descriptor
+     00000085  _ROM_ADDR_H                        usb_descriptor
+     00000086  _P0_6                              usb_descriptor
+     00000086  _ROM_CTRL                          usb_descriptor
+     00000087  _P0_7                              usb_descriptor
+     00000087  _PCON                              usb_descriptor
+     00000088  _IT0                               usb_descriptor
+     00000088  _TCON                              usb_descriptor
+     00000089  _IE0                               usb_descriptor
+     00000089  _TMOD                              usb_descriptor
+     0000008A  _IT1                               usb_descriptor
+     0000008A  _TL0                               usb_descriptor
+     0000008B  _IE1                               usb_descriptor
+     0000008B  _TL1                               usb_descriptor
+     0000008C  _TH0                               usb_descriptor
+     0000008C  _TR0                               usb_descriptor
+     0000008D  _TF0                               usb_descriptor
+     0000008D  _TH1                               usb_descriptor
+     0000008E  _ROM_DATA_HL                       usb_descriptor
+     0000008E  _TR1                               usb_descriptor
+     0000008F  _ROM_DATA_HH                       usb_descriptor
+     0000008F  _TF1                               usb_descriptor
+     00000090  _AIN0                              usb_descriptor
+     00000090  _CAP1                              usb_descriptor
+     00000090  _P1                                usb_descriptor
+     00000090  _P1_0                              usb_descriptor
+     00000090  _T2                                usb_descriptor
+     00000091  _AIN1                              usb_descriptor
+     00000091  _CAP2                              usb_descriptor
+ASxxxx Linker V05.50.4-SDLD,  page 4.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     00000091  _P1_1                              usb_descriptor
+     00000091  _T2EX                              usb_descriptor
+     00000092  _AIN2                              usb_descriptor
+     00000092  _INT0_                             usb_descriptor
+     00000092  _P1_2                              usb_descriptor
+     00000092  _P1_MOD_OC                         usb_descriptor
+     00000093  _AIN3                              usb_descriptor
+     00000093  _P1_3                              usb_descriptor
+     00000093  _P1_DIR_PU                         usb_descriptor
+     00000094  _AIN4                              usb_descriptor
+     00000094  _P1_4                              usb_descriptor
+     00000094  _P2_MOD_OC                         usb_descriptor
+     00000094  _SCS                               usb_descriptor
+     00000095  _AIN5                              usb_descriptor
+     00000095  _MOSI                              usb_descriptor
+     00000095  _P1_5                              usb_descriptor
+     00000095  _P2_DIR_PU                         usb_descriptor
+     00000096  _AIN6                              usb_descriptor
+     00000096  _MISO                              usb_descriptor
+     00000096  _P1_6                              usb_descriptor
+     00000096  _P3_MOD_OC                         usb_descriptor
+     00000096  _RXD1_                             usb_descriptor
+     00000097  _AIN7                              usb_descriptor
+     00000097  _P1_7                              usb_descriptor
+     00000097  _P3_DIR_PU                         usb_descriptor
+     00000097  _SCK                               usb_descriptor
+     00000097  _TXD1_                             usb_descriptor
+     00000098  _RI                                usb_descriptor
+     00000098  _SCON                              usb_descriptor
+     00000099  _SBUF                              usb_descriptor
+     00000099  _TI                                usb_descriptor
+     0000009A  _RB8                               usb_descriptor
+     0000009B  _TB8                               usb_descriptor
+     0000009C  _REN                               usb_descriptor
+     0000009D  _SM2                               usb_descriptor
+     0000009E  _SM1                               usb_descriptor
+     0000009F  _SM0                               usb_descriptor
+     000000A0  _P2                                usb_descriptor
+     000000A0  _P2_0                              usb_descriptor
+     000000A0  __XPAGE                            
+     000000A1  _P2_1                              usb_descriptor
+     000000A1  _SAFE_MOD                          usb_descriptor
+     000000A2  _P2_2                              usb_descriptor
+     000000A2  _XBUS_AUX                          usb_descriptor
+     000000A3  _P2_3                              usb_descriptor
+     000000A4  _CAP1_                             usb_descriptor
+     000000A4  _P2_4                              usb_descriptor
+     000000A4  _T2_                               usb_descriptor
+     000000A5  _CAP2_                             usb_descriptor
+     000000A5  _P2_5                              usb_descriptor
+     000000A5  _T2EX_                             usb_descriptor
+ASxxxx Linker V05.50.4-SDLD,  page 5.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     000000A6  _LED_COMMON                        usb_descriptor
+     000000A6  _P2_6                              usb_descriptor
+     000000A6  _RXD1                              usb_descriptor
+     000000A7  _LED_PWM_OE                        usb_descriptor
+     000000A7  _P2_7                              usb_descriptor
+     000000A7  _TXD1                              usb_descriptor
+     000000A8  _EX0                               usb_descriptor
+     000000A8  _IE                                usb_descriptor
+     000000A9  _ET0                               usb_descriptor
+     000000A9  _WAKE_CTRL                         usb_descriptor
+     000000AA  _EX1                               usb_descriptor
+     000000AA  _P5_IN                             usb_descriptor
+     000000AB  _ET1                               usb_descriptor
+     000000AB  _P5_OUT_PU                         usb_descriptor
+     000000AC  _ES                                usb_descriptor
+     000000AC  _P5_DIR                            usb_descriptor
+     000000AD  _ET2                               usb_descriptor
+     000000AD  _P6_IN                             usb_descriptor
+     000000AE  _E_DIS                             usb_descriptor
+     000000AE  _P6_OUT_PU                         usb_descriptor
+     000000AF  _EA                                usb_descriptor
+     000000AF  _P6_DIR                            usb_descriptor
+     000000B0  _P3                                usb_descriptor
+     000000B0  _P3_0                              usb_descriptor
+     000000B0  _RXD                               usb_descriptor
+     000000B1  _GLOBAL_CFG                        usb_descriptor
+     000000B1  _P3_1                              usb_descriptor
+     000000B1  _TXD                               usb_descriptor
+     000000B2  _GPIO_IE                           usb_descriptor
+     000000B2  _INT0                              usb_descriptor
+     000000B2  _P3_2                              usb_descriptor
+     000000B3  _I2CX_INT                          usb_descriptor
+     000000B3  _INT1                              usb_descriptor
+     000000B3  _P3_3                              usb_descriptor
+     000000B4  _P3_4                              usb_descriptor
+     000000B4  _SPI1_STAT                         usb_descriptor
+     000000B4  _T0                                usb_descriptor
+     000000B5  _MOSI1                             usb_descriptor
+     000000B5  _P3_5                              usb_descriptor
+     000000B5  _SPI1_DATA                         usb_descriptor
+     000000B5  _T1                                usb_descriptor
+     000000B6  _MISO1                             usb_descriptor
+     000000B6  _P3_6                              usb_descriptor
+     000000B6  _SPI1_CTRL                         usb_descriptor
+     000000B7  _P3_7                              usb_descriptor
+     000000B7  _SCK1                              usb_descriptor
+     000000B7  _SPI1_CK_SE                        usb_descriptor
+     000000B8  _IP                                usb_descriptor
+     000000B8  _PX0                               usb_descriptor
+     000000B9  _CLOCK_CFG                         usb_descriptor
+     000000B9  _PT0                               usb_descriptor
+ASxxxx Linker V05.50.4-SDLD,  page 6.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     000000BA  _POWER_CFG                         usb_descriptor
+     000000BA  _PX1                               usb_descriptor
+     000000BB  _I2CS_INT_ST                       usb_descriptor
+     000000BB  _PT1                               usb_descriptor
+     000000BC  _PS                                usb_descriptor
+     000000BC  _SCON1                             usb_descriptor
+     000000BD  _PT2                               usb_descriptor
+     000000BD  _SBUF1                             usb_descriptor
+     000000BE  _PL_FLAG                           usb_descriptor
+     000000BE  _SBAUD1                            usb_descriptor
+     000000BF  _PH_FLAG                           usb_descriptor
+     000000BF  _SIF1                              usb_descriptor
+     000000C0  _P4                                usb_descriptor
+     000000C0  _P4_0                              usb_descriptor
+     000000C1  _P4_1                              usb_descriptor
+     000000C1  _P4_LED_KEY                        usb_descriptor
+     000000C2  _P4_2                              usb_descriptor
+     000000C2  _P4_MOD_OC                         usb_descriptor
+     000000C3  _P4_3                              usb_descriptor
+     000000C3  _P4_DIR_PU                         usb_descriptor
+     000000C4  _P0_MOD_OC                         usb_descriptor
+     000000C4  _P4_4                              usb_descriptor
+     000000C5  _P0_DIR_PU                         usb_descriptor
+     000000C5  _P4_5                              usb_descriptor
+     000000C6  _LED_DMA_L                         usb_descriptor
+     000000C6  _P4_6                              usb_descriptor
+     000000C7  _LED_DMA_H                         usb_descriptor
+     000000C8  _CP_RL2                            usb_descriptor
+     000000C8  _T2CON                             usb_descriptor
+     000000C9  _C_T2                              usb_descriptor
+     000000C9  _T2MOD                             usb_descriptor
+     000000CA  _RCAP2L                            usb_descriptor
+     000000CA  _TR2                               usb_descriptor
+     000000CB  _EXEN2                             usb_descriptor
+     000000CB  _RCAP2H                            usb_descriptor
+     000000CC  _TCLK                              usb_descriptor
+     000000CC  _TL2                               usb_descriptor
+     000000CD  _RCLK                              usb_descriptor
+     000000CD  _TH2                               usb_descriptor
+     000000CE  _EXF2                              usb_descriptor
+     000000CE  _T2CAP1L                           usb_descriptor
+     000000CF  _CAP1F                             usb_descriptor
+     000000CF  _T2CAP1H                           usb_descriptor
+     000000CF  _TF2                               usb_descriptor
+     000000D0  _P                                 usb_descriptor
+     000000D0  _PSW                               usb_descriptor
+     000000D1  _F1                                usb_descriptor
+     000000D2  _OV                                usb_descriptor
+     000000D3  _RS0                               usb_descriptor
+     000000D4  _RS1                               usb_descriptor
+     000000D5  _F0                                usb_descriptor
+ASxxxx Linker V05.50.4-SDLD,  page 7.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     000000D6  _AC                                usb_descriptor
+     000000D7  _CY                                usb_descriptor
+     000000E0  _ACC                               usb_descriptor
+     000000E8  _IE_EX                             usb_descriptor
+     000000E8  _IE_SPI0                           usb_descriptor
+     000000E9  _IE_USB                            usb_descriptor
+     000000E9  _IP_EX                             usb_descriptor
+     000000EB  _IE_ADC                            usb_descriptor
+     000000EC  _IE_UART1                          usb_descriptor
+     000000ED  _IE_PWM_I2C                        usb_descriptor
+     000000EE  _IE_GPIO                           usb_descriptor
+     000000EF  _IE_WDOG                           usb_descriptor
+     000000F0  _B                                 usb_descriptor
+     000000F1  _P7                                usb_descriptor
+     000000F3  _ADC_CTRL                          usb_descriptor
+     000000F4  _ADC_DAT_L                         usb_descriptor
+     000000F5  _ADC_DAT_H                         usb_descriptor
+     000000F5  _B_5                               _gptrget
+     000000F6  _ADC_CHAN                          usb_descriptor
+     000000F6  _B_6                               _gptrget
+     000000F7  _ADC_START                         usb_descriptor
+     000000F7  _B_7                               _gptrget
+     000000F7  _LED_STATUS                        usb_descriptor
+     000000F8  _S0_R_FIFO                         usb_descriptor
+     000000F8  _SPI0_STAT                         usb_descriptor
+     000000F9  _SPI0_DATA                         usb_descriptor
+     000000FA  _S0_T_FIFO                         usb_descriptor
+     000000FA  _SPI0_CTRL                         usb_descriptor
+     000000FB  _S0_FREE                           usb_descriptor
+     000000FB  _SPI0_CK_SE                        usb_descriptor
+     000000FC  _S0_IF_BYTE                        usb_descriptor
+     000000FC  _SPI0_SETUP                        usb_descriptor
+     000000FD  _A_INV                             usb_descriptor
+     000000FD  _S0_IF_FIRST                       usb_descriptor
+     000000FE  _RESET_KEEP                        usb_descriptor
+     000000FE  _S0_IF_OV                          usb_descriptor
+     000000FF  _S0_FST_ACT                        usb_descriptor
+     000000FF  _WDOG_COUNT                        usb_descriptor
+     00000200  _ak820_led_dma                     ak820_board
+     00000400  _ak820_flash_stage                 ak820_flash
+     00008584  _ROM_ADDR                          usb_descriptor
+     00008F8E  _ROM_DATA_HI                       usb_descriptor
+     0000C7C6  _LED_DMA                           usb_descriptor
+     0000CBCA  _RCAP2                             usb_descriptor
+     0000CDCC  _T2COUNT                           usb_descriptor
+     0000CFCE  _T2CAP1                            usb_descriptor
+     0000F5F4  _ADC_DAT                           usb_descriptor
+
+ASxxxx Linker V05.50.4-SDLD,  page 8.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+BSEG_BYTES                          00000020    00000007 =           7. bytes (REL,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 9.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+REG_BANK_0                          00000000    00000008 =           8. bytes (REL,OVR)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 10.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+BIT_BANK                            00000027    00000001 =           1. bytes (REL,OVR)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 11.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+DSEG                                00000000    0000007F =         127. bytes (REL,CON)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 12.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+OSEG                                00000043    00000006 =           6. bytes (REL,OVR)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 13.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+SSEG                                00000049    000000B7 =         183. bytes (REL,OVR)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+     00000049  __start__stack                     main
+
+ASxxxx Linker V05.50.4-SDLD,  page 14.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XSEG                                00000440    00000AD0 =        2768. bytes (REL,CON,XDATA)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+D:   00000440  _ak820_scan_rows                   ak820_board
+D:   00000450  _ak820_scan_ready                  ak820_board
+D:   00000451  _ak820_scan_sample                 ak820_board
+D:   00000456  _ak820_set_slot_rgb_PARM_2         ak820_board
+D:   00000457  _ak820_set_slot_rgb_PARM_3         ak820_board
+D:   00000458  _ak820_set_slot_rgb_PARM_4         ak820_board
+D:   00000459  _ak820_rgb_set_color_PARM_2        ak820_board
+D:   0000045A  _ak820_rgb_set_color_PARM_3        ak820_board
+D:   0000045B  _ak820_rgb_set_color_PARM_4        ak820_board
+D:   0000045D  _ak820_rgb_set_color_all_PARM_2    ak820_board
+D:   0000045E  _ak820_rgb_set_color_all_PARM_3    ak820_board
+D:   0000049E  _ak820_crc16_PARM_2                ak820_crc
+D:   000004E8  _ak820_dynamic_macro_source        ak820_dynamic_macro
+D:   000004E9  _ak820_dynamic_macro_process_PAR   ak820_dynamic_macro
+D:   000004EC  _ak820_dynamic_macro_observe_PAR   ak820_dynamic_macro
+D:   000004F5  _ak820_flash_diagnostic            ak820_flash
+D:   00000506  _ak820_flash_program_PARM_2        ak820_flash
+D:   00000509  _ak820_flash_program_page_PARM_2   ak820_flash
+D:   0000050D  _dynamic_keymap_get_keycode_PARM   ak820_keymap_words
+D:   0000050E  _dynamic_keymap_get_keycode_PARM   ak820_keymap_words
+D:   0000050F  _dynamic_keymap_set_keycode_PARM   ak820_keymap_words
+D:   00000510  _dynamic_keymap_set_keycode_PARM   ak820_keymap_words
+D:   00000511  _dynamic_keymap_set_keycode_PARM   ak820_keymap_words
+D:   00000513  _dynamic_keymap_get_encoder_PARM   ak820_keymap_words
+D:   00000514  _dynamic_keymap_get_encoder_PARM   ak820_keymap_words
+D:   00000515  _dynamic_keymap_set_encoder_PARM   ak820_keymap_words
+D:   00000516  _dynamic_keymap_set_encoder_PARM   ak820_keymap_words
+D:   00000517  _dynamic_keymap_set_encoder_PARM   ak820_keymap_words
+D:   00000549  _ak820_macro_write_PARM_2          ak820_macro
+D:   0000054B  _ak820_macro_write_PARM_3          ak820_macro
+D:   000005B0  _ak820_eeprom_write_block_xdata_   ak820_nvm
+D:   000005B3  _ak820_eeprom_write_block_xdata_   ak820_nvm
+D:   000005B7  _ak820_eeprom_read_block_xdata_P   ak820_nvm_read_block
+D:   000005BA  _ak820_eeprom_read_block_xdata_P   ak820_nvm_read_block
+D:   000005BC  _ak820_eeprom_update_block_xdata   ak820_nvm_update_block
+D:   000005BF  _ak820_eeprom_update_block_xdata   ak820_nvm_update_block
+D:   000005C1  _ak820_oneshot_post_PARM_2         ak820_oneshot
+D:   000005C3  _ak820_os_indicator_mode           ak820_os_indicators
+D:   00000603  _ak820_settings_query_PARM_2       ak820_settings
+D:   00000605  _ak820_settings_query_PARM_3       ak820_settings
+D:   00000609  _ak820_settings_get_PARM_2         ak820_settings
+D:   0000060B  _ak820_settings_get_PARM_3         ak820_settings
+D:   0000060E  _ak820_settings_set_PARM_2         ak820_settings
+D:   00000610  _ak820_settings_set_PARM_3         ak820_settings
+D:   00000729  _ak820_tapping_source_PARM_1       ak820_tapping
+D:   00000734  _ak820_oneshot_mods                ak820_tapping
+D:   00000735  _ak820_oneshot_consumed            ak820_tapping
+D:   00000736  _ak820_oneshot_process_PARM_2      ak820_tapping
+D:   00000737  _ak820_oneshot_process_PARM_3      ak820_tapping
+D:   0000073B  _timer_count                       ak820_timer
+ASxxxx Linker V05.50.4-SDLD,  page 15.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XSEG                                00000440    00000AD0 =        2768. bytes (REL,CON,XDATA)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+D:   00000745  _keyboard_idle                     ch555_ak820
+D:   0000075D  _raw_hid_send_PARM_2               ch555_ak820
+D:   00000771  _eeprom_write_byte_PARM_2          eeprom_driver
+D:   00000775  _eeprom_write_word_PARM_2          eeprom_driver
+D:   0000077A  _eeprom_write_dword_PARM_2         eeprom_driver
+D:   00000781  _eeprom_update_byte_PARM_2         eeprom_driver
+D:   00000785  _eeprom_update_word_PARM_2         eeprom_driver
+D:   0000078A  _eeprom_update_dword_PARM_2        eeprom_driver
+D:   00000791  _rgb_matrix_config                 ak820_rgb
+D:   000007FC  _rgb_matrix_set_color_all_PARM_2   ak820_rgb
+D:   000007FD  _rgb_matrix_set_color_all_PARM_3   ak820_rgb
+D:   00000809  _process_rgb_matrix_PARM_2         ak820_rgb
+D:   0000080A  _process_rgb_matrix_PARM_3         ak820_rgb
+D:   0000080E  _rgb_matrix_sethsv_noeeprom_PARM   ak820_rgb
+D:   0000080F  _rgb_matrix_sethsv_noeeprom_PARM   ak820_rgb
+D:   0000081D  _raw_matrix                        matrix
+D:   0000082D  _matrix                            matrix
+D:   0000083D  _matrix_is_on_PARM_2               matrix
+D:   00000843  _D0SetupReqCode                    usb_ak820
+D:   00000844  _D0SetupLen                        usb_ak820
+D:   00000846  _pD0Descr                          usb_ak820
+D:   00000849  _D0UsbConfig                       usb_ak820
+D:   0000084A  _USB_EnumStatus                    usb_ak820
+D:   0000084B  _USB_SleepStatus                   usb_ak820
+D:   0000084C  _MCU_Sleep_Operate                 usb_ak820
+D:   0000084D  _KB_USB_UpStatus                   usb_ak820
+D:   0000084E  _KB_USB_SetReport                  usb_ak820
+D:   0000084F  _ak820_boot_stage                  usb_ak820
+D:   00000850  _ak820_main_heartbeat              usb_ak820
+D:   00000852  _raw_buffer                        usb_ak820
+D:   000008AF  _ak820_usb_send_PARM_2             usb_ak820
+D:   000008B1  _ak820_usb_send_PARM_3             usb_ak820
+D:   000008B4  _ak820_usb_try_send_PARM_2         usb_ak820
+D:   000008B6  _ak820_usb_try_send_PARM_3         usb_ak820
+D:   000008B9  _ak820_usb_raw_send_PARM_2         usb_ak820
+D:   000008D1  _add_key_byte_PARM_2               report
+D:   000008D5  _del_key_byte_PARM_2               report
+D:   000008D8  _add_key_to_report_PARM_2          report
+D:   000008DB  _del_key_from_report_PARM_2        report
+D:   000008E2  _usb_device_state_set_configurat   usb_device_state
+D:   000008E4  _usb_device_state_set_suspend_PA   usb_device_state
+D:   000008E5  _usb_device_state_set_resume_PAR   usb_device_state
+D:   000008E7  _tp_buttons                        action
+D:   000008E9  _action_exec_PARM_1                action
+D:   00000903  _register_mouse_PARM_2             action
+D:   00000906  _tap_code_delay_PARM_2             action
+D:   00000A27  _ak820_cache_keycode_PARM_2        action_layer
+D:   00000A2B  _ak820_cache_layer_PARM_2          action_layer
+D:   00000A30  _ak820_resolve_key_PARM_2          action_layer
+D:   00000A4A  _ak820_macro_primitive             action_util
+D:   00000A4B  _ak820_macro_cancelled             action_util
+ASxxxx Linker V05.50.4-SDLD,  page 16.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XSEG                                00000440    00000AD0 =        2768. bytes (REL,CON,XDATA)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+D:   00000A4C  _ak820_macro_change_PARM_2         action_util
+D:   00000A4D  _ak820_macro_change_PARM_3         action_util
+D:   00000B57  _owned_usage_key_PARM_2            action_util
+D:   00000B6A  _keymap_config                     magic
+D:   00000B6E  _hsv_to_rgb_into_PARM_2            color
+D:   00000B6F  _hsv_to_rgb_into_PARM_3            color
+D:   00000B73  _debounce_PARM_2                   sym_defer_g
+D:   00000B76  _debounce_PARM_3                   sym_defer_g
+D:   00000B77  _debounce_PARM_4                   sym_defer_g
+D:   00000B89  _dynamic_keymap_get_tap_dance_PA   dynamic_keymap
+D:   00000B8D  _dynamic_keymap_set_tap_dance_PA   dynamic_keymap
+D:   00000B91  _dynamic_keymap_get_combo_PARM_2   dynamic_keymap
+D:   00000B95  _dynamic_keymap_set_combo_PARM_2   dynamic_keymap
+D:   00000BC4  _dynamic_keymap_get_buffer_PARM_   dynamic_keymap
+D:   00000BC6  _dynamic_keymap_get_buffer_PARM_   dynamic_keymap
+D:   00000BCB  _dynamic_keymap_set_buffer_PARM_   dynamic_keymap
+D:   00000BCD  _dynamic_keymap_set_buffer_PARM_   dynamic_keymap
+D:   00000BD5  _keycode_at_keymap_location_PARM   dynamic_keymap
+D:   00000BD6  _keycode_at_keymap_location_PARM   dynamic_keymap
+D:   00000BD8  _keycode_at_encodermap_location_   dynamic_keymap
+D:   00000BD9  _keycode_at_encodermap_location_   dynamic_keymap
+D:   00000BDB  _dynamic_keymap_macro_get_buffer   dynamic_keymap
+D:   00000BDD  _dynamic_keymap_macro_get_buffer   dynamic_keymap
+D:   00000BE2  _dynamic_keymap_macro_set_buffer   dynamic_keymap
+D:   00000BE4  _dynamic_keymap_macro_set_buffer   dynamic_keymap
+D:   00000C11  _switch_events_PARM_2              keyboard
+D:   00000C12  _switch_events_PARM_3              keyboard
+D:   00000C3F  _ak820_keycode_at_PARM_2           keymap_common
+D:   00000C42  _keycode_at_keymap_location_raw_   keymap_introspection
+D:   00000C43  _keycode_at_keymap_location_raw_   keymap_introspection
+D:   00000C48  _keycode_at_encodermap_location_   keymap_introspection
+D:   00000C49  _keycode_at_encodermap_location_   keymap_introspection
+D:   00000C4B  _led_update_user_PARM_1            led
+D:   00000C4C  _led_update_kb_PARM_1              led
+D:   00000C4D  _led_update_ports_PARM_1           led
+D:   00000C54  _process_caps_word_PARM_2          process_caps_word
+D:   00000C59  _remember_last_key_user_PARM_2     process_repeat_key
+D:   00000C5C  _remember_last_key_user_PARM_3     process_repeat_key
+D:   00000C66  _process_last_key_PARM_2           process_repeat_key
+D:   00000C6B  _process_repeat_key_PARM_2         process_repeat_key
+D:   00000C6F  _process_rgb_PARM_2                process_rgb
+D:   00000C75  _process_tri_layer_PARM_2          process_tri_layer
+D:   00000C81  _get_record_keycode_PARM_2         quantum
+D:   00000C88  _process_record_quantum_helper_P   quantum
+D:   00000CA5  _set_last_record_PARM_2            repeat_key
+D:   00000CBB  _get_alt_repeat_key_keycode_user   repeat_key
+D:   00000CC3  _process_record_via_PARM_2         via
+D:   00000CC8  _raw_hid_receive_kb_PARM_2         via
+D:   00000CCC  _raw_hid_receive_PARM_2            via
+D:   00000CD7  _vial_handle_cmd_PARM_2            vial
+D:   00000CE5  _g_vial_magic_keycode_override     vial
+ASxxxx Linker V05.50.4-SDLD,  page 17.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XSEG                                00000440    00000AD0 =        2768. bytes (REL,CON,XDATA)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+D:   00000CF6  _g_direct_mode_colors              vialrgb
+D:   00000DEC  _ak820_direct_stage                vialrgb
+D:   00000EE2  _ak820_direct_state                vialrgb
+D:   00000EF9  _vialrgb_get_value_PARM_2          vialrgb
+D:   00000EFD  _vialrgb_set_value_PARM_2          vialrgb
+D:   00000F01  _vialrgb_save_PARM_2               vialrgb
+D:   00000F04  ___memcpy_PARM_2                   __memcpy
+D:   00000F07  ___memcpy_PARM_3                   __memcpy
+D:   00000F0C  _memset_PARM_2                     _memset
+D:   00000F0D  _memset_PARM_3                     _memset
+D:   00000F0F  __gptrput_PARM_2                   _gptrput
+
+ASxxxx Linker V05.50.4-SDLD,  page 18.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XISEG                               00000F10    00000065 =         101. bytes (REL,CON,XDATA)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+D:   00000F14  _ak820_oneshot_target              ak820_tapping
+D:   00000F15  _keyboard_protocol                 ch555_ak820
+D:   00000F16  _ch555_usb_stack_driver            ch555_ak820
+D:   00000F22  _usb_device_state                  usb_device_state
+D:   00000F23  _disable_action_cache              action
+D:   00000F24  _default_layer_state               action_layer
+D:   00000F25  _layer_state                       action_layer
+D:   00000F28  _actual_keyboard_report            action_util
+D:   00000F5D  _debug_config                      debug
+D:   00000F6A  _vial_unlocked                     vial
+D:   00000F6B  _vial_unlock_in_progress           vial
+
+ASxxxx Linker V05.50.4-SDLD,  page 19.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+HOME                                00003027    0000007E =         126. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   0000302F  sdcc_atomic_exchange_rollback_st   main
+C:   00003056  sdcc_atomic_exchange_gptr_impl     main
+C:   00003056  sdcc_atomic_exchange_rollback_en   main
+C:   00003066  sdcc_atomic_compare_exchange_gpt   main
+C:   00003070  __sdcc_program_startup             main
+C:   00003075  __sdcc_call_dptr                   
+C:   00003077  ___gptr_cmp                        
+
+ASxxxx Linker V05.50.4-SDLD,  page 20.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT0                             000030A5    00000003 =           3. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000030A5  __sdcc_gsinit_startup              
+
+ASxxxx Linker V05.50.4-SDLD,  page 21.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT2                             000030A8    0000000A =          10. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 22.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT3                             000030B2    0000002C =          44. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000030B2  __mcs51_genXINIT                   ak820_startup
+
+ASxxxx Linker V05.50.4-SDLD,  page 23.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT4                             000030DE    0000002A =          42. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000030DE  __mcs51_genRAMCLEAR                
+C:   000030E4  __mcs51_genXRAMCLEAR               
+
+ASxxxx Linker V05.50.4-SDLD,  page 24.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT                              00003108    00000028 =          40. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 25.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSFINAL                             00003130    00000003 =           3. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 26.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00003133  _ak820_clock_init                  ak820_board
+C:   00003151  _ak820_board_init                  ak820_board
+C:   000031EA  _ak820_led_irq                     ak820_board
+C:   000032D6  _ak820_direct_publish_row          ak820_board
+C:   0000332E  _ak820_matrix_snapshot             ak820_board
+C:   000033AD  _ak820_set_slot_rgb                ak820_board
+C:   000033E3  _ak820_rgb_set_color               ak820_board
+C:   0000341A  _ak820_rgb_set_color_all           ak820_board
+C:   00003450  _ak820_outline_0175                ak820_board
+C:   00003459  _mcu_reset                         ak820_boot
+C:   00003466  _bootloader_jump                   ak820_boot
+C:   000034C0  _ak820_combo_valid                 ak820_combo
+C:   000034E1  _ak820_tailshare_00000             ak820_combo
+C:   0000357E  _ak820_combo_cancel                ak820_combo
+C:   0000358B  _ak820_combo_reload                ak820_combo
+C:   000035F9  _ak820_combo_tick                  ak820_combo
+C:   00003631  _ak820_combo_process               ak820_combo
+C:   00003650  _ak820_tailshare_00003             ak820_combo
+C:   000037C5  _ak820_outline_0003                ak820_combo
+C:   000037CC  _ak820_tailshare_00002             ak820_combo
+C:   000037D2  _ak820_outline_0005                ak820_combo
+C:   000037DC  _ak820_outline_0014                ak820_combo
+C:   000037E1  _ak820_tailshare_00004             ak820_combo
+C:   000037E6  _ak820_outline_0015                ak820_combo
+C:   000037F1  _ak820_outline_0019                ak820_combo
+C:   000037FE  _ak820_outline_0020                ak820_combo
+C:   00003808  _ak820_outline_0023                ak820_combo
+C:   0000380B  _ak820_tailshare_00005             ak820_combo
+C:   00003810  _ak820_outline_0025                ak820_combo
+C:   00003818  _ak820_outline_0034                ak820_combo
+C:   00003820  _ak820_outline_0042                ak820_combo
+C:   00003827  _ak820_outline_0049                ak820_combo
+C:   0000382E  _ak820_outline_0053                ak820_combo
+C:   00003834  _ak820_outline_0055                ak820_combo
+C:   00003840  _ak820_tailshare_00001             ak820_combo
+C:   00003845  _ak820_outline_0061                ak820_combo
+C:   0000384B  _ak820_outline_0073                ak820_combo
+C:   00003851  _ak820_outline_0074                ak820_combo
+C:   00003854  _ak820_outline_0075                ak820_combo
+C:   0000385A  _ak820_outline_0084                ak820_combo
+C:   00003862  _ak820_outline_0089                ak820_combo
+C:   00003870  _ak820_outline_0090                ak820_combo
+C:   0000387E  _ak820_outline_0095                ak820_combo
+C:   00003884  _ak820_outline_0098                ak820_combo
+C:   0000388A  _ak820_outline_0099                ak820_combo
+C:   00003890  _ak820_outline_0106                ak820_combo
+C:   00003896  _ak820_outline_0118                ak820_combo
+C:   00003898  _ak820_outline_0119                ak820_combo
+C:   0000389D  _ak820_outline_0126                ak820_combo
+C:   000038A0  _ak820_outline_0127                ak820_combo
+ASxxxx Linker V05.50.4-SDLD,  page 27.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000038A5  _ak820_outline_0128                ak820_combo
+C:   000038A7  _ak820_outline_0136                ak820_combo
+C:   000038AC  _ak820_outline_0141                ak820_combo
+C:   000038B2  _ak820_outline_0144                ak820_combo
+C:   000038B7  _ak820_outline_0145                ak820_combo
+C:   000038BC  _ak820_outline_0146                ak820_combo
+C:   000038C1  _ak820_outline_0152                ak820_combo
+C:   000038C4  _ak820_outline_0158                ak820_combo
+C:   000038CB  _ak820_outline_0161                ak820_combo
+C:   000038D0  _ak820_outline_0188                ak820_combo
+C:   0000394B  _ak820_dynamic_macro_cancel        ak820_dynamic_macro
+C:   0000395C  _ak820_dynamic_macro_process       ak820_dynamic_macro
+C:   00003987  _ak820_tailshare_00006             ak820_dynamic_macro
+C:   000039F6  _ak820_dynamic_macro_observe       ak820_dynamic_macro
+C:   00003AAD  _ak820_dynamic_macro_task          ak820_dynamic_macro
+C:   00003B7E  _ak820_outline_0004                ak820_dynamic_macro
+C:   00003B8D  _ak820_outline_0063                ak820_dynamic_macro
+C:   00003B93  _ak820_outline_0105                ak820_dynamic_macro
+C:   00003B99  _ak820_outline_0113                ak820_dynamic_macro
+C:   00003BA0  _ak820_outline_0138                ak820_dynamic_macro
+C:   00003BA6  _ak820_outline_0147                ak820_dynamic_macro
+C:   00003BB0  _ak820_outline_0153                ak820_dynamic_macro
+C:   00003BB5  _ak820_outline_0189                ak820_dynamic_macro
+C:   00003BDE  _ak820_flash_read                  ak820_flash
+C:   00003CE2  _ak820_flash_erase                 ak820_flash
+C:   00003D42  _ak820_flash_program               ak820_flash
+C:   00003DCD  _ak820_flash_program_page          ak820_flash
+C:   00003E20  _ak820_update_indicators           ak820_indicators
+C:   00003E8A  _dynamic_keymap_get_keycode        ak820_keymap_words
+C:   00003E9B  _dynamic_keymap_set_keycode        ak820_keymap_words
+C:   00003EB4  _dynamic_keymap_get_encoder        ak820_keymap_words
+C:   00003EC5  _dynamic_keymap_set_encoder        ak820_keymap_words
+C:   00003F74  _ak820_leader_cancel               ak820_leader
+C:   00003F93  _ak820_leader_task                 ak820_leader
+C:   00003FF5  _ak820_leader_process              ak820_leader
+C:   00004031  _ak820_tailshare_00007             ak820_leader
+C:   00004080  _ak820_tailshare_00008             ak820_leader
+C:   00004160  _ak820_outline_0007                ak820_leader
+C:   0000416B  _ak820_outline_0035                ak820_leader
+C:   00004173  _ak820_outline_0125                ak820_leader
+C:   00004179  _ak820_outline_0143                ak820_leader
+C:   0000417E  _ak820_outline_0194                ak820_leader
+C:   00004197  _ak820_nvm_diagnostic              ak820_nvm
+C:   000043A2  _eeprom_driver_init                ak820_nvm
+C:   000043B8  _ak820_nvm_ok                      ak820_nvm
+C:   000043C1  _ak820_nvm_schema_fault            ak820_nvm
+C:   000043C7  _ak820_nvm_flush                   ak820_nvm
+C:   00004519  _ak820_nvm_begin                   ak820_nvm
+C:   0000452E  _ak820_nvm_end                     ak820_nvm
+C:   000045FB  _eeprom_read_byte                  ak820_nvm
+C:   000045FE  _ak820_eeprom_write_block_xdata    ak820_nvm
+ASxxxx Linker V05.50.4-SDLD,  page 28.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000046E2  _eeprom_driver_erase               ak820_nvm
+C:   00004722  _ak820_outline_0040                ak820_nvm
+C:   0000472E  _ak820_outline_0054                ak820_nvm
+C:   0000473F  _ak820_outline_0079                ak820_nvm
+C:   00004745  _ak820_outline_0120                ak820_nvm
+C:   0000474A  _ak820_outline_0129                ak820_nvm
+C:   0000474F  _ak820_outline_0131                ak820_nvm
+C:   0000475A  _ak820_outline_0170                ak820_nvm
+C:   0000475F  _ak820_outline_0185                ak820_nvm
+C:   00004768  _ak820_outline_0187                ak820_nvm
+C:   0000476D  _ak820_eeprom_read_block_xdata     ak820_nvm_read_block
+C:   000047B1  _ak820_eeprom_update_block_xdata   ak820_nvm_update_block
+C:   00004827  _ak820_os_indicator_set            ak820_os_indicators
+C:   00004842  _ak820_os_indicator_get            ak820_os_indicators
+C:   00004871  _ak820_tailshare_00009             ak820_os_indicators
+C:   00004875  _ak820_os_indicator_value          ak820_os_indicators
+C:   000048BC  _ak820_outline_0006                ak820_os_indicators
+C:   000048C8  _ak820_outline_0016                ak820_os_indicators
+C:   000048D9  _ak820_outline_0036                ak820_os_indicators
+C:   000048E1  _ak820_outline_0057                ak820_os_indicators
+C:   00004980  _ak820_tailshare_00011             ak820_settings
+C:   00004A24  _ak820_tailshare_00010             ak820_settings
+C:   00004A3E  _ak820_tailshare_00012             ak820_settings
+C:   00004A70  _ak820_settings_init               ak820_settings
+C:   00004AEE  _ak820_settings_query              ak820_settings
+C:   00004B81  _ak820_settings_get                ak820_settings
+C:   00004BF1  _ak820_settings_set                ak820_settings
+C:   00004CBE  _ak820_settings_reset              ak820_settings
+C:   00004CC2  _ak820_settings_combo_term         ak820_settings
+C:   00004CC7  _ak820_settings_tapping_term       ak820_settings
+C:   00004CCC  _ak820_settings_tap_code_delay     ak820_settings
+C:   00004CD1  _ak820_settings_caps_delay         ak820_settings
+C:   00004CD6  _ak820_outline_0038                ak820_settings
+C:   00004CE2  _ak820_outline_0041                ak820_settings
+C:   00004CEA  _ak820_tailshare_00013             ak820_settings
+C:   00004CEE  _ak820_outline_0045                ak820_settings
+C:   00004CF7  _ak820_outline_0091                ak820_settings
+C:   00004CFD  _ak820_outline_0097                ak820_settings
+C:   00004D04  _ak820_outline_0112                ak820_settings
+C:   00004D0B  _ak820_outline_0142                ak820_settings
+C:   00004D11  _ak820_outline_0164                ak820_settings
+C:   00004D17  _ak820_outline_0192                ak820_settings
+C:   00004D82  _ak820_tap_dance_valid             ak820_tap_dance
+C:   00004D91  _ak820_tailshare_00014             ak820_tap_dance
+C:   00004DD1  _ak820_tailshare_00015             ak820_tap_dance
+C:   00004F6A  _ak820_tap_dance_task              ak820_tap_dance
+C:   00004FB3  _ak820_tap_dance_before            ak820_tap_dance
+C:   000050DF  _ak820_tap_dance_process           ak820_tap_dance
+C:   00005260  _ak820_tap_dance_cancel            ak820_tap_dance
+C:   00005298  _ak820_outline_0008                ak820_tap_dance
+C:   000052AD  _ak820_outline_0012                ak820_tap_dance
+ASxxxx Linker V05.50.4-SDLD,  page 29.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000052B8  _ak820_outline_0029                ak820_tap_dance
+C:   000052C0  _ak820_tailshare_00016             ak820_tap_dance
+C:   000052C6  _ak820_outline_0030                ak820_tap_dance
+C:   000052CE  _ak820_outline_0062                ak820_tap_dance
+C:   000052D0  _ak820_outline_0072                ak820_tap_dance
+C:   000052DA  _ak820_outline_0082                ak820_tap_dance
+C:   000052E2  _ak820_outline_0096                ak820_tap_dance
+C:   000052E9  _ak820_outline_0103                ak820_tap_dance
+C:   000052EF  _ak820_outline_0115                ak820_tap_dance
+C:   000052F6  _ak820_outline_0150                ak820_tap_dance
+C:   00005300  _ak820_outline_0159                ak820_tap_dance
+C:   00005307  _ak820_outline_0160                ak820_tap_dance
+C:   0000530C  _ak820_outline_0186                ak820_tap_dance
+C:   00005311  _ak820_outline_0190                ak820_tap_dance
+C:   0000533F  _ak820_tapping_source              ak820_tapping
+C:   000053FD  _ak820_tapping_before              ak820_tapping
+C:   00005444  _ak820_tailshare_00017             ak820_tapping
+C:   000054B9  _ak820_tailshare_00018             ak820_tapping
+C:   00005524  _ak820_tapping_process             ak820_tapping
+C:   00005679  _ak820_tapping_cancel              ak820_tapping
+C:   000056A7  _ak820_oneshot_process             ak820_tapping
+C:   0000583E  _ak820_outline_0022                ak820_tapping
+C:   00005849  _ak820_outline_0024                ak820_tapping
+C:   00005863  _ak820_outline_0102                ak820_tapping
+C:   00005869  _ak820_outline_0121                ak820_tapping
+C:   00005871  _ak820_outline_0149                ak820_tapping
+C:   0000587B  _ak820_outline_0157                ak820_tapping
+C:   00005882  _ak820_outline_0163                ak820_tapping
+C:   00005888  _ak820_outline_0183                ak820_tapping
+C:   00005898  _timer_init                        ak820_timer
+C:   000058BC  _ak820_timer_irq                   ak820_timer
+C:   000058D6  _timer_read32                      ak820_timer
+C:   00005907  _timer_read                        ak820_timer
+C:   0000590A  _timer_elapsed                     ak820_timer
+C:   0000592F  _timer_elapsed32                   ak820_timer
+C:   0000596F  _ak820_keyboard_report_pending     ch555_ak820
+C:   00005A67  _ak820_host_keyboard_leds          ch555_ak820
+C:   00005A6A  _ak820_host_send_keyboard          ch555_ak820
+C:   00005A8E  _ak820_host_send_extra             ch555_ak820
+C:   00005AB2  _raw_hid_send                      ch555_ak820
+C:   00005ADE  _protocol_setup                    ch555_ak820
+C:   00005AE4  _protocol_pre_init                 ch555_ak820
+C:   00005AF0  _protocol_post_init                ch555_ak820
+C:   00005B03  _protocol_pre_task                 ch555_ak820
+C:   00005BD6  _protocol_post_task                ch555_ak820
+C:   00005CC9  _eeprom_read_word                  eeprom_driver
+C:   00005CFA  _eeprom_read_dword                 eeprom_driver
+C:   00005D2B  _eeprom_write_byte                 eeprom_driver
+C:   00005D45  _eeprom_write_word                 eeprom_driver
+C:   00005D5F  _eeprom_write_dword                eeprom_driver
+C:   00005D79  _eeprom_update_byte                eeprom_driver
+ASxxxx Linker V05.50.4-SDLD,  page 30.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00005DDE  _eeprom_update_word                eeprom_driver
+C:   00005E1A  _eeprom_update_dword               eeprom_driver
+C:   00005E62  _ak820_outline_0002                eeprom_driver
+C:   00005E79  _ak820_outline_0011                eeprom_driver
+C:   00005E88  _ak820_outline_0033                eeprom_driver
+C:   00005E91  _ak820_outline_0043                eeprom_driver
+C:   00005E98  _ak820_outline_0050                eeprom_driver
+C:   00005EA1  _ak820_outline_0052                eeprom_driver
+C:   00005EAA  _ak820_outline_0080                eeprom_driver
+C:   00005EB1  _ak820_outline_0137                eeprom_driver
+C:   00005F6E  _eeconfig_update_rgb_matrix        ak820_rgb
+C:   00005F89  _eeconfig_update_rgb_matrix_defa   ak820_rgb
+C:   00005FBE  _rgb_matrix_reload_from_eeprom     ak820_rgb
+C:   00005FFA  _rgb_matrix_init                   ak820_rgb
+C:   00006011  _rgb_matrix_set_color_all          ak820_rgb
+C:   00006060  _rgb_matrix_task                   ak820_rgb
+C:   0000631C  _process_rgb_matrix                ak820_rgb
+C:   00006394  _rgb_matrix_set_suspend_state      ak820_rgb
+C:   000063C3  _rgb_matrix_get_suspend_state      ak820_rgb
+C:   000063C9  _rgb_matrix_is_enabled             ak820_rgb
+C:   000063CE  _rgb_matrix_get_mode               ak820_rgb
+C:   000063D3  _rgb_matrix_get_hue                ak820_rgb
+C:   000063DA  _rgb_matrix_get_sat                ak820_rgb
+C:   000063E1  _rgb_matrix_get_val                ak820_rgb
+C:   000063E8  _rgb_matrix_get_speed              ak820_rgb
+C:   000063EF  _rgb_matrix_toggle_noeeprom        ak820_rgb
+C:   00006408  _rgb_matrix_enable_noeeprom        ak820_rgb
+C:   00006417  _rgb_matrix_disable_noeeprom       ak820_rgb
+C:   0000641F  _rgb_matrix_mode_noeeprom          ak820_rgb
+C:   00006453  _rgb_matrix_step_noeeprom          ak820_rgb
+C:   0000646A  _rgb_matrix_step_reverse_noeepro   ak820_rgb
+C:   0000647C  _rgb_matrix_sethsv_noeeprom        ak820_rgb
+C:   000064AB  _rgb_matrix_set_speed_noeeprom     ak820_rgb
+C:   000064B7  _rgb_matrix_increase_hue_noeepro   ak820_rgb
+C:   000064C2  _rgb_matrix_decrease_hue_noeepro   ak820_rgb
+C:   000064CD  _rgb_matrix_increase_sat_noeepro   ak820_rgb
+C:   000064DD  _rgb_matrix_decrease_sat_noeepro   ak820_rgb
+C:   000064ED  _rgb_matrix_increase_val_noeepro   ak820_rgb
+C:   00006508  _rgb_matrix_decrease_val_noeepro   ak820_rgb
+C:   00006518  _rgb_matrix_increase_speed_noeep   ak820_rgb
+C:   00006528  _rgb_matrix_decrease_speed_noeep   ak820_rgb
+C:   00006538  _rgb_matrix_toggle                 ak820_rgb
+C:   0000653D  _rgb_matrix_step                   ak820_rgb
+C:   00006542  _rgb_matrix_step_reverse           ak820_rgb
+C:   00006547  _rgb_matrix_increase_hue           ak820_rgb
+C:   0000654C  _rgb_matrix_decrease_hue           ak820_rgb
+C:   00006551  _rgb_matrix_increase_sat           ak820_rgb
+C:   00006556  _rgb_matrix_decrease_sat           ak820_rgb
+C:   0000655B  _rgb_matrix_increase_val           ak820_rgb
+C:   00006560  _rgb_matrix_decrease_val           ak820_rgb
+C:   00006565  _rgb_matrix_increase_speed         ak820_rgb
+ASxxxx Linker V05.50.4-SDLD,  page 31.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   0000656A  _rgb_matrix_decrease_speed         ak820_rgb
+C:   0000656F  _rgb_matrix_mode                   ak820_rgb
+C:   0000657B  _ak820_outline_0021                ak820_rgb
+C:   00006584  _ak820_outline_0047                ak820_rgb
+C:   0000658F  _ak820_outline_0048                ak820_rgb
+C:   0000659A  _ak820_outline_0060                ak820_rgb
+C:   000065A1  _ak820_outline_0065                ak820_rgb
+C:   000065B1  _ak820_outline_0070                ak820_rgb
+C:   000065BB  _ak820_outline_0092                ak820_rgb
+C:   000065C4  _ak820_outline_0101                ak820_rgb
+C:   000065CA  _ak820_outline_0109                ak820_rgb
+C:   000065D6  _ak820_outline_0111                ak820_rgb
+C:   000065DD  _ak820_outline_0116                ak820_rgb
+C:   000065E4  _ak820_outline_0140                ak820_rgb
+C:   000065EA  _ak820_outline_0172                ak820_rgb
+C:   000065EF  _ak820_outline_0176                ak820_rgb
+C:   000065F8  _ak820_outline_0181                ak820_rgb
+C:   00006601  _ak820_outline_0193                ak820_rgb
+C:   00006606  _pinModeInputHighQMK               gpio
+C:   00006652  _readPin                           gpio
+C:   000066F4  _writePinHigh                      gpio
+C:   00006744  _mDelayuS                          hal
+C:   00006788  _mDelaymS                          hal
+C:   000067C4  _getchar                           hal
+C:   000067D5  _putchar                           hal
+C:   000067FA  _matrix_is_on                      matrix
+C:   00006847  _matrix_get_row                    matrix
+C:   0000686B  _matrix_init_custom                matrix
+C:   0000686E  _matrix_scan_custom                matrix
+C:   00006881  _matrix_init                       matrix
+C:   000068AA  _matrix_scan                       matrix
+C:   000068D6  _matrix_print                      matrix
+C:   000068D7  _platform_setup                    platform
+C:   000073B1  _USB_DeviceInterrupt               usb_ak820
+C:   000074A6  _USB_Device_Init                   usb_ak820
+C:   0000750E  _USB_WakeUp_PC                     usb_ak820
+C:   00007539  _ak820_usb_send                    usb_ak820
+C:   000076BF  _ak820_usb_try_send                usb_ak820
+C:   000077D5  _ak820_usb_raw_send                usb_ak820
+C:   00007812  _ak820_usb_raw_task                usb_ak820
+C:   00007AAC  _ak820_usb_keyboard_blocked        usb_ak820
+C:   00007ACE  _ak820_usb_take_keyboard_reset     usb_ak820
+C:   00007AEA  _ak820_outline_0001                usb_ak820
+C:   00007AFE  _ak820_outline_0039                usb_ak820
+C:   00007B0A  _ak820_outline_0167                usb_ak820
+C:   00007B10  _ak820_outline_0191                usb_ak820
+C:   00007B15  _host_set_driver                   host
+C:   00007B1F  _host_keyboard_leds                host
+C:   00007B2F  _host_keyboard_send                host
+C:   00007B88  _host_system_send                  host
+C:   00007BAB  _host_consumer_send                host
+ASxxxx Linker V05.50.4-SDLD,  page 32.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00007BCE  _host_last_system_usage            host
+C:   00007BD5  _host_last_consumer_usage          host
+C:   00007BDC  _KEYCODE2CONSUMER                  report
+C:   00007C19  _add_key_byte                      report
+C:   00007C6F  _del_key_byte                      report
+C:   00007C97  _add_key_to_report                 report
+C:   00007CA6  _del_key_from_report               report
+C:   00007CB5  _clear_keys_from_report            report
+C:   00007CD5  _ak820_outline_0058                report
+C:   00007CDD  _ak820_outline_0123                report
+C:   00007CE5  _ak820_outline_0133                report
+C:   00007CF0  _notify_usb_device_state_change_   usb_device_state
+C:   00007CFC  _notify_usb_device_state_change_   usb_device_state
+C:   00007D09  _usb_device_state_set_configurat   usb_device_state
+C:   00007D22  _usb_device_state_set_suspend      usb_device_state
+C:   00007D2E  _usb_device_state_set_resume       usb_device_state
+C:   00007D47  _usb_device_state_init             usb_device_state
+C:   00007D53  _action_exec                       action
+C:   00007DE5  _ak820_action_exec                 action
+C:   00007E00  _process_record                    action
+C:   00007F53  _process_record_handler            action
+C:   000081FF  _register_mouse                    action
+C:   00008200  _register_code                     action
+C:   0000826E  _unregister_code                   action
+C:   000082E0  _tap_code_delay                    action
+C:   0000830B  _tap_code                          action
+C:   00008336  _register_mods                     action
+C:   0000834A  _unregister_mods                   action
+C:   0000835E  _register_weak_mods                action
+C:   00008372  _unregister_weak_mods              action
+C:   00008386  _clear_keyboard                    action
+C:   0000838B  _clear_keyboard_but_mods           action
+C:   00008393  _clear_keyboard_but_mods_and_key   action
+C:   000083CE  _ak820_outline_0069                action
+C:   000083D3  _ak820_tailshare_00019             action
+C:   000083D8  _ak820_outline_0081                action
+C:   000083DF  _ak820_outline_0114                action
+C:   000083E3  _ak820_outline_0124                action
+C:   000083EB  _ak820_outline_0162                action
+C:   000083F1  _ak820_outline_0168                action
+C:   000083F7  _ak820_outline_0169                action
+C:   000083FD  _default_layer_state_set_user      action_layer
+C:   00008405  _default_layer_state_set_kb        action_layer
+C:   00008427  _default_layer_set                 action_layer
+C:   00008431  _ak820_layer_refresh               action_layer
+C:   00008488  _layer_hold_on                     action_layer
+C:   000084BD  _layer_hold_off                    action_layer
+C:   000084F2  _layer_hold_clear                  action_layer
+C:   0000850C  _layer_state_set_user              action_layer
+C:   00008514  _layer_state_set_kb                action_layer
+C:   0000851E  _layer_state_set                   action_layer
+ASxxxx Linker V05.50.4-SDLD,  page 33.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00008526  _layer_xor                         action_layer
+C:   00008597  _ak820_tailshare_00020             action_layer
+C:   0000859B  _ak820_cache_keycode               action_layer
+C:   000085C0  _ak820_cache_layer                 action_layer
+C:   00008605  _ak820_cached_key                  action_layer
+C:   00008648  _ak820_resolve_key                 action_layer
+C:   0000869C  _ak820_layer_for_key               action_layer
+C:   0000870E  _ak820_outline_0178                action_layer
+C:   00008717  _ak820_macro_change                action_util
+C:   00008726  _ak820_tailshare_00022             action_util
+C:   00008770  _ak820_tailshare_00023             action_util
+C:   0000884D  _add_owned_mods                    action_util
+C:   00008855  _del_owned_mods                    action_util
+C:   0000885E  _add_owned_weak_mods               action_util
+C:   00008868  _del_owned_weak_mods               action_util
+C:   00008872  _clear_owned_mods                  action_util
+C:   000088A9  _clear_owned_keys                  action_util
+C:   000088D6  _add_owned_key                     action_util
+C:   0000892A  _del_owned_key                     action_util
+C:   0000899C  _clear_owned_usages                action_util
+C:   000089D2  _owned_usage_key                   action_util
+C:   00008B21  _send_keyboard_report              action_util
+C:   00008B8D  _get_mods                          action_util
+C:   00008B97  _ak820_tailshare_00021             action_util
+C:   00008B9F  _clear_mods                        action_util
+C:   00008BA5  _get_weak_mods                     action_util
+C:   00008BB1  _add_weak_mods                     action_util
+C:   00008BBB  _del_weak_mods                     action_util
+C:   00008BC9  _clear_weak_mods                   action_util
+C:   00008BCF  _ak820_outline_0068                action_util
+C:   00008BD9  _ak820_outline_0076                action_util
+C:   00008BE8  _ak820_outline_0077                action_util
+C:   00008BF7  _ak820_outline_0117                action_util
+C:   00008BFE  _ak820_outline_0132                action_util
+C:   00008C09  _ak820_outline_0135                action_util
+C:   00008C14  _bootmagic_lite_reset_eeprom       bootmagic_lite
+C:   00008C17  _bootmagic_lite                    bootmagic_lite
+C:   00008C3C  _bootmagic                         bootmagic_lite
+C:   00008C3E  _magic                             magic
+C:   00008C6F  _hsv_to_rgb_into                   color
+C:   00008D09  _debounce_init                     sym_defer_g
+C:   00008D0A  _debounce                          sym_defer_g
+C:   00008D90  _ak820_outline_0173                sym_defer_g
+C:   00008D99  _dynamic_keymap_get_layer_count    dynamic_keymap
+C:   00008E03  _ak820_tailshare_00024             dynamic_keymap
+C:   00008E6A  _ak820_tailshare_00026             dynamic_keymap
+C:   00008EF7  _dynamic_keymap_get_tap_dance      dynamic_keymap
+C:   00008F11  _dynamic_keymap_set_tap_dance      dynamic_keymap
+C:   00008F2B  _dynamic_keymap_get_combo          dynamic_keymap
+C:   00008FC6  _dynamic_keymap_set_combo          dynamic_keymap
+C:   00009061  _dynamic_keymap_reset              dynamic_keymap
+ASxxxx Linker V05.50.4-SDLD,  page 34.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00009258  _dynamic_keymap_get_buffer         dynamic_keymap
+C:   0000928D  _dynamic_keymap_set_buffer         dynamic_keymap
+C:   000093DD  _keycode_at_keymap_location        dynamic_keymap
+C:   000093F9  _keycode_at_encodermap_location    dynamic_keymap
+C:   00009415  _dynamic_keymap_macro_get_count    dynamic_keymap
+C:   00009419  _dynamic_keymap_macro_get_buffer   dynamic_keymap
+C:   0000941D  _dynamic_keymap_macro_get_buffer   dynamic_keymap
+C:   00009469  _dynamic_keymap_macro_set_buffer   dynamic_keymap
+C:   0000948F  _dynamic_keymap_macro_reset        dynamic_keymap
+C:   000094AF  _dynamic_keymap_macro_send         dynamic_keymap
+C:   00009753  _ak820_outline_0000                dynamic_keymap
+C:   0000976F  _ak820_outline_0051                dynamic_keymap
+C:   00009773  _ak820_tailshare_00025             dynamic_keymap
+C:   00009778  _ak820_outline_0059                dynamic_keymap
+C:   0000977C  _ak820_outline_0087                dynamic_keymap
+C:   0000978A  _ak820_outline_0094                dynamic_keymap
+C:   00009790  _ak820_outline_0151                dynamic_keymap
+C:   0000979A  _ak820_outline_0154                dynamic_keymap
+C:   000097A1  _ak820_outline_0166                dynamic_keymap
+C:   000097A7  _ak820_outline_0174                dynamic_keymap
+C:   000097B0  _ak820_outline_0179                dynamic_keymap
+C:   000097B9  _ak820_outline_0180                dynamic_keymap
+C:   000097C2  _ak820_outline_0182                dynamic_keymap
+C:   000097CB  _ak820_outline_0184                dynamic_keymap
+C:   000097D4  _eeconfig_init_user                eeconfig
+C:   000097DA  _eeconfig_init_kb                  eeconfig
+C:   000097E2  _eeconfig_init_quantum             eeconfig
+C:   000098AD  _eeconfig_init                     eeconfig
+C:   000098B0  _eeconfig_disable                  eeconfig
+C:   000098C0  _eeconfig_is_enabled               eeconfig
+C:   000098EA  _eeconfig_read_debug               eeconfig
+C:   000098F3  _eeconfig_read_default_layer       eeconfig
+C:   000098FC  _eeconfig_read_keymap              eeconfig
+C:   00009905  _eeconfig_update_kb                eeconfig
+C:   00009913  _eeconfig_update_user              eeconfig
+C:   00009921  _ak820_outline_0104                eeconfig
+C:   00009927  _ak820_outline_0110                eeconfig
+C:   00009933  _ak820_outline_0155                eeconfig
+C:   0000993A  _ak820_outline_0156                eeconfig
+C:   00009941  _encoder_wait_pullup_charge        encoder
+C:   00009950  _encoder_init                      encoder
+C:   00009A97  _ak820_tailshare_00028             encoder
+C:   00009A9B  _encoder_read                      encoder
+C:   00009AFE  _ak820_outline_0027                encoder
+C:   00009B06  _ak820_tailshare_00027             encoder
+C:   00009B0C  _ak820_outline_0028                encoder
+C:   00009B16  _ak820_outline_0064                encoder
+C:   00009B26  _ak820_outline_0093                encoder
+C:   00009B2F  _last_matrix_activity_trigger      keyboard
+C:   00009B42  _last_encoder_activity_trigger     keyboard
+C:   00009B55  _keyboard_post_init_kb             keyboard
+ASxxxx Linker V05.50.4-SDLD,  page 35.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   00009B57  _matrix_can_read                   keyboard
+C:   00009B5B  _keyboard_setup                    keyboard
+C:   00009B67  _is_keyboard_master                keyboard
+C:   00009B6B  _should_process_keypress           keyboard
+C:   00009B6D  _housekeeping_task                 keyboard
+C:   00009B6E  _quantum_init                      keyboard
+C:   00009B77  _keyboard_init                     keyboard
+C:   00009B86  _switch_events                     keyboard
+C:   00009D3D  _quantum_task                      keyboard
+C:   00009D40  _keyboard_task                     keyboard
+C:   00009D58  _ak820_outline_0067                keyboard
+C:   00009D62  _ak820_keycode_at                  keymap_common
+C:   00009D76  _ak820_tailshare_00029             keymap_common
+C:   00009DCD  _ak820_outline_0088                keymap_common
+C:   00009DDB  _keyboard_post_init_user           keymap_introspection
+C:   00009DDC  _keycode_at_keymap_location_raw    keymap_introspection
+C:   00009DFD  _ak820_tailshare_00030             keymap_introspection
+C:   00009E87  _keycode_at_encodermap_location_   keymap_introspection
+C:   00009EDA  _led_update_user                   led
+C:   00009EDE  _led_update_kb                     led
+C:   00009F06  _led_update_ports                  led
+C:   00009F07  _led_init_ports                    led
+C:   00009F08  _led_set                           led
+C:   00009F22  _led_task                          led
+C:   00009F4E  _ak820_outline_0026                led
+C:   00009F5C  _ak820_outline_0177                led
+C:   00009F69  _print_set_sendchar                print
+C:   00009F73  _putchar_                          print
+C:   00009F84  _sendchar                          sendchar
+C:   00009F88  _protocol_init                     main
+C:   00009F91  _protocol_task                     main
+C:   00009F9A  _main                              main
+C:   00009FAC  _process_caps_word                 process_caps_word
+C:   00009FF6  _ak820_tailshare_00031             process_caps_word
+C:   0000A0BC  _ak820_tailshare_00032             process_repeat_key
+C:   0000A0BC  _remember_last_key_user            process_repeat_key
+C:   0000A132  _ak820_tailshare_00033             process_repeat_key
+C:   0000A15D  _process_last_key                  process_repeat_key
+C:   0000A1D1  _process_repeat_key                process_repeat_key
+C:   0000A210  _ak820_outline_0122                process_repeat_key
+C:   0000A218  _process_rgb                       process_rgb
+C:   0000A2B4  _clear_macro_tri_layer             process_tri_layer
+C:   0000A2BF  _process_tri_layer                 process_tri_layer
+C:   0000A336  _ak820_tailshare_00034             process_tri_layer
+C:   0000A3A8  _extract_mod_bits                  quantum
+C:   0000A3B5  _ak820_tailshare_00035             quantum
+C:   0000A3C8  _register_code16                   quantum
+C:   0000A40B  _unregister_code16                 quantum
+C:   0000A452  _shutdown_quantum                  quantum
+C:   0000A467  _reset_keyboard                    quantum
+C:   0000A46C  _soft_reset_keyboard               quantum
+ASxxxx Linker V05.50.4-SDLD,  page 36.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   0000A471  _get_record_keycode                quantum
+C:   0000A4B5  _pre_process_record_quantum        quantum
+C:   0000A55B  _process_record_quantum            quantum
+C:   0000A587  _process_record_quantum_helper     quantum
+C:   0000A688  _shutdown_user                     quantum
+C:   0000A689  _ak820_outline_0018                quantum
+C:   0000A696  _repeat_key_cancel                 repeat_key
+C:   0000A69D  _set_last_mods                     repeat_key
+C:   0000A6A4  _set_last_record                   repeat_key
+C:   0000A723  _get_repeat_key_count              repeat_key
+C:   0000A83C  _repeat_key_invoke                 repeat_key
+C:   0000A87A  _get_alt_repeat_key_keycode        repeat_key
+C:   0000A982  _alt_repeat_key_invoke             repeat_key
+C:   0000A98E  _get_alt_repeat_key_keycode_user   repeat_key
+C:   0000A992  _ak820_outline_0083                repeat_key
+C:   0000A99A  _ak820_outline_0085                repeat_key
+C:   0000A9A8  _send_char                         send_string
+C:   0000AA3C  _ak820_tri_layer_derived           tri_layer
+C:   0000AA56  _get_tri_layer_lower_layer         tri_layer
+C:   0000AA59  _ak820_tailshare_00036             tri_layer
+C:   0000AA5D  _get_tri_layer_upper_layer         tri_layer
+C:   0000AA62  _via_eeprom_is_valid               via
+C:   0000AA9A  _via_eeprom_set_valid              via
+C:   0000AAEB  _via_init                          via
+C:   0000AAF9  _eeconfig_init_via                 via
+C:   0000AB0E  _via_get_layout_options            via
+C:   0000AB26  _via_set_layout_options_kb         via
+C:   0000AB27  _via_set_layout_options            via
+C:   0000AB3C  _process_record_via                via
+C:   0000AB7B  _raw_hid_receive_kb                via
+C:   0000AB88  _raw_hid_receive                   via
+C:   0000AEF8  _ak820_outline_0010                via
+C:   0000AF07  _ak820_outline_0013                via
+C:   0000AF11  _ak820_outline_0078                via
+C:   0000AF20  _vial_unlock_task                  vial
+C:   0000AFA9  _vial_init                         vial
+C:   0000AFE8  _vial_handle_cmd                   vial
+C:   0000B1F3  _ak820_tailshare_00038             vial
+C:   0000B3D4  _vial_keycode_down                 vial
+C:   0000B3DF  _vial_keycode_up                   vial
+C:   0000B3EB  _vial_keycode_tap                  vial
+C:   0000B41A  _ak820_outline_0009                vial
+C:   0000B42E  _ak820_outline_0037                vial
+C:   0000B436  _ak820_outline_0046                vial
+C:   0000B441  _ak820_outline_0056                vial
+C:   0000B452  _ak820_outline_0107                vial
+C:   0000B45A  _ak820_tailshare_00037             vial
+C:   0000B45E  _ak820_outline_0108                vial
+C:   0000B468  _ak820_outline_0134                vial
+C:   0000B473  _ak820_outline_0165                vial
+C:   0000B479  _ak820_direct_tick                 vialrgb
+ASxxxx Linker V05.50.4-SDLD,  page 37.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                00003133    00008C17 =       35863. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   0000B804  _ak820_direct_request              vialrgb
+C:   0000B9E2  _vialrgb_get_value                 vialrgb
+C:   0000BAC2  _vialrgb_set_value                 vialrgb
+C:   0000BB2F  _vialrgb_save                      vialrgb
+C:   0000BB32  _ak820_outline_0017                vialrgb
+C:   0000BB52  _ak820_outline_0031                vialrgb
+C:   0000BB69  _ak820_outline_0032                vialrgb
+C:   0000BB73  _ak820_outline_0044                vialrgb
+C:   0000BB85  _ak820_outline_0066                vialrgb
+C:   0000BB8C  _ak820_outline_0071                vialrgb
+C:   0000BB96  _ak820_outline_0086                vialrgb
+C:   0000BBA4  _ak820_outline_0100                vialrgb
+C:   0000BBB1  _ak820_outline_0130                vialrgb
+C:   0000BBBC  _ak820_outline_0139                vialrgb
+C:   0000BBC2  _ak820_outline_0148                vialrgb
+C:   0000BBCC  _ak820_outline_0171                vialrgb
+C:   0000BBD1  _rand                              rand
+C:   0000BC49  _srand                             rand
+C:   0000BC71  ___memcpy                          __memcpy
+C:   0000BCE7  _memset                            _memset
+C:   0000BD0F  __gptrput                          _gptrput
+C:   0000BD2A  __gptrget                          _gptrget
+C:   0000BD46  ___sdcc_external_startup           _startup
+
+ASxxxx Linker V05.50.4-SDLD,  page 38.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CONST                               0000BD4A    00000702 =        1794. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   0000BDDA  _ak820_rgb_slots                   ak820_board
+C:   0000BE4E  _pin_to_pinmask                    gpio
+C:   0000BEA6  _encoder_map                       keymap_introspection
+C:   0000BEAE  _ak820_led_points                  keymap_introspection
+C:   0000BF52  _ak820_default_classes             keymap_introspection
+C:   0000BF92  _ak820_default_payload             keymap_introspection
+C:   0000C004  _ak820_default_offsets             keymap_introspection
+C:   0000C024  _CIE1931_CURVE                     led_tables
+C:   0000C083  _ascii_to_shift_lut                send_string
+C:   0000C093  _ascii_to_altgr_lut                send_string
+C:   0000C0A3  _ascii_to_dead_lut                 send_string
+C:   0000C0B3  _ascii_to_keycode_lut              send_string
+C:   0000C2DD  _KeyboardReport                    usb_descriptor
+C:   0000C321  _KeyboardReport_size               usb_descriptor
+C:   0000C322  _SharedReport                      usb_descriptor
+C:   0000C354  _SharedReport_size                 usb_descriptor
+C:   0000C355  _RawReport                         usb_descriptor
+C:   0000C37D  _RawReport_size                    usb_descriptor
+C:   0000C37E  _DeviceDescriptor                  usb_descriptor
+C:   0000C390  _ConfigurationDescriptor           usb_descriptor
+C:   0000C3E4  _LanguageString                    usb_descriptor
+C:   0000C3E8  _ManufacturerString                usb_descriptor
+C:   0000C3F6  _ProductString                     usb_descriptor
+C:   0000C42E  _SerialNumberString                usb_descriptor
+ASxxxx Linker V05.50.4-SDLD,  page 39.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+XINIT                               0000C44C    00000065 =         101. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+ASxxxx Linker V05.50.4-SDLD,  page 40.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+AK820LOW                            000028A0    0000075A =        1882. bytes (REL,CON,CODE)
+
+         Value  Global                             Global Defined In Module
+         -----  --------------------------------   ------------------------
+C:   000028A0  _ak820_crc16                       ak820_crc
+C:   00002A9F  _ak820_macro_init                  ak820_macro
+C:   00002ADA  _ak820_macro_ready                 ak820_macro
+C:   00002B13  _ak820_macro_length                ak820_macro
+C:   00002B2D  _ak820_macro_write                 ak820_macro
+C:   00002E15  _ak820_macro_reset                 ak820_macro
+C:   00002E6C  _ak820_oneshot_post                ak820_oneshot
+C:   00002EA1  _ak820_oneshot_cancel              ak820_oneshot
+C:   00002EB0  _ak820_breathing_wave              ak820_rgb_shared
+C:   00002EF2  _ak820_direct_cancel               ak820_rgb_shared
+C:   00002F09  _caps_word_task                    caps_word
+C:   00002F32  _caps_word_reset_idle_timer        caps_word
+C:   00002F4A  _caps_word_on                      caps_word
+C:   00002F63  _caps_word_off                     caps_word
+C:   00002F7E  _caps_word_toggle                  caps_word
+C:   00002F8A  _is_caps_word_on                   caps_word
+C:   00002F91  _caps_word_set_user                caps_word
+C:   00002F92  _caps_word_press_user              caps_word
+ASxxxx Linker V05.50.4-SDLD,  page 41.
+
+Files Linked                              [ module(s) ]
+
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/.build/ci-profiles/creative/obj_ajazz_ak820_vial/src/default_keyboard.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_board.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_boot.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_combo.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_crc.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_dynamic_macro.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_flash.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_indicators.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_keymap_words.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_leader.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_macro.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_nvm.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_nvm_read_block.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_nvm_update_block.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_oneshot.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_os_indicators.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_rgb_shared.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_settings.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_startup.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_tap_dance.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_tapping.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ak820_timer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/ch555_ak820.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/eeprom_driver.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/keyboards/ajazz/ak820/ak820_rgb.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/lib/ch555/gpio.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/lib/ch555/hal.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/matrix.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/mcs51/hardware_id.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/mcs51/platform.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/mcs51/suspend.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/suspend.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/synchronization_util.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/platforms/timer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/ch555/usb_ak820.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/ch555/usb_util.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/host.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/report.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/usb_device_state.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/protocol/usb_util.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/action.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/action_layer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/action_tapping.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/action_util.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/bitwise.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/bootmagic/bootmagic_lite.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/bootmagic/magic.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/caps_word.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/color.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/debounce/sym_defer_g.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/dynamic_keymap.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/eeconfig.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/encoder.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/keyboard.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/keycode_config.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/keymap_common.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/keymap_introspection.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/led.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/led_tables.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/logging/debug.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/logging/print.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/logging/sendchar.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/main.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/process_keycode/process_caps_word.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/process_keycode/process_repeat_key.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/process_keycode/process_rgb.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/process_keycode/process_tri_layer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/quantum.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/repeat_key.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/rgb_matrix/rgb_matrix_drivers.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/send_string/send_string.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/sync_timer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/tri_layer.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/via.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/vial.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/quantum/vialrgb.rel
+                                          [  ]
+/home/runner/work/ak820/ak820/qmk-8051-ak820/.build/ci-profiles/creative/dce/usb_descriptor.rel
+                                          [  ]
+
+
+Libraries Linked                          [ object file ]
+
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ rand.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ crtclear.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ __memcpy.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ _memset.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ _gptrput.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ crtxclear.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ crtcall.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ crtpagesfr.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ gptr_cmp.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/mcs51.lib
+                                          [ crtstart.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ _gptrget.rel ]
+/home/runner/work/ak820/ak820/toolchains/sdcc-4.6.0/bin/../share/sdcc/lib/large/libsdcc.lib
+                                          [ _startup.rel ]
+
+ASxxxx Linker V05.50.4-SDLD,  page 42.
+
+User Base Address Definitions
+
+HOME = 0x3027
+XSEG = 0x0440
+PSEG = 0x0440
+ISEG = 0x0000
+BSEG = 0x0000
+AK820LOW=0x28a0
+
+

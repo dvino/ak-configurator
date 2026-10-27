@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "ak-configurator"
-version = "0.1.0-beta.2"
+version = "0.1.0-alpha.1"
 dependencies = [
  "ab_glyph",
  "anyhow",

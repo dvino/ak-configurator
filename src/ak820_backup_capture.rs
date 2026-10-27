@@ -1,6 +1,6 @@
 //! Immutable complete capture bytes. Construction never grants restore permission.
-use crate::ak820_settings_backup::{canonical, BackupResult, ImageIdentity};
-use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use crate::ak820_settings_backup::{BackupResult, ImageIdentity, canonical};
+use crate::app::ak820_beta1_profiles::ProfileId;
 use std::collections::BTreeMap;
 
 /// Byte stability only: success does not establish firmware trust or ownership.
@@ -45,7 +45,20 @@ impl CapturedBackup {
         rom: Vec<u8>,
         rgb_matches_saved: bool,
     ) -> BackupResult<Self> {
-        let exact = matrix_profile(profile)
+        let manifest = rom.get(0xef80..0xefc0).ok_or("Incomplete capture ROM")?;
+        let parsed =
+            crate::ak820::parse_manifest(manifest).map_err(|_| "Invalid capture manifest")?;
+        let image = crate::ak820::contract_for_hash(
+            parsed.schema,
+            &crate::ak820_settings_backup::sha256(&rom[0x2800..0xc700]),
+        )
+        .ok_or("Unknown exact capture image")?;
+        if image.profile() != Some(profile) {
+            return Err("Capture profile mismatch".into());
+        }
+        let exact = image
+            .matrix_profile()
+            .ok_or("Missing profile contract")?
             .settings_identity
             .as_ref()
             .ok_or("Image lacks qualified settings identity")?;

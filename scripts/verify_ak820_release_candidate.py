@@ -11,7 +11,7 @@ import tomllib
 import zipfile
 import io
 
-from package_ak820_candidate import PLATFORMS, check_architecture
+from package_ak820_candidate import DOCUMENTS, PLATFORMS, check_architecture, package_document
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = tuple(sorted(PLATFORMS))
@@ -19,13 +19,7 @@ STATIC_FILES = {
     "audio-sources/build_cava_helper.py": "scripts/build_cava_helper.py",
     "CAVA-LICENSE": "vendor/cava/LICENSE",
     "CAVA-PROVENANCE.json": "vendor/cava-provenance.json",
-    "THIRD-PARTY-AUDIO.en.md": "docs/THIRD-PARTY-AUDIO.md",
-    "THIRD-PARTY-AUDIO.ru.md": "docs/ru/THIRD-PARTY-AUDIO.md",
-    "INSTALL.en.md": "docs/INSTALL.md",
-    "INSTALL.ru.md": "docs/ru/INSTALL.md",
-    "RGB-PLAN.en.md": "docs/RGB-PLAN.md",
-    "RGB-PLAN.ru.md": "docs/ru/RGB-PLAN.md",
-    "firmware-provenance.json": "assets/ak820/beta2-provenance.json",
+    "firmware-provenance.json": "assets/ak820/beta3-provenance.json",
     "LICENSE": "LICENSE",
     "FONT-LICENSES.txt": "assets/FONT-LICENSES.txt",
     "LUCIDE-LICENSE.txt": "assets/LUCIDE-LICENSE.txt",
@@ -46,8 +40,9 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def expected_static_files(platform):
+def expected_static_files(platform, commit):
     files = {name: (ROOT / path).read_bytes() for name, path in STATIC_FILES.items()}
+    files.update({name: package_document(source, commit) for name, source in DOCUMENTS.items()})
     os_name = TARGETS[platform][0]
     for kind in ("install", "uninstall"):
         suffix = ".ps1" if os_name == "windows" else ".sh"
@@ -55,12 +50,12 @@ def expected_static_files(platform):
         files[filename] = (ROOT / "scripts/ak820-release" / os_name / filename).read_bytes()
         if os_name == "macos":
             files[f"AK-Configurator.app/Contents/Resources/{filename}"] = files[filename]
-    for asset in sorted((ROOT / "assets/ak820").glob("beta2-*.json")):
-        files[f"offline/{asset.name.removeprefix('beta2-')}"] = asset.read_bytes()
-    for asset in sorted((ROOT / "assets/ak820/firmware-beta2").rglob("*")):
+    for asset in sorted((ROOT / "assets/ak820").glob("beta3-*.json")):
+        files[f"offline/{asset.name.removeprefix('beta3-')}"] = asset.read_bytes()
+    for asset in sorted((ROOT / "assets/ak820/firmware-beta3").rglob("*")):
         if asset.is_file():
-            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta2").as_posix()
-            files[f"offline/firmware-beta2/{relative}"] = asset.read_bytes()
+            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta3").as_posix()
+            files[f"offline/firmware-beta3/{relative}"] = asset.read_bytes()
     for dependency in sorted((ROOT / "vendor/cava-dependencies").iterdir()):
         if dependency.is_file():
             files["audio-sources/" + dependency.name] = dependency.read_bytes()
@@ -72,12 +67,12 @@ def expected_static_files(platform):
 
 
 def expected_runtime_identity(platform):
-    provenance = json.loads((ROOT / "assets/ak820/beta2-provenance.json").read_text(encoding="utf-8"))
-    defaults = json.loads((ROOT / "tests/fixtures/ak820-beta2-defaults.json").read_text(encoding="utf-8"))
-    catalog = (ROOT / "assets/ak820/beta2-capability-catalog.json").read_bytes()
+    provenance = json.loads((ROOT / "assets/ak820/beta3-provenance.json").read_text(encoding="utf-8"))
+    defaults = json.loads((ROOT / "tests/fixtures/ak820-beta3-defaults.json").read_text(encoding="utf-8"))
+    catalog = (ROOT / "assets/ak820/beta3-capability-catalog.json").read_bytes()
     profiles = []
     for profile in ("main", "game", "mmo", "typing", "code", "pointer", "onehand", "creative", "shortcuts", "multios"):
-        folder = ROOT / "assets/ak820/firmware-beta2" / profile
+        folder = ROOT / "assets/ak820/firmware-beta3" / profile
         profiles.append({
             "profile": profile,
             "ihx_sha256": sha256((folder / "application.ihx").read_bytes()),
@@ -166,13 +161,13 @@ def verify(directory: Path, version: str, commit: str):
     checked_out_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if checked_out_commit != commit:
         raise ValueError("Verifier checkout does not match the validated source commit")
-    common_static = expected_static_files("linux-x86_64")
+    common_static = expected_static_files("linux-x86_64", commit)
     firmware = json.loads(common_static["firmware-provenance.json"])
     result = {"format": "ak-configurator-release-candidate-1", "application_version": version,
               "source_commit": commit, "status": "unsigned desktop trial; hardware and platform qualification remain separate",
               "platforms": {}}
     for platform in EXPECTED:
-        expected_static = expected_static_files(platform)
+        expected_static = expected_static_files(platform, commit)
         suffix = ".app.zip" if platform.startswith("macos-") else (".tar.gz" if platform.startswith("linux-") else ".zip")
         name = f"ak-configurator-{version}-{platform}{suffix}"
         archive = directory / name

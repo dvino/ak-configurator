@@ -4,12 +4,12 @@ use super::*;
 use crate::ak820_openrgb_bridge::{Bridge, Status as BridgeStatus};
 use crate::ak820_rgb_audio::{self as audio, Capture, Options as AudioOptions};
 use crate::ak820_rgb_compositor::Scene;
-use crate::ak820_rgb_scheduler::{Frame, FrameScheduler, FRAME_INTERVAL_MS, SUSPEND_GAP_MS};
+use crate::ak820_rgb_scheduler::{FRAME_INTERVAL_MS, Frame, FrameScheduler, SUSPEND_GAP_MS};
 use crate::hid::{Ak820RgbRestoreResult, Ak820RgbStream, Ak820RgbStreamResult, HidDevice};
 use chrono::Timelike;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant, SystemTime};
 
@@ -23,11 +23,18 @@ struct Playback {
     demo_profile: Option<ak820_beta1_profiles::ProfileId>,
     demo: bool,
     owned: Option<Ak820RgbStream>,
-    once: bool,
+    once: Option<SingleFrame>,
+}
+
+#[derive(Clone, Copy)]
+enum SingleFrame {
+    Off,
+    Base,
 }
 
 enum Input {
     Scene,
+    Static(Frame),
     Music {
         capture: Capture,
         options: AudioOptions,
@@ -43,6 +50,7 @@ impl Input {
     fn frame(&mut self, scene: &Scene, elapsed: u64, minute: u16) -> Result<Option<Frame>, String> {
         let brightness = scene.brightness_at(minute);
         match self {
+            Self::Static(frame) => Ok(Some(*frame)),
             Self::Scene => scene
                 .render(elapsed, minute)
                 .map(Some)
@@ -119,6 +127,19 @@ struct RestoreTask {
     generation: u64,
 }
 
+struct PaletteResult {
+    hid: HidDevice,
+    generation: u64,
+    image: crate::ak820::ImageContract,
+    restored: bool,
+    outcome: Result<crate::ak820_rgb::direct::Snapshot, String>,
+}
+struct PaletteTask {
+    receiver: mpsc::Receiver<PaletteResult>,
+    cancel: Arc<AtomicBool>,
+    generation: u64,
+}
+
 pub(super) struct Runtime {
     clock: Instant,
     playback: Option<Playback>,
@@ -127,6 +148,12 @@ pub(super) struct Runtime {
     off: Option<OffRequest>,
     restore: Option<RestoreRequest>,
     restore_task: Option<RestoreTask>,
+    palette_task: Option<PaletteTask>,
+    direct_capture: Option<(
+        u64,
+        crate::ak820::ImageContract,
+        crate::ak820_rgb::direct::Snapshot,
+    )>,
     preview: Option<Frame>,
     last_frame_ms: Option<u64>,
 }
@@ -141,6 +168,8 @@ impl Default for Runtime {
             off: None,
             restore: None,
             restore_task: None,
+            palette_task: None,
+            direct_capture: None,
             preview: None,
             last_frame_ms: None,
         }
@@ -148,8 +177,143 @@ impl Default for Runtime {
 }
 
 impl EntropyApp {
+    pub(super) fn ak820_rgb_direct_capture(&self) -> Option<&crate::ak820_rgb::direct::Snapshot> {
+        self.ak820_rgb_runtime
+            .direct_capture
+            .as_ref()
+            .map(|(_, _, s)| s)
+    }
+
+    pub(super) fn ak820_rgb_direct_capture_source(&self) -> Option<String> {
+        self.ak820_rgb_runtime
+            .direct_capture
+            .as_ref()
+            .map(|(generation, image, _)| format!("{:?}; connection {}", image, generation))
+    }
+
+    /// Transfer the unique HID owner to one cancellable worker. A sidecar has
+    /// already been parsed and validated before this operation can start.
+    pub(super) fn ak820_rgb_palette_request(
+        &mut self,
+        ctx: &egui::Context,
+        restore: Option<crate::ak820_rgb::direct::Snapshot>,
+    ) {
+        if self.ak820_rgb_scene_running() || !self.ak820_rgb_scene_can_start() {
+            return;
+        }
+        let Some(image) = self
+            .hid_device
+            .as_ref()
+            .and_then(|h| h.ak820_image())
+            .filter(|i| i.direct_protocol() == Some(1))
+        else {
+            return;
+        };
+        let Some(hid) = self.hid_device.take() else {
+            return;
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        let generation = self.connection_generation;
+        let (sender, receiver) = mpsc::channel();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            #[cfg(target_os = "macos")]
+            let _hid_lock = hid.macos_hid_operation_lock();
+            let restored = restore.is_some();
+            let outcome = (|| -> anyhow::Result<_> {
+                if let Some(palette) = restore {
+                    hid.ak820_restore_direct_palette_with_cancel(&palette, &flag)?;
+                }
+                hid.ak820_direct_snapshot_with_cancel(&flag)
+            })()
+            .map_err(|e| format!("{e:#}"));
+            let _ = sender.send(PaletteResult {
+                hid,
+                generation,
+                image,
+                restored,
+                outcome,
+            });
+            repaint.request_repaint();
+        });
+        self.ak820_rgb_runtime.palette_task = Some(PaletteTask {
+            receiver,
+            cancel,
+            generation,
+        });
+        self.ak820_rgb_status(
+            "Операция с отдельной палитрой Direct в ОЗУ…",
+            "Direct RAM palette operation in progress…",
+        );
+    }
+
+    fn poll_ak820_rgb_palette(&mut self) {
+        let Some(task) = self.ak820_rgb_runtime.palette_task.as_ref() else {
+            return;
+        };
+        let received = task.receiver.try_recv();
+        let result = match received {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let task = self.ak820_rgb_runtime.palette_task.take().unwrap();
+                if task.generation == self.connection_generation {
+                    self.ak820_rgb_status(
+                        "Обработчик Direct завершился. Подключитесь заново.",
+                        "Direct worker exited. Connect again.",
+                    );
+                }
+                self.resume_pending_device_connect();
+                return;
+            }
+        };
+        let task = self.ak820_rgb_runtime.palette_task.take().unwrap();
+        if result.generation != self.connection_generation
+            || self.ak820_demo
+            || result.hid.ak820_image() != Some(result.image)
+        {
+            self.resume_pending_device_connect();
+            return;
+        }
+        self.hid_device = Some(result.hid);
+        if task.cancel.load(Ordering::Acquire) {
+            self.ak820_rgb_status(
+                "Операция Direct отменена. Запись не повторяется.",
+                "Direct operation cancelled. Writes are not retried.",
+            );
+        } else {
+            match result.outcome {
+                Ok(snapshot) => {
+                    self.ak820_rgb_runtime.direct_capture =
+                        Some((result.generation, result.image, snapshot));
+                    if result.restored {
+                        self.ak820_rgb_status("82 цвета Direct восстановлены в ОЗУ и прочитаны обратно; режим и EEPROM не изменены. Показ светодиодов не проверен.",
+                            "82 Direct colors restored in RAM and read back; mode and EEPROM unchanged. Physical LED display unverified.");
+                    } else {
+                        self.ak820_rgb_status(
+                            "82 цвета Direct прочитаны согласованно. Режим и EEPROM не изменены.",
+                            "82 Direct colors read coherently. Mode and EEPROM unchanged.",
+                        );
+                    }
+                }
+                Err(error) => {
+                    log::warn!("AK820 Direct palette operation stopped: {error}");
+                    self.ak820_rgb_scene_stop();
+                    self.ak820_rgb_status(
+                        "Ошибка Direct: операция остановлена. Прочитайте устройство заново.",
+                        "Direct error: operation stopped. Read the device again.",
+                    );
+                }
+            }
+        }
+        self.resume_pending_device_connect();
+    }
+
     pub(super) fn ak820_rgb_scene_owns_hid(&self) -> bool {
-        self.ak820_rgb_runtime.task.is_some() || self.ak820_rgb_runtime.restore_task.is_some()
+        self.ak820_rgb_runtime.task.is_some()
+            || self.ak820_rgb_runtime.restore_task.is_some()
+            || self.ak820_rgb_runtime.palette_task.is_some()
     }
 
     pub(crate) fn ak820_rgb_scene_running(&self) -> bool {
@@ -225,7 +389,7 @@ impl EntropyApp {
             demo_profile: self.ak820_demo_profile,
             demo: self.ak820_demo,
             owned: None,
-            once: false,
+            once: None,
         });
         self.ak820_rgb_runtime
             .scheduler
@@ -233,6 +397,42 @@ impl EntropyApp {
         self.ak820_rgb_status(
             "Воспроизведение RGB запущено. Цвета не сохраняются в клавиатуре.",
             "RGB playback started. Colors are not saved in the keyboard.",
+        );
+    }
+
+    /// A base palette uses the same cancellable worker and device-priority
+    /// scheduler as playback. The GUI never waits for its HID transactions.
+    pub(super) fn ak820_rgb_apply_base(&mut self, frame: Frame) {
+        if self.ak820_rgb_scene_running() || !self.ak820_rgb_scene_can_start() {
+            return;
+        }
+        if self.ak820_demo {
+            self.ak820_rgb_runtime.preview = Some(frame);
+            self.ak820_rgb_status(
+                "Демо: предпросмотр обновлён; устройство не затронуто.",
+                "Demo preview updated; no device was contacted.",
+            );
+            return;
+        }
+        let now = Instant::now();
+        self.ak820_rgb_runtime.playback = Some(Playback {
+            scene: Scene::default(),
+            input: Input::Static(frame),
+            started: now,
+            last_tick: now,
+            last_wall_tick: SystemTime::now(),
+            generation: self.connection_generation,
+            demo_profile: None,
+            demo: false,
+            owned: None,
+            once: Some(SingleFrame::Base),
+        });
+        self.ak820_rgb_runtime
+            .scheduler
+            .resume(self.ak820_rgb_runtime.clock.elapsed().as_millis() as u64);
+        self.ak820_rgb_status(
+            "Применение основы RGB в ОЗУ…",
+            "Applying base RGB colors to RAM…",
         );
     }
 
@@ -321,9 +521,9 @@ impl EntropyApp {
         {
             return Some(
                 if ru {
-                    "Возврат предыдущего эффекта…"
+                    "Возврат прежней подсветки…"
                 } else {
-                    "Restoring previous effect…"
+                    "Restoring previous lighting…"
                 }
                 .into(),
             );
@@ -333,6 +533,12 @@ impl EntropyApp {
             .as_ref()
             .map(|p| match &p.input {
                 Input::Scene => if ru { "Сцена" } else { "Scene" }.into(),
+                Input::Static(_) => if ru {
+                    "Основа RGB"
+                } else {
+                    "Base RGB colors"
+                }
+                .into(),
                 Input::Music { .. } => if ru {
                     "Захват системного звука включён"
                 } else {
@@ -403,6 +609,9 @@ impl EntropyApp {
         if let Some(task) = &self.ak820_rgb_runtime.restore_task {
             task.cancel.store(true, Ordering::Release);
         }
+        if let Some(task) = &self.ak820_rgb_runtime.palette_task {
+            task.cancel.store(true, Ordering::Release);
+        }
     }
 
     pub(crate) fn ak820_rgb_scene_off(&mut self) {
@@ -446,6 +655,7 @@ impl EntropyApp {
     /// Poll before settings work so its handle is returned before another
     /// operation is selected. A stale result never replaces a newer handle.
     pub(super) fn poll_ak820_rgb_task(&mut self) {
+        self.poll_ak820_rgb_palette();
         self.poll_ak820_rgb_restore();
         let received = match self.ak820_rgb_runtime.task.as_ref() {
             Some(t) => t.receiver.try_recv(),
@@ -490,12 +700,18 @@ impl EntropyApp {
                 }
                 if let Some(p) = self.ak820_rgb_runtime.playback.as_mut() {
                     p.owned = Some(owned);
-                    if p.once {
+                    if let Some(once) = p.once {
                         self.ak820_rgb_scene_stop();
-                        self.ak820_rgb_status(
-                            "Подсветка выключена в ОЗУ; сохранённые настройки не изменены.",
-                            "Lighting is off in RAM; saved settings are unchanged.",
-                        );
+                        match once {
+                            SingleFrame::Off => self.ak820_rgb_status(
+                                "Подсветка выключена в ОЗУ; сохранённые настройки не изменены.",
+                                "Lighting is off in RAM; saved settings are unchanged.",
+                            ),
+                            SingleFrame::Base => self.ak820_rgb_status(
+                                "Основа RGB применена в ОЗУ; сохранённые настройки не изменены.",
+                                "Base RGB colors applied to RAM; saved settings are unchanged.",
+                            ),
+                        }
                     }
                 }
             }
@@ -565,7 +781,7 @@ impl EntropyApp {
                 self.rgb_settings.saturation = mode[4];
                 self.rgb_settings.brightness = mode[5];
                 self.ak820_rgb_runtime.preview = None;
-                self.ak820_rgb_status("Предыдущий встроенный эффект возвращён; память не перезаписывалась.", "Previous built-in effect restored; persistent memory was not rewritten.");
+                self.ak820_rgb_status("Прежняя подсветка восстановлена; постоянная память не перезаписывалась.", "Previous lighting restored; persistent memory was not rewritten.");
             }
             Ok(_) => self.ak820_rgb_status("RGB остановлен. Возврат отменён: состояние изменилось или прежняя палитра недоступна.", "RGB stopped. Restoration cancelled: state changed or the previous palette is unavailable."),
             Err(error) => {
@@ -654,6 +870,13 @@ impl EntropyApp {
             self.ak820_rgb_scene_stop();
             return;
         }
+        if let Some(task) = &self.ak820_rgb_runtime.palette_task {
+            if task.generation != self.connection_generation || self.ak820_demo {
+                task.cancel.store(true, Ordering::Release);
+            }
+            ctx.request_repaint_after(Duration::from_millis(20));
+            return;
+        }
         self.dispatch_ak820_rgb_restore(ctx, now, wall_now);
         if self.ak820_rgb_runtime.restore.is_some() || self.ak820_rgb_runtime.restore_task.is_some()
         {
@@ -680,7 +903,7 @@ impl EntropyApp {
                     demo_profile: None,
                     demo: false,
                     owned: off.owned,
-                    once: true,
+                    once: Some(SingleFrame::Off),
                 });
             } else {
                 self.ak820_rgb_status(
@@ -822,6 +1045,183 @@ impl EntropyApp {
 mod tests {
     use super::*;
     use crate::app::ak820_beta1_profiles::ProfileId;
+
+    fn direct_app() -> (EntropyApp, crate::hid::TestHidRecorder) {
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, log) = HidDevice::test_beta3_ak820_device(ProfileId::Main, true);
+        let mut fake = crate::ak820_rgb::direct::tests::Fake::default();
+        let mut mode = [2, 0, 50, 90, 255, 160];
+        log.respond_by(move |p| {
+            if p[..2] == [0xfd, 1] {
+                let mut r = [0; 32];
+                r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]);
+                Some(Ok(r))
+            } else if p[..2] == [8, 0x41] {
+                let mut r = *p;
+                r[2..8].copy_from_slice(&mode);
+                Some(Ok(r))
+            } else if p[..2] == [7, 0x41] {
+                mode.copy_from_slice(&p[2..8]);
+                Some(Ok(*p))
+            } else {
+                Some(fake.send(p).map_err(|e| e.to_string()))
+            }
+        });
+        app.hid_device = Some(hid);
+        app.connect_state = ConnectState::Idle;
+        (app, log)
+    }
+
+    #[test]
+    fn base_palette_uses_one_worker_then_stops_without_nvm_or_repeated_frames() {
+        for beta3 in [false, true] {
+            let (mut app, log) = if beta3 { direct_app() } else { live_app(false) };
+            let ctx = egui::Context::default();
+            app.ak820_rgb_apply_base([[40, 90, 120]; 82]);
+            assert!(app.ak820_rgb_scene_running());
+            assert!(
+                log.requests().is_empty(),
+                "GUI dispatch must perform no HID I/O"
+            );
+            app.tick_ak820_rgb_scene(&ctx);
+            assert!(app.ak820_rgb_scene_owns_hid());
+            assert!(app.hid_device.is_none());
+            finish_frame(&mut app);
+            assert!(!app.ak820_rgb_scene_running());
+            assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
+            let sent = log.requests();
+            assert!(sent.iter().all(|p| p[0] != 9));
+            assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
+            if beta3 {
+                assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x45]).count(), 1);
+                assert!(!sent.iter().any(|p| p[..2] == [7, 0x42]));
+            } else {
+                assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x42]).count(), 10);
+            }
+            app.tick_ak820_rgb_scene(&ctx);
+            assert_eq!(log.requests().len(), sent.len());
+            assert_eq!(app.rgb_settings.effect, 1);
+            assert!(
+                app.status_msg.contains("основа")
+                    || app.status_msg.contains("Основа")
+                    || app.status_msg.contains("Base RGB colors")
+            );
+        }
+    }
+
+    #[test]
+    fn base_palette_yields_to_settings_and_can_be_cancelled_before_dispatch() {
+        let (mut app, log) = direct_app();
+        app.ak820_rgb_apply_base([[100; 3]; 82]);
+        app.combo_dirty = true;
+        app.tick_ak820_rgb_scene(&egui::Context::default());
+        assert!(log.requests().is_empty());
+        assert!(!app.ak820_rgb_scene_owns_hid());
+        assert!(app.hid_device.is_some());
+        app.ak820_rgb_scene_stop();
+        app.combo_dirty = false;
+        app.tick_ak820_rgb_scene(&egui::Context::default());
+        assert!(!app.ak820_rgb_scene_running());
+        assert!(log.requests().is_empty());
+    }
+
+    #[test]
+    fn direct_palette_worker_transfers_single_owner_and_restores_without_mode_or_nvm_writes() {
+        let (mut app, log) = direct_app();
+        let ctx = egui::Context::default();
+        app.ak820_rgb_palette_request(&ctx, None);
+        assert!(app.ak820_rgb_scene_owns_hid());
+        assert!(app.hid_device.is_none());
+        assert!(!app.ak820_rgb_scene_can_start());
+        finish_frame(&mut app);
+        let mut snapshot = app.ak820_rgb_direct_capture().unwrap().clone();
+        snapshot.hsv = [[14, 150, 90]; 82];
+        app.ak820_rgb_palette_request(&ctx, Some(snapshot.clone()));
+        finish_frame(&mut app);
+        assert_eq!(app.ak820_rgb_direct_capture().unwrap().hsv, snapshot.hsv);
+        assert!(
+            log.requests()
+                .iter()
+                .all(|p| p[0] != 9 && p[..2] != [7, 0x41])
+        );
+        assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
+    }
+
+    #[test]
+    fn late_direct_palette_completion_is_discarded_after_connection_change() {
+        let (mut app, log) = direct_app();
+        let (sender, receiver) = mpsc::channel();
+        let hid = app.hid_device.take().unwrap();
+        let generation = app.connection_generation;
+        let image = hid.ak820_image().unwrap();
+        app.ak820_rgb_runtime.palette_task = Some(PaletteTask {
+            receiver,
+            cancel: Arc::new(AtomicBool::new(false)),
+            generation,
+        });
+        app.connection_generation += 1;
+        app.tick_ak820_rgb_scene(&egui::Context::default());
+        assert!(
+            app.ak820_rgb_runtime
+                .palette_task
+                .as_ref()
+                .unwrap()
+                .cancel
+                .load(Ordering::Acquire)
+        );
+        sender
+            .send(PaletteResult {
+                hid,
+                generation,
+                image,
+                restored: true,
+                outcome: Ok(crate::ak820_rgb::direct::Snapshot {
+                    generation: 7,
+                    flags: 3,
+                    hsv: [[0; 3]; 82],
+                }),
+            })
+            .ok()
+            .unwrap();
+        app.poll_ak820_rgb_task();
+        assert!(!app.ak820_rgb_scene_owns_hid());
+        assert!(app.hid_device.is_none());
+        assert!(app.ak820_rgb_direct_capture().is_none());
+        assert!(log.requests().is_empty());
+    }
+
+    #[test]
+    fn cancelled_direct_palette_completion_does_not_replace_captured_snapshot() {
+        let (mut app, _) = direct_app();
+        let (sender, receiver) = mpsc::channel();
+        let hid = app.hid_device.take().unwrap();
+        let generation = app.connection_generation;
+        let image = hid.ak820_image().unwrap();
+        app.ak820_rgb_runtime.palette_task = Some(PaletteTask {
+            receiver,
+            cancel: Arc::new(AtomicBool::new(false)),
+            generation,
+        });
+        app.ak820_rgb_scene_stop();
+        sender
+            .send(PaletteResult {
+                hid,
+                generation,
+                image,
+                restored: false,
+                outcome: Ok(crate::ak820_rgb::direct::Snapshot {
+                    generation: 7,
+                    flags: 3,
+                    hsv: [[0; 3]; 82],
+                }),
+            })
+            .ok()
+            .unwrap();
+        app.poll_ak820_rgb_task();
+        assert!(app.ak820_rgb_direct_capture().is_none());
+        assert!(app.hid_device.is_some());
+        assert!(!app.ak820_rgb_scene_owns_hid());
+    }
 
     fn live_app(fail: bool) -> (EntropyApp, crate::hid::TestHidRecorder) {
         let mut app = EntropyApp::new_inert_for_test();
@@ -975,10 +1375,11 @@ mod tests {
             app.tick_ak820_rgb_scene(&ctx);
         }
         assert_eq!(log.requests().len(), count);
-        assert!(!log
-            .requests()
-            .iter()
-            .any(|p| p[..2] == [7, 0x41] || p[0] == 9));
+        assert!(
+            !log.requests()
+                .iter()
+                .any(|p| p[..2] == [7, 0x41] || p[0] == 9)
+        );
     }
 
     #[test]
@@ -1015,24 +1416,26 @@ mod tests {
             generation: 0,
         });
         app.connection_generation = 1;
-        assert!(tx
-            .send(FrameResult {
+        assert!(
+            tx.send(FrameResult {
                 hid: old,
                 generation: 0,
                 outcome: Ok(Ak820RgbStreamResult::Cancelled),
                 elapsed_ms: 1
             })
-            .is_ok());
+            .is_ok()
+        );
         app.poll_ak820_rgb_task();
         assert!(app.ak820_rgb_scene_can_start());
         assert!(current_log.requests().is_empty());
-        assert!(app
-            .hid_device
-            .unwrap()
-            .ak820_image()
-            .unwrap()
-            .rgb_modes()
-            .contains(&1));
+        assert!(
+            app.hid_device
+                .unwrap()
+                .ak820_image()
+                .unwrap()
+                .rgb_modes()
+                .contains(&1)
+        );
     }
 
     #[test]
@@ -1054,9 +1457,11 @@ mod tests {
         let requests = log.requests();
         let packets: Vec<_> = requests.iter().filter(|p| p[..2] == [7, 0x42]).collect();
         assert!(packets.len() >= 10);
-        assert!(packets[packets.len() - 10..]
-            .iter()
-            .all(|p| p[5..].iter().all(|&b| b == 0)));
+        assert!(
+            packets[packets.len() - 10..]
+                .iter()
+                .all(|p| p[5..].iter().all(|&b| b == 0))
+        );
         assert!(!requests.iter().any(|p| p[0] == 9));
     }
 
@@ -1107,12 +1512,13 @@ mod tests {
         let p = app.ak820_rgb_runtime.playback.as_ref().unwrap();
         let (now, wall) = (p.started, p.last_wall_tick);
         app.tick_ak820_rgb_scene_at(&egui::Context::default(), now, wall, 90);
-        assert!(app
-            .ak820_rgb_scene_preview()
-            .unwrap()
-            .iter()
-            .flatten()
-            .all(|&c| c <= 7));
+        assert!(
+            app.ak820_rgb_scene_preview()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|&c| c <= 7)
+        );
         assert!(app.hid_device.is_none());
         app.ak820_rgb_scene_stop();
         assert!(!app.ak820_rgb_scene_running());
@@ -1227,13 +1633,14 @@ mod tests {
         app.ak820_rgb_music_start(Scene::default(), AudioOptions::default(), true);
         app.tick_ak820_rgb_scene(&ctx);
         finish_frame(&mut app);
-        assert!(app
-            .ak820_rgb_runtime
-            .playback
-            .as_ref()
-            .unwrap()
-            .owned
-            .is_some());
+        assert!(
+            app.ak820_rgb_runtime
+                .playback
+                .as_ref()
+                .unwrap()
+                .owned
+                .is_some()
+        );
         // A cancellation result from a later frame must never keep playback
         // alive with an ownership token retired by the HID layer.
         let (sender, receiver) = mpsc::channel();
