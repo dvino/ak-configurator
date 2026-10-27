@@ -2,6 +2,10 @@
 
 # Desktop adaptation and review
 
+## Independent bundle follow-up — 2026-10-27
+
+A fresh independent source review of commit `2bd5084` covered the MCP read-only boundary, diagnostic bootstrap, stopped sessions, trace, startup and window lifecycle, tray, CI and release evidence binding. No confirmed blocking findings were identified. This review did not execute tests or establish hardware behavior. Linux Xvfb and synthetic tray evidence does not establish a real panel, Wayland, Windows, macOS or arm64 behavior.
+
 ## Handoff fixes, tray and first MCP implementation — 2026-10-27
 
 Base: `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` on `desktop-dev`. The supplied `docs/mcp-integration-plan` bundle was merged as reviewed documentation before implementation. Application version remains `0.1.0-alpha.1`; the firmware target and ten beta.3 profile identities are unchanged. This is an unpublished source bundle, not an alpha release. [MCP.md](MCP.md) documents the implemented preview. The plan-only review below is historical.
