@@ -2,6 +2,8 @@
 
 # AK Configurator implementation plan
 
+Prepare future compact-controls installation only after the final catalog, exact image and settings identities and allowed transitions are supplied and reviewed. The separate QS v1/v2 model is offline-only; integrate its codec, capability gates, backup/migration and failure-state tests before offering installation.
+
 Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.
 
 This plan tracks the agreed [requirements](REQUIREMENTS.md) for `dvino/ak-configurator`; firmware remains in `dvino/ak820`. Source implementation and offline verification do not authorize live keyboard operations or establish physical behavior.

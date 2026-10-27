@@ -25,6 +25,7 @@ mod ak820_rgb_scheduler;
 mod ak820_settings_backup;
 mod ak820_settings_model;
 mod ak820_typed_storage;
+mod ak820_qs_versioned_offline;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod app_discovery;

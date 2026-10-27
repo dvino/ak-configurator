@@ -2,6 +2,10 @@
 
 # Desktop adaptation and review
 
+## Provisional QS v2 offline model — 2026-10-27
+
+A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Four targeted tests passed against synthetic vectors generated from the provisional firmware Python reference. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
+
 ## Offline project correction — 2026-10-27
 
 The Linux x86_64 candidate from CI `40534916601` was checked separately: outer and internal SHA256 files passed. Its executable SHA256 `cf4b602d8a8d3b6d982ef267a55e0dafa743e62c52401089c2f647fbaed70a24` passed the Xvfb/synthetic-tray runtime smoke again in an isolated Ubuntu 24.04 container. Its manifest identifies PR merge commit `0624d3a0398dda82c65d3ba0932196db1e120cb6`, whose parents are `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` and `b535d8feb93d5bfbdbf23455583befed7fe2ff0f`; it predates the offline-project correction. No physical keyboard was used.
