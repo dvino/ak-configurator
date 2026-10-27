@@ -36,7 +36,38 @@ fn should_handoff_close_to_helper(
     enabled && allowed && !explicit_quit && !faulted
 }
 
+#[cfg(target_os = "linux")]
+fn linux_can_hide_window(display: Option<raw_window_handle::RawDisplayHandle>) -> bool {
+    matches!(display, Some(raw_window_handle::RawDisplayHandle::Xlib(_)
+        | raw_window_handle::RawDisplayHandle::Xcb(_)))
+}
+
 impl EntropyApp {
+    #[cfg(target_os = "linux")]
+    pub(crate) fn with_start_minimized_on_linux(mut self) -> Self {
+        self.linux_start_minimized_pending = true;
+        self
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn handle_linux_start_minimized(&mut self, ctx: &egui::Context) {
+        if !self.linux_start_minimized_pending { return; }
+        self.linux_start_minimized_pending = false;
+        if linux_can_hide_window(self.parent_display_handle) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        } else {
+            self.linux_hide_unavailable_status();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn linux_hide_unavailable_status(&mut self) {
+        self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+            "Сворачивание в трей недоступно в этом оконном окружении; окно остаётся открытым.".into()
+        } else {
+            "Hiding to the tray is unavailable on this window backend; the window remains open.".into()
+        };
+    }
     #[cfg(target_os = "windows")]
     pub(crate) fn with_start_hidden_to_tray(mut self) -> Self {
         self.windows_start_hidden_to_tray_pending = true;
@@ -369,6 +400,13 @@ impl EntropyApp {
         }
         #[cfg(target_os = "linux")]
         {
+            // Winit cannot hide or restore a Wayland window. Never mark it hidden
+            // or minimize it: Wayland cannot programmatically unminimize either.
+            if !linux_can_hide_window(self.parent_display_handle) {
+                self.linux_window_hidden_to_tray = false;
+                self.linux_hide_unavailable_status();
+                return;
+            }
             self.ensure_tray_icon(ctx);
             // A desktop without a StatusNotifier host has no restore affordance.
             // Leave its window accessible instead of hiding it permanently.
@@ -1292,6 +1330,59 @@ fn linux_close_to_tray_prompt_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    fn wayland_display() -> raw_window_handle::RawDisplayHandle {
+        raw_window_handle::RawDisplayHandle::Wayland(
+            raw_window_handle::WaylandDisplayHandle::new(std::ptr::NonNull::dangling()))
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_backend_policy_uses_actual_handle_and_fails_closed() {
+        use raw_window_handle::{RawDisplayHandle, XcbDisplayHandle, XlibDisplayHandle};
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0)))));
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xcb(XcbDisplayHandle::new(None, 0)))));
+        assert!(!linux_can_hide_window(Some(wayland_display())));
+        assert!(!linux_can_hide_window(None));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wayland_close_and_tray_action_keep_window_accessible() {
+        let mut app = EntropyApp::new_inert_for_test();
+        app.parent_display_handle = Some(wayland_display());
+        app.app_settings.minimize_to_tray_on_close = true;
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().events.push(egui::ViewportEvent::Close);
+        let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
+        let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+        assert!(commands.contains(&egui::ViewportCommand::CancelClose));
+        assert!(!commands.contains(&egui::ViewportCommand::Visible(false)));
+        assert!(!commands.contains(&egui::ViewportCommand::Minimized(true)));
+        assert!(!app.linux_window_hidden_to_tray);
+        assert!(app.status_msg.contains("unavailable"));
+        let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.minimize_window_to_tray(&ctx));
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        assert!(!app.linux_window_hidden_to_tray);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_start_minimized_only_uses_x11_and_runs_once() {
+        use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle};
+        for (handle, expected) in [(Some(wayland_display()), false), (None, false),
+            (Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0))), true)] {
+            let mut app = EntropyApp::new_inert_for_test().with_start_minimized_on_linux();
+            app.parent_display_handle = handle;
+            let ctx = egui::Context::default();
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
+            assert_eq!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)), expected);
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
+            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        }
+    }
 
     #[test]
     fn active_vial_unlock_blocks_close_and_tray_actions() {

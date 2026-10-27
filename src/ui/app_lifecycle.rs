@@ -1577,6 +1577,13 @@ impl eframe::App for EntropyApp {
         // Poll before its device-work early return; starting a job remains explicit.
         #[cfg(not(target_arch = "wasm32"))]
         self.app_update_runtime.poll(&mut self.update_check);
+        #[cfg(target_os = "linux")]
+        {
+            // Linux startup and tray actions must use the actual winit backend,
+            // including in the isolated demo/smoke path.
+            self.cache_parent_window_handles(frame);
+            self.handle_linux_start_minimized(ctx);
+        }
         if self.ak820_demo {
             #[cfg(not(target_arch = "wasm32"))]
             self.tick_ak820_rgb_scene(ctx);

@@ -682,7 +682,9 @@ fn initialize_gui(ctx: &egui::Context, launch_minimized: bool) -> Box<dyn eframe
     } else {
         app
     };
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    let app = if launch_minimized { app.with_start_minimized_on_linux() } else { app };
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     if launch_minimized {
         ctx
             .send_viewport_cmd(egui::ViewportCommand::Minimized(true));

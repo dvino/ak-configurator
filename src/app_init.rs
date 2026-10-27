@@ -590,6 +590,8 @@ impl EntropyApp {
             tray_icon: None,
             #[cfg(target_os = "linux")]
             linux_window_hidden_to_tray: false,
+            #[cfg(target_os = "linux")]
+            linux_start_minimized_pending: false,
             #[cfg(target_os = "windows")]
             windows_hwnd: None,
             #[cfg(target_os = "windows")]

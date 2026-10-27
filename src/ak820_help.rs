@@ -272,7 +272,7 @@ const EN: &[(&str, &str)] = &[
     ),
     (
         "OS layout helper",
-        "Open Menu → Application settings → OS layout indicator, enable the OS helper and map EN/RU to normal, off, on or slow breathing. Unknown layouts release the override; unsupported Wayland compositors cannot report a layout. These preferences stay on the computer.\n\nThe helper pauses while another operation owns the device and stops refreshing after an error. With close-to-tray enabled, closing the window hides it and keeps the helper running. Restore the window from the tray. Quit in the main menu or tray, Ctrl+Q (also Cmd+Q), requests full exit. --ak820-helper starts without a GUI; minimized autostart also uses the helper when enabled.\n\nThe temporary firmware indication expires within three seconds without refresh.",
+        "Open Menu → Application settings → OS layout indicator, enable the OS helper and map EN/RU to normal, off, on or slow breathing. Unknown layouts release the override; unsupported Wayland compositors cannot report a layout. These preferences stay on the computer.\n\nThe helper pauses while another operation owns the device and stops refreshing after an error. With close-to-tray enabled, supported window backends hide the window and keep the helper running; restore the window from the tray. On Linux Wayland the window stays open because tray hiding is not supported. Quit in the main menu or tray, Ctrl+Q (also Cmd+Q), requests full exit. --ak820-helper starts without a GUI; minimized autostart also uses the helper when enabled.\n\nThe temporary firmware indication expires within three seconds without refresh.",
     ),
     (
         "Application settings and updates",
@@ -327,7 +327,7 @@ const RU: &[(&str, &str)] = &[
     ),
     (
         "Помощник раскладки OS",
-        "Откройте Меню → Настройки приложения, включите помощник OS и сопоставьте EN/RU обычную индикацию, выключение, включение или медленное дыхание. Неизвестная раскладка возвращает обычную индикацию; неподдерживаемый композитор Wayland не сообщает раскладку. Настройки хранятся на компьютере.\n\nПомощник уступает устройство другим операциям и прекращает обновление после ошибки. При включённом сворачивании в трей закрытие окна скрывает его и сохраняет работу помощника. Окно восстанавливается из трея. Выход из основного меню или трея, Ctrl+Q (также Cmd+Q) запрашивает полное завершение. --ak820-helper запускает помощник без GUI; свёрнутый автозапуск тоже использует включённый помощник.\n\nБез обновления временная индикация прошивки истекает за три секунды.",
+        "Откройте Меню → Настройки приложения, включите помощник OS и сопоставьте EN/RU обычную индикацию, выключение, включение или медленное дыхание. Неизвестная раскладка возвращает обычную индикацию; неподдерживаемый композитор Wayland не сообщает раскладку. Настройки хранятся на компьютере.\n\nПомощник уступает устройство другим операциям и прекращает обновление после ошибки. При включённом сворачивании в трей поддерживаемые оконные системы скрывают окно и сохраняют работу помощника; окно восстанавливается из трея. В Linux Wayland окно остаётся открытым: скрытие в трей пока не поддерживается. Выход из основного меню или трея, Ctrl+Q (также Cmd+Q) запрашивает полное завершение. --ak820-helper запускает помощник без GUI; свёрнутый автозапуск тоже использует включённый помощник.\n\nБез обновления временная индикация прошивки истекает за три секунды.",
     ),
     (
         "Настройки приложения и обновления",
