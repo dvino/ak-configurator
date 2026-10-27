@@ -11,6 +11,18 @@ struct Job {
     previous: Option<Mode>,
     queued: Instant,
 }
+#[derive(Clone, Copy, Default)]
+enum IndicatorStatus {
+    #[default]
+    Ready,
+    WorkerStopped,
+    DeviceError,
+    Disabled,
+    Paused,
+    LayoutDetected(bool),
+    LayoutUnavailable,
+}
+
 struct Finished {
     hid: crate::hid::HidDevice,
     generation: u64,
@@ -28,7 +40,7 @@ pub(super) struct Runtime {
     in_flight: bool,
     generation: u64,
     previous: Option<Mode>,
-    pub(super) status: String,
+    status: IndicatorStatus,
 }
 impl Default for Runtime {
     fn default() -> Self {
@@ -41,7 +53,7 @@ impl Default for Runtime {
             in_flight: false,
             generation: 0,
             previous: None,
-            status: String::new(),
+            status: IndicatorStatus::Ready,
         }
     }
 }
@@ -117,8 +129,7 @@ impl EntropyApp {
                     Mode::Normal,
                     false,
                 );
-                runtime.status =
-                    "OS helper worker stopped / Обработчик индикатора OS остановлен".into();
+                runtime.status = IndicatorStatus::WorkerStopped;
                 self.resume_pending_device_connect();
                 return;
             }
@@ -137,21 +148,13 @@ impl EntropyApp {
             result.result.is_ok(),
         );
         runtime.status = if result.result.is_err() {
-            "Stopped after device error; read settings again / Ошибка устройства; прочитайте настройки снова".into()
+            IndicatorStatus::DeviceError
         } else if !self.app_settings.ak820_os_indicator.enabled {
-            "Disabled / Выключен".into()
+            IndicatorStatus::Disabled
         } else if let Some(layout) = result.layout {
-            format!(
-                "{}: {layout}",
-                if self.app_settings.language == crate::i18n::Language::Russian {
-                    "Раскладка"
-                } else {
-                    "Layout"
-                }
-            )
+            IndicatorStatus::LayoutDetected(layout == "ru")
         } else {
-            "Layout unavailable; normal LED behavior / Раскладка недоступна; обычная индикация"
-                .into()
+            IndicatorStatus::LayoutUnavailable
         };
         self.hid_device = Some(result.hid);
         self.resume_pending_device_connect();
@@ -188,7 +191,7 @@ impl EntropyApp {
             runtime.scheduler.pause();
             runtime.previous = None;
             if self.app_settings.ak820_os_indicator.enabled {
-                runtime.status = "Paused: device busy or not verified / Пауза: устройство занято или не проверено".into();
+                runtime.status = IndicatorStatus::Paused;
             }
             return;
         }
@@ -241,48 +244,199 @@ impl EntropyApp {
         ctx.request_repaint_after(Duration::from_millis(20));
     }
 
-    pub(super) fn draw_ak820_os_indicator(&mut self, ui: &mut egui::Ui) {
-        let ru = self.app_settings.language == crate::i18n::Language::Russian;
-        let tr = |r, e| if ru { r } else { e };
-        ui.collapsing(tr("Индикатор раскладки OS", "OS layout indicator"), |ui| {
-            let settings = &mut self.app_settings.ak820_os_indicator;
-            let mut changed = ui.checkbox(&mut settings.enabled, tr("Включить помощник OS", "Enable OS helper")).changed();
-            ui.label(tr("Настройки хранятся на компьютере. Поддерживаются EN/RU; неизвестная раскладка возвращает обычную индикацию. На неподдерживаемом Wayland раскладка недоступна.", "Preferences stay on this computer. EN/RU are supported; unknown layouts restore normal LED behavior. Unsupported Wayland compositors report layout unavailable."));
-            for code in ["en", "ru"] {
-                let mode = settings.layouts.entry(code.into()).or_default();
-                ui.horizontal(|ui| {
-                    ui.label(code.to_uppercase());
-                    egui::ComboBox::from_id_salt(("ak820_os_layout", code)).selected_text(mode_label(*mode, ru)).show_ui(ui, |ui| {
-                        for value in [Mode::Normal, Mode::Off, Mode::On, Mode::Breathing] {
-                            changed |= ui.selectable_value(mode, value, mode_label(value, ru)).changed();
+    pub(super) fn draw_ak820_os_indicator_page(
+        &mut self,
+        ui: &mut egui::Ui,
+        content_rect: egui::Rect,
+    ) {
+        let lang = self.app_settings.language;
+        let ru = lang == crate::i18n::Language::Russian;
+        let dark = ui.visuals().dark_mode;
+        let tr = |r: &'static str, e: &'static str| if ru { r } else { e };
+        let metrics = crate::ui_style::ResponsiveMetrics::from_ctx(ui.ctx());
+        crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(metrics.value(18.0));
+                ui.label(
+                    RichText::new(tr("Индикатор раскладки OS", "OS layout indicator"))
+                        .size(metrics.value(18.0))
+                        .strong(),
+                );
+                ui.add_space(metrics.value(6.0));
+                ui.label(
+                    RichText::new(tr(
+                        "Показывает активную раскладку на подсветке клавиатуры.",
+                        "Shows the active keyboard layout through keyboard lighting.",
+                    ))
+                    .size(metrics.value(13.0))
+                    .color(app_muted_text(dark)),
+                );
+                ui.add_space(metrics.value(24.0));
+                let content_width = metrics
+                    .settings_row_content_width()
+                    .min(ui.available_width() - 8.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("ak820_os_indicator_scroll")
+                    .max_height(ui.available_height())
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.set_max_width(content_width);
+                        ui.spacing_mut().item_spacing.y = 8.0;
+                        let mut changed = false;
+                        let switch_size = metrics.size(46.0, 24.0);
+                        crate::ui_style::settings_list_row(
+                            ui,
+                            content_width,
+                            metrics.settings_row_height(),
+                            tr("Включить помощник", "Enable helper"),
+                            true,
+                            switch_size.x,
+                            |ui| {
+                                changed |= crate::ui_style::settings_switch_sized_stable(
+                                    ui,
+                                    "ak820_os_indicator_enabled",
+                                    &mut self.app_settings.ak820_os_indicator.enabled,
+                                    switch_size,
+                                )
+                                .changed();
+                            },
+                        );
+                        for (key, label) in [
+                            ("en", tr("Английская раскладка", "English layout")),
+                            ("ru", tr("Русская раскладка", "Russian layout")),
+                        ] {
+                            let mode = self
+                                .app_settings
+                                .ak820_os_indicator
+                                .layouts
+                                .entry(key.into())
+                                .or_default();
+                            let values = [Mode::Normal, Mode::Off, Mode::On, Mode::Breathing];
+                            let labels: Vec<String> = values
+                                .iter()
+                                .map(|v| mode_label(*v, ru).to_owned())
+                                .collect();
+                            let selected = values.iter().position(|v| *v == *mode).unwrap_or(0);
+                            let width = (content_width * 0.44).clamp(148.0, 220.0);
+                            let dropdown_id = ui.make_persistent_id(("ak820_os_layout", key));
+                            crate::ui_style::settings_list_row(
+                                ui,
+                                content_width,
+                                metrics.settings_row_height(),
+                                label,
+                                self.app_settings.ak820_os_indicator.enabled,
+                                width,
+                                |ui| {
+                                    if let (_, Some(index)) =
+                                        crate::ui_style::modern_dropdown_select_sized(
+                                            ui,
+                                            dropdown_id,
+                                            &labels,
+                                            selected,
+                                            width,
+                                            metrics.settings_row_height().min(40.0),
+                                            metrics.value(12.5),
+                                        )
+                                    {
+                                        *mode = values[index];
+                                        changed = true;
+                                    }
+                                },
+                            );
+                        }
+                        ui.add_space(metrics.value(14.0));
+                        ui.label(
+                            RichText::new(status_label(self.ak820_os_indicator_runtime.status, ru))
+                                .size(metrics.value(13.0)),
+                        );
+                        ui.add_space(metrics.value(12.0));
+                        if crate::ui_style::modern_button(
+                            ui,
+                            tr("Справка", "Help"),
+                            metrics.size(104.0, 32.0),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            super::ak820_help_ui::open_section(ui.ctx(), "os-layout-helper");
+                        }
+                        let can_hide = self.app_settings.ak820_os_indicator.enabled
+                            && !self.ak820_demo
+                            && !self.headless
+                            && crate::background_helper_allowed()
+                            && !self.hid_write_lifecycle_busy()
+                            && matches!(self.connect_state, ConnectState::Idle)
+                            && !self.unlock_open
+                            && self.pending_file_dialog.is_none();
+                        if crate::ui_style::action_button(
+                            ui,
+                            tr(
+                                "Закрыть интерфейс, оставить помощник",
+                                "Close interface, keep helper",
+                            ),
+                            can_hide,
+                        )
+                        .clicked()
+                        {
+                            save_app_settings(&self.app_settings);
+                            crate::request_background_helper();
+                            self.force_close_requested = true;
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if crate::ui_style::action_button(
+                            ui,
+                            tr("Завершить приложение", "Quit application"),
+                            !self.ak820_install_runtime.blocks_exit(),
+                        )
+                        .clicked()
+                        {
+                            crate::cancel_background_helper_request();
+                            self.force_close_requested = true;
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        ui.label(
+                            RichText::new(tr(
+                                "Помощник работает, пока приложение запущено.",
+                                "The helper runs while the application is open.",
+                            ))
+                            .size(metrics.value(12.5))
+                            .color(app_muted_text(dark)),
+                        );
+                        if changed {
+                            save_app_settings(&self.app_settings);
                         }
                     });
-                });
-            }
-            ui.label(&self.ak820_os_indicator_runtime.status);
-            ui.label(tr("Помощник работает, пока приложение запущено. При паузе или потере связи временная индикация истекает за 3 секунды.", "The helper runs while the application is running. On pause or connection loss, the temporary override expires within 3 seconds."));
-            if changed { save_app_settings(&self.app_settings); }
-            let can_hide = self.app_settings.ak820_os_indicator.enabled
-                && !self.ak820_demo
-                && !self.headless
-                && crate::background_helper_allowed()
-                && !self.hid_write_lifecycle_busy()
-                && matches!(self.connect_state, ConnectState::Idle)
-                && !self.unlock_open
-                && self.pending_file_dialog.is_none();
-            if ui.add_enabled(can_hide, egui::Button::new(tr("Закрыть интерфейс, оставить помощник", "Close interface, keep helper"))).clicked() {
-                save_app_settings(&self.app_settings);
-                crate::request_background_helper();
-                self.force_close_requested = true;
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-            if ui.add_enabled(!self.ak820_install_runtime.blocks_exit(), egui::Button::new(tr("Завершить приложение", "Quit application"))).clicked() {
-                crate::cancel_background_helper_request();
-                self.force_close_requested = true;
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-            ui.label(tr("При закрытии интерфейса включённый помощник остаётся без окон редактора. Для возврата откройте AK Configurator снова; явный выход завершает приложение.", "Closing the interface keeps an enabled helper without editor windows. Open AK Configurator again to return; explicit Quit exits the application."));
+            });
         });
+    }
+}
+
+fn status_label(status: IndicatorStatus, ru: bool) -> &'static str {
+    match (status, ru) {
+        (IndicatorStatus::Ready, false) => "Waiting for a supported keyboard.",
+        (IndicatorStatus::Ready, true) => "Ожидание поддерживаемой клавиатуры.",
+        (IndicatorStatus::WorkerStopped, false) => "The helper stopped unexpectedly.",
+        (IndicatorStatus::WorkerStopped, true) => "Помощник неожиданно остановился.",
+        (IndicatorStatus::DeviceError, false) => {
+            "Stopped after a device error. Read settings again to resume."
+        }
+        (IndicatorStatus::DeviceError, true) => {
+            "Остановлено из-за ошибки устройства. Прочитайте настройки снова."
+        }
+        (IndicatorStatus::Disabled, false) => "Helper is off.",
+        (IndicatorStatus::Disabled, true) => "Помощник выключен.",
+        (IndicatorStatus::Paused, false) => "Paused while the device is busy or unverified.",
+        (IndicatorStatus::Paused, true) => "Пауза: устройство занято или не проверено.",
+        (IndicatorStatus::LayoutDetected(false), false) => "English layout detected.",
+        (IndicatorStatus::LayoutDetected(true), false) => "Russian layout detected.",
+        (IndicatorStatus::LayoutDetected(false), true) => "Определена английская раскладка.",
+        (IndicatorStatus::LayoutDetected(true), true) => "Определена русская раскладка.",
+        (IndicatorStatus::LayoutUnavailable, false) => {
+            "Layout unavailable; normal lighting is restored."
+        }
+        (IndicatorStatus::LayoutUnavailable, true) => {
+            "Раскладка недоступна; включена обычная подсветка."
+        }
     }
 }
 

@@ -2,6 +2,46 @@
 
 # Desktop adaptation and review
 
+## UI integration and interaction — 2026-10-27
+
+Baseline: `3c5fb77199fa7cce090267a9fd7df243f43bcf0b` on `desktop-dev`.
+Application and firmware targets remain `0.1.0-beta.2` and `v0.6.0-beta.2`.
+The additional AK toolbar is replaced by Entropy navigation and shared controls.
+The change includes persistent RU/EN selection before connection, complete offline
+help, a dedicated OS indicator page, explicit utility-window opening, separate
+profile preview/application, and four RGB sections with persistent drafts and
+visible source-stop controls. The default scene view starts with the keyboard;
+layer/effect details are expandable.
+
+Interaction checks cover shared popup closure, Escape ownership, suppression of
+background layer/page shortcuts, language persistence through demo startup,
+profile preview without application, and RGB section changes without source
+startup or loss of scene/selection/undo. Existing installer ownership and close
+protection, backup/restore confirmations and device-write gates remain in place.
+The UI changes do not authorize or perform physical keyboard operations.
+
+| Check | Result and scope |
+| --- | --- |
+| Linux Rust build | Native debug binary built with pinned Rust 1.97.0, locked dependencies and offline Cargo. Compiler warnings remain. |
+| Full default offline suite | 1787 passed, 0 failed, 14 already-ignored tests, 1 explicitly excluded environment-limited test. Run with `cargo test --locked --offline --bin ak-configurator -- --skip ak820_backup_files::tests::restrictive_umasks_are_isolated_and_leave_no_stage_leaks`. |
+| Excluded test | The unchanged restrictive-umask subprocess test attempts UID/GID 65534 when run as root. This environment rejects that child launch with OS error 22 (`Invalid argument`), including outside the filesystem sandbox. The test was not weakened or marked ignored in source. |
+| Focused UI regressions | Help and profile windows checked at 800×500 in RU/EN; help also checked in both themes. Language picker/persistence, F1/Escape ownership, popup arbitration and RGB draft-preservation tests exercise production UI/state. After the final visual polish, the focused AK820 suite passed all 255 tests (1547 filtered out). |
+| Native visual inspection | Linux Xvfb demo at 800×500: navigation, language, Help, catalog, OS indicator and all four RGB sections. No capture, OpenRGB listener or physical keyboard operation is started by inspection. |
+| Localization/source checks | English/Russian catalog checker and `git diff --check` pass. Help covers all 30 feature IDs from the bundled beta2 catalog and 13 workflow topics. |
+
+The initial review identified independent shell/upstream menus that could remain
+open together. The shared open/close mechanism now includes shell popups, and
+upstream hover menus yield while a popup is open. A shared-close regression test
+covers both shell IDs. Verification also exposed catalog overflow and a restored
+picker-language mismatch; bounded columns/scroll areas and language initialization
+fix those cases. Their regressions were rerun. The English/Russian desktop guides,
+status and plan describe the same implemented behavior.
+
+This evidence covers Linux compilation, synthetic/offline tests and the native
+demo interface. Physical HID/settings retention, audio-capture qualification,
+firmware installation and native Windows/macOS execution were not performed.
+Independent GPT-6.1 Sol Low review approved the exact code, matching EN/RU documentation, test logs and final native screenshots for commit with no actionable P1/P2 findings. The reviewer made no edits or device operations.
+
 ## Windows audio CI repair — 2026-10-26
 
 Baseline: `1e1f33e58dd1acc7ffbf2142bbe89910a5ff4094` on `desktop-dev`.

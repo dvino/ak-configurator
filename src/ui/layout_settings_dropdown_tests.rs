@@ -18,7 +18,7 @@ fn labels(app: &mut EntropyApp, ctx: &egui::Context, lang: crate::i18n::Language
             ..Default::default()
         }, |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                app.draw_layout_settings_dropdown(ui, &layout, lang,
+                app.draw_layout_settings_dropdown(ui, Some(&layout), lang,
                     Some(egui::Rect::from_min_size(egui::pos2(500.0, 0.0), egui::vec2(80.0, 30.0))),
                     false, false, true);
             });

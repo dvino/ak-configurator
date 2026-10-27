@@ -5,7 +5,7 @@ impl EntropyApp {
     pub(super) fn draw_layout_top_dropdowns(
         &mut self,
         ui: &mut egui::Ui,
-        layout: &KeyboardLayout,
+        layout: Option<&KeyboardLayout>,
         ctx: &egui::Context,
         lang: crate::i18n::Language,
         device_tab_rect: Option<egui::Rect>,

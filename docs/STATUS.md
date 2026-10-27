@@ -2,7 +2,15 @@
 
 # Project status
 
-Updated 2026-10-26. Application source version remains `0.1.0-beta.2`. The active AK820 firmware target is v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled commit `2990ef877c5c6c54013b8821450c5a91878b8c3a`; annotated tag object: `2e0b28b384872c482e0e358a4b353f00ddd976a7`. The target release defines ten supported exact profile images. This is release preparation, not a fully qualified or published first release. Exact build and test evidence is recorded in [REVIEW.md](REVIEW.md).
+Updated 2026-10-27. Application source version remains `0.1.0-beta.2`. The active AK820 firmware target is v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled commit `2990ef877c5c6c54013b8821450c5a91878b8c3a`; annotated tag object: `2e0b28b384872c482e0e358a4b353f00ddd976a7`. The target release defines ten supported exact profile images. This is release preparation, not a fully qualified or published first release. Exact build and test evidence is recorded in [REVIEW.md](REVIEW.md).
+
+## Unified desktop interface
+
+The AK820 controls now use Entropy's navigation, spacing, buttons and window frames. A single application menu replaces the additional toolbar. Language and Help remain available before connection; the selected language is saved and restored in normal and demo startup. The OS layout indicator has a dedicated settings page. Utility windows open on request and respect the common Escape/popup ownership rules, while active installation retains its existing close protection.
+
+RGB has separate Built-in, Scenes, Music and OpenRGB sections. Section changes preserve the scene, selection, undo history and source options without starting playback. The keyboard preview precedes scene-layer details; the section controls and running-source Stop action remain outside the scroll area. Profile selection previews capabilities; applying an offline profile remains an explicit action. Local projects and typed module windows no longer open automatically.
+
+The bilingual offline help contains 13 workflow topics and all 30 catalog features with instructions, actual profile availability and limits. Search, contents, previous/next topics, F1 and contextual help links use the same current language. Compact catalog/help dialogs fit 800×500. Current Linux build, UI and offline test evidence and environment limits are recorded in [REVIEW.md](REVIEW.md). No new device or other-platform runtime qualification is implied.
 
 ## Current source contract
 

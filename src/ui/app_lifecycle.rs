@@ -125,7 +125,13 @@ impl EntropyApp {
         let import_pending = self.import_pending();
         #[cfg(target_arch = "wasm32")]
         let import_pending = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let ak820_window_open = super::ak820_status::utility_window_open(ctx);
+        #[cfg(target_arch = "wasm32")]
+        let ak820_window_open = false;
         self.application_categories_open
+            || ak820_window_open
+            || super::ak820_help_ui::is_open(ctx)
             || self.application_picker_open
             || self.text_expander_rule_editor.is_some()
             || self.keycode_picker.open
@@ -1444,6 +1450,14 @@ impl EntropyApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
         let rect = ui.max_rect();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let status = egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 310.0, rect.bottom() - 28.0),
+                egui::vec2((rect.width() - 540.0).max(80.0), 20.0),
+            );
+            crate::ui_style::allocate_ui_at_rect(ui, status, |ui| self.draw_ak820_status(ui));
+        }
         if self.app_settings.show_made_by_signature {
             let signature = egui::Rect::from_min_size(
                 egui::pos2(rect.left() + 16.0, rect.bottom() - 28.0),
@@ -1663,6 +1677,7 @@ impl eframe::App for EntropyApp {
         // Arrow keys Left/Right switch layers (when picker is closed and no text field is focused)
         if !self.tour_state.active
             && !self.keycode_picker.has_open_modal()
+            && !modal_or_popup_open_at_frame_start
             && !ctx.egui_wants_keyboard_input()
         {
             let layer_count = self.layer_count;
@@ -1686,30 +1701,15 @@ impl eframe::App for EntropyApp {
         #[cfg(target_arch = "wasm32")]
         let is_loading = false;
 
-        #[cfg(not(target_arch = "wasm32"))]
-        egui::TopBottomPanel::top("ak820_session_status")
-            .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(16, 8)))
-            .show_inside(root_ui, |ui| {
-                if self.ak820_install_runtime.owns_hid() {
-                    ui.disable();
-                }
-                self.draw_ak820_status(ui)
-            });
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
+            super::ak820_help_ui::open(ctx);
+        }
 
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
             self.draw_canvas_footer(ui, ctx);
             #[cfg(not(target_arch = "wasm32"))]
             if self.ak820_install_runtime.owns_hid() {
-                ui.disable();
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            if self
-                .hid_device
-                .as_ref()
-                .and_then(crate::hid::HidDevice::ak820_failure)
-                .is_some()
-            {
                 ui.disable();
             }
             #[cfg(not(target_arch = "wasm32"))]
@@ -1720,30 +1720,8 @@ impl eframe::App for EntropyApp {
 
             if self.selected_device.is_none() && !reconnecting_with_layout {
                 let rect = ui.max_rect();
-                if self.settings_tab == SettingsTab::ApplicationLayouts
-                    && self.offline_application_layouts_available()
-                {
-                    self.draw_application_layouts_settings_page(ui, rect);
-                    let back_rect = egui::Rect::from_min_size(
-                        egui::pos2(rect.left() + 18.0, rect.top() + 18.0),
-                        egui::vec2(128.0, 32.0),
-                    );
-                    crate::ui_style::allocate_ui_at_rect(ui, back_rect, |ui| {
-                        if crate::ui_style::modern_button(
-                            ui,
-                            super::application_layout_runtime::app_layout_text(
-                                self.app_settings.language,
-                                "К подключению",
-                                "Back to connection",
-                            ),
-                            back_rect.size(),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.settings_tab = SettingsTab::AppSettings;
-                        }
-                    });
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.draw_disconnected_navigation(ui, ctx, rect) {
                     return;
                 }
                 #[cfg(target_os = "linux")]
@@ -2001,7 +1979,7 @@ impl eframe::App for EntropyApp {
                     let open_id = egui::Id::new("ak820_offline_extensions_open");
                     let mut open = ctx
                         .data(|data| data.get_temp::<bool>(open_id))
-                        .unwrap_or(true);
+                        .unwrap_or(false);
                     if open {
                         let mut changed = false;
                         let mut td_assignment = None;
@@ -2018,16 +1996,31 @@ impl eframe::App for EntropyApp {
                                     .collect::<Vec<_>>()
                             })
                             .unwrap_or_default();
-                        egui::Window::new(match self.app_settings.language {
-                            crate::i18n::Language::English => "Offline profile modules",
-                            crate::i18n::Language::Russian => "Модули офлайн-профиля",
-                        })
-                        .id(egui::Id::new("ak820_offline_extensions_window"))
-                        .open(&mut open)
-                        .default_size(egui::vec2(580.0, 480.0))
-                        .max_height((ctx.content_rect().height() - 64.0).max(100.0))
+                        crate::ui_style::utility_window(
+                            ctx,
+                            match self.app_settings.language {
+                                crate::i18n::Language::English => "Offline profile modules",
+                                crate::i18n::Language::Russian => "Модули офлайн-профиля",
+                            },
+                            egui::Id::new("ak820_offline_extensions_window"),
+                            &mut open,
+                            egui::vec2(580.0, 480.0),
+                        )
                         .vscroll(true)
                         .show(ctx, |ui| {
+                            if crate::ui_style::action_button(
+                                ui,
+                                if language == crate::i18n::Language::Russian {
+                                    "Справка"
+                                } else {
+                                    "Help"
+                                },
+                                true,
+                            )
+                            .clicked()
+                            {
+                                super::ak820_help_ui::open_section(ctx, "layers-modules");
+                            }
                             if super::ak820_beta1_profiles::matrix_profile(profile)
                                 .capabilities
                                 .dynamic_entries
@@ -2108,16 +2101,19 @@ impl eframe::App for EntropyApp {
                                 ctx.data_mut(|data| data.insert_temp(target_id, target));
                                 ui.horizontal_wrapped(|ui| {
                                     for slot in 0..tap_count {
-                                        if ui
-                                            .button(format!(
+                                        if crate::ui_style::action_button(
+                                            ui,
+                                            format!(
                                                 "{} TD({slot})",
                                                 if language == crate::i18n::Language::Russian {
                                                     "Назначить"
                                                 } else {
                                                     "Assign"
                                                 }
-                                            ))
-                                            .clicked()
+                                            ),
+                                            true,
+                                        )
+                                        .clicked()
                                         {
                                             td_assignment = Some((target.0, target.1, slot));
                                         }
@@ -2463,6 +2459,8 @@ impl eframe::App for EntropyApp {
         // Right-click anywhere = pop back one step (only if NOT hovering a layer key and not handled by key)
         if !settings_page_navigation_handled
             && !self.jump_back_stack.is_empty()
+            && !modal_or_popup_open_at_frame_start
+            && !self.modal_or_popup_open(ctx)
             && !self.keycode_picker.open
             && !self.secondary_click_handled
         {
@@ -2475,6 +2473,9 @@ impl eframe::App for EntropyApp {
             }
         }
 
+        // Help may be opened from another utility in this frame. Render it last
+        // so its topic is immediately available above the originating window.
+        super::ak820_help_ui::show(ctx, self.app_settings.language);
         self.pause_typing_trainer_if_inactive(std::time::Instant::now());
     }
 }
@@ -2553,6 +2554,94 @@ mod ak820_footer_window_tests {
         harness.get_by_label("Apply floating example").click();
         harness.run();
         assert!(harness.state().clicked);
+        assert!(harness.state().app.hid_device.is_none());
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod ak820_navigation_tests {
+    use super::*;
+    use egui_kittest::{kittest::Queryable, Harness};
+
+    #[test]
+    fn disconnected_language_picker_persists_and_updates_demo_and_picker() {
+        let _config = ScopedTempConfig::new();
+        let mut app = EntropyApp::new_inert_for_test();
+        app.app_settings.language = crate::i18n::Language::English;
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(
+                |ui, app: &mut EntropyApp| {
+                    eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+                },
+                app,
+            );
+        harness.run();
+        harness.get_by_label("EN").click();
+        harness.run();
+        harness.get_by_label("Русский").click();
+        harness.run();
+        assert_eq!(
+            harness.state().app_settings.language,
+            crate::i18n::Language::Russian
+        );
+        assert_eq!(
+            harness.state().keycode_picker.language,
+            crate::i18n::Language::Russian
+        );
+        assert!(harness.state().hid_device.is_none());
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let reopened = EntropyApp::new_ak820_demo(&cc);
+        assert_eq!(
+            reopened.app_settings.language,
+            crate::i18n::Language::Russian
+        );
+        assert_eq!(
+            reopened.keycode_picker.language,
+            crate::i18n::Language::Russian
+        );
+    }
+
+    #[test]
+    fn help_owns_escape_and_arrows_without_navigating_underlying_page() {
+        let _config = ScopedTempConfig::new();
+        struct State {
+            app: EntropyApp,
+            help_open: bool,
+        }
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.main_menu_tab = MainMenuTab::Settings;
+        app.settings_tab = SettingsTab::AppSettings;
+        app.selected_layer = 1;
+        app.jump_back_stack.push(0);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(
+                |ui, state: &mut State| {
+                    eframe::App::ui(&mut state.app, ui, &mut eframe::Frame::_new_kittest());
+                    state.help_open = super::super::ak820_help_ui::is_open(ui.ctx());
+                },
+                State {
+                    app,
+                    help_open: false,
+                },
+            );
+        harness.run();
+        harness.key_press(egui::Key::F1);
+        harness.run();
+        assert!(harness.state().help_open);
+        harness.key_press(egui::Key::ArrowRight);
+        harness.run();
+        assert_eq!(harness.state().app.selected_layer, 1);
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert!(!harness.state().help_open);
+        assert!(harness.state().app.main_menu_tab == MainMenuTab::Settings);
+        assert_eq!(harness.state().app.jump_back_stack, vec![0]);
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert!(harness.state().app.main_menu_tab == MainMenuTab::Keyboard);
         assert!(harness.state().app.hid_device.is_none());
     }
 }

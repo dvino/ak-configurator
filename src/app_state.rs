@@ -3567,6 +3567,7 @@ pub(crate) enum TextExpanderRuleField {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsTab {
     AppSettings,
+    OsIndicator,
     ApplicationLayouts,
     MatrixTester,
     TextExpanderSetup,

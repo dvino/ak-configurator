@@ -826,13 +826,16 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
         let busy = runtime.owns_hid();
         ui.label(tr(ru, "Select the exact image and local safety inputs. Preparation reads the device; no flash write occurs until you review the preview and explicitly start.", "Выберите точный образ и локальные защитные данные. Подготовка читает устройство; запись прошивки начнётся только после проверки плана и явного запуска."));
         ui.horizontal(|ui| {
-            if ui
-                .button(tr(
+            if crate::ui_style::action_button(
+                ui,
+                tr(
                     ru,
                     "Refresh install candidates",
                     "Обновить устройства для установки",
-                ))
-                .clicked()
+                ),
+                true,
+            )
+            .clicked()
             {
                 refresh_candidates = true;
             }
@@ -886,11 +889,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|| tr(ru, "not selected", "не выбрана").into())
             ));
-            if ui
-                .add_enabled(
-                    !busy && runtime.dialog.is_none(),
-                    egui::Button::new(tr(ru, "Choose folder…", "Выбрать папку…")),
-                )
+            if crate::ui_style::action_button(ui, tr(ru, "Choose folder…", "Выбрать папку…"), !busy && runtime.dialog.is_none())
                 .clicked()
             {
                 pick(runtime, Pick::BackupRoot);
@@ -977,17 +976,12 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     retire = true;
                 }
                 if runtime.source == Source::PreparedFile
-                    && ui
-                        .add_enabled(
-                            !busy,
-                            egui::Button::new(
+                    && crate::ui_style::action_button(ui,
                                 runtime
                                     .external_payload
                                     .as_ref()
                                     .map(|x| x.name.as_str())
-                                    .unwrap_or(tr(ru, "Choose…", "Выбрать…")),
-                            ),
-                        )
+                                    .unwrap_or(tr(ru, "Choose…", "Выбрать…")), !busy)
                         .clicked()
                 {
                     pick(runtime, Pick::Payload);
@@ -1026,10 +1020,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     "Personal OEM recovery ROM (optional for first OEM install)",
                     "Личная OEM-копия ROM (необязательна при первой установке поверх OEM)",
                 ));
-                if ui
-                    .add_enabled(
-                        !busy,
-                        egui::Button::new(
+                if crate::ui_style::action_button(ui,
                             runtime
                                 .recovery
                                 .as_ref()
@@ -1038,9 +1029,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                                     ru,
                                     "Choose 65,536-byte file…",
                                     "Выбрать файл 65 536 байт…",
-                                )),
-                        ),
-                    )
+                                )), !busy)
                     .clicked()
                 {
                     pick(runtime, Pick::Recovery);
@@ -1062,18 +1051,14 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                         "Choose verified snapshot folder…",
                         "Выбрать проверенную папку снимка…",
                     ));
-                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                if crate::ui_style::action_button(ui, label, !busy).clicked() {
                     pick(runtime, Pick::OemRecovery);
                 }
             });
             ui.label(tr(ru, "Rollback is available only from a private same-app first-capture snapshot with a recorded device and USB-port binding.", "Откат доступен только из закрытого снимка первого чтения, сохранённого этим приложением и связанного с устройством и USB-портом."));
         }
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(
-                    !busy && runtime.release_check.is_none(),
-                    egui::Button::new(tr(ru, "Check release status", "Проверить статус выпуска")),
-                )
+            if crate::ui_style::action_button(ui, tr(ru, "Check release status", "Проверить статус выпуска"), !busy && runtime.release_check.is_none())
                 .clicked()
             {
                 start_release_check(runtime);
@@ -1086,12 +1071,12 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
         });
         match &runtime.owner {
             Owner::Idle => {
-                if ui
-                    .add_enabled(
-                        matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none(),
-                        egui::Button::new(tr(ru, "Prepare preview", "Подготовить план")),
-                    )
-                    .clicked()
+                if crate::ui_style::action_button(
+                    ui,
+                    tr(ru, "Prepare preview", "Подготовить план"),
+                    matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none(),
+                )
+                .clicked()
                 {
                     begin = true;
                 }
@@ -1109,9 +1094,12 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     ),
                     progress.load(Ordering::Acquire)
                 ));
-                if ui
-                    .button(tr(ru, "Cancel preparation", "Отменить подготовку"))
-                    .clicked()
+                if crate::ui_style::action_button(
+                    ui,
+                    tr(ru, "Cancel preparation", "Отменить подготовку"),
+                    true,
+                )
+                .clicked()
                 {
                     cancel.store(true, Ordering::Release);
                 }
@@ -1182,18 +1170,21 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     );
                 }
                 ui.horizontal(|ui| {
-                    if ui
-                        .add_enabled(
-                            runtime.release_check.is_none(),
-                            egui::Button::new(tr(ru, "Start flashing", "Начать прошивку")),
-                        )
-                        .clicked()
+                    if crate::ui_style::action_button(
+                        ui,
+                        tr(ru, "Start flashing", "Начать прошивку"),
+                        runtime.release_check.is_none(),
+                    )
+                    .clicked()
                     {
                         execute = Some(summary.confirmation_pin.clone());
                     }
-                    if ui
-                        .button(tr(ru, "Retire preview", "Закрыть план"))
-                        .clicked()
+                    if crate::ui_style::action_button(
+                        ui,
+                        tr(ru, "Retire preview", "Закрыть план"),
+                        true,
+                    )
+                    .clicked()
                     {
                         retire = true;
                     }
@@ -1211,9 +1202,12 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 let value = progress.load(Ordering::Acquire);
                 ui.add(egui::ProgressBar::new(value as f32 / 100.0).show_percentage());
                 if value < 20
-                    && ui
-                        .button(tr(ru, "Cancel before erase", "Отменить до стирания"))
-                        .clicked()
+                    && crate::ui_style::action_button(
+                        ui,
+                        tr(ru, "Cancel before erase", "Отменить до стирания"),
+                        true,
+                    )
+                    .clicked()
                 {
                     cancel.store(true, Ordering::Release);
                 }
@@ -1235,13 +1229,16 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     },
                     text,
                 );
-                if ui
-                    .button(tr(
+                if crate::ui_style::action_button(
+                    ui,
+                    tr(
                         ru,
                         "Close result and rescan",
                         "Закрыть результат и проверить снова",
-                    ))
-                    .clicked()
+                    ),
+                    true,
+                )
+                .clicked()
                 {
                     close_result = true;
                     rescan = true;
@@ -1285,19 +1282,24 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let active = app.ak820_install_runtime.owns_hid();
     let mut open = true;
-    egui::Window::new(tr(
-        ru,
-        "AK820 firmware installation",
-        "Установка прошивки AK820",
-    ))
-    .id(egui::Id::new("ak820_install_window"))
-    .open(&mut open)
-    .resizable(true)
-    .default_size(egui::vec2(760.0, 450.0))
-    .max_width((ctx.content_rect().width() - 24.0).max(280.0))
-    .max_height((ctx.content_rect().height() - 32.0).max(120.0))
+    crate::ui_style::utility_window(
+        ctx,
+        tr(
+            ru,
+            "AK820 firmware installation",
+            "Установка прошивки AK820",
+        ),
+        egui::Id::new("ak820_install_window"),
+        &mut open,
+        egui::vec2(720.0, 430.0),
+    )
     .vscroll(true)
-    .show(ctx, |ui| draw(app, ui));
+    .show(ctx, |ui| {
+        if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
+            super::ak820_help_ui::open_section(ctx, "firmware-install-recovery");
+        }
+        draw(app, ui)
+    });
     if !open && !active {
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
     }
@@ -1310,12 +1312,16 @@ mod tests {
     fn prepared_payload_settings_must_equal_the_derived_settings_bytes() {
         let expected = crate::ak820_release::bundled_defaults(
             crate::app::ak820_beta1_profiles::ProfileId::Main,
-        ).unwrap();
+        )
+        .unwrap();
         // This is only a comparison model, not a catalog-admitted image.
         let mut payload = vec![0; 51136];
         let start = 0xc700 - crate::ak820_image_pack::APP_START;
         payload[start..start + expected.len()].copy_from_slice(&expected);
-        assert_eq!(validate_payload_nvm(&payload, &expected).unwrap(), sha256(&expected));
+        assert_eq!(
+            validate_payload_nvm(&payload, &expected).unwrap(),
+            sha256(&expected)
+        );
         payload[start + 0x40] ^= 1;
         assert!(validate_payload_nvm(&payload, &expected).is_err());
         assert!(validate_payload_nvm(&payload[..51135], &expected).is_err());

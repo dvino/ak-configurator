@@ -2,6 +2,8 @@ use crate::device::{Device, DeviceIdentity, DeviceManager};
 use crate::firmware::FirmwareProtocol;
 #[path = "ui/ak820_backup_inspection.rs"]
 mod ak820_backup_inspection;
+#[path = "ui/ak820_help.rs"]
+mod ak820_help_ui;
 #[path = "ak820_beta1_profiles.rs"]
 pub(crate) mod ak820_beta1_profiles;
 #[cfg(not(target_arch = "wasm32"))]

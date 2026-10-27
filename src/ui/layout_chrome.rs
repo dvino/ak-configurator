@@ -58,7 +58,7 @@ impl EntropyApp {
                     }
                     self.draw_layout_top_dropdowns(
                         ui,
-                        layout,
+                        Some(layout),
                         ctx,
                         top_tabs.lang,
                         top_tabs.device_tab_rect,
@@ -76,13 +76,16 @@ impl EntropyApp {
                 self.main_menu_tab,
                 MainMenuTab::Settings | MainMenuTab::Advanced
             ) {
-                self.draw_settings_screen(
-                    ui,
-                    layout,
-                    ctx,
-                    chrome_rect.top() + top_reserved_h,
-                    chrome_rect,
-                );
+                #[cfg(not(target_arch = "wasm32"))]
+                let editable = matches!(self.settings_tab, SettingsTab::AppSettings | SettingsTab::OsIndicator | SettingsTab::AboutEntropy)
+                    || self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_failure).is_none();
+                #[cfg(target_arch = "wasm32")]
+                let editable = true;
+                ui.add_enabled_ui(editable, |ui| {
+                    self.draw_settings_screen(
+                        ui, layout, ctx, chrome_rect.top() + top_reserved_h, chrome_rect,
+                    );
+                });
                 return true;
             }
 

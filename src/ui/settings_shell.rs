@@ -49,6 +49,11 @@ impl EntropyApp {
                 self.draw_app_settings_page(ui, content_rect);
                 false
             }
+            SettingsTab::OsIndicator => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.draw_ak820_os_indicator_page(ui, content_rect);
+                false
+            }
             SettingsTab::ApplicationLayouts => {
                 self.draw_application_layouts_settings_page(ui, content_rect);
                 false

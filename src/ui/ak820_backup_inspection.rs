@@ -533,25 +533,26 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     let mut restore = false;
     let mut close = false;
     let mut open = true;
-    egui::Window::new(tr(ru, "AK820 backups", "Резервные копии AK820"))
-        .id(egui::Id::new("ak820_backup_inspection_window"))
-        .open(&mut open).resizable(true).default_width(610.0)
-        .max_width((ctx.content_rect().width() - 32.0).max(260.0))
-        .max_height((ctx.content_rect().height() - 64.0).max(100.0)).vscroll(true)
+    crate::ui_style::utility_window(ctx, tr(ru, "AK820 backups", "Резервные копии AK820"),
+        egui::Id::new("ak820_backup_inspection_window"), &mut open, egui::vec2(650.0, 430.0))
+        .vscroll(true)
         .show(ctx, |ui| {
+            if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
+                super::ak820_help_ui::open_section(ctx, "backups-restore");
+            }
             ui.label(tr(ru, "Complete saved settings and firmware evidence. ROM and macros stay in the chosen local folder.", "Полные сохранённые настройки и данные для проверки прошивки. ROM и макросы остаются в выбранной локальной папке."));
             if !cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")) {
                 ui.label(tr(ru, "Backup folder access is unavailable on this platform.", "Работа с папками копий недоступна на этой платформе."));
             }
             ui.horizontal_wrapped(|ui| {
-                if ui.add_enabled(!busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")), egui::Button::new(tr(ru, "Open backup…", "Открыть копию…"))).clicked() { file_action = Some(FileAction::Open(None)); }
-                if ui.add_enabled(!busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")), egui::Button::new(tr(ru, "Choose backup folder…", "Папка для копий…"))).clicked() { file_action = Some(FileAction::History(None)); }
+                if crate::ui_style::action_button(ui, tr(ru, "Open backup…", "Открыть копию…"), !busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() { file_action = Some(FileAction::Open(None)); }
+                if crate::ui_style::action_button(ui, tr(ru, "Choose backup folder…", "Папка для копий…"), !busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() { file_action = Some(FileAction::History(None)); }
             });
             if let Some(root) = &state.root {
                 let name = root.file_name().unwrap_or_else(|| root.as_os_str()).to_string_lossy();
                 ui.label(format!("{}: {}", tr(ru, "Folder", "Папка"), short_text(&name)));
                 ui.label(tr(ru, "Backup folder selected. New copies are saved to separate dated folders.", "Папка выбрана. Новые копии сохраняются в отдельных папках с датой."));
-                if ui.add_enabled(!busy, egui::Button::new(tr(ru, "Refresh list", "Обновить список"))).clicked() { file_action = Some(FileAction::History(state.root.clone())); }
+                if crate::ui_style::action_button(ui, tr(ru, "Refresh list", "Обновить список"), !busy).clicked() { file_action = Some(FileAction::History(state.root.clone())); }
             }
             if let Some(history) = &state.history {
                 ui.collapsing(format!("{} ({})", tr(ru, "Saved backups", "Сохранённые копии"), history.entries.len()), |ui| {
@@ -573,7 +574,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             let can_capture = app.can_capture_ak820_backup();
             #[cfg(target_arch = "wasm32")]
             let can_capture = false;
-            if ui.add_enabled(!busy && can_capture, egui::Button::new(tr(ru, "Read complete snapshot", "Прочитать полный снимок"))).clicked() { capture = true; }
+            if crate::ui_style::action_button(ui, tr(ru, "Read complete snapshot", "Прочитать полный снимок"), !busy && can_capture).clicked() { capture = true; }
             if app.ak820_demo {
                 ui.label(tr(ru, "Demo has no physical settings snapshot. Connect a supported keyboard to create a complete backup.", "В деморежиме нет снимка физической клавиатуры. Для полной копии подключите поддерживаемую клавиатуру."));
             } else if !can_capture && state.capture_pending.is_none() {
@@ -585,7 +586,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 #[cfg(target_arch = "wasm32")]
                 let progress = 0.0;
                 ui.add(egui::ProgressBar::new(progress).show_percentage().text(tr(ru, "Reading and checking…", "Чтение и проверка…")));
-                if ui.button(tr(ru, "Cancel reading", "Отменить чтение")).clicked() { cancel = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Cancel reading", "Отменить чтение"), true).clicked() { cancel = true; }
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
             if let Some(target) = &state.target {
@@ -593,33 +594,33 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 ui.label(tr(ru, "64 KiB ROM and 10 KiB saved settings checked. This snapshot reflects the time it was read.", "Проверены 64 КиБ ROM и 10 КиБ сохранённых настроек. Снимок соответствует моменту чтения."));
                 if let Some(name) = &state.saved_name { ui.label(format!("{}: {}", tr(ru, "Saved and rechecked", "Сохранено и проверено повторно"), short_text(name))); }
                 else { ui.label(tr(ru, "Snapshot is in memory; no backup file has been saved yet.", "Снимок в памяти; файл резервной копии ещё не сохранён.")); }
-                if ui.add_enabled(!busy && state.root.is_some() && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")), egui::Button::new(tr(ru, "Save new backup", "Сохранить новую копию"))).clicked() {
+                if crate::ui_style::action_button(ui, tr(ru, "Save new backup", "Сохранить новую копию"), !busy && state.root.is_some() && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() {
                     file_action = Some(FileAction::Save { root: state.root.clone().unwrap(), snapshot: target.data.clone() });
                 }
-                if ui.add_enabled(!busy && can_capture, egui::Button::new(tr(ru, "Preview reset to release defaults…", "Предпросмотр сброса к настройкам выпуска…"))).clicked() { reset = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Preview reset to release defaults…", "Предпросмотр сброса к настройкам выпуска…"), !busy && can_capture).clicked() { reset = true; }
             }
             if state.restore_verified {
                 ui.colored_label(egui::Color32::LIGHT_GREEN, tr(ru, "Restore verified. The editor reads the current settings again.", "Восстановление проверено. Редактор повторно читает текущие настройки."));
             }
             if let Some(location) = &state.undo_backup {
-                if ui.add_enabled(!busy, egui::Button::new(tr(ru, "Open safety backup to undo restore", "Открыть защитную копию для отмены восстановления"))).clicked() {
+                if crate::ui_style::action_button(ui, tr(ru, "Open safety backup to undo restore", "Открыть защитную копию для отмены восстановления"), !busy).clicked() {
                     file_action = Some(FileAction::Open(Some((location.path.clone(), location.manifest_sha256.clone()))));
                 }
                 ui.label(tr(ru, "Undo uses the same preview, fresh confirmation and verified restore workflow.", "Для отмены используются тот же предпросмотр, новое подтверждение и проверяемое восстановление."));
             }
             if let Some(source) = &state.source {
                 ui.separator(); draw_source(ui, source, ru);
-                if ui.add_enabled(!busy && state.target.is_some(), egui::Button::new(tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"))).clicked() { compare = true; }
-                if ui.add_enabled(!busy && state.source_path.is_some(), egui::Button::new(tr(ru, "Delete this backup…", "Удалить эту копию…"))).clicked() { state.delete_confirm = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"), !busy && state.target.is_some()).clicked() { compare = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Delete this backup…", "Удалить эту копию…"), !busy && state.source_path.is_some()).clicked() { state.delete_confirm = true; }
                 if state.delete_confirm {
                     let name = state.source_path.as_ref().and_then(|p| p.file_name()).map(|p| p.to_string_lossy()).unwrap_or_default();
                     ui.label(format!("{}: {}", tr(ru, "Permanently delete all files of this validated backup", "Безвозвратно удалить все файлы этой проверенной копии"), short_text(&name)));
                     ui.horizontal_wrapped(|ui| {
-                        if ui.add_enabled(!busy, egui::Button::new(tr(ru, "Delete permanently", "Удалить безвозвратно"))).clicked() {
+                        if crate::ui_style::action_button(ui, tr(ru, "Delete permanently", "Удалить безвозвратно"), !busy).clicked() {
                             if let Some(path) = &state.source_path { file_action = Some(FileAction::Delete { path:path.clone(), manifest_sha256:source.archive().manifest_sha256.clone() }); }
                             state.delete_confirm = false;
                         }
-                        if ui.button(tr(ru, "Keep backup", "Сохранить копию")).clicked() { state.delete_confirm = false; }
+                        if crate::ui_style::action_button(ui, tr(ru, "Keep backup", "Сохранить копию"), true).clicked() { state.delete_confirm = false; }
                     });
                 }
             }
@@ -628,7 +629,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 if state.reset_preview { ui.label(tr(ru, "Reset supported keys, encoder mappings, macros, lighting and enabled modules. Inactive and inaccessible data remain intact. A verified safety backup is required before fresh confirmation.", "Сбрасываются поддерживаемые назначения клавиш и энкодера, макросы, подсветка и включённые модули. Неактивные и недоступные данные сохраняются. Перед новым подтверждением обязательна проверенная защитная копия.")); }
                 let ready = !busy && can_capture && value.commands > 0 && state.preview_plan.is_some() && (state.reset_preview || state.source_path.is_some()) && state.root.is_some();
                 let label = if state.reset_preview { tr(ru, "Reset these settings…", "Сбросить эти настройки…") } else { tr(ru, "Restore these settings…", "Восстановить эти настройки…") };
-                if ui.add_enabled(ready, egui::Button::new(label)).clicked() { restore = true; }
+                if crate::ui_style::action_button(ui, label, ready).clicked() { restore = true; }
                 if state.root.is_none() { ui.label(tr(ru, "Choose a backup folder before restore.", "Перед восстановлением выберите папку для защитной копии.")); }
             }
             if let Some((id, _)) = state.restore_pending {
@@ -644,13 +645,13 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                     _ => tr(ru, "Final complete verification…", "Итоговая полная проверка…"),
                 };
                 ui.add(egui::ProgressBar::new(progress as f32 / 100.0).text(label));
-                if ui.button(tr(ru, "Stop restore", "Остановить восстановление")).clicked() { cancel = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Stop restore", "Остановить восстановление"), true).clicked() { cancel = true; }
                 ui.label(tr(ru, "Stopping leaves already written changes in place. The safety copy remains available.", "При остановке уже записанные изменения сохраняются. Защитная копия остаётся доступной."));
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
             if let Some(error) = state.error { ui.colored_label(egui::Color32::LIGHT_RED, problem_text(error, ru)); }
             if state.pending.is_some() { ui.spinner(); ui.label(tr(ru, "Checking local files…", "Проверка локальных файлов…")); }
-            if ui.button(tr(ru, "Close", "Закрыть")).clicked() { close = true; }
+            if crate::ui_style::action_button(ui, tr(ru, "Close", "Закрыть"), true).clicked() { close = true; }
         });
     if compare {
         state.reset_preview = false;

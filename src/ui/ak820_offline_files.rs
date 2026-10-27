@@ -4,6 +4,20 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 const MAX_PROJECT_BYTES: u64 = 2 * 1024 * 1024;
+const WINDOW_ID: &str = "ak820_local_project_open";
+
+pub(crate) fn open(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(WINDOW_ID), true));
+}
+pub(crate) fn close(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(WINDOW_ID), false));
+}
+pub(crate) fn is_open(ctx: &egui::Context) -> bool {
+    ctx.data(|d| {
+        d.get_temp::<bool>(egui::Id::new(WINDOW_ID))
+            .unwrap_or(false)
+    })
+}
 
 impl EntropyApp {
     pub(crate) fn snapshot_current_ak820_project(
@@ -125,6 +139,9 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
         let pending_id = egui::Id::new("ak820_local_project_dialog");
         let message_id = egui::Id::new("ak820_local_project_message");
         let pending = ctx.data(|d| d.get_temp::<PendingDialog>(pending_id));
+        if !is_open(ctx) {
+            return;
+        }
         if let Some(pending) = &pending {
             let result = pending.result.lock().unwrap().try_recv();
             if !matches!(result, Err(std::sync::mpsc::TryRecvError::Empty)) {
@@ -157,71 +174,131 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
         }
         let mut action = None;
         let mut profile_to_open = None;
-        egui::Window::new(tr("Local example project", "Локальный проект примера"))
-            .id(egui::Id::new("ak820_local_project_window"))
-            .default_pos(egui::pos2(24.0, 180.0))
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.label(tr(
-                    "Demo only · saved edits · local file",
-                    "Только демо · сохранённые правки · локальный файл",
-                ));
-                if let Some(profile) = app.ak820_demo_profile {
-                    egui::ComboBox::from_id_salt("ak820_local_project_profile")
-                        .selected_text(format!(
-                            "{}: {}",
-                            tr("Profile", "Профиль"),
-                            profile.as_str()
-                        ))
-                        .show_ui(ui, |ui| {
-                            for image in super::ak820_beta1_profiles::profiles() {
-                                let description =
-                                    super::ak820_beta1_profiles::profile_description(image.profile);
-                                if ui
-                                    .selectable_label(
-                                        image.profile == profile,
-                                        description.title.for_language(ru),
-                                    )
-                                    .clicked()
-                                {
-                                    profile_to_open = Some(image.profile);
+        let mut window_open = true;
+        let mut close_clicked = false;
+        crate::ui_style::utility_window(
+            ctx,
+            tr("Offline project", "Офлайн-проект"),
+            egui::Id::new("ak820_local_project_window"),
+            &mut window_open,
+            egui::vec2(500.0, 320.0),
+        )
+        .show(ctx, |ui| {
+            crate::ui_style::modal_intro(
+                ui,
+                tr("Demo only · local file", "Только демо · локальный файл"),
+            );
+            ui.add_space(8.0);
+            egui::ScrollArea::vertical()
+                .id_salt("ak820_local_project_content")
+                .max_height((ui.available_height() - 48.0).max(100.0))
+                .show(ui, |ui| {
+                    if let Some(profile) = app.ak820_demo_profile {
+                        egui::ComboBox::from_id_salt("ak820_local_project_profile")
+                            .selected_text(format!(
+                                "{}: {}",
+                                tr("Profile", "Профиль"),
+                                profile.as_str()
+                            ))
+                            .show_ui(ui, |ui| {
+                                for image in super::ak820_beta1_profiles::profiles() {
+                                    let description =
+                                        super::ak820_beta1_profiles::profile_description(
+                                            image.profile,
+                                        );
+                                    if ui
+                                        .selectable_label(
+                                            image.profile == profile,
+                                            description.title.for_language(ru),
+                                        )
+                                        .clicked()
+                                    {
+                                        profile_to_open = Some(image.profile);
+                                    }
                                 }
+                            });
+                    }
+                    ui.add_enabled_ui(pending.is_none(), |ui| {
+                        ui.horizontal(|ui| {
+                            if crate::ui_style::modern_button(
+                                ui,
+                                tr("Export…", "Экспорт…"),
+                                egui::vec2(124.0, 34.0),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                action = Some(true);
+                            }
+                            if crate::ui_style::modern_button(
+                                ui,
+                                tr("Import…", "Импорт…"),
+                                egui::vec2(124.0, 34.0),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                action = Some(false);
                             }
                         });
-                }
-                ui.add_enabled_ui(pending.is_none(), |ui| {
-                    ui.horizontal(|ui| {
-                        if ui.button(tr("Save project", "Сохранить проект")).clicked()
-                        {
-                            action = Some(true);
-                        }
-                        if ui.button(tr("Open project", "Открыть проект")).clicked() {
-                            action = Some(false);
-                        }
                     });
-                });
-                if ui
-                    .add_enabled(
+                    if crate::ui_style::action_button(
+                        ui,
+                        tr("Undo import", "Отменить импорт"),
                         pending.is_none() && app.ak820_offline_import_undo.is_some(),
-                        egui::Button::new(tr("Undo project import", "Отменить импорт проекта")),
                     )
                     .clicked()
-                {
-                    app.undo_ak820_project_import();
-                }
-                if app.ak820_offline_extensions.is_some()
-                    && ui
-                        .button(tr("Module settings", "Настройки модулей"))
+                    {
+                        app.undo_ak820_project_import();
+                    }
+                    if app.ak820_offline_extensions.is_some()
+                        && crate::ui_style::action_button(
+                            ui,
+                            tr("Module settings", "Настройки модулей"),
+                            pending.is_none(),
+                        )
                         .clicked()
-                {
-                    ctx.data_mut(|data| {
-                        data.insert_temp(egui::Id::new("ak820_offline_extensions_open"), true)
-                    });
+                    {
+                        ctx.data_mut(|data| {
+                            data.insert_temp(egui::Id::new("ak820_offline_extensions_open"), true)
+                        });
+                        close_clicked = true;
+                    }
+                    if let Some(message) = ctx.data(|d| d.get_temp::<String>(message_id)) {
+                        ui.label(message);
+                    }
+                });
+            ui.separator();
+            ui.horizontal(|ui| {
+                let close = crate::ui_style::modern_button(
+                    ui,
+                    tr("Close", "Закрыть"),
+                    egui::vec2(100.0, 32.0),
+                    pending.is_none(),
+                );
+                if close.clicked() && pending.is_none() {
+                    close_clicked = true;
                 }
-                if let Some(message) = ctx.data(|d| d.get_temp::<String>(message_id)) {
-                    ui.label(message);
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if crate::ui_style::modern_button(
+                        ui,
+                        tr("Help", "Справка"),
+                        egui::vec2(100.0, 32.0),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        super::ak820_help_ui::open_section(ctx, "offline-projects");
+                    }
+                });
             });
+        });
+        if close_clicked {
+            window_open = false;
+        }
+        if !window_open && pending.is_none() {
+            close(ctx);
+        }
         if let Some(profile) = profile_to_open {
             app.configure_ak820_offline_profile(profile);
         }
@@ -302,9 +379,26 @@ mod tests {
                 use crate::app::ak820_beta1_profiles::ProfileId;
                 let mut records = Extensions::decode_nvm(extensions.nvm()).unwrap();
                 let matrix = beta::matrix_profile(entry.profile);
-                if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) { records.settings.set(2, 73).unwrap(); }
-                if matrix.capabilities.dynamic_entries.tap_dance > 0 { records.tap_dance[7] = TapDance { outputs: [4, 5, 6, 7], term: 123 }; }
-                if matrix.capabilities.dynamic_entries.key_overrides > 0 { records.key_overrides[7] = KeyOverride { trigger: 4, replacement: 5, layers: 1, mods: 2, negative: 4, suppressed: 8, options: 0x81 }; }
+                if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) {
+                    records.settings.set(2, 73).unwrap();
+                }
+                if matrix.capabilities.dynamic_entries.tap_dance > 0 {
+                    records.tap_dance[7] = TapDance {
+                        outputs: [4, 5, 6, 7],
+                        term: 123,
+                    };
+                }
+                if matrix.capabilities.dynamic_entries.key_overrides > 0 {
+                    records.key_overrides[7] = KeyOverride {
+                        trigger: 4,
+                        replacement: 5,
+                        layers: 1,
+                        mods: 2,
+                        negative: 4,
+                        suppressed: 8,
+                        options: 0x81,
+                    };
+                }
                 let bytes = records
                     .apply_to_nvm(extensions.nvm(), entry.profile)
                     .unwrap();
@@ -418,8 +512,15 @@ mod ak820_local_profile_ui_tests {
     #[test]
     fn local_project_profile_selector_opens_typed_example_without_usb() {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
-        let app = EntropyApp::new_ak820_demo(&cc);
-        let mut harness = Harness::new_state(|ctx, app| show(app, ctx), app);
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.language = crate::i18n::Language::Russian;
+        let mut harness = Harness::new_state(
+            |ctx, app| {
+                open(ctx);
+                show(app, ctx);
+            },
+            app,
+        );
         harness.run();
         harness.get_by_value("Профиль: main").click();
         harness.run();

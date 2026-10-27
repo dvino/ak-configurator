@@ -29,7 +29,7 @@ impl EntropyApp {
             let show_application_layouts_item = self.application_layouts_supported();
             let auto_shift_supported =
                 self.auto_shift_timeout.is_some() || self.supported_qmk_settings.contains(&4);
-            let show_host_tools = !self.keycode_picker.ak820_profile;
+            let show_host_tools = self.layout.is_some() && !self.keycode_picker.ak820_profile;
             let host_item_count = if show_host_tools { 2 } else { 0 };
             let advanced_item_count = host_item_count
                 + show_application_layouts_item as usize
@@ -85,7 +85,8 @@ impl EntropyApp {
                 .input(|i| i.pointer.hover_pos())
                 .map(|pos| hover_bridge_rect.contains(pos))
                 .unwrap_or(false);
-            let show_dropdown = advanced_item_count > 0
+            let show_dropdown = !egui::Popup::is_any_open(ui.ctx())
+                && advanced_item_count > 0
                 && !device_tab_hovered
                 && !settings_tab_hovered
                 && (advanced_tab_hovered || (was_open && pointer_over_bridge));
@@ -340,6 +341,7 @@ mod tests {
             "layouts": { "keymap": [["0,0"]] }
         }))
         .unwrap();
+        app.layout = Some(layout.clone());
         let tab = egui::Rect::from_min_size(egui::pos2(400.0, 10.0), egui::vec2(100.0, 32.0));
         let draw = |app: &mut EntropyApp, advanced: bool, lang, events| {
             ctx.run_ui(
@@ -357,7 +359,7 @@ mod tests {
                     } else {
                         app.draw_layout_settings_dropdown(
                             ui,
-                            &layout,
+                            Some(&layout),
                             lang,
                             Some(tab),
                             false,

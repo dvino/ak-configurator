@@ -92,7 +92,9 @@ pub(crate) fn show(
     let has_td = matrix.capabilities.dynamic_entries.tap_dance > 0;
     let has_ko = matrix.capabilities.dynamic_entries.key_overrides > 0;
     let has_qs = !matrix.capabilities.runtime_qmk_settings_ids.is_empty();
-    if !has_td && !has_ko && !has_qs { return false; }
+    if !has_td && !has_ko && !has_qs {
+        return false;
+    }
     ui.heading(text(
         language,
         "Offline module settings",
@@ -103,50 +105,50 @@ pub(crate) fn show(
         "Изменения действуют в памяти этого примера. Чтение и запись модулей на клавиатуре и физическое поведение не проверены. Ожидающие действия Tap Dance и активная замена — временное состояние прошивки, здесь оно не сохраняется."));
     let mut edited = false;
     if has_td {
-            ui.label(text(language,
+        ui.label(text(language,
                 "Assign TD(0)…TD(7) on a key separately. Outputs use hexadecimal keycodes: 0000 uses the firmware fallback; otherwise below 2000, low byte 04…A4 or E0…E7. Term: 0 uses 200 ms; 1…32767 ms is explicit. Zero hold falls back to tap; zero double tap repeats tap; zero tap-then-hold uses hold or tap. Invalid combinations keep the previous candidate.",
                 "Назначьте TD(0)…TD(7) на клавишу отдельно. Выходы — шестнадцатеричные коды: 0000 использует резервный выход прошивки; остальные ниже 2000 с младшим байтом 04…A4 или E0…E7. Интервал 0 означает 200 мс; явное значение — 1…32767 мс. Нулевое удержание использует одиночное нажатие; нулевое двойное — повтор одиночного; нулевое нажатие с удержанием — удержание или одиночное. При ошибке прежний вариант сохраняется."));
-            for (i, row) in state.draft.tap_dance.iter_mut().enumerate() {
-                egui::CollapsingHeader::new(format!("TD({i})"))
-                    .id_salt(("offline-td", i))
-                    .show(ui, |ui| {
-                        for (label, value) in [
-                            text(language, "Single tap", "Одиночное нажатие"),
-                            text(language, "Hold", "Удержание"),
-                            text(language, "Double tap", "Двойное нажатие"),
-                            text(language, "Tap then hold", "Нажатие и удержание"),
-                        ]
-                        .into_iter()
-                        .zip(row.outputs.iter_mut())
-                        {
-                            edited |= number(ui, label, value, 0..=u16::MAX, true);
-                        }
-                        edited |= number(
-                            ui,
-                            text(language, "Term (ms)", "Интервал (мс)"),
-                            &mut row.term,
-                            0..=32767,
-                            false,
-                        );
-                        if ui
-                            .button(text(language, "Clear row", "Очистить строку"))
-                            .clicked()
-                        {
-                            *row = TapDance::default();
-                            edited = true;
-                        }
-                    });
-            }
+        for (i, row) in state.draft.tap_dance.iter_mut().enumerate() {
+            egui::CollapsingHeader::new(format!("TD({i})"))
+                .id_salt(("offline-td", i))
+                .show(ui, |ui| {
+                    for (label, value) in [
+                        text(language, "Single tap", "Одиночное нажатие"),
+                        text(language, "Hold", "Удержание"),
+                        text(language, "Double tap", "Двойное нажатие"),
+                        text(language, "Tap then hold", "Нажатие и удержание"),
+                    ]
+                    .into_iter()
+                    .zip(row.outputs.iter_mut())
+                    {
+                        edited |= number(ui, label, value, 0..=u16::MAX, true);
+                    }
+                    edited |= number(
+                        ui,
+                        text(language, "Term (ms)", "Интервал (мс)"),
+                        &mut row.term,
+                        0..=32767,
+                        false,
+                    );
+                    if crate::ui_style::action_button(
+                        ui,
+                        text(language, "Clear row", "Очистить строку"),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        *row = TapDance::default();
+                        edited = true;
+                    }
+                });
+        }
     }
     if has_ko {
-            ui.label(text(language,
+        ui.label(text(language,
                 "All-zero rows are empty. Other rows require trigger 04…A4, replacement 0000 or below 2000 with low byte 04…A4, layers 01…3F. Modifier masks: 01 left Ctrl, 02 left Shift, 04 left Alt, 08 left GUI; 10/20/40/80 are their right counterparts. Layer bits 01/02/04/08/10/20 select layers 0…5. Options: 01 trigger-down, 02 required-mod-down, 04 negative-mod-up, 08 one required mod suffices, 10 no re-registration, 20 no unregister on another key, 80 enabled. At least one of 01/02/04 is required; 40 is forbidden. Hexadecimal fields are validated together.",
                 "Нулевая строка пуста. Иначе: исходная клавиша 04…A4, замена 0000 или ниже 2000 с младшим байтом 04…A4, слои 01…3F. Маски модификаторов: 01 левый Ctrl, 02 левый Shift, 04 левый Alt, 08 левый GUI; 10/20/40/80 — соответствующие правые. Биты слоёв 01/02/04/08/10/20 выбирают слои 0…5. Флаги: 01 нажатие клавиши, 02 нажатие нужного модификатора, 04 отпускание запрещённого модификатора, 08 достаточно одного нужного модификатора, 10 без повторной регистрации, 20 без отмены другой клавишей, 80 включено. Нужен хотя бы один из 01/02/04; 40 запрещён. Шестнадцатеричные поля проверяются вместе."));
-            for (i, row) in state.draft.key_overrides.iter_mut().enumerate() {
-                egui::CollapsingHeader::new(format!(
-                    "{} {i}",
-                    text(language, "Override", "Замена")
-                ))
+        for (i, row) in state.draft.key_overrides.iter_mut().enumerate() {
+            egui::CollapsingHeader::new(format!("{} {i}", text(language, "Override", "Замена")))
                 .id_salt(("offline-ko", i))
                 .show(ui, |ui| {
                     edited |= number(
@@ -186,52 +188,67 @@ pub(crate) fn show(
                         &mut row.suppressed,
                     );
                     edited |= mask(ui, text(language, "Options", "Флаги"), &mut row.options);
-                    if ui
-                        .button(text(language, "Clear row", "Очистить строку"))
-                        .clicked()
+                    if crate::ui_style::action_button(
+                        ui,
+                        text(language, "Clear row", "Очистить строку"),
+                        true,
+                    )
+                    .clicked()
                     {
                         *row = KeyOverride::default();
                         edited = true;
                     }
                 });
-            }
+        }
     }
     if has_qs {
-            ui.label(text(language,
+        ui.label(text(language,
                 "Only advertised QSIDs are editable; inactive values are preserved. Auto Shift timeout (QSID 4) is editable only where advertised (Typing). Grave Escape mask: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift.",
                 "Редактируются только объявленные QSID; неактивные значения сохраняются. Интервал Auto Shift (QSID 4) доступен только в профиле Typing. Маска Grave Escape: 01 Alt, 02 Ctrl, 04 GUI, 08 Shift."));
-            for (id, en, ru, low, high) in [
-                (1, "Grave Escape flags", "Флаги Grave Escape", 0, 15),
-                (2, "Combo term (ms)", "Интервал Combo (мс)", 1, 1000),
-                (4, "Auto Shift timeout (ms)", "Интервал Auto Shift (мс)", 1, 1000),
-                (7, "Tapping term (ms)", "Интервал нажатия (мс)", 1, 1000),
-                (18, "Tap delay (ms)", "Задержка нажатия (мс)", 0, 100),
-                (
-                    19,
-                    "Caps Lock delay (ms)",
-                    "Задержка Caps Lock (мс)",
-                    0,
-                    100,
-                ),
-            ].into_iter().filter(|(id, _, _, _, _)| matrix.capabilities.runtime_qmk_settings_ids.contains(id)) {
-                let mut value = state.draft.settings.get(id).expect("known QSID");
-                if number(ui, text(language, en, ru), &mut value, low..=high, id == 1) {
-                    if state.draft.settings.set(id, value).is_ok() {
-                        edited = true;
-                    }
+        for (id, en, ru, low, high) in [
+            (1, "Grave Escape flags", "Флаги Grave Escape", 0, 15),
+            (2, "Combo term (ms)", "Интервал Combo (мс)", 1, 1000),
+            (
+                4,
+                "Auto Shift timeout (ms)",
+                "Интервал Auto Shift (мс)",
+                1,
+                1000,
+            ),
+            (7, "Tapping term (ms)", "Интервал нажатия (мс)", 1, 1000),
+            (18, "Tap delay (ms)", "Задержка нажатия (мс)", 0, 100),
+            (
+                19,
+                "Caps Lock delay (ms)",
+                "Задержка Caps Lock (мс)",
+                0,
+                100,
+            ),
+        ]
+        .into_iter()
+        .filter(|(id, _, _, _, _)| matrix.capabilities.runtime_qmk_settings_ids.contains(id))
+        {
+            let mut value = state.draft.settings.get(id).expect("known QSID");
+            if number(ui, text(language, en, ru), &mut value, low..=high, id == 1) {
+                if state.draft.settings.set(id, value).is_ok() {
+                    edited = true;
                 }
             }
+        }
     }
     let changed = edited && state.apply(profile);
     if state.invalid {
         ui.colored_label(egui::Color32::RED,text(language,"Invalid draft: check the ranges and masks above. The previous NVM candidate is unchanged.","Ошибка: проверьте диапазоны и маски выше. Прежний вариант NVM сохранён."));
-        if ui
-            .button(text(
+        if crate::ui_style::action_button(
+            ui,
+            text(
                 language,
                 "Discard invalid draft",
                 "Отменить ошибочные изменения",
-            ))
-            .clicked()
+            ),
+            true,
+        )
+        .clicked()
         {
             state.discard();
         }
@@ -271,11 +288,7 @@ mod tests {
         for blank in [0, 255] {
             let mut state = fixture(blank);
             let before = state.nvm().to_vec();
-            for profile in [
-                ProfileId::Mmo,
-                ProfileId::Shortcuts,
-                ProfileId::Creative,
-            ] {
+            for profile in [ProfileId::Mmo, ProfileId::Shortcuts, ProfileId::Creative] {
                 assert!(!state.apply(profile));
                 assert!(!state.invalid);
                 assert_eq!(state.nvm(), before);

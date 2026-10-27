@@ -4,6 +4,11 @@
 
 This plan turns the agreed [requirements](REQUIREMENTS.md) into reviewable work for `dvino/ak-configurator`. Firmware remains in `dvino/ak820`. Source implementation and offline verification do not authorize live keyboard operations or establish physical behavior.
 
+## Desktop UI integration — 2026-10-27
+
+Baseline: `3c5fb77199fa7cce090267a9fd7df243f43bcf0b` on `desktop-dev`.
+The UI work integrates AK820 utilities into Entropy navigation and components, unifies popup/shortcut ownership, preserves explicit preview/apply/start actions, adds persistent language selection before connection, and provides complete local RU/EN help for the current catalog. RGB sections share source ownership and keep draft state across navigation. Native Linux and offline regression evidence is recorded separately in [REVIEW.md](REVIEW.md); device operations and the six-platform release gate remain separate. Delivery is an incremental Git bundle from this baseline.
+
 ## Active release preparation — 2026-10-26
 
 Working-tree baseline for the P1 RGB continuation: `8b1f67f`. The target is AK820 v0.6.0-beta.2, published 2026-10-26T04:52:40Z from peeled firmware commit `2990ef877c5c6c54013b8821450c5a91878b8c3a` (annotated tag object `2e0b28b384872c482e0e358a4b353f00ddd976a7`). Application version remains `0.1.0-beta.2`. The current work implements native workflows; it does not complete or publish a qualified release. Exact build, test and independent-review evidence belongs in [REVIEW.md](REVIEW.md).

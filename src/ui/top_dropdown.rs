@@ -1,5 +1,8 @@
 use super::*;
 
+pub(super) const APP_MENU_ID: &str = "ak820_application_menu";
+pub(super) const LANGUAGE_MENU_ID: &str = "quick_app_language";
+
 pub(super) fn device_dropdown_open_id() -> egui::Id {
     egui::Id::new("device_dropdown_open")
 }
@@ -420,7 +423,7 @@ pub(super) fn adaptive_top_icon_dropdown_width<'a>(
 }
 
 impl EntropyApp {
-    pub(super) fn close_top_dropdowns(&self, ctx: &egui::Context) {
+    pub(super) fn close_hover_top_dropdowns(&self, ctx: &egui::Context) {
         ctx.data_mut(|d| {
             d.insert_temp(device_dropdown_open_id(), false);
             d.insert_temp(device_layer_operations_submenu_open_id(), false);
@@ -429,15 +432,22 @@ impl EntropyApp {
         });
     }
 
+    pub(super) fn close_top_dropdowns(&self, ctx: &egui::Context) {
+        self.close_hover_top_dropdowns(ctx);
+        egui::Popup::close_id(ctx, egui::Id::new(APP_MENU_ID));
+        egui::Popup::close_id(ctx, egui::Id::new(LANGUAGE_MENU_ID));
+    }
+
     pub(super) fn top_dropdown_open(&self, ctx: &egui::Context) -> bool {
-        ctx.data(|d| {
-            d.get_temp::<bool>(device_dropdown_open_id())
-                .unwrap_or(false)
-                || d.get_temp::<bool>(advanced_dropdown_open_id())
+        egui::Popup::is_any_open(ctx)
+            || ctx.data(|d| {
+                d.get_temp::<bool>(device_dropdown_open_id())
                     .unwrap_or(false)
-                || d.get_temp::<bool>(settings_dropdown_open_id())
-                    .unwrap_or(false)
-        })
+                    || d.get_temp::<bool>(advanced_dropdown_open_id())
+                        .unwrap_or(false)
+                    || d.get_temp::<bool>(settings_dropdown_open_id())
+                        .unwrap_or(false)
+            })
     }
 }
 
@@ -671,5 +681,26 @@ mod tests {
 
         app.close_top_dropdowns(&ctx);
         assert!(!app.top_dropdown_open(&ctx));
+    }
+
+    #[test]
+    fn shared_close_arbitrates_shell_popups_and_hover_dropdowns() {
+        let ctx = egui::Context::default();
+        let creation_context = eframe::CreationContext::_new_kittest(ctx.clone());
+        let app = EntropyApp::new(&creation_context);
+
+        for shell_id in [APP_MENU_ID, LANGUAGE_MENU_ID] {
+            egui::Popup::open_id(&ctx, egui::Id::new(shell_id));
+            ctx.data_mut(|d| d.insert_temp(device_dropdown_open_id(), true));
+            assert!(app.top_dropdown_open(&ctx));
+
+            app.close_top_dropdowns(&ctx);
+
+            assert!(!egui::Popup::is_id_open(&ctx, egui::Id::new(shell_id)));
+            assert!(!app.top_dropdown_open(&ctx));
+            assert!(!ctx.data(|d| d
+                .get_temp::<bool>(device_dropdown_open_id())
+                .unwrap_or(false)));
+        }
     }
 }

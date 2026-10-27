@@ -258,6 +258,27 @@ pub fn modern_button(ui: &mut Ui, label: &str, size: Vec2, enabled: bool) -> egu
     modern_button_with_font(ui, label, size, 12.5, enabled)
 }
 
+/// Content-sized action with the same geometry and behavior as settings buttons.
+pub fn action_button(ui: &mut Ui, label: impl AsRef<str>, enabled: bool) -> egui::Response {
+    let label = label.as_ref();
+    let width = ui
+        .painter()
+        .layout_no_wrap(
+            label.to_owned(),
+            FontId::proportional(12.5),
+            ui.visuals().text_color(),
+        )
+        .size()
+        .x
+        + 24.0;
+    modern_button(
+        ui,
+        label,
+        Vec2::new(width.max(76.0).min(ui.available_width().max(76.0)), 32.0),
+        enabled,
+    )
+}
+
 pub fn modern_keycap_button(ui: &mut Ui, label: &str, size: Vec2, enabled: bool) -> egui::Response {
     let enabled = enabled && ui.is_enabled();
     let dark = ui.visuals().dark_mode;
@@ -492,6 +513,7 @@ fn modern_button_impl(
         Sense::hover()
     };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
     let active = enabled && resp.is_pointer_button_down_on();
     let hovered = enabled && resp.hovered();
     let fill = if active {
@@ -831,6 +853,9 @@ pub fn modern_dropdown_button_sized(
     let dropdown_open = egui::Popup::is_id_open(ui.ctx(), id);
     let (dropdown_rect, dropdown_resp) =
         ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+    dropdown_resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), selected_text)
+    });
     if dropdown_resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -1003,6 +1028,9 @@ fn modern_dropdown_option_row(
 ) -> egui::Response {
     let dark = ui.visuals().dark_mode;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 28.0), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, label)
+    });
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -1377,6 +1405,40 @@ pub fn modal_window_frame(style: &egui::Style, dark: bool) -> egui::Frame {
         .fill(window_fill(dark))
         .stroke(egui::Stroke::NONE)
         .inner_margin(egui::Margin::same(10))
+}
+
+/// Shared viewport bounds for native utility dialogs; size excludes the title bar.
+pub fn utility_window<'a>(
+    ctx: &egui::Context,
+    title: impl Into<egui::WidgetText>,
+    id: egui::Id,
+    open: &'a mut bool,
+    preferred: Vec2,
+) -> egui::Window<'a> {
+    // Escape belongs to the front utility, never the page behind it. Popup
+    // widgets receive it first; each caller retains its own busy/close guard.
+    let front = ctx.memory(|memory| memory.areas().top_layer_id(egui::Order::Middle));
+    if front == Some(egui::LayerId::new(egui::Order::Middle, id))
+        && !egui::Popup::is_any_open(ctx)
+        && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+    {
+        *open = false;
+    }
+    let viewport = ctx.content_rect();
+    let max_size = (viewport.size() - Vec2::new(48.0, 80.0)).max(Vec2::new(260.0, 160.0));
+    let size = preferred.min(max_size);
+    egui::Window::new(title)
+        .id(id)
+        .open(open)
+        .default_size(size)
+        .min_size(size.min(Vec2::new(380.0, 240.0)))
+        .max_size(max_size)
+        .collapsible(false)
+        .resizable(true)
+        .frame(modal_window_frame(
+            ctx.global_style().as_ref(),
+            ctx.global_style().visuals.dark_mode,
+        ))
 }
 
 pub fn modal_backdrop_alpha(dark: bool) -> u8 {

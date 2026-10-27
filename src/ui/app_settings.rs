@@ -208,8 +208,10 @@ impl EntropyApp {
                         },
                     );
                     if selected_language != self.app_settings.language {
-                        self.app_settings.language = selected_language;
-                        save_app_settings(&self.app_settings);
+                        #[cfg(not(target_arch = "wasm32"))]
+                        self.set_app_language(selected_language);
+                        #[cfg(target_arch = "wasm32")]
+                        { self.app_settings.language = selected_language; save_app_settings(&self.app_settings); }
                     }
                 }
                 1 => {

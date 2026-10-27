@@ -59,9 +59,8 @@ impl EntropyApp {
     /// Offline preview: no discovery, HID handle, typing hook or update worker.
     pub(crate) fn new_ak820_demo(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = AppSettings {
-            language: crate::i18n::Language::Russian,
             onboarding_tour_seen_version: ONBOARDING_TOUR_VERSION,
-            ..Default::default()
+            ..load_app_settings()
         };
         cc.egui_ctx.set_zoom_factor(settings.ui_scale);
         let mut app = Self::from_bootstrap(AppBootstrap {
@@ -444,6 +443,8 @@ impl EntropyApp {
             update_check,
         } = bootstrap;
         let dark_mode = app_settings.dark_mode;
+        let mut keycode_picker = KeycodePicker::default();
+        keycode_picker.language = app_settings.language;
 
         Self {
             #[cfg(not(target_arch = "wasm32"))]
@@ -542,7 +543,7 @@ impl EntropyApp {
             selected_encoder: None,
             layout: None,
             layer_count: 4,
-            keycode_picker: KeycodePicker::default(),
+            keycode_picker,
             status_msg: String::new(),
             import_report_open: false,
             import_report_title: String::new(),

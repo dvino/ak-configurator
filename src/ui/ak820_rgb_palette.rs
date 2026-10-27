@@ -4,6 +4,13 @@ use crate::ak820_rgb_compositor::{Axis, Effect, Layer, QuietHours, Scene, MAX_SC
 use chrono::Timelike;
 use std::io::Read;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RgbSection {
+    Scenes,
+    Music,
+    OpenRgb,
+}
+
 #[derive(Clone)]
 struct Editor {
     scene: Scene,
@@ -195,7 +202,7 @@ fn base_key_groups() -> [Vec<(u8, u8)>; 6] {
 impl EntropyApp {
     /// Render the real AK820 physical key geometry with colors indexed only by
     /// the pinned matrix-to-LED map. This edits a local preview, not readback.
-    pub(crate) fn draw_ak820_rgb_palette(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn draw_ak820_rgb_palette(&mut self, ui: &mut egui::Ui, section: RgbSection) {
         let profile = self
             .ak820_demo_profile
             .map(|p| p.as_str())
@@ -206,362 +213,38 @@ impl EntropyApp {
             .data(|d| d.get_temp::<Editor>(id))
             .unwrap_or_default();
         let ru = self.app_settings.language == crate::i18n::Language::Russian;
-        ui.heading(if ru {
-            "AK820: RGB для каждой клавиши"
-        } else {
-            "AK820 per-key RGB"
-        });
-        ui.label(if ru { "Локальный предпросмотр. Режим Direct хранится только в ОЗУ клавиатуры; прочитать цвета обратно нельзя." } else { "Local preview only. Direct RGB is RAM-only and cannot be read back from the keyboard." });
-        self.draw_ak820_rgb_inputs(ui, &e.scene);
+        if section == RgbSection::Scenes {
+            ui.label(
+                egui::RichText::new(if ru {
+                    "Предпросмотр сцены · цвета Direct действуют в ОЗУ клавиатуры до перезапуска."
+                } else {
+                    "Scene preview · Direct colors stay in keyboard RAM until restart."
+                })
+                .small()
+                .weak(),
+            );
+        }
+        if section == RgbSection::Music {
+            self.draw_ak820_rgb_inputs(
+                ui,
+                &e.scene,
+                super::ak820_rgb_inputs::RgbInputSection::Music,
+            );
+        } else if section == RgbSection::OpenRgb {
+            self.draw_ak820_rgb_inputs(
+                ui,
+                &e.scene,
+                super::ak820_rgb_inputs::RgbInputSection::OpenRgb,
+            );
+        }
+        if section != RgbSection::Scenes {
+            ui.ctx().data_mut(|d| d.insert_temp(id, e));
+            return;
+        }
         let mut changed = false;
         let mut history_move = false;
         let before = e.scene.clone();
         let groups = base_key_groups();
-        ui.horizontal(|ui| {
-            if ui
-                .add_enabled(
-                    !e.undo.is_empty(),
-                    egui::Button::new(if ru { "Отменить" } else { "Undo" }),
-                )
-                .clicked()
-            {
-                if e.undo_scene() {
-                    changed = true;
-                    history_move = true;
-                }
-            }
-            if ui
-                .add_enabled(
-                    !e.redo.is_empty(),
-                    egui::Button::new(if ru { "Повторить" } else { "Redo" }),
-                )
-                .clicked()
-            {
-                if e.redo_scene() {
-                    changed = true;
-                    history_move = true;
-                }
-            }
-            if ui
-                .add_enabled(
-                    e.scene.layers.len() < 16,
-                    egui::Button::new(if ru {
-                        "Добавить слой"
-                    } else {
-                        "Add layer"
-                    }),
-                )
-                .clicked()
-            {
-                let name = if ru {
-                    format!("Слой {}", e.scene.layers.len() + 1)
-                } else {
-                    format!("Layer {}", e.scene.layers.len() + 1)
-                };
-                e.scene.layers.push(Layer {
-                    name,
-                    mask: (0..LED_COUNT).collect(),
-                    ..Layer::default()
-                });
-                e.active_layer = e.scene.layers.len() - 1;
-                changed = true;
-            }
-        });
-        let mut remove_layer = None;
-        let layer_count = e.scene.layers.len();
-        for i in 0..layer_count {
-            let layer = &mut e.scene.layers[i];
-            ui.horizontal(|ui| {
-                if ui
-                    .selectable_label(e.active_layer == i, format!("{}: {}", i + 1, layer.name))
-                    .clicked()
-                {
-                    e.active_layer = i;
-                }
-                if ui
-                    .checkbox(&mut layer.enabled, if ru { "Вкл." } else { "On" })
-                    .changed()
-                {
-                    changed = true;
-                }
-                if ui.small_button("×").clicked() {
-                    remove_layer = Some(i);
-                }
-            });
-        }
-        if let Some(i) = remove_layer {
-            e.scene.layers.remove(i);
-            e.active_layer = e.active_layer.min(e.scene.layers.len().saturating_sub(1));
-            changed = true;
-        }
-        if let Some(layer) = e.scene.layers.get_mut(e.active_layer) {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(if ru { "Имя" } else { "Name" });
-                changed |= ui
-                    .add_sized(
-                        Vec2::new(180.0, ui.spacing().interact_size.y),
-                        egui::TextEdit::singleline(&mut layer.name),
-                    )
-                    .changed();
-            });
-            ui.horizontal_wrapped(|ui| {
-                egui::ComboBox::from_label(if ru { "Эффект" } else { "Effect" })
-                    .selected_text(effect_label(layer.effect, ru))
-                    .show_ui(ui, |ui| {
-                        for effect in [
-                            Effect::Solid,
-                            Effect::Gradient,
-                            Effect::Wave,
-                            Effect::Breathing,
-                            Effect::Rain,
-                        ] {
-                            if ui
-                                .selectable_value(
-                                    &mut layer.effect,
-                                    effect,
-                                    effect_label(effect, ru),
-                                )
-                                .changed()
-                            {
-                                changed = true;
-                            }
-                        }
-                    });
-            });
-            ui.horizontal_wrapped(|ui| {
-                egui::ComboBox::from_label(if ru { "Ось" } else { "Axis" })
-                    .selected_text(axis_label(layer.axis, ru))
-                    .show_ui(ui, |ui| {
-                        for axis in [Axis::Horizontal, Axis::Vertical] {
-                            if ui
-                                .selectable_value(&mut layer.axis, axis, axis_label(axis, ru))
-                                .changed()
-                            {
-                                changed = true;
-                            }
-                        }
-                    });
-            });
-            ui.horizontal_wrapped(|ui| {
-                let mut opacity = layer.opacity as f32;
-                if ui
-                    .add_sized(
-                        Vec2::new(260.0, ui.spacing().interact_size.y),
-                        egui::Slider::new(&mut opacity, 0.0..=255.0).text(if ru {
-                            "Непрозрачность"
-                        } else {
-                            "Opacity"
-                        }),
-                    )
-                    .changed()
-                {
-                    layer.opacity = opacity as u8;
-                    changed = true;
-                }
-                let mut speed = layer.period_ms as f32;
-                if ui
-                    .add_sized(
-                        Vec2::new(260.0, ui.spacing().interact_size.y),
-                        egui::Slider::new(&mut speed, 250.0..=60000.0).text(if ru {
-                            "Период, мс"
-                        } else {
-                            "Period ms"
-                        }),
-                    )
-                    .changed()
-                {
-                    layer.period_ms = speed as u32;
-                    changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(if ru {
-                    "Цвета слоя"
-                } else {
-                    "Layer colors"
-                });
-                let mut c1 =
-                    Color32::from_rgb(layer.color.0[0], layer.color.0[1], layer.color.0[2]);
-                if ui.color_edit_button_srgba(&mut c1).changed() {
-                    layer.color = Rgb([c1.r(), c1.g(), c1.b()]);
-                    changed = true;
-                }
-                let mut c2 =
-                    Color32::from_rgb(layer.color2.0[0], layer.color2.0[1], layer.color2.0[2]);
-                if ui.color_edit_button_srgba(&mut c2).changed() {
-                    layer.color2 = Rgb([c2.r(), c2.g(), c2.b()]);
-                    changed = true;
-                }
-                ui.label(format!(
-                    "{} {}",
-                    if ru { "Маска" } else { "Mask" },
-                    layer.mask.len()
-                ));
-                if ui
-                    .button(if ru {
-                        "Маска из выбора"
-                    } else {
-                        "Mask from selection"
-                    })
-                    .clicked()
-                {
-                    layer.mask = normalized_mask(&e.selected);
-                    changed = true;
-                }
-                if ui
-                    .button(if ru {
-                        "Вся клавиатура"
-                    } else {
-                        "All LEDs"
-                    })
-                    .clicked()
-                {
-                    layer.mask = (0..LED_COUNT).collect();
-                    changed = true;
-                }
-            });
-        }
-        ui.collapsing(
-            if ru {
-                "Тихие часы"
-            } else {
-                "Quiet hours"
-            },
-            |ui| {
-                let existing = e.scene.quiet_hours.clone();
-                let mut q = existing.clone().unwrap_or(QuietHours {
-                    start_minute: 22 * 60,
-                    end_minute: 7 * 60,
-                    brightness: 30,
-                });
-                let mut enabled = existing.is_some();
-                if ui
-                    .checkbox(&mut enabled, if ru { "Включить" } else { "Enable" })
-                    .changed()
-                {
-                    changed = true;
-                }
-                if enabled {
-                    let mut start_hour = u32::from(q.start_minute / 60);
-                    let mut start_minute = u32::from(q.start_minute % 60);
-                    let mut end_hour = u32::from(q.end_minute / 60);
-                    let mut end_minute = u32::from(q.end_minute % 60);
-                    let mut b = q.brightness as f32;
-                    ui.horizontal(|ui| {
-                        ui.label(if ru { "Начало" } else { "Start" });
-                        changed |= ui
-                            .add(
-                                egui::DragValue::new(&mut start_hour)
-                                    .range(0..=23)
-                                    .prefix(if ru { "ч " } else { "h " }),
-                            )
-                            .changed();
-                        ui.label(":");
-                        changed |= ui
-                            .add(
-                                egui::DragValue::new(&mut start_minute)
-                                    .range(0..=59)
-                                    .suffix(if ru { " мин" } else { " min" }),
-                            )
-                            .changed();
-                        ui.label(format!("{start_hour:02}:{start_minute:02}"));
-                        ui.label(if ru { "Конец" } else { "End" });
-                        changed |= ui
-                            .add(
-                                egui::DragValue::new(&mut end_hour)
-                                    .range(0..=23)
-                                    .prefix(if ru { "ч " } else { "h " }),
-                            )
-                            .changed();
-                        ui.label(":");
-                        changed |= ui
-                            .add(
-                                egui::DragValue::new(&mut end_minute)
-                                    .range(0..=59)
-                                    .suffix(if ru { " мин" } else { " min" }),
-                            )
-                            .changed();
-                        ui.label(format!("{end_hour:02}:{end_minute:02}"));
-                    });
-                    q.start_minute = (start_hour * 60 + start_minute) as u16;
-                    q.end_minute = (end_hour * 60 + end_minute) as u16;
-                    if ui
-                        .add(egui::Slider::new(&mut b, 0.0..=160.0).text(if ru {
-                            "Яркость"
-                        } else {
-                            "Brightness"
-                        }))
-                        .changed()
-                    {
-                        q.brightness = b as u8;
-                        changed = true;
-                    }
-                }
-                e.scene.quiet_hours = if enabled { Some(q) } else { None };
-            },
-        );
-        ui.horizontal(|ui| {
-            if ui
-                .button(if ru {
-                    "Поднять выбранный слой"
-                } else {
-                    "Move selected layer up"
-                })
-                .clicked()
-                && e.active_layer < e.scene.layers.len()
-                && e.active_layer > 0
-            {
-                changed |= e.move_active_layer(-1);
-            }
-            if ui
-                .button(if ru {
-                    "Опустить выбранный слой"
-                } else {
-                    "Move selected layer down"
-                })
-                .clicked()
-                && e.active_layer < e.scene.layers.len()
-                && e.active_layer + 1 < e.scene.layers.len()
-            {
-                changed |= e.move_active_layer(1);
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            for (label, g) in [
-                (if ru { "WASD" } else { "WASD" }, 0),
-                (if ru { "Стрелки" } else { "Arrows" }, 1),
-                (if ru { "F-клавиши" } else { "Function" }, 2),
-                (if ru { "Цифры" } else { "Numbers" }, 3),
-                (
-                    if ru {
-                        "Модификаторы"
-                    } else {
-                        "Modifiers"
-                    },
-                    4,
-                ),
-                (
-                    if ru {
-                        "Навигация"
-                    } else {
-                        "Navigation"
-                    },
-                    5,
-                ),
-            ] {
-                if ui.button(label).clicked() {
-                    e.selected = groups[g]
-                        .iter()
-                        .filter_map(|&(r, c)| slot_for_matrix(r, c))
-                        .collect();
-                    e.anchor = e.selected.first().copied();
-                    if let Some(&first) = e.selected.first() {
-                        let c = e.scene.base.colors[first].0;
-                        e.draft = Color32::from_rgb(c[0], c[1], c[2]);
-                    }
-                }
-            }
-        });
         let Some(layout) = self.layout.as_ref() else {
             ui.label(if ru {
                 "Раскладка AK820 недоступна."
@@ -570,22 +253,6 @@ impl EntropyApp {
             });
             return;
         };
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(if ru { "Выбрать всё" } else { "All" }).clicked() {
-                e.selected = (0..LED_COUNT).collect();
-            }
-            if ui.button(if ru { "Снять выбор" } else { "None" }).clicked() {
-                e.selected.clear();
-            }
-        });
-        ui.add(
-            egui::Label::new(if ru {
-                "Щелчок: выбор · Ctrl/Cmd+щелчок: переключить · Shift+щелчок: диапазон слотов"
-            } else {
-                "Click: select · Ctrl/Cmd+click: toggle · Shift+click: slot range"
-            })
-            .wrap(),
-        );
         let keycodes = base_keycodes();
         let local_now = chrono::Local::now();
         let local_minute = (local_now.hour() * 60 + local_now.minute()) as u16;
@@ -595,8 +262,13 @@ impl EntropyApp {
             None
         }
         .or_else(|| e.scene.render(0, local_minute).ok());
-        let (response, painter) =
-            ui.allocate_painter(Vec2::new(ui.available_width(), 245.0), Sense::hover());
+        let (response, painter) = ui.allocate_painter(
+            Vec2::new(
+                ui.available_width(),
+                (ui.ctx().content_rect().height() * 0.32).clamp(160.0, 245.0),
+            ),
+            Sense::hover(),
+        );
         let bounds = response.rect;
         let min_x = layout
             .keys
@@ -661,7 +333,7 @@ impl EntropyApp {
                         1.0
                     },
                     if slot.is_some_and(|i| e.selected.contains(&i)) {
-                        Color32::YELLOW
+                        crate::ui_style::accent()
                     } else {
                         Color32::from_gray(130)
                     },
@@ -722,33 +394,95 @@ impl EntropyApp {
             let c = e.scene.base.colors[index].0;
             e.draft = Color32::from_rgb(c[0], c[1], c[2]);
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            for (label, g) in [
+                (if ru { "WASD" } else { "WASD" }, 0),
+                (if ru { "Стрелки" } else { "Arrows" }, 1),
+                (if ru { "F-клавиши" } else { "Function" }, 2),
+                (if ru { "Цифры" } else { "Numbers" }, 3),
+                (
+                    if ru {
+                        "Модификаторы"
+                    } else {
+                        "Modifiers"
+                    },
+                    4,
+                ),
+                (
+                    if ru {
+                        "Навигация"
+                    } else {
+                        "Navigation"
+                    },
+                    5,
+                ),
+            ] {
+                if crate::ui_style::action_button(ui, label, true).clicked() {
+                    e.selected = groups[g]
+                        .iter()
+                        .filter_map(|&(r, c)| slot_for_matrix(r, c))
+                        .collect();
+                    e.anchor = e.selected.first().copied();
+                    if let Some(&first) = e.selected.first() {
+                        let c = e.scene.base.colors[first].0;
+                        e.draft = Color32::from_rgb(c[0], c[1], c[2]);
+                    }
+                }
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui_style::action_button(ui, if ru { "Выбрать всё" } else { "All" }, true)
+                .clicked()
+            {
+                e.selected = (0..LED_COUNT).collect();
+            }
+            if crate::ui_style::action_button(ui, if ru { "Снять выбор" } else { "None" }, true)
+                .clicked()
+            {
+                e.selected.clear();
+            }
+        });
+        ui.add(
+            egui::Label::new(if ru {
+                "Щелчок: выбор · Ctrl/Cmd+щелчок: переключить · Shift+щелчок: диапазон слотов"
+            } else {
+                "Click: select · Ctrl/Cmd+click: toggle · Shift+click: slot range"
+            })
+            .wrap(),
+        );
+        ui.horizontal_wrapped(|ui| {
             ui.label(if ru {
                 format!("Выбрано клавиш: {}", e.selected.len())
             } else {
                 format!("{} key(s) selected", e.selected.len())
             });
             ui.color_edit_button_srgba(&mut e.draft);
-            if ui
-                .button(if ru {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
                     "Применить цвет"
                 } else {
                     "Apply color"
-                })
-                .clicked()
+                },
+                true,
+            )
+            .clicked()
             {
                 for &i in &e.selected {
                     e.scene.base.colors[i] = Rgb([e.draft.r(), e.draft.g(), e.draft.b()]);
                     changed = true;
                 }
             }
-            if ui
-                .button(if ru {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
                     "Сбросить выбор"
                 } else {
                     "Reset selection"
-                })
-                .clicked()
+                },
+                true,
+            )
+            .clicked()
             {
                 for &i in &e.selected {
                     e.scene.base.colors[i] = Rgb([0, 0, 0]);
@@ -768,16 +502,361 @@ impl EntropyApp {
             e.scene.base.brightness = brightness as u8;
             changed = true;
         }
+        ui.separator();
+        egui::CollapsingHeader::new(if ru {
+            "Слои и эффекты"
+        } else {
+            "Layers and effects"
+        })
+        .id_salt("ak820_scene_layers")
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru { "Отменить" } else { "Undo" },
+                    !e.undo.is_empty(),
+                )
+                .clicked()
+                {
+                    if e.undo_scene() {
+                        changed = true;
+                        history_move = true;
+                    }
+                }
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru { "Повторить" } else { "Redo" },
+                    !e.redo.is_empty(),
+                )
+                .clicked()
+                {
+                    if e.redo_scene() {
+                        changed = true;
+                        history_move = true;
+                    }
+                }
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru {
+                        "Добавить слой"
+                    } else {
+                        "Add layer"
+                    },
+                    e.scene.layers.len() < 16,
+                )
+                .clicked()
+                {
+                    let name = if ru {
+                        format!("Слой {}", e.scene.layers.len() + 1)
+                    } else {
+                        format!("Layer {}", e.scene.layers.len() + 1)
+                    };
+                    e.scene.layers.push(Layer {
+                        name,
+                        mask: (0..LED_COUNT).collect(),
+                        ..Layer::default()
+                    });
+                    e.active_layer = e.scene.layers.len() - 1;
+                    changed = true;
+                }
+            });
+            let mut remove_layer = None;
+            let layer_count = e.scene.layers.len();
+            for i in 0..layer_count {
+                let layer = &mut e.scene.layers[i];
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .selectable_label(e.active_layer == i, format!("{}: {}", i + 1, layer.name))
+                        .clicked()
+                    {
+                        e.active_layer = i;
+                    }
+                    if ui
+                        .checkbox(&mut layer.enabled, if ru { "Вкл." } else { "On" })
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    if ui.small_button("×").clicked() {
+                        remove_layer = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = remove_layer {
+                e.scene.layers.remove(i);
+                e.active_layer = e.active_layer.min(e.scene.layers.len().saturating_sub(1));
+                changed = true;
+            }
+            if let Some(layer) = e.scene.layers.get_mut(e.active_layer) {
+                ui.separator();
+                ui.strong(if ru {
+                    "Параметры слоя"
+                } else {
+                    "Layer settings"
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(if ru { "Имя" } else { "Name" });
+                    changed |= ui
+                        .add_sized(
+                            Vec2::new(180.0, ui.spacing().interact_size.y),
+                            egui::TextEdit::singleline(&mut layer.name),
+                        )
+                        .changed();
+                });
+                ui.horizontal_wrapped(|ui| {
+                    egui::ComboBox::from_label(if ru { "Эффект" } else { "Effect" })
+                        .selected_text(effect_label(layer.effect, ru))
+                        .show_ui(ui, |ui| {
+                            for effect in [
+                                Effect::Solid,
+                                Effect::Gradient,
+                                Effect::Wave,
+                                Effect::Breathing,
+                                Effect::Rain,
+                            ] {
+                                if ui
+                                    .selectable_value(
+                                        &mut layer.effect,
+                                        effect,
+                                        effect_label(effect, ru),
+                                    )
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                            }
+                        });
+                });
+                ui.horizontal_wrapped(|ui| {
+                    egui::ComboBox::from_label(if ru { "Ось" } else { "Axis" })
+                        .selected_text(axis_label(layer.axis, ru))
+                        .show_ui(ui, |ui| {
+                            for axis in [Axis::Horizontal, Axis::Vertical] {
+                                if ui
+                                    .selectable_value(&mut layer.axis, axis, axis_label(axis, ru))
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                            }
+                        });
+                });
+                ui.horizontal_wrapped(|ui| {
+                    let mut opacity = layer.opacity as f32;
+                    if ui
+                        .add_sized(
+                            Vec2::new(260.0, ui.spacing().interact_size.y),
+                            egui::Slider::new(&mut opacity, 0.0..=255.0).text(if ru {
+                                "Непрозрачность"
+                            } else {
+                                "Opacity"
+                            }),
+                        )
+                        .changed()
+                    {
+                        layer.opacity = opacity as u8;
+                        changed = true;
+                    }
+                    let mut speed = layer.period_ms as f32;
+                    if ui
+                        .add_sized(
+                            Vec2::new(260.0, ui.spacing().interact_size.y),
+                            egui::Slider::new(&mut speed, 250.0..=60000.0).text(if ru {
+                                "Период, мс"
+                            } else {
+                                "Period ms"
+                            }),
+                        )
+                        .changed()
+                    {
+                        layer.period_ms = speed as u32;
+                        changed = true;
+                    }
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(if ru {
+                        "Цвета слоя"
+                    } else {
+                        "Layer colors"
+                    });
+                    let mut c1 =
+                        Color32::from_rgb(layer.color.0[0], layer.color.0[1], layer.color.0[2]);
+                    if ui.color_edit_button_srgba(&mut c1).changed() {
+                        layer.color = Rgb([c1.r(), c1.g(), c1.b()]);
+                        changed = true;
+                    }
+                    let mut c2 =
+                        Color32::from_rgb(layer.color2.0[0], layer.color2.0[1], layer.color2.0[2]);
+                    if ui.color_edit_button_srgba(&mut c2).changed() {
+                        layer.color2 = Rgb([c2.r(), c2.g(), c2.b()]);
+                        changed = true;
+                    }
+                    ui.label(format!(
+                        "{} {}",
+                        if ru { "Маска" } else { "Mask" },
+                        layer.mask.len()
+                    ));
+                    if crate::ui_style::action_button(
+                        ui,
+                        if ru {
+                            "Маска из выбора"
+                        } else {
+                            "Mask from selection"
+                        },
+                        true,
+                    )
+                    .clicked()
+                    {
+                        layer.mask = normalized_mask(&e.selected);
+                        changed = true;
+                    }
+                    if crate::ui_style::action_button(
+                        ui,
+                        if ru {
+                            "Вся клавиатура"
+                        } else {
+                            "All LEDs"
+                        },
+                        true,
+                    )
+                    .clicked()
+                    {
+                        layer.mask = (0..LED_COUNT).collect();
+                        changed = true;
+                    }
+                });
+            }
+            ui.collapsing(
+                if ru {
+                    "Тихие часы"
+                } else {
+                    "Quiet hours"
+                },
+                |ui| {
+                    let existing = e.scene.quiet_hours.clone();
+                    let mut q = existing.clone().unwrap_or(QuietHours {
+                        start_minute: 22 * 60,
+                        end_minute: 7 * 60,
+                        brightness: 30,
+                    });
+                    let mut enabled = existing.is_some();
+                    if ui
+                        .checkbox(&mut enabled, if ru { "Включить" } else { "Enable" })
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    if enabled {
+                        let mut start_hour = u32::from(q.start_minute / 60);
+                        let mut start_minute = u32::from(q.start_minute % 60);
+                        let mut end_hour = u32::from(q.end_minute / 60);
+                        let mut end_minute = u32::from(q.end_minute % 60);
+                        let mut b = q.brightness as f32;
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(if ru { "Начало" } else { "Start" });
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut start_hour)
+                                        .range(0..=23)
+                                        .prefix(if ru { "ч " } else { "h " }),
+                                )
+                                .changed();
+                            ui.label(":");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut start_minute)
+                                        .range(0..=59)
+                                        .suffix(if ru { " мин" } else { " min" }),
+                                )
+                                .changed();
+                            ui.label(format!("{start_hour:02}:{start_minute:02}"));
+                            ui.label(if ru { "Конец" } else { "End" });
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut end_hour)
+                                        .range(0..=23)
+                                        .prefix(if ru { "ч " } else { "h " }),
+                                )
+                                .changed();
+                            ui.label(":");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut end_minute)
+                                        .range(0..=59)
+                                        .suffix(if ru { " мин" } else { " min" }),
+                                )
+                                .changed();
+                            ui.label(format!("{end_hour:02}:{end_minute:02}"));
+                        });
+                        q.start_minute = (start_hour * 60 + start_minute) as u16;
+                        q.end_minute = (end_hour * 60 + end_minute) as u16;
+                        if ui
+                            .add(egui::Slider::new(&mut b, 0.0..=160.0).text(if ru {
+                                "Яркость"
+                            } else {
+                                "Brightness"
+                            }))
+                            .changed()
+                        {
+                            q.brightness = b as u8;
+                            changed = true;
+                        }
+                    }
+                    e.scene.quiet_hours = if enabled { Some(q) } else { None };
+                },
+            );
+            ui.horizontal_wrapped(|ui| {
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru {
+                        "Поднять выбранный слой"
+                    } else {
+                        "Move selected layer up"
+                    },
+                    true,
+                )
+                .clicked()
+                    && e.active_layer < e.scene.layers.len()
+                    && e.active_layer > 0
+                {
+                    changed |= e.move_active_layer(-1);
+                }
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru {
+                        "Опустить выбранный слой"
+                    } else {
+                        "Move selected layer down"
+                    },
+                    true,
+                )
+                .clicked()
+                    && e.active_layer < e.scene.layers.len()
+                    && e.active_layer + 1 < e.scene.layers.len()
+                {
+                    changed |= e.move_active_layer(1);
+                }
+            });
+        });
         let playback_running = self.ak820_rgb_scene_running();
         let scene_validation = e.scene.validate();
-        ui.horizontal(|ui| {
-            if ui
-                .button(if ru {
+        ui.separator();
+        ui.heading(if ru {
+            "Файлы и воспроизведение"
+        } else {
+            "Files and playback"
+        });
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
                     "Сохранить палитру основы…"
                 } else {
                     "Save base colors…"
-                })
-                .clicked()
+                },
+                true,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_stop();
                 match e.scene.base.encode_preset() {
@@ -813,16 +892,16 @@ impl EntropyApp {
                     }
                 }
             }
-            if ui
-                .add_enabled(
-                    !playback_running,
-                    egui::Button::new(if ru {
-                        "Открыть палитру основы…"
-                    } else {
-                        "Open base palette…"
-                    }),
-                )
-                .clicked()
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Открыть палитру основы…"
+                } else {
+                    "Open base palette…"
+                },
+                !playback_running,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_stop();
                 if let Some(path) = rfd::FileDialog::new()
@@ -869,13 +948,16 @@ impl EntropyApp {
                     }
                 }
             }
-            if ui
-                .button(if ru {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
                     "Сохранить сцену…"
                 } else {
                     "Save scene…"
-                })
-                .clicked()
+                },
+                true,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_stop();
                 match e.scene.encode_preset() {
@@ -904,16 +986,16 @@ impl EntropyApp {
                     }
                 }
             }
-            if ui
-                .add_enabled(
-                    !playback_running,
-                    egui::Button::new(if ru {
-                        "Открыть сцену…"
-                    } else {
-                        "Open scene…"
-                    }),
-                )
-                .clicked()
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Открыть сцену…"
+                } else {
+                    "Open scene…"
+                },
+                !playback_running,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_stop();
                 if let Some(path) = rfd::FileDialog::new()
@@ -961,26 +1043,29 @@ impl EntropyApp {
         if self.ak820_demo {
             let demo_can_start = self.ak820_rgb_scene_can_start() && scene_validation.is_ok();
             if playback_running {
-                if ui
-                    .button(if ru {
+                if crate::ui_style::action_button(
+                    ui,
+                    if ru {
                         "Остановить предпросмотр (демо, без устройства)"
                     } else {
                         "Stop demo preview (no device)"
-                    })
-                    .clicked()
+                    },
+                    true,
+                )
+                .clicked()
                 {
                     self.ak820_rgb_scene_stop();
                 }
-            } else if ui
-                .add_enabled(
-                    demo_can_start,
-                    egui::Button::new(if ru {
-                        "Запустить предпросмотр (демо, без устройства)"
-                    } else {
-                        "Start demo preview (no device)"
-                    }),
-                )
-                .clicked()
+            } else if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Запустить предпросмотр (демо, без устройства)"
+                } else {
+                    "Start demo preview (no device)"
+                },
+                demo_can_start,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_start(e.scene.clone());
             }
@@ -1000,28 +1085,31 @@ impl EntropyApp {
                 );
             }
         } else if playback_running {
-            if ui
-                .button(if ru {
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
                     "Остановить RAM-воспроизведение"
                 } else {
                     "Stop RAM playback"
-                })
-                .clicked()
+                },
+                true,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_stop();
             }
         } else {
             let can_start = self.ak820_rgb_scene_can_start() && scene_validation.is_ok();
-            if ui
-                .add_enabled(
-                    can_start,
-                    egui::Button::new(if ru {
-                        "Запустить RAM-воспроизведение"
-                    } else {
-                        "Start RAM playback"
-                    }),
-                )
-                .clicked()
+            if crate::ui_style::action_button(
+                ui,
+                if ru {
+                    "Запустить RAM-воспроизведение"
+                } else {
+                    "Start RAM playback"
+                },
+                can_start,
+            )
+            .clicked()
             {
                 self.ak820_rgb_scene_start(e.scene.clone());
             }
@@ -1037,8 +1125,7 @@ impl EntropyApp {
             }
         }
         if !self.ak820_demo
-            && ui
-                .button(if ru { "Выкл. RGB" } else { "RGB Off" })
+            && crate::ui_style::action_button(ui, if ru { "Выкл. RGB" } else { "RGB Off" }, true)
                 .clicked()
         {
             self.ak820_rgb_scene_off();
@@ -1068,10 +1155,7 @@ impl EntropyApp {
         } else {
             "Apply base colors only (RAM)"
         };
-        if ui
-            .add_enabled(can_apply, egui::Button::new(apply_label))
-            .clicked()
-        {
+        if crate::ui_style::action_button(ui, apply_label, can_apply).clicked() {
             if demo_rgb {
                 self.status_msg = if ru {
                     "Демо: предпросмотр обновлён; устройство не затронуто"
@@ -1131,6 +1215,40 @@ impl EntropyApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browsing_sections_preserves_scene_and_undo_without_starting_a_source() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        let id = egui::Id::new(("ak820-rgb-editor", "main"));
+        let mut editor = Editor::default();
+        editor.push_undo(editor.scene.clone());
+        editor.scene.base.brightness = 73;
+        editor.selected = vec![3, 7];
+        let expected = editor.scene.clone();
+        cc.egui_ctx.data_mut(|d| d.insert_temp(id, editor));
+        for language in crate::i18n::Language::ALL {
+            app.app_settings.language = language;
+            for section in [
+                RgbSection::Scenes,
+                RgbSection::Music,
+                RgbSection::OpenRgb,
+                RgbSection::Scenes,
+            ] {
+                let _ = cc.egui_ctx.run_ui(egui::RawInput::default(), |ui| {
+                    ui.push_id(format!("{section:?}"), |ui| {
+                        app.draw_ak820_rgb_palette(ui, section)
+                    });
+                });
+                let saved = cc.egui_ctx.data(|d| d.get_temp::<Editor>(id).unwrap());
+                assert_eq!(saved.scene, expected);
+                assert_eq!(saved.selected, vec![3, 7]);
+                assert_eq!(saved.undo.len(), 1);
+                assert!(!app.ak820_rgb_scene_running());
+                assert!(app.hid_device.is_none());
+            }
+        }
+    }
     #[test]
     fn mapping_resolves_physical_rows_and_encoder_press_is_unlit() {
         assert_eq!(slot_for_matrix(0, 0), Some(0));

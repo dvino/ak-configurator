@@ -288,12 +288,12 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
     for (slot, english, russian, size) in rows {
         ui.horizontal_wrapped(|ui| {
             ui.label(tr(ru, english, russian));
-            if ui
-                .add_enabled(
-                    state.pending.is_none(),
-                    egui::Button::new(tr(ru, "Choose…", "Выбрать…")),
-                )
-                .clicked()
+            if crate::ui_style::action_button(
+                ui,
+                tr(ru, "Choose…", "Выбрать…"),
+                state.pending.is_none(),
+            )
+            .clicked()
             {
                 pick = Some(slot);
             }
@@ -318,11 +318,7 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
             && state.snapshot.is_some()
             && state.recovery.is_some()
             && state.pending.is_none();
-        if ui
-            .add_enabled(
-                ready,
-                egui::Button::new(tr(ru, "Check files", "Проверить файлы")),
-            )
+        if crate::ui_style::action_button(ui, tr(ru, "Check files", "Проверить файлы"), ready)
             .clicked()
         {
             check = true;
@@ -423,7 +419,7 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
             },
         );
     }
-    if ui.button(tr(ru, "Close", "Закрыть")).clicked() {
+    if crate::ui_style::action_button(ui, tr(ru, "Close", "Закрыть"), true).clicked() {
         close = true;
     }
     (pick, check, close)
@@ -458,19 +454,24 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
         }
     }
     let mut open = true;
-    let (pick, check, close) = egui::Window::new(tr(
-        ru,
-        "Check AK820 local files",
-        "Проверка локальных файлов AK820",
-    ))
-    .id(egui::Id::new("ak820_install_files_window"))
-    .open(&mut open)
-    .resizable(true)
-    .default_width(620.0)
-    .max_width((ctx.content_rect().width() - 32.0).max(260.0))
-    .max_height((ctx.content_rect().height() - 48.0).max(100.0))
+    let (pick, check, close) = crate::ui_style::utility_window(
+        ctx,
+        tr(
+            ru,
+            "Check AK820 local files",
+            "Проверка локальных файлов AK820",
+        ),
+        egui::Id::new("ak820_install_files_window"),
+        &mut open,
+        egui::vec2(620.0, 430.0),
+    )
     .vscroll(true)
-    .show(ctx, |ui| draw_contents(ui, ru, &mut s))
+    .show(ctx, |ui| {
+        if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
+            super::ak820_help_ui::open_section(ctx, "firmware-files");
+        }
+        draw_contents(ui, ru, &mut s)
+    })
     .and_then(|response| response.inner)
     .unwrap_or_default();
     if !open || close {

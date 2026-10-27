@@ -223,8 +223,21 @@ impl EntropyApp {
             }
         };
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let scene_available = self
+            .ak820_demo_profile
+            .is_some_and(|p| ak820_beta1_profiles::has_feature(p, "vialrgb-direct"))
+            || self.ak820_rgb_scene_running()
+            || self.ak820_rgb_scene_owns_hid()
+            || self
+                .hid_device
+                .as_ref()
+                .and_then(crate::hid::HidDevice::ak820_image)
+                .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1));
+        #[cfg(target_arch = "wasm32")]
+        let scene_available = false;
+
         crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
-            egui::ScrollArea::vertical().id_salt("rgb_page_scroll").show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(18.0);
                 ui.label(
@@ -238,10 +251,109 @@ impl EntropyApp {
                         .size(13.0)
                         .color(app_muted_text(dark)),
                 );
-                ui.add_space(24.0);
+                ui.add_space(10.0);
 
-                if self.ak820_demo {
-                    ui.label(match lang {
+                let section_id = ui.make_persistent_id("rgb_page_section");
+                let mut section_index = ui
+                    .ctx()
+                    .data(|d| d.get_temp::<usize>(section_id))
+                    .unwrap_or(0);
+                let mut labels = vec![if lang == crate::i18n::Language::Russian {
+                    "Эффекты"
+                } else {
+                    "Built-in"
+                }
+                .to_owned()];
+                if scene_available {
+                    labels.extend([
+                        if lang == crate::i18n::Language::Russian {
+                            "Сцены"
+                        } else {
+                            "Scenes"
+                        }
+                        .to_owned(),
+                        if lang == crate::i18n::Language::Russian {
+                            "Музыка"
+                        } else {
+                            "Music"
+                        }
+                        .to_owned(),
+                        "OpenRGB".to_owned(),
+                    ]);
+                } else {
+                    section_index = 0;
+                }
+                ui.horizontal(|ui| {
+                    let nav_width = (ui.available_width() - 88.0).max(120.0);
+                    if let Some(index) = crate::ui_style::settings_segmented_control(
+                        ui,
+                        "rgb_page_section_tabs",
+                        &labels,
+                        section_index,
+                        Vec2::new(nav_width, 36.0),
+                    ) {
+                        section_index = index;
+                    }
+                    let help = if lang == crate::i18n::Language::Russian {
+                        "Справка"
+                    } else {
+                        "Help"
+                    };
+                    if crate::ui_style::modern_button(ui, help, Vec2::new(78.0, 36.0), true)
+                        .clicked()
+                    {
+                        super::ak820_help_ui::open_section(ui.ctx(), "lighting-palettes");
+                    }
+                });
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(section_id, section_index));
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.ak820_rgb_scene_running() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            RichText::new(if lang == crate::i18n::Language::Russian {
+                                "RGB-источник работает"
+                            } else {
+                                "RGB source is running"
+                            })
+                            .strong(),
+                        );
+                        let stop = if lang == crate::i18n::Language::Russian {
+                            "Остановить"
+                        } else {
+                            "Stop"
+                        };
+                        if crate::ui_style::modern_button(ui, stop, Vec2::new(96.0, 32.0), true)
+                            .clicked()
+                        {
+                            self.ak820_rgb_scene_stop();
+                        }
+                        if self.ak820_rgb_can_restore() {
+                            let restore = if lang == crate::i18n::Language::Russian {
+                                "Остановить и вернуть эффект"
+                            } else {
+                                "Stop and restore effect"
+                            };
+                            if crate::ui_style::modern_button(
+                                ui,
+                                restore,
+                                Vec2::new(196.0, 32.0),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                self.ak820_rgb_stop_and_restore();
+                            }
+                        }
+                    });
+                }
+
+                egui::ScrollArea::vertical()
+                    .id_salt(("rgb_page_scroll", section_index))
+                    .show(ui, |ui| {
+                        if self.ak820_demo && section_index == 0 {
+                            ui.label(match lang {
                         crate::i18n::Language::Russian => {
                             "Изменения сохраняются в памяти офлайн-профиля до закрытия приложения."
                         }
@@ -249,41 +361,61 @@ impl EntropyApp {
                             "Changes stay in this offline profile until the application closes."
                         }
                     });
-                }
+                        }
 
-                if !self.rgb_settings.supported {
-                    crate::ui_style::modal_empty_state(
-                        ui,
-                        crate::i18n::tr(lang, crate::i18n::Key::RgbUnavailableTooltip),
-                        None,
-                    );
-                    return;
-                }
+                        if !self.rgb_settings.supported {
+                            crate::ui_style::modal_empty_state(
+                                ui,
+                                crate::i18n::tr(lang, crate::i18n::Key::RgbUnavailableTooltip),
+                                None,
+                            );
+                            return;
+                        }
 
-                if !hid_ready {
-                    crate::ui_style::modal_empty_state(
-                        ui,
-                        crate::i18n::tr(lang, crate::i18n::Key::RgbConnect),
-                        None,
-                    );
-                    return;
-                }
+                        if !hid_ready {
+                            crate::ui_style::modal_empty_state(
+                                ui,
+                                crate::i18n::tr(lang, crate::i18n::Key::RgbConnect),
+                                None,
+                            );
+                            return;
+                        }
 
-                let can_write = self.ak820_demo || (!self.hid_write_task_owner_active()
-                    && matches!(self.connect_state, ConnectState::Idle)
-                    && self.hid_device.as_ref().is_some_and(|h| !h.is_ak820_session() || h.ak820_editing_ready()));
-                ui.add_enabled_ui(can_write, |ui| {
-                    self.draw_rgb_editor_content(ui, dark, &RgbModalLayout::responsive(ui.ctx()));
-                });
-                #[cfg(not(target_arch = "wasm32"))]
-                if self.ak820_demo_profile.is_some_and(|p| ak820_beta1_profiles::has_feature(p, "vialrgb-direct"))
-                    || self.ak820_rgb_scene_running() || self.ak820_rgb_scene_owns_hid()
-                    || self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_image)
-                        .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1)) {
-                    ui.separator();
-                    self.draw_ak820_rgb_palette(ui);
-                }
-            });
+                        let can_write = self.ak820_demo
+                            || (!self.hid_write_task_owner_active()
+                                && matches!(self.connect_state, ConnectState::Idle)
+                                && self.hid_device.as_ref().is_some_and(|h| {
+                                    !h.is_ak820_session() || h.ak820_editing_ready()
+                                }));
+                        if section_index == 0 {
+                            ui.add_enabled_ui(can_write, |ui| {
+                                self.draw_rgb_editor_content(
+                                    ui,
+                                    dark,
+                                    &RgbModalLayout::responsive(ui.ctx()),
+                                );
+                            });
+                        } else {
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let section = match section_index.min(3) {
+                                    1 => super::ak820_rgb_palette::RgbSection::Scenes,
+                                    2 => super::ak820_rgb_palette::RgbSection::Music,
+                                    _ => super::ak820_rgb_palette::RgbSection::OpenRgb,
+                                };
+                                ui.separator();
+                                self.draw_ak820_rgb_palette(ui, section);
+                            }
+                            #[cfg(target_arch = "wasm32")]
+                            ui.add_enabled_ui(can_write, |ui| {
+                                self.draw_rgb_editor_content(
+                                    ui,
+                                    dark,
+                                    &RgbModalLayout::responsive(ui.ctx()),
+                                );
+                            });
+                        }
+                    });
             });
         });
     }
@@ -444,8 +576,10 @@ impl EntropyApp {
         let Some(hid) = &self.hid_device else {
             return;
         };
-        if hid.is_ak820_session() && (self.rgb_settings.effect == 1
-            || (self.rgb_settings.effect == 0 && self.rgb_settings.last_enabled_effect == 1)) {
+        if hid.is_ak820_session()
+            && (self.rgb_settings.effect == 1
+                || (self.rgb_settings.effect == 0 && self.rgb_settings.last_enabled_effect == 1))
+        {
             // Direct palettes have no NVM representation. Keep the previous
             // saved built-in effect rather than persisting an empty palette.
             return;

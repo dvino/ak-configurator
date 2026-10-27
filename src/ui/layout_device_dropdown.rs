@@ -52,8 +52,8 @@ fn about_device_label(lang: crate::i18n::Language) -> &'static str {
 
 fn beta1_profiles_label(lang: crate::i18n::Language) -> &'static str {
     match lang {
-        crate::i18n::Language::Russian => "Профили прошивки beta.1",
-        crate::i18n::Language::English => "beta.1 firmware profiles",
+        crate::i18n::Language::Russian => "Профили прошивки beta.2",
+        crate::i18n::Language::English => "beta.2 firmware profiles",
     }
 }
 
@@ -175,7 +175,8 @@ impl EntropyApp {
                 .input(|i| i.pointer.hover_pos())
                 .map(|pos| hover_bridge_rect.contains(pos))
                 .unwrap_or(false);
-            let show_dropdown = !advanced_tab_hovered
+            let show_dropdown = !egui::Popup::is_any_open(ctx)
+                && !advanced_tab_hovered
                 && !settings_tab_hovered
                 && (device_tab_hovered
                     || (was_open

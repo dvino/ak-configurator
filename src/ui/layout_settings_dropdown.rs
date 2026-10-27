@@ -48,7 +48,7 @@ impl EntropyApp {
     pub(super) fn draw_layout_settings_dropdown(
         &mut self,
         ui: &mut egui::Ui,
-        layout: &KeyboardLayout,
+        layout: Option<&KeyboardLayout>,
         lang: crate::i18n::Language,
         settings_tab_rect: Option<egui::Rect>,
         device_tab_hovered: bool,
@@ -63,7 +63,8 @@ impl EntropyApp {
                 .ctx()
                 .data(|d| d.get_temp::<bool>(dropdown_id))
                 .unwrap_or(false);
-            let rgb_available_for_menu = self.rgb_settings.supported || layout.supports_rgb;
+            let rgb_available_for_menu = layout.is_some()
+                && (self.rgb_settings.supported || layout.is_some_and(|l| l.supports_rgb));
             #[cfg(not(target_arch = "wasm32"))]
             let known_display_device = self
                 .selected_device
@@ -73,8 +74,10 @@ impl EntropyApp {
             let known_display_device = false;
             let show_display_item = display_menu_available(known_display_device);
             let layer_leds_available_for_menu = self.layer_led_settings.supported;
-            let show_encoders_item = self.show_separate_encoder_visibility_settings(layout);
-            let show_layout_options_item = !self.user_layout_option_indices(layout).is_empty();
+            let show_encoders_item =
+                layout.is_some_and(|l| self.show_separate_encoder_visibility_settings(l));
+            let show_layout_options_item =
+                layout.is_some_and(|l| !self.user_layout_option_indices(l).is_empty());
             #[cfg(not(target_arch = "wasm32"))]
             let deferred_modules = self.deferred_section_available(DeferredLoadSection::Modules);
             #[cfg(target_arch = "wasm32")]
@@ -99,7 +102,7 @@ impl EntropyApp {
             let deferred_rgb = false;
             let show_rgb_item = rgb_available_for_menu || deferred_rgb;
             let show_modules_item = (self.module_settings.supported || deferred_modules)
-                && !self.encoder_only_module_settings(layout);
+                && layout.is_some_and(|l| !self.encoder_only_module_settings(l));
             let show_touchpad_item = self.touchpad_settings.supported || deferred_touchpad;
             let show_bluetooth_item = self.bluetooth_settings.supported || deferred_bluetooth;
             let show_layer_leds_item = layer_leds_available_for_menu || deferred_layer_leds;
@@ -112,7 +115,7 @@ impl EntropyApp {
                     .iter()
                     .any(|qsid| self.supported_qmk_settings.contains(qsid));
             let show_update_indicator = crate::app::update_available(&self.update_check);
-            let show_matrix_item = self.firmware == FirmwareProtocol::Vial;
+            let show_matrix_item = layout.is_some() && self.firmware == FirmwareProtocol::Vial;
             let is_unlocked = self.vial_unlocked == Some(true);
             #[cfg(not(target_arch = "wasm32"))]
             let vial_hid_idle = vial_lock_control_idle(
@@ -222,7 +225,8 @@ impl EntropyApp {
                 .input(|i| i.pointer.hover_pos())
                 .map(|pos| hover_bridge_rect.contains(pos))
                 .unwrap_or(false);
-            let show_dropdown = !device_tab_hovered
+            let show_dropdown = !egui::Popup::is_any_open(ui.ctx())
+                && !device_tab_hovered
                 && !advanced_tab_hovered
                 && (settings_tab_hovered || (was_open && pointer_over_bridge));
 

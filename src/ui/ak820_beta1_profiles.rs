@@ -1,6 +1,6 @@
 use super::ak820_beta1_profiles as catalog;
 use crate::i18n::Language;
-use egui::{Color32, RichText};
+use egui::RichText;
 
 const OPTIONAL_MODULE_LABELS: &[(&str, &str, &str)] = &[
     ("auto-shift", "Auto Shift", "Auto Shift"),
@@ -21,7 +21,11 @@ const OPTIONAL_MODULE_LABELS: &[(&str, &str, &str)] = &[
     ("space-cadet", "Space Cadet", "Space Cadet"),
     ("tap-dance", "Tap Dance", "Tap Dance"),
     ("vialrgb-direct", "Per-key RGB", "RGB для каждой клавиши"),
-    ("vialrgb-direct-ram", "Volatile RGB palette", "Палитра RGB в ОЗУ"),
+    (
+        "vialrgb-direct-ram",
+        "Volatile RGB palette",
+        "Палитра RGB в ОЗУ",
+    ),
 ];
 
 #[derive(Clone)]
@@ -81,6 +85,16 @@ pub(crate) fn open(ctx: &egui::Context) {
     store(ctx, current);
 }
 
+pub(crate) fn close(ctx: &egui::Context) {
+    let mut current = state(ctx);
+    current.open = false;
+    store(ctx, current);
+}
+
+pub(crate) fn is_open(ctx: &egui::Context) -> bool {
+    state(ctx).open
+}
+
 pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language) -> egui::Response {
     let label = if language == Language::Russian {
         "Профили прошивки beta.2"
@@ -108,20 +122,18 @@ pub(crate) fn show(
     let russian = language == Language::Russian;
     let mut apply_profile = None;
     let mut keep_open = model.open;
-    egui::Window::new(if russian {
+    let mut close_clicked = false;
+    let preferred_size =
+        (ctx.content_rect().size() - egui::vec2(64.0, 100.0)).min(egui::vec2(960.0, 600.0));
+    crate::ui_style::utility_window(ctx, if russian {
         "Профили AK820 · beta.2"
     } else {
         "AK820 profiles · beta.2"
-    })
-    .id(egui::Id::new("ak820_beta1_profile_window"))
-    .open(&mut keep_open)
-    .default_size(egui::vec2(820.0, 660.0))
-    .min_size(egui::vec2(540.0, 420.0))
-    .max_size(egui::vec2(
-        (ctx.content_rect().width() - 32.0).max(540.0),
-        (ctx.content_rect().height() - 64.0).max(100.0),
-    ))
+    }, egui::Id::new("ak820_beta1_profile_window"), &mut keep_open, preferred_size)
+    .fixed_size(preferred_size)
+    .resizable(false)
     .show(ctx, |ui| {
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
         ui.label(if russian {
             "Выберите профиль, чтобы просмотреть его возможности и точную идентичность образа."
         } else {
@@ -129,16 +141,23 @@ pub(crate) fn show(
         });
         ui.add_space(8.0);
 
-        egui::ScrollArea::vertical()
-            .id_salt("ak820_beta1_profile_list")
-            .show(ui, |ui| {
-                egui::Grid::new("ak820_beta1_profile_cards")
-                    .num_columns(2)
-                    .spacing(egui::vec2(10.0, 8.0))
-                    .show(ui, |ui| {
-                        for (index, image) in catalog::profiles().iter().enumerate() {
+        ui.separator();
+        let available = ui.available_size();
+        let footer_reserve = 52.0;
+        let columns_height = (available.y - footer_reserve).max(100.0);
+        let list_width = (available.x * 0.32).clamp(132.0, 230.0);
+        let detail_width = (available.x - list_width - 16.0 - 2.0 * ui.spacing().item_spacing.x).max(100.0);
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(list_width, columns_height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+            egui::ScrollArea::vertical().id_salt("ak820_beta1_profile_list").max_height(columns_height).show(ui, |ui| {
+                ui.set_width((list_width - ui.spacing().scroll.bar_width - 4.0).max(100.0));
+                let mut profiles: Vec<_> = catalog::profiles().iter().collect();
+                profiles.sort_by_key(|image| image.profile != catalog::ProfileId::Main);
+                for image in profiles {
                             let id = image.profile;
-                            let matrix = catalog::matrix_profile(id);
                             let profile_description = catalog::profile_description(id);
                             let is_selected = model.selected == id;
                             let title = format!(
@@ -150,61 +169,21 @@ pub(crate) fn show(
                                     ""
                                 }
                             );
-                            let card = egui::Frame::group(ui.style())
-                                .fill(if is_selected {
-                                    ui.visuals().selection.bg_fill
-                                } else {
-                                    ui.visuals().faint_bg_color
-                                })
-                                .show(ui, |ui| ui.vertical(|ui| {
-                                    ui.set_width(330.0);
-                                    let response = ui.selectable_label(is_selected, title);
-                                    ui.label(RichText::new(id.as_str()).monospace().weak());
-                                    ui.label(profile_description.summary.for_language(russian));
-                                    let extra_modules = profile_modules(matrix, russian);
-                                    ui.label(if extra_modules.is_empty() {
-                                        if russian { "Базовые функции каталога" } else { "Catalog base features" }
-                                    } else {
-                                        extra_modules.as_str()
-                                    });
-                                    ui.horizontal_wrapped(|ui| {
-                                        ui.label(RichText::new(image.status.as_str()).weak());
-                                        ui.label(RichText::new(if image.hardware_validated {
-                                            if russian { "Устройство проверено" } else { "Hardware checked" }
-                                        } else if russian {
-                                            "Устройство не проверено"
-                                        } else {
-                                            "Hardware untested"
-                                        }).color(if image.hardware_validated {
-                                            Color32::LIGHT_GREEN
-                                        } else {
-                                            Color32::YELLOW
-                                        }));
-                                        ui.label(RichText::new(if matrix.release_approved {
-                                            if russian { "Релиз beta.2 одобрен" } else { "beta.2 release approved" }
-                                        } else if russian {
-                                            "Кандидат каталога"
-                                        } else {
-                                            "Catalog candidate"
-                                        }).weak());
-                                        ui.label(RichText::new(if russian {
-                                            "Образ включён в отдельный установщик"
-                                        } else {
-                                            "Image included in standalone installer"
-                                        }).strong());
-                                    });
-                                    response
-                                }).inner);
-                            if card.inner.clicked() && model.selected != id {
+                            let response = ui.add_sized([ui.available_width(), 42.0], egui::Button::selectable(is_selected, egui::RichText::new(title).size(12.5)).wrap());
+                            if response.clicked() && model.selected != id {
                                 select_preview_profile(&mut model, id);
                             }
-                            if index % 2 == 1 {
-                                ui.end_row();
-                            }
-                        }
-                    });
-
-                ui.add_space(12.0);
+                }
+            });
+                },
+            );
+            ui.add_space(16.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(detail_width, columns_height),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+            egui::ScrollArea::vertical().id_salt("ak820_beta1_profile_details").auto_shrink([false, false]).max_height(columns_height).show(ui, |ui| {
+                ui.set_width((detail_width - ui.spacing().scroll.bar_width - 4.0).max(100.0));
                 let image = catalog::profile(model.selected);
                 let matrix = catalog::matrix_profile(model.selected);
                 ui.separator();
@@ -215,7 +194,9 @@ pub(crate) fn show(
                 });
                 let profile_description = catalog::profile_description(model.selected);
                 ui.label(RichText::new(profile_description.summary.for_language(russian)).strong());
-                ui.label(profile_description.purpose.for_language(russian));
+                if profile_description.purpose.for_language(russian) != profile_description.summary.for_language(russian) {
+                    ui.label(profile_description.purpose.for_language(russian));
+                }
                 ui.label(format!("{} · {}", image.model, image.profile.as_str()));
                 ui.label(format!(
                     "{}: {}",
@@ -226,6 +207,7 @@ pub(crate) fn show(
                     },
                     profile_modules(matrix, russian)
                 ));
+                ui.collapsing(if russian { "Технические сведения об образе" } else { "Image technical details" }, |ui| {
                 let enabled_module_count = matrix
                     .capabilities
                     .optional_modules
@@ -301,6 +283,7 @@ pub(crate) fn show(
                 hash_row(ui, if russian { "Настройка сборки SHA-256" } else { "Configuration SHA-256" }, &image.build_identity.configuration_sha256);
                 hash_row(ui, if russian { "Схема настроек" } else { "Settings schema" }, &format!("{}", image.settings_schema));
                 ui.add_space(8.0);
+                });
                 ui.heading(if russian {
                     "Возможности и ограничения"
                 } else {
@@ -310,6 +293,9 @@ pub(crate) fn show(
                     if let Some(description) = catalog::feature_description(feature_id) {
                         ui.label(RichText::new(description.title.for_language(russian)).strong());
                         ui.label(description.summary.for_language(russian));
+                        if ui.link(if russian { "Подробнее" } else { "Learn more" }).clicked() {
+                            super::ak820_help_ui::open_section(ctx, &format!("feature-{feature_id}"));
+                        }
                         ui.label(RichText::new(description.limits.for_language(russian)).weak());
                         ui.add_space(5.0);
                     } else {
@@ -334,10 +320,10 @@ pub(crate) fn show(
                     .wrap(),
                 );
                 ui.label(RichText::new(if russian {
-                    "Все десять образов включены в отдельные установщики прошивки. Companion пока не устанавливает их; аппаратная проверка не проводилась."
+                    "Для установки выберите Меню → Установить прошивку. Просмотр этого каталога не изменяет клавиатуру."
                 } else {
-                    "All ten images are included in standalone firmware installers. The companion does not install them yet; no profile has been tested on hardware."
-                }).color(Color32::YELLOW));
+                    "Installation is a separate action in Menu → Install firmware. Browsing this catalog never changes the keyboard."
+                }).weak());
                 ui.label(RichText::new(if russian {
                     "Выбор в списке показывает возможности. В деморежиме кнопка ниже открывает офлайн-проект; клавиатура и её прошивка не изменяются."
                 } else {
@@ -356,17 +342,30 @@ pub(crate) fn show(
                     } else {
                         "Offline controls include profile-supported key and encoder assignments, macros, Combo, RGB and schema03 modules. Edits stay in memory until the application closes. No device is connected."
                     });
-                    if ui.button(if russian { "Применить к офлайн-проекту" } else { "Use in offline project" }).clicked() {
-                        apply_profile = apply_selected_profile(&mut model, offline_demo);
-                    }
-                    if catalog::matrix_profile(model.applied_to_offline_project).identity.nvm_schema == crate::ak820_typed_storage::SCHEMA {
-                        if ui.button(if russian { "Открыть модули офлайн" } else { "Open offline modules" }).clicked() {
-                            ctx.data_mut(|data| data.insert_temp(egui::Id::new("ak820_offline_extensions_open"), true));
-                        }
-                    }
+
                 }
             });
+                },
+            );
+        });
+        ui.separator();
+        ui.horizontal(|ui| {
+            if offline_demo && crate::ui_style::action_button(ui,
+                if russian { "Использовать в проекте" } else { "Use in project" },
+                model.selected != model.applied_to_offline_project).clicked() {
+                apply_profile = apply_selected_profile(&mut model, offline_demo);
+                close_clicked = true;
+            }
+
+            if crate::ui_style::modern_button(ui, if russian { "Закрыть" } else { "Close" }, egui::vec2(100.0, 32.0), true).clicked() { close_clicked = true; }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if crate::ui_style::modern_button(ui, if russian { "Справка" } else { "Help" }, egui::vec2(100.0, 32.0), true).clicked() { super::ak820_help_ui::open_section(ctx, "supported-firmware"); }
+            });
+        });
     });
+    if close_clicked {
+        keep_open = false;
+    }
     model.open = keep_open;
     store(ctx, model);
     apply_profile
@@ -423,11 +422,32 @@ mod tests {
         let profiles = &catalog::firmware_matrix().profiles;
         assert_eq!(profiles.len(), 10);
         for profile in profiles {
-            let enabled = OPTIONAL_MODULE_LABELS.iter().filter(|(id, _, _)| profile.capabilities.optional_modules.get(*id) == Some(&true)).collect::<Vec<_>>();
-            let expected_en = enabled.iter().map(|(_, en, _)| *en).collect::<Vec<_>>().join(" · ");
-            let expected_ru = enabled.iter().map(|(_, _, ru)| *ru).collect::<Vec<_>>().join(" · ");
-            assert_eq!(profile_modules(profile, false), expected_en, "{} EN", profile.profile.as_str());
-            assert_eq!(profile_modules(profile, true), expected_ru, "{} RU", profile.profile.as_str());
+            let enabled = OPTIONAL_MODULE_LABELS
+                .iter()
+                .filter(|(id, _, _)| profile.capabilities.optional_modules.get(*id) == Some(&true))
+                .collect::<Vec<_>>();
+            let expected_en = enabled
+                .iter()
+                .map(|(_, en, _)| *en)
+                .collect::<Vec<_>>()
+                .join(" · ");
+            let expected_ru = enabled
+                .iter()
+                .map(|(_, _, ru)| *ru)
+                .collect::<Vec<_>>()
+                .join(" · ");
+            assert_eq!(
+                profile_modules(profile, false),
+                expected_en,
+                "{} EN",
+                profile.profile.as_str()
+            );
+            assert_eq!(
+                profile_modules(profile, true),
+                expected_ru,
+                "{} RU",
+                profile.profile.as_str()
+            );
         }
 
         let no_modules = catalog::MatrixProfile {
@@ -565,7 +585,10 @@ mod tests {
             apply_selected_profile(&mut model, true),
             Some(catalog::ProfileId::Pointer)
         );
-        assert_eq!(model.applied_to_offline_project, catalog::ProfileId::Pointer);
+        assert_eq!(
+            model.applied_to_offline_project,
+            catalog::ProfileId::Pointer
+        );
         assert_eq!(apply_selected_profile(&mut model, true), None);
     }
 }
