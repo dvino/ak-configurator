@@ -65,6 +65,10 @@ pub(crate) struct Scheduler {
 }
 
 impl Scheduler {
+    pub(crate) fn failed(&self) -> bool {
+        self.failed
+    }
+
     pub(crate) fn bind(&mut self, generation: u64) {
         if self.session != Some(generation) {
             *self = Self {

@@ -434,6 +434,7 @@ mod tests {
     fn autolayer_settings_stays_in_place_when_master_switch_changes() {
         let ctx = egui::Context::default();
         let mut app = EntropyApp::new_inert_for_test();
+        app.app_settings.language = crate::i18n::Language::English;
         let device_key = "offline-macropad-vertical-position-test".to_owned();
         app.app_settings.application_layouts.insert(
             device_key.clone(),

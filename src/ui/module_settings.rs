@@ -1764,6 +1764,7 @@ mod tests {
         }
 
         let mut app = test_app();
+        app.app_settings.language = crate::i18n::Language::English;
         assert_eq!(
             app.module_setting_label(ModuleSettingsGroupKind::AutoLayer, &field.title),
             "Auto layer deactivate on key"

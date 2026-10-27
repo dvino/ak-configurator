@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const WINDOWS_ICON_PATH: &str = "assets/entropy.ico";
+const WINDOWS_ICON_PATH: &str = "assets/ak-configurator.ico";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");

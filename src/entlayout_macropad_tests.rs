@@ -728,6 +728,7 @@ use crate::application_layouts::{
 
 fn fixture() -> (EntropyApp, crate::hid::TestHidRecorder, String) {
     let mut app = EntropyApp::new_inert_for_test();
+    app.app_settings.language = crate::i18n::Language::English;
     // Most cases model firmware with explicitly unsupported custom icon storage.
     // Cold-connection regressions override this to None and script production reads.
     app.display_settings.pictograms.supported = Some(false);

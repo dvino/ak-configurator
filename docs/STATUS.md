@@ -27,3 +27,11 @@ The ten beta.3 release profile sources and verified assets are available for off
 Firmware CI passed the shared-host job and revalidated/assembled all ten profiles; it skipped the profile qualification matrix and publishing. The later public release and source-to-release identity checks are complete as described above. Application package configuration is not a completed release. Backup history limits, guarded restore/reset/deletion steps, and filesystem/platform constraints are detailed in [DESKTOP.md](DESKTOP.md). The complete six-platform native pass, installed execution on the other five targets, signing/notarization and device qualification remain open. The verified Linux trial is recorded separately above. Verified release inputs do not establish physical device behavior.
 
 Historical beta.2 documentation and changelog entries describe the earlier development baseline; claims that Direct palette readback or atomic commit are absent apply only to that historical firmware. Beta.2 backup migration is supported only through an explicit reviewed source-to-target path. Historical CI runs, isolated adapter typechecks and earlier platform checks do not establish current-source qualification. Browser support remains a later stage. Source implementation, host tests, platform execution and physical behavior are tracked separately.
+
+Windows local fix: HID now routes FD02 replies to OS indicator validation. The local build uses the supplied AK Configurator icon for the Windows executable, window and tray. The matching test passes; physical indicator and tray restore remain unverified.
+
+On a Russian-locale Windows host, the full suite reported 1691 passes, 11 failures and 5 ignored. All 11 passed individually after test fixtures explicitly selected English where expected; the held-HID test also has a longer test-only deadline. At this review, a full rerun had not finished.
+
+The OS helper cannot enter the background after a session or helper error. The error stays visible while the device is unverified. Targeted offline tests passed, and the rebuilt Windows x86_64 package was installed and self-checked. Physical behavior remains unverified.
+
+The tray setting takes priority over the automatic helper handoff. The Windows close-event test passed; restoring a real window from the tray remains unverified.

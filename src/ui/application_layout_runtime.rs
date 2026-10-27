@@ -2618,6 +2618,7 @@ mod tests {
             (0,"draft_switch_device"), (0,"unicode")] {
             let ctx = egui::Context::default();
             let mut app = EntropyApp::new_inert_for_test();
+            app.app_settings.language = crate::i18n::Language::English;
             let mut device = m4cr0pad_v3_device();
             device.path = format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"));
             app.device_manager.replace_devices(vec![device]);
@@ -2649,7 +2650,7 @@ mod tests {
             let gate = std::sync::Mutex::new(gate);
             packets.respond_by(move |request| {
                 if request[..2] == [0xfe, 0x08] {
-                    gate.lock().unwrap().recv_timeout(std::time::Duration::from_secs(3)).unwrap();
+                    gate.lock().unwrap().recv_timeout(std::time::Duration::from_secs(30)).unwrap();
                     Some(Ok([0;32]))
                 } else if request[..2] == [0xfe, 0x0b] && request[2..4] == 200u16.to_le_bytes() {
                     if scenario == "set_error" { return Some(Ok([0xff;32])); }

@@ -1078,6 +1078,7 @@ mod tests {
     fn pending_modifier_picker_renders_layout_and_list_tabs() {
         let ctx = egui::Context::default();
         let mut picker = KeycodePicker::default();
+        picker.language = crate::i18n::Language::English;
         picker.open = true;
         picker.vial_quantum_pending_mod = Some(0x0100);
 

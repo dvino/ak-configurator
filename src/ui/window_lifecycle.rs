@@ -27,8 +27,8 @@ fn should_keep_vial_unlock_visible(unlock_open: bool, unlock_polling: bool) -> b
     unlock_open || unlock_polling
 }
 
-fn should_handoff_close_to_helper(enabled: bool, allowed: bool, explicit_quit: bool) -> bool {
-    enabled && allowed && !explicit_quit
+fn should_handoff_close_to_helper(enabled: bool, allowed: bool, explicit_quit: bool, faulted: bool) -> bool {
+    enabled && allowed && !explicit_quit && !faulted
 }
 
 impl EntropyApp {
@@ -256,19 +256,6 @@ impl EntropyApp {
             return;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        if should_handoff_close_to_helper(
-            crate::app::background_helper_enabled(),
-            crate::background_helper_allowed(),
-            self.force_close_requested,
-        ) {
-            if self.defer_exit_until_hid_write_returns(ctx) {
-                return;
-            }
-            crate::request_background_helper();
-            return;
-        }
-
         if self.app_settings.minimize_to_tray_on_close
             || matches!(
                 self.app_settings.close_to_tray_behavior,
@@ -277,6 +264,20 @@ impl EntropyApp {
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.minimize_window_to_tray(ctx);
+            return;
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if should_handoff_close_to_helper(
+            crate::app::background_helper_enabled(),
+            crate::background_helper_allowed(),
+            self.force_close_requested,
+            !self.ak820_os_indicator_handoff_allowed(),
+        ) {
+            if self.defer_exit_until_hid_write_returns(ctx) {
+                return;
+            }
+            crate::request_background_helper();
             return;
         }
 
@@ -1182,10 +1183,31 @@ mod tests {
 
     #[test]
     fn helper_close_handoff_requires_opt_in_and_never_intercepts_explicit_quit() {
-        assert!(should_handoff_close_to_helper(true, true, false));
-        assert!(!should_handoff_close_to_helper(false, true, false));
-        assert!(!should_handoff_close_to_helper(true, false, false));
-        assert!(!should_handoff_close_to_helper(true, true, true));
+        assert!(should_handoff_close_to_helper(true, true, false, false));
+        assert!(!should_handoff_close_to_helper(false, true, false, false));
+        assert!(!should_handoff_close_to_helper(true, false, false, false));
+        assert!(!should_handoff_close_to_helper(true, true, true, false));
+        assert!(!should_handoff_close_to_helper(true, true, false, true));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn configured_tray_close_takes_priority_over_background_handoff() {
+        let _storage = crate::app::app_storage::ScopedTempConfig::new();
+        crate::cancel_background_helper_request();
+        let mut app = EntropyApp::new_inert_for_test();
+        app.app_settings.ak820_os_indicator.enabled = true;
+        app.app_settings.minimize_to_tray_on_close = true;
+        app.app_settings.close_to_tray_behavior = CloseToTrayBehavior::Tray;
+        save_app_settings(&app.app_settings);
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().events.push(egui::ViewportEvent::Close);
+        let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
+        assert!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::CancelClose));
+        assert!(!crate::background_helper_requested());
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        app.release_tray_before_gui_drop();
     }
 
     #[test]

@@ -246,6 +246,7 @@ mod tests {
     #[test]
     fn single_section_heading_is_searchable() {
         let mut picker = KeycodePicker::default();
+        picker.language = crate::i18n::Language::English;
         let basic_heading = picker.tab_heading(KeycodeTab::Basic).unwrap();
         let results = search(&mut picker, "standard keyboard layout");
         assert!(!results.is_empty());
@@ -295,6 +296,7 @@ mod tests {
     #[test]
     fn finds_rows_the_static_keycode_table_does_not_know() {
         let mut picker = KeycodePicker::default();
+        picker.language = crate::i18n::Language::English;
 
         // RGB tab rows are hardcoded keycodes.
         let results = search(&mut picker, "backlight");

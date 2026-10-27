@@ -831,3 +831,11 @@ candidate install/execute/uninstall smoke passed on Windows x64 and arm64. Linux
 x64/arm64 and macOS x64/arm64 jobs also passed. The local release workflow suite
 passed 15 tests. These results establish the stated CI checks only; broader OS
 qualification and physical keyboard behavior remain separate.
+
+## Windows alpha follow-up — 2026-10-27
+
+An independent automated reviewer checked the changes to FD02 response matching, failure handling, tray close priority, the Windows icon and the documentation. No actionable code findings remained. The review did not include device access.
+
+The Windows x86_64 release build and offline self-check passed. The package install, upgrade, uninstall and data-preservation checks passed in isolation; the same executable was installed and self-checked. Its SHA256 is 79a9e6a2736ef4351363a2cd637c891e827ba61a4074e8287aabf6ae7f80f678. The unsigned archive SHA256 is 92581cecb2dfa1dee053002e495756dabf5b1d2756c6861b7f71a56e7f9c1828. This local package was built from a modified worktree based on b332696, not from a clean release commit.
+
+The first full Windows suite had 1691 passes, 11 failures and 5 ignored. All 11 failed tests passed individually after test-only locale and deadline corrections. At this review, the full rerun had not finished. Targeted FD02, helper fault and tray-close tests passed. The physical indicator, real tray restore and other platforms remain unverified.

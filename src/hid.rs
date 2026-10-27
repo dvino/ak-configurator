@@ -1799,6 +1799,7 @@ fn response_matches_command(command: &[u8], resp: &[u8; MSG_LEN]) -> bool {
                 && match command[1] {
                     0 => command.len() >= 5 && resp[..5] == command[..5],
                     1 => resp[..4] == [0xFD, 1, 1, 0xA8],
+                    2 => resp[..2] == [0xFD, 2],
                     _ => false,
                 }
         }
@@ -2393,6 +2394,21 @@ mod tests {
             usb_send_max_attempts(HidTransport::Usb, &dynamic_entry_counts),
             1
         );
+    }
+
+    #[test]
+    fn os_indicator_reply_reaches_contract_validation() {
+        use crate::ak820_os_indicator::{request, validate_reply, Mode};
+        let command = request(Mode::Breathing);
+        let mut response = [0u8; MSG_LEN];
+        response[..10].copy_from_slice(&[0xfd, 2, 1, 0, 3, 0xa8, 0xb8, 0x0b, 0, 0x10]);
+        assert!(response_matches_command(&command, &response));
+        assert!(validate_reply(Mode::Breathing, &response).is_ok());
+        response[3] = 2;
+        assert!(response_matches_command(&command, &response));
+        assert!(validate_reply(Mode::Breathing, &response).is_err());
+        response[1] = 1;
+        assert!(!response_matches_command(&command, &response));
     }
 
     #[test]

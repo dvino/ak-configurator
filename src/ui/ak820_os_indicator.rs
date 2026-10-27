@@ -104,6 +104,11 @@ impl Runtime {
 }
 
 impl EntropyApp {
+    pub(super) fn ak820_os_indicator_handoff_allowed(&self) -> bool {
+        !self.ak820_os_indicator_runtime.scheduler.failed()
+            && self.hid_device.as_ref().is_none_or(|hid| hid.ak820_failure().is_none())
+    }
+
     pub(super) fn ak820_os_indicator_owns_hid(&self) -> bool {
         self.ak820_os_indicator_runtime.in_flight
     }
@@ -190,7 +195,9 @@ impl EntropyApp {
         if busy || !verified || self.headless {
             runtime.scheduler.pause();
             runtime.previous = None;
-            if self.app_settings.ak820_os_indicator.enabled {
+            if self.app_settings.ak820_os_indicator.enabled
+                && !matches!(runtime.status, IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped)
+            {
                 runtime.status = IndicatorStatus::Paused;
             }
             return;
@@ -199,6 +206,7 @@ impl EntropyApp {
             runtime.generation = self.connection_generation;
             runtime.previous = None;
             runtime.checked_at = None;
+            runtime.status = IndicatorStatus::Ready;
         }
         runtime.scheduler.bind(self.connection_generation);
         if !self.app_settings.ak820_os_indicator.enabled
@@ -364,6 +372,7 @@ impl EntropyApp {
                             && !self.ak820_demo
                             && !self.headless
                             && crate::background_helper_allowed()
+                            && self.ak820_os_indicator_handoff_allowed()
                             && !self.hid_write_lifecycle_busy()
                             && matches!(self.connect_state, ConnectState::Idle)
                             && !self.unlock_open
@@ -620,6 +629,28 @@ pub(crate) fn run_background_helper() -> HelperExit {
 #[cfg(test)]
 mod background_tests {
     use super::*;
+    #[test]
+    fn failed_session_cannot_handoff_or_hide_its_error() {
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, requests) = crate::hid::HidDevice::test_ak820_device(true);
+        hid.ak820_fail(&anyhow::anyhow!("synthetic timeout"));
+        app.hid_device = Some(hid);
+        app.app_settings.ak820_os_indicator.enabled = true;
+        app.ak820_os_indicator_runtime.status = IndicatorStatus::DeviceError;
+        assert!(!app.ak820_os_indicator_handoff_allowed());
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(matches!(app.ak820_os_indicator_runtime.status, IndicatorStatus::DeviceError));
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn failed_indicator_scheduler_blocks_handoff_without_a_device() {
+        let mut app = EntropyApp::new_inert_for_test();
+        assert!(app.ak820_os_indicator_handoff_allowed());
+        app.ak820_os_indicator_runtime.scheduler.completed(0, Mode::Off, false);
+        assert!(!app.ak820_os_indicator_handoff_allowed());
+    }
+
     #[test]
     fn fault_cannot_be_regranted_by_time_or_repeated_same_endpoint() {
         let mut gate = FaultedEndpoints::default();
