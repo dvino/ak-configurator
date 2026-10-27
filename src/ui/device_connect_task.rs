@@ -787,10 +787,7 @@ impl EntropyApp {
                     dev.product_id
                 );
                 #[cfg(test)]
-                let opened = match test_hid {
-                    Some(hid) => Ok(hid),
-                    None => HidDevice::open_fresh_for(&dev),
-                };
+                let opened = open_test_connect_hid(test_hid);
                 #[cfg(not(test))]
                 let opened = HidDevice::open_fresh_for(&dev);
                 let dev_conn = opened.map_err(|e| format!("Open failed: {e:#}"))?;
@@ -1677,8 +1674,23 @@ impl EntropyApp {
 }
 
 #[cfg(test)]
+fn open_test_connect_hid(
+    test_hid: Option<crate::hid::HidDevice>,
+) -> Result<crate::hid::HidDevice, String> {
+    test_hid.ok_or_else(|| "Test connection requires an explicit test HID device".to_owned())
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_worker_requires_an_explicit_test_hid() {
+        assert!(matches!(open_test_connect_hid(None), Err(ref error)
+            if error.contains("explicit test HID device")));
+        let (hid, _recorder) = crate::hid::HidDevice::test_device();
+        assert!(open_test_connect_hid(Some(hid)).is_ok());
+    }
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]

@@ -843,3 +843,7 @@ The first full Windows suite had 1691 passes, 11 failures and 5 ignored. All 11 
 The full Windows rerun was stopped after tests wrote to the real application configuration. Unit-test storage, configuration and cache paths now use a temporary root, and unit tests cannot change autostart. Five storage tests and one startup/cache path test passed. Other filesystem paths, system APIs, network access and spawned production binaries still require review. This does not establish that the full suite is safe on a user account.
 
 An independent automated reviewer checked the test-only isolation changes and the EN/RU incident record. No blocking findings remained. The shared fallback does not isolate unscoped tests from each other; worker tasks that need a scoped directory must retain its resolved path and finish before the scope ends.
+
+Follow-up unit-test safeguards reject the reviewed live HID open and discovery paths, require an explicit test HID for connection and skip native tray creation. Focused Windows tests for these safeguards, the indicator and tray-close policy passed; 42 connection and 15 scan tests also passed. They do not cover every operating-system or subprocess path, and the test suite is not qualified as fully isolated.
+
+An independent automated reviewer checked these safeguards and their documentation; no blocking findings remained. Private lower-level HID calls, macOS initialization and spawned production binaries remain outside this review's isolation claim.

@@ -690,14 +690,29 @@ impl HidDevice {
     }
 
     pub fn open_fresh_for(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(test)]
+        {
+            let _ = device;
+            bail!("Live HID is disabled in unit tests; use an explicit test device");
+        }
+        #[cfg(not(test))]
+        {
         if !device.is_ak820() {
             bail!("AK Configurator supports only the wired AK820 Raw HID interface");
         }
         Self::open_proxy_for(device)
+        }
     }
 
     // Called only by the helper on its main thread, never by the UI process.
     fn open_in_helper(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(test)]
+        {
+            let _ = device;
+            bail!("Live HID is disabled in unit tests; use an explicit test device");
+        }
+        #[cfg(not(test))]
+        {
         #[cfg(target_os = "linux")]
         if device.uses_bluez_gatt_transport() {
             match crate::linux_ble::LinuxBleDevice::open(device) {
@@ -715,6 +730,7 @@ impl HidDevice {
             }
         }
         Self::open_fresh_for_local(device)
+        }
     }
 
     /// Only dedicated owners may use this handle. A shared-output consumer must
@@ -769,6 +785,13 @@ impl HidDevice {
     }
 
     fn open_fresh_for_local(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(test)]
+        {
+            let _ = device;
+            bail!("Live HID is disabled in unit tests; use an explicit test device");
+        }
+        #[cfg(not(test))]
+        {
         #[cfg(target_os = "macos")]
         let open_result = with_macos_bluetooth_hid_access(
             device.is_bluetooth_transport(),
@@ -781,6 +804,7 @@ impl HidDevice {
         let open_result = Self::open_fresh_for_local_after_access_request(device);
 
         open_result
+        }
     }
 
     fn open_fresh_for_local_after_access_request(device: &crate::device::Device) -> Result<Self> {
@@ -2409,6 +2433,33 @@ mod tests {
         assert!(validate_reply(Mode::Breathing, &response).is_err());
         response[1] = 1;
         assert!(!response_matches_command(&command, &response));
+    }
+
+    #[test]
+    fn unit_tests_reject_opening_a_live_ak820_endpoint() {
+        let device = crate::device::Device {
+            name: "synthetic AK820".into(),
+            vendor_id: 0x320f,
+            product_id: 0x505b,
+            manufacturer: String::new(),
+            serial_number: String::new(),
+            bus_type: "Usb".into(),
+            path: "synthetic-no-device".into(),
+            instance_token: String::new(),
+            firmware: crate::firmware::FirmwareProtocol::Vial,
+        };
+        let error = HidDevice::open_fresh_for(&device)
+            .err()
+            .expect("live open must fail");
+        assert!(error.to_string().contains("disabled in unit tests"));
+        let local_error = HidDevice::open_fresh_for_local(&device)
+            .err()
+            .expect("local live open must fail");
+        assert!(local_error.to_string().contains("disabled in unit tests"));
+        let helper_error = HidDevice::open_in_helper(&device)
+            .err()
+            .expect("helper live open must fail");
+        assert!(helper_error.to_string().contains("disabled in unit tests"));
     }
 
     #[test]

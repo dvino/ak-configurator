@@ -37,3 +37,5 @@ The OS helper cannot enter the background after a session or helper error. The e
 The tray setting takes priority over the automatic helper handoff. The Windows close-event test passed; restoring a real window from the tray remains unverified.
 
 The local Windows full-suite rerun was stopped after test code wrote to the real application configuration. Unit-test storage, configuration and cache paths now use a temporary root; unit tests cannot change autostart. Five storage tests and one startup/cache path test passed. Other filesystem paths, system APIs, network access and spawned production binaries still need isolation review; this does not qualify the full suite as safe to run on a user account.
+
+Unit-test device discovery and the reviewed HID open paths now fail closed; the connection worker requires an explicit test device. Unit tests skip native tray creation. Focused Windows tests passed for these paths and the existing indicator and tray decisions; 42 connection and 15 scan tests also passed. A real tray restore and physical keyboard behavior remain unverified.

@@ -522,6 +522,13 @@ impl DeviceManager {
     }
 
     pub fn new() -> Self {
+        // Unit tests must never enumerate the host's real HID devices.
+        #[cfg(test)]
+        {
+            return Self { devices: vec![] };
+        }
+
+        #[cfg(not(test))]
         #[cfg(not(target_os = "macos"))]
         {
             let mut manager = Self { devices: vec![] };
@@ -531,7 +538,7 @@ impl DeviceManager {
 
         // Do not scan here on macOS: hidapi pumps the run loop during enumeration,
         // which can re-enter winit while its event handler is still active.
-        #[cfg(target_os = "macos")]
+        #[cfg(all(not(test), target_os = "macos"))]
         {
             Self { devices: vec![] }
         }
@@ -544,11 +551,24 @@ impl DeviceManager {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan_usb_devices() -> Result<Vec<Device>, String> {
+        #[cfg(test)]
+        {
+            return Err("USB discovery is disabled in unit tests; use explicit fixtures".to_owned());
+        }
+
+        #[cfg(not(test))]
         usb_discovery::scan().map(|devices| devices.into_iter().filter(Device::is_ak820).collect())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan_devices() -> Result<Vec<Device>, String> {
+        #[cfg(test)]
+        {
+            return Err("HID discovery is disabled in unit tests; use explicit fixtures".to_owned());
+        }
+
+        #[cfg(not(test))]
+        {
         let mut devices = Vec::new();
 
         #[cfg(target_os = "macos")]
@@ -609,6 +629,7 @@ impl DeviceManager {
 
         devices.retain(Device::is_ak820);
         Ok(devices)
+        }
     }
 
     pub fn scan(&mut self) {
@@ -701,6 +722,27 @@ fn merge_bluez_vial_devices(devices: &mut Vec<Device>, bluez_devices: Vec<Device
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ordinary_device_manager_construction_is_empty_in_tests() {
+        assert!(DeviceManager::new().devices().is_empty());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn usb_scan_fails_closed_in_tests() {
+        assert!(DeviceManager::scan_usb_devices()
+            .expect_err("test USB scan must fail closed")
+            .contains("disabled in unit tests"));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn hid_scan_fails_closed_in_tests() {
+        assert!(DeviceManager::scan_devices()
+            .expect_err("test HID scan must fail closed")
+            .contains("disabled in unit tests"));
+    }
 
     fn test_device(bus_type: &str, path: &str) -> Device {
         Device {

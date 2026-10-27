@@ -754,6 +754,15 @@ impl EntropyApp {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(super) fn ensure_tray_icon(&mut self, ctx: &egui::Context) {
+        // Unit tests exercise close policy without creating native tray state
+        // or installing process-global callbacks.
+        #[cfg(test)]
+        {
+            let _ = (self, ctx);
+        }
+
+        #[cfg(not(test))]
+        {
         *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = Some(TrayGui {
             context: ctx.clone(),
             #[cfg(target_os = "windows")]
@@ -842,6 +851,7 @@ impl EntropyApp {
         {
             Ok(icon) => self.tray_icon = Some(icon),
             Err(e) => log::warn!("failed to create tray icon: {e}"),
+        }
         }
     }
 
