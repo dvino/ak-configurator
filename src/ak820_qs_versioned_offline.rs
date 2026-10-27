@@ -21,6 +21,38 @@ impl TryFrom<u8> for RecordVersion {
         }
     }
 }
+/// Offline image contract version, distinct from the persisted record header.
+/// The provisional v2 image reads both v1 and v2 records; v1 reads only v1.
+/// Callers must supply this explicitly; no image identity is admitted here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ImageVersion {
+    V1,
+    V2,
+}
+impl TryFrom<u8> for ImageVersion {
+    type Error = String;
+    fn try_from(value: u8) -> CodecResult<Self> {
+        match value {
+            1 => Ok(Self::V1),
+            2 => Ok(Self::V2),
+            _ => Err("Unknown QS image contract version".into()),
+        }
+    }
+}
+impl ImageVersion {
+    fn record_version(self) -> RecordVersion {
+        match self {
+            Self::V1 => RecordVersion::V1,
+            Self::V2 => RecordVersion::V2,
+        }
+    }
+    fn accepts(self, record: RecordVersion) -> bool {
+        match self {
+            Self::V1 => record == RecordVersion::V1,
+            Self::V2 => true,
+        }
+    }
+}
 // QSID, offset, width, minimum, maximum, default. First six are v1.
 const FIELDS: [(u16, usize, usize, u16, u16, u16); 9] = [
     (1, 5, 1, 0, 15, 0),
@@ -125,10 +157,10 @@ impl SettingsRecord {
         }
         result.normalize(target)
     }
-    /// Offline boundary for a caller that already knows the source record
-    /// contract. The supplied version is not evidence of image admission.
-    /// Erased storage inherits the source contract before normalization, so a
-    /// v2 source cannot be downgraded even when it contains no saved values.
+    /// Strict persisted-record contract, not a source image version. Nonblank
+    /// headers must match exactly; blank defaults use the supplied record
+    /// version. Use decode_for_image for a v2 image retaining a v1 record.
+    /// Neither API admits an image identity.
     pub(crate) fn decode_for_source(
         raw: &[u8],
         source: RecordVersion,
@@ -144,6 +176,28 @@ impl SettingsRecord {
             return Err("QS record version differs from explicit source contract".into());
         }
         Self::decode(raw, source)?.normalize(target)
+    }
+    /// Decode within an explicit source IMAGE contract, then migrate to the
+    /// target IMAGE contract. Mirrors provisional Python decode_settings with
+    /// the source image's settings_record_version, followed by normalization.
+    /// Image downgrade is forbidden even if storage remains v1 or erased.
+    /// This produces an offline model only and has no production callers.
+    pub(crate) fn decode_for_image(
+        raw: &[u8],
+        source: ImageVersion,
+        target: ImageVersion,
+    ) -> CodecResult<Self> {
+        if source == ImageVersion::V2 && target == ImageVersion::V1 {
+            return Err("QS image contract downgrade is forbidden".into());
+        }
+        if raw.len() != 24 {
+            return Err("QS record requires 24 bytes".into());
+        }
+        let erased = raw.iter().all(|&v| v == 0) || raw.iter().all(|&v| v == 255);
+        if !erased && !source.accepts(RecordVersion::try_from(raw[2])?) {
+            return Err("QS record version is not accepted by source image contract".into());
+        }
+        Self::decode(raw, source.record_version())?.normalize(target.record_version())
     }
     pub(crate) fn normalize(&self, target: RecordVersion) -> CodecResult<Self> {
         if self.version == RecordVersion::V2 && target == RecordVersion::V1 {
@@ -285,6 +339,66 @@ mod tests {
         }
         for size in [0, 23, 25] {
             assert!(SettingsRecord::decode_for_source(&vec![0; size], V1, V2).is_err());
+        }
+    }
+    #[test]
+    fn image_contract_acceptance_migration_and_erased_defaults() {
+        use ImageVersion::{V1 as I1, V2 as I2};
+        let mut old = SettingsRecord::defaults(V1);
+        old.set(2, 913).unwrap();
+        old.set(4, 996).unwrap();
+        let mut current = SettingsRecord::defaults(V2);
+        current.set(3, 29).unwrap();
+        current.set(6, 30000).unwrap();
+        current.set(22, 1).unwrap();
+        for source in [I1, I2] {
+            for target in [I1, I2] {
+                for (record, persisted) in [
+                    (old.encode(), Some(V1)),
+                    (current.encode(), Some(V2)),
+                    ([0; 24], None),
+                    ([255; 24], None),
+                ] {
+                    let result = SettingsRecord::decode_for_image(&record, source, target);
+                    let allowed =
+                        !(source == I2 && target == I1) && !(source == I1 && persisted == Some(V2));
+                    assert_eq!(
+                        result.is_ok(),
+                        allowed,
+                        "{source:?} -> {target:?}, persisted {persisted:?}"
+                    );
+                    if allowed {
+                        let expected = match persisted {
+                            Some(V1) => old.normalize(target.record_version()).unwrap(),
+                            Some(V2) => current.clone(),
+                            None => SettingsRecord::defaults(source.record_version())
+                                .normalize(target.record_version())
+                                .unwrap(),
+                        };
+                        assert_eq!(result.unwrap(), expected);
+                    }
+                }
+            }
+        }
+        // Both images validate the full stored record, including corrected-CRC
+        // reserved corruption, rather than accepting only its version byte.
+        for (source, model) in [(I1, old), (I2, current)] {
+            for byte in 0..24 {
+                let mut bad = model.encode();
+                bad[byte] ^= 1;
+                assert!(SettingsRecord::decode_for_image(&bad, source, I2).is_err());
+            }
+            let mut bad = model.encode();
+            bad[21] = 1;
+            let checksum = crc(&bad[..22]);
+            bad[22..].copy_from_slice(&checksum.to_le_bytes());
+            assert!(SettingsRecord::decode_for_image(&bad, source, I2).is_err());
+            for size in [0, 23, 25] {
+                assert!(SettingsRecord::decode_for_image(&vec![0; size], source, I2).is_err());
+            }
+        }
+        for version in [0, 3, 255] {
+            assert!(ImageVersion::try_from(version).is_err());
         }
     }
     #[test]

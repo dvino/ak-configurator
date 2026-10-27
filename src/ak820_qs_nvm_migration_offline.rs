@@ -6,15 +6,17 @@
 //! No production caller, identity admission, transport or persistence is provided.
 #![allow(dead_code)]
 
-use crate::ak820_qs_versioned_offline::{RecordVersion, SettingsRecord};
+use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
 
 const NVM_SIZE: usize = 0x2800;
 const QS_START: usize = 0x6a8;
 const QS_END: usize = QS_START + 24;
 
 /// Return a separate prepared NVM payload with only its QS record normalized.
-/// Source and target versions are explicit format assumptions, not trusted
-/// image identities. All other bytes are opaque and preserved, not validated.
+/// Source is the explicit persisted RECORD version, not the source image
+/// version. Target is a record version too. These format assumptions do not
+/// establish trusted image identities. All other bytes are opaque and preserved,
+/// not validated. Use prepare_qs_nvm_for_image for an image retaining older QS.
 /// Completely zero/FF QS records materialize canonical defaults, following the
 /// Python offline codec; this does not claim firmware saves its RAM upgrade.
 pub(crate) fn prepare_qs_nvm(
@@ -22,16 +24,41 @@ pub(crate) fn prepare_qs_nvm(
     source: RecordVersion,
     target: RecordVersion,
 ) -> Result<Vec<u8>, String> {
+    validate_carrier(nvm)?;
+    let record = SettingsRecord::decode_for_source(&nvm[QS_START..QS_END], source, target)?;
+    Ok(with_record(nvm, record))
+}
+
+/// Prepare a separate payload using explicit source and target IMAGE contracts.
+/// A v2 image may retain a v1 persisted record; source-image defaults apply to
+/// erased records. Image downgrade is forbidden even for v1 or erased storage.
+/// ImageVersion expresses an offline format assumption, never image admission
+/// or authorization of a directed transition. Canonical defaults in this output
+/// do not establish firmware persistence. Non-QS bytes remain opaque.
+pub(crate) fn prepare_qs_nvm_for_image(
+    nvm: &[u8],
+    source: ImageVersion,
+    target: ImageVersion,
+) -> Result<Vec<u8>, String> {
+    validate_carrier(nvm)?;
+    let record = SettingsRecord::decode_for_image(&nvm[QS_START..QS_END], source, target)?;
+    Ok(with_record(nvm, record))
+}
+
+fn validate_carrier(nvm: &[u8]) -> Result<(), String> {
     if nvm.len() != NVM_SIZE {
         return Err("Incomplete or oversized NVM".into());
     }
     if nvm[..2] != [0xe6, 0xfe] || nvm[37..40] != [3, 0x20, 8] {
         return Err("NVM magic or schema03 differs".into());
     }
-    let record = SettingsRecord::decode_for_source(&nvm[QS_START..QS_END], source, target)?;
+    Ok(())
+}
+
+fn with_record(nvm: &[u8], record: SettingsRecord) -> Vec<u8> {
     let mut prepared = nvm.to_vec();
     prepared[QS_START..QS_END].copy_from_slice(&record.encode());
-    Ok(prepared)
+    prepared
 }
 
 #[cfg(test)]
@@ -118,6 +145,69 @@ mod tests {
                 bad[index] ^= 1;
                 let snapshot = bad.clone();
                 assert!(prepare_qs_nvm(&bad, source, V2).is_err(), "byte {index}");
+                assert_eq!(bad, snapshot);
+            }
+        }
+    }
+
+    #[test]
+    fn image_contract_accepts_retained_v1_and_preserves_input_and_opaque_bytes() {
+        use ImageVersion::{V1 as I1, V2 as I2};
+        let mut saved = SettingsRecord::defaults(V1);
+        saved.set(2, 913).unwrap();
+        saved.set(19, 99).unwrap();
+        let input = carrier(&saved.encode());
+        let snapshot = input.clone();
+        let output = prepare_qs_nvm_for_image(&input, I2, I2).unwrap();
+        assert_eq!(input, snapshot);
+        assert_opaque_unchanged(&input, &output);
+        let expected = saved.normalize(V2).unwrap().encode();
+        assert_eq!(&output[QS_START..QS_END], expected);
+        assert_eq!(prepare_qs_nvm_for_image(&input, I1, I2).unwrap(), output);
+        // Persisted-record and image contracts intentionally differ here.
+        assert!(prepare_qs_nvm(&input, V2, V2).is_err());
+        assert!(prepare_qs_nvm_for_image(&input, I2, I1).is_err());
+        assert!(prepare_qs_nvm_for_image(&output, I1, I2).is_err());
+        assert!(prepare_qs_nvm_for_image(&output, I2, I1).is_err());
+    }
+
+    #[test]
+    fn image_blank_defaults_follow_source_and_forbid_image_downgrade() {
+        use ImageVersion::{V1 as I1, V2 as I2};
+        for blank in [0, 255] {
+            let input = carrier(&[blank; 24]);
+            let snapshot = input.clone();
+            for (source, target, record) in [(I1, I1, V1), (I1, I2, V2), (I2, I2, V2)] {
+                let output = prepare_qs_nvm_for_image(&input, source, target).unwrap();
+                assert_opaque_unchanged(&input, &output);
+                assert_eq!(
+                    &output[QS_START..QS_END],
+                    SettingsRecord::defaults(record).encode()
+                );
+            }
+            assert!(prepare_qs_nvm_for_image(&input, I2, I1).is_err());
+            assert_eq!(input, snapshot);
+        }
+    }
+
+    #[test]
+    fn image_preparation_rejects_invalid_carriers_and_records_without_mutation() {
+        use ImageVersion::{V1 as I1, V2 as I2};
+        for size in [0, QS_END, NVM_SIZE - 1, NVM_SIZE + 1] {
+            assert!(prepare_qs_nvm_for_image(&vec![0; size], I2, I2).is_err());
+        }
+        for version in [V1, V2] {
+            let input = carrier(&SettingsRecord::defaults(version).encode());
+            for index in [0, 1, 37, 38, 39].into_iter().chain(QS_START..QS_END) {
+                let mut bad = input.clone();
+                bad[index] ^= 1;
+                let snapshot = bad.clone();
+                for source in [I1, I2] {
+                    assert!(
+                        prepare_qs_nvm_for_image(&bad, source, I2).is_err(),
+                        "byte {index}"
+                    );
+                }
                 assert_eq!(bad, snapshot);
             }
         }

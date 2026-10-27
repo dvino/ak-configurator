@@ -4,13 +4,13 @@
 
 ## Provisional QS v2 offline model — 2026-10-27
 
-The isolated NVM preparation helper checks length, magic, schema and an explicitly bound QS record, and changes only the QS slice. Three targeted synthetic tests passed; opaque NVM bytes are preserved, not validated. This is preparation only, not an authorized transition or proof of persistent firmware behavior.
+The isolated NVM preparation helper checks length, magic, schema and an explicitly bound QS record, and changes only the QS slice. Six targeted synthetic tests passed, including v2 image contracts retaining v1 records; opaque NVM bytes are preserved, not validated. This is preparation only, not an authorized transition or proof of persistent firmware behavior.
 
 An isolated parser checks only the provisional three-field compact-controls identity projection and storage-version agreement. Three synthetic test groups passed, including malformed, duplicate and unknown fields and schemas. Image hashes, full metadata, capability admission and transitions remain outside that parser.
 
 A behavior-preserving refactor shares non-QS extension and NVM/macro checks with future offline decoding. Independent source review confirmed the existing validation order and rejection of QS v2 in the production path. Five targeted typed-storage and seven settings-model tests passed, including malformed non-QS and macro records. This refactor does not implement a v2 backup or change image admission.
 
-A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Five targeted tests passed against synthetic vectors generated from the provisional firmware Python reference, including explicit source-version binding and blank-record downgrade rejection. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
+A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Six targeted tests passed against synthetic vectors generated from the provisional firmware Python reference, including distinct source image and persisted-record versions, v2 images retaining v1 records and blank-record downgrade rejection. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
 
 ## Offline project correction — 2026-10-27
 
