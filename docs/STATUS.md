@@ -2,6 +2,8 @@
 
 # Project status
 
+A separate offline NVM preparation helper also preserves all non-QS bytes; it neither validates the complete backup nor authorizes a transition.
+
 A separate offline QS v1/v2 record model is prepared against provisional compact-controls source. It is not connected to device sessions, image admission, backup restore or installation; no new firmware support is enabled. The final release catalog, image and settings identities and directed transitions are still required.
 
 Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. The file dialog worker also handles reads and atomic writes, keeping slow file access off the UI thread; parsing and application remain on the UI thread.
