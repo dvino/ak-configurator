@@ -2,10 +2,11 @@
 //! Offline backup settings derivation, ported from firmware bef20f89's
 //! settings_backup.py and pack_ak820.py. No HID, OEM bytes or write operations.
 //! NVM-only parsing proves storage structure, not a running firmware identity.
+use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
 use crate::ak820_settings_backup::{
     BackupResult, ImageIdentity, macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256,
 };
-use crate::ak820_typed_storage::{Extensions, SCHEMA};
+use crate::ak820_typed_storage::{Extensions, NonQsExtensions, SCHEMA};
 use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity, matrix_profile};
 use serde_json::{Map, Value, json};
 
@@ -178,6 +179,72 @@ pub(crate) fn settings_from_nvm(nvm: &[u8], rgb_mode: &[u8], combos: bool) -> Ba
         "Schema01 requires explicit migration; six-layer derivation is unavailable",
     )?;
     let meta = validate_nvm(nvm, schema)?;
+    derive_settings(nvm, rgb_mode, combos, meta, || {
+        if schema != SCHEMA {
+            return Ok(None);
+        }
+        let typed = Extensions::decode_nvm(nvm)?;
+        let mut settings = Map::new();
+        for id in [1, 2, 4, 7, 18, 19] {
+            settings.insert(id.to_string(), json!(typed.settings.get(id)?));
+        }
+        extension_json(settings, &typed.tap_dance, &typed.key_overrides).map(Some)
+    })
+}
+
+/// Complete offline schema03 settings derivation under explicit image format
+/// assumptions. This admits no image identity or directed device transition.
+/// Image V2 may retain persisted QS v1; extensions JSON format remains version 1.
+/// Source/target provenance stays in the caller's explicit arguments, not JSON.
+#[allow(dead_code)]
+pub(crate) fn settings_from_nvm_for_image_offline(
+    nvm: &[u8],
+    rgb_mode: &[u8],
+    combos: bool,
+    source: ImageVersion,
+    target: ImageVersion,
+) -> BackupResult<Value> {
+    let layout = validate_nvm_structure(nvm, SCHEMA)?;
+    let record = SettingsRecord::decode_for_image(&nvm[0x6a8..0x6c0], source, target)?;
+    let non_qs = NonQsExtensions::decode_nvm(nvm)?;
+    let meta = layout.validate_macros(nvm)?;
+    derive_settings(nvm, rgb_mode, combos, meta, || {
+        let mut settings = Map::new();
+        let ids: &[u16] = if record.version() == RecordVersion::V2 {
+            &[1, 2, 4, 7, 18, 19, 3, 6, 22]
+        } else {
+            &[1, 2, 4, 7, 18, 19]
+        };
+        for &id in ids {
+            settings.insert(id.to_string(), json!(record.get(id)?));
+        }
+        extension_json(settings, &non_qs.tap_dance, &non_qs.key_overrides).map(Some)
+    })
+}
+
+fn extension_json(
+    settings: Map<String, Value>,
+    tap_dance: &[crate::ak820_typed_storage::TapDance; 8],
+    key_overrides: &[crate::ak820_typed_storage::KeyOverride; 8],
+) -> BackupResult<Value> {
+    let td: BackupResult<Vec<_>> = tap_dance
+        .iter()
+        .map(|entry| entry.encode().map(|raw| hex(&raw)))
+        .collect();
+    let ko: BackupResult<Vec<_>> = key_overrides
+        .iter()
+        .map(|entry| entry.encode().map(|raw| hex(&raw)))
+        .collect();
+    Ok(json!({"version":1,"qmk_settings":settings,"tap_dance":td?,"key_overrides":ko?}))
+}
+
+fn derive_settings(
+    nvm: &[u8],
+    rgb_mode: &[u8],
+    combos: bool,
+    meta: NvmMetadata,
+    extensions: impl FnOnce() -> BackupResult<Option<Value>>,
+) -> BackupResult<Value> {
     let stream = &nvm[meta.macro_offset..meta.macro_offset + meta.published_macro_length];
     let mut keys = Vec::with_capacity(498);
     let mut encoders = Vec::with_capacity(12);
@@ -199,24 +266,8 @@ pub(crate) fn settings_from_nvm(nvm: &[u8], rgb_mode: &[u8], combos: bool) -> Ba
         }
     }
     let mut result = json!({"keys":keys,"encoders":encoders,"layout_options":nvm[40],"macros":{"count":16,"capacity":8192,"published_length":meta.published_macro_length,"logical_length":meta.logical_macro_length,"data_hex":hex(stream),"commands":macro_commands(stream)?},"rgb":{"saved_config_hex":hex(&nvm[24..32]),"current_mode_hex":hex(rgb_mode),"saved_source":"NVM[24:32]","current_source":"VialRGB 0x08/0x41"},"limitations":LIMITATIONS});
-    if schema == SCHEMA {
-        let typed = Extensions::decode_nvm(nvm)?;
-        let mut settings = Map::new();
-        for id in [1, 2, 4, 7, 18, 19] {
-            settings.insert(id.to_string(), json!(typed.settings.get(id)?));
-        }
-        let td: BackupResult<Vec<_>> = typed
-            .tap_dance
-            .iter()
-            .map(|entry| entry.encode().map(|raw| hex(&raw)))
-            .collect();
-        let ko: BackupResult<Vec<_>> = typed
-            .key_overrides
-            .iter()
-            .map(|entry| entry.encode().map(|raw| hex(&raw)))
-            .collect();
-        result["extensions"] =
-            json!({"version":1,"qmk_settings":settings,"tap_dance":td?,"key_overrides":ko?});
+    if let Some(extensions) = extensions()? {
+        result["extensions"] = extensions;
     }
     if combos {
         result["combos"] = combo_settings(nvm)?;
@@ -488,6 +539,153 @@ mod tests {
             n[0x740..0x74a].copy_from_slice(&[4, 0, 5, 0, 3, 0, 1, 0, 0, 1]);
         }
         n
+    }
+    fn offline(
+        nvm: &[u8],
+        source: ImageVersion,
+        target: ImageVersion,
+        combos: bool,
+    ) -> BackupResult<Value> {
+        settings_from_nvm_for_image_offline(nvm, &[0; 6], combos, source, target)
+    }
+    #[test]
+    fn offline_v1_complete_json_matches_production_and_preserves_input() {
+        let nvm = modeled_nvm(SCHEMA);
+        let original = nvm.clone();
+        for combos in [false, true] {
+            let legacy = settings_from_nvm(&nvm, &[0; 6], combos).unwrap();
+            let versioned = offline(&nvm, ImageVersion::V1, ImageVersion::V1, combos).unwrap();
+            assert_eq!(canonical(&versioned).unwrap(), canonical(&legacy).unwrap());
+        }
+        assert_eq!(nvm, original);
+    }
+    #[test]
+    fn offline_image_v2_accepts_v1_v2_and_erased_qs_without_writing() {
+        for persisted in [None, Some(RecordVersion::V1), Some(RecordVersion::V2)] {
+            for blank in [0, 255] {
+                let mut nvm = modeled_nvm(SCHEMA);
+                nvm[0x6a8..0x6c0].fill(blank);
+                if let Some(version) = persisted {
+                    let mut record = SettingsRecord::defaults(version);
+                    record.set(4, 321).unwrap();
+                    if version == RecordVersion::V2 {
+                        record.set(3, 29).unwrap();
+                        record.set(6, 30000).unwrap();
+                        record.set(22, 1).unwrap();
+                    }
+                    nvm[0x6a8..0x6c0].copy_from_slice(&record.encode());
+                }
+                let original = nvm.clone();
+                let result = offline(&nvm, ImageVersion::V2, ImageVersion::V2, true).unwrap();
+                assert_eq!(result["extensions"]["version"], 1);
+                let qs = &result["extensions"]["qmk_settings"];
+                assert_eq!(qs.as_object().unwrap().len(), 9);
+                assert_eq!(qs["4"], if persisted.is_some() { 321 } else { 175 });
+                assert_eq!(
+                    qs["3"],
+                    if persisted == Some(RecordVersion::V2) {
+                        29
+                    } else {
+                        1
+                    }
+                );
+                assert_eq!(
+                    qs["6"],
+                    if persisted == Some(RecordVersion::V2) {
+                        30000
+                    } else {
+                        0
+                    }
+                );
+                assert_eq!(
+                    qs["22"],
+                    if persisted == Some(RecordVersion::V2) {
+                        1
+                    } else {
+                        0
+                    }
+                );
+                assert_eq!(nvm, original);
+                assert!(offline(&nvm, ImageVersion::V2, ImageVersion::V1, true).is_err());
+                if persisted == Some(RecordVersion::V2) {
+                    assert!(offline(&nvm, ImageVersion::V1, ImageVersion::V2, true).is_err());
+                    assert!(settings_from_nvm(&nvm, &[0; 6], true).is_err());
+                } else {
+                    assert_eq!(
+                        offline(&nvm, ImageVersion::V1, ImageVersion::V2, true).unwrap(),
+                        result
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    fn offline_versioned_full_decoder_rejects_corruption_and_respects_combo_gate() {
+        for version in [ImageVersion::V1, ImageVersion::V2] {
+            let mut baseline = modeled_nvm(SCHEMA);
+            let record = SettingsRecord::defaults(if version == ImageVersion::V1 {
+                RecordVersion::V1
+            } else {
+                RecordVersion::V2
+            });
+            baseline[0x6a8..0x6c0].copy_from_slice(&record.encode());
+            for (at, value) in [
+                (0, 0),
+                (37, 9),
+                (0x6a8, 0),
+                (0x6ae, 0),
+                (0x7f0, 1),
+                (0x7f1, 0),
+                (0x7f2, 255),
+                (0x800, 128),
+                (0x806, 8),
+            ] {
+                let mut bad = baseline.clone();
+                bad[at] = value;
+                assert!(
+                    offline(&bad, version, version, true).is_err(),
+                    "mutation at {at:x} for {version:?}"
+                );
+            }
+            let mut bad_crc = baseline.clone();
+            bad_crc[0x6bf] ^= 1;
+            assert!(offline(&bad_crc, version, version, true).is_err());
+            for (stream, error) in [
+                (vec![0; 15], "Invalid published macro length"),
+                (
+                    [vec![1, 8], vec![0; 16]].concat(),
+                    "Unsupported macro opcode",
+                ),
+                ([vec![1, 1, 0], vec![0; 16]].concat(), "Zero macro operand"),
+                (
+                    [vec![0; 16], vec![2]].concat(),
+                    "Nonzero tail after macro terminators",
+                ),
+                (vec![2; 16], "Incomplete macro stream"),
+            ] {
+                let mut bad = baseline.clone();
+                bad[0x7f1..0x7f3].copy_from_slice(&(stream.len() as u16).to_le_bytes());
+                bad[0x800..0x800 + stream.len()].copy_from_slice(&stream);
+                assert_eq!(offline(&bad, version, version, true).unwrap_err(), error);
+            }
+            for slot in 0..8 {
+                for td in [true, false] {
+                    let mut bad = baseline.clone();
+                    let at = crate::ak820_typed_storage::slot_offset(td, slot).unwrap();
+                    bad[at] = 1;
+                    assert!(offline(&bad, version, version, true).is_err());
+                }
+            }
+            assert!(offline(&baseline[..100], version, version, true).is_err());
+            let mut oversized = baseline.clone();
+            oversized.push(0);
+            assert!(offline(&oversized, version, version, true).is_err());
+            // A media Combo output remains outside the existing accepted domain.
+            baseline[0x658..0x662].copy_from_slice(&[4, 0, 5, 0, 0x20, 8, 1, 0, 0xa8, 0]);
+            assert!(offline(&baseline, version, version, true).is_err());
+            let result = offline(&baseline, version, version, false).unwrap();
+            assert!(result.get("combos").is_none());
+        }
     }
     #[test]
     fn shared_structure_and_macro_validation_preserve_legacy_rejection() {
