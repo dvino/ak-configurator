@@ -152,6 +152,9 @@ pub(crate) fn current_platform_label() -> String {
 }
 
 pub(crate) fn start_update_check() -> UpdateCheckState {
+    if crate::isolated_runtime() {
+        return UpdateCheckState::Failed("Network update checks are disabled in isolated runtime".to_owned());
+    }
     #[cfg(not(target_arch = "wasm32"))]
     {
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -177,6 +180,12 @@ pub(crate) fn start_firmware_update_check(
     let Some(target) = target else {
         return FirmwareUpdateCheckState::Unsupported;
     };
+    if crate::isolated_runtime() {
+        return FirmwareUpdateCheckState::Failed {
+            target,
+            error: "Network update checks are disabled in isolated runtime".to_owned(),
+        };
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -415,6 +424,9 @@ fn normalized_asset_prefix(value: &str) -> Option<String> {
 }
 
 pub(crate) fn open_url_in_browser(url: &str) -> bool {
+    if crate::isolated_runtime() {
+        return false;
+    }
     open_trusted_release_url(url, launch_url_in_browser)
 }
 

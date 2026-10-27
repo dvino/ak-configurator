@@ -110,6 +110,9 @@ pub(crate) struct Capture {
 
 impl Capture {
     pub(crate) fn start(options: &Options) -> Result<Self, String> {
+        if crate::isolated_runtime() {
+            return Err("System audio capture is disabled in isolated application modes".into());
+        }
         Self::start_at(&bundled_helper()?, options)
     }
 

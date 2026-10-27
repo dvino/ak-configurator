@@ -18,6 +18,10 @@ pub(crate) struct ScreenColorPickerWorker {
 pub(crate) fn spawn(repaint: egui::Context) -> ScreenColorPickerWorker {
     let (result_tx, rx) = mpsc::channel();
     let (cancel_tx, cancel_rx) = async_channel::bounded(1);
+    if crate::isolated_runtime() {
+        let _ = result_tx.send(Err("Screen capture is disabled in isolated runtime".to_owned()));
+        return ScreenColorPickerWorker { cancel_tx, rx };
+    }
     std::thread::Builder::new()
         .name("entropy-screen-color-picker".to_owned())
         .spawn(move || {

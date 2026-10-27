@@ -16,6 +16,7 @@ pub struct TextExpanderAppCandidate {
 
 #[cfg(target_os = "windows")]
 pub(crate) fn native_foreground_app_candidate() -> Option<TextExpanderAppCandidate> {
+    if crate::isolated_runtime() { return None; }
     smart_input_windows::foreground_app_candidate()
 }
 
@@ -68,6 +69,7 @@ pub(crate) fn remember_foreground_app(candidate: TextExpanderAppCandidate) {
 }
 
 pub fn text_expander_app_candidates() -> Vec<TextExpanderAppCandidate> {
+    if crate::isolated_runtime() { return Vec::new(); }
     let mut apps = platform_open_window_candidates();
     if let Ok(recent) = recent_foreground_apps().lock() {
         for candidate in recent.iter().rev() {
@@ -128,11 +130,13 @@ fn foreground_app_blacklisted(app_blacklist: &[String]) -> bool {
 
 #[cfg(target_os = "windows")]
 pub fn platform_open_window_candidates() -> Vec<TextExpanderAppCandidate> {
+    if crate::isolated_runtime() { return Vec::new(); }
     smart_input_windows::platform_open_window_candidates()
 }
 
 #[cfg(target_os = "macos")]
 pub fn platform_open_window_candidates() -> Vec<TextExpanderAppCandidate> {
+    if crate::isolated_runtime() { return Vec::new(); }
     macos::platform_open_window_candidates()
 }
 
@@ -174,6 +178,7 @@ fn linux_command_available(command: &str) -> bool {
 
 #[cfg(target_os = "linux")]
 pub fn refresh_installed_ibus_backend() {
+    if crate::isolated_runtime() { return; }
     let Some(source) = linux_bundled_ibus_engine_path() else {
         return;
     };
@@ -239,6 +244,7 @@ fn set_user_executable(path: &std::path::Path) {
 /// the engine is already on it.
 #[cfg(target_os = "linux")]
 pub(crate) fn reload_ibus_registry() -> Result<(), String> {
+    if crate::isolated_runtime() { return Err("IBus registry operations are disabled in isolated runtime".to_owned()); }
     if !linux_command_available("ibus") {
         return Err("ibus is not installed".to_owned());
     }
@@ -304,6 +310,7 @@ fn refresh_ibus_registry() {
 
 #[cfg(target_os = "windows")]
 pub fn start() {
+    if crate::isolated_runtime() { return; }
     smart_input_windows::start();
 }
 
@@ -347,26 +354,37 @@ fn macos_effective_input_monitoring_granted(
 
 #[cfg(target_os = "macos")]
 pub fn macos_text_expander_status() -> MacosTextExpanderStatus {
+    if crate::isolated_runtime() {
+        return MacosTextExpanderStatus {
+            accessibility_granted: false, input_monitoring_granted: false,
+            event_tap_active: false, last_event_ms_ago: None,
+            failure_reason: Some("Native input monitoring is disabled in isolated mode".into()),
+        };
+    }
     macos::status_snapshot()
 }
 
 #[cfg(target_os = "macos")]
 pub fn request_input_monitoring_access() -> bool {
+    if crate::isolated_runtime() { return false; }
     macos::request_input_monitoring_access()
 }
 
 #[cfg(target_os = "macos")]
 pub fn input_monitoring_access_granted() -> bool {
+    if crate::isolated_runtime() { return false; }
     macos::input_monitoring_granted()
 }
 
 #[cfg(target_os = "macos")]
 pub fn restart_event_tap() {
+    if crate::isolated_runtime() { return; }
     macos::restart_event_tap();
 }
 
 #[cfg(target_os = "macos")]
 pub fn start() {
+    if crate::isolated_runtime() { return; }
     crate::app_discovery::start_macos_foreground_monitor();
     macos::ensure_event_tap_thread();
 }

@@ -1,6 +1,65 @@
 //! Offline transaction checks; scripted saved bytes do not prove physical durability.
 use super::*;
 
+#[test]
+fn diagnostic_bootstrap_cancelled_before_open_sends_no_packets() {
+    let (hid, recorder) = HidDevice::test_ak820_device(false);
+    assert!(hid.ak820_diagnostic_bootstrap(&AtomicBool::new(true)).is_err());
+    assert!(recorder.requests().is_empty());
+    assert!(hid.ak820_failure().is_some());
+    assert!(!hid.ak820_editing_ready());
+}
+
+#[test]
+fn diagnostic_bootstrap_cancels_at_the_next_packet_boundary() {
+    let (hid, recorder) = HidDevice::test_ak820_device(false);
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let flag = cancel.clone();
+    recorder.respond_by(move |request| {
+        let mut reply = [0; 32];
+        reply[..5].copy_from_slice(&request[..5]);
+        flag.store(true, Ordering::Release);
+        Some(Ok(reply))
+    });
+    assert!(hid.ak820_diagnostic_bootstrap(&cancel).is_err());
+    let sent = recorder.requests();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(&sent[0][..2], &[0xfd, 0]);
+}
+
+#[test]
+fn diagnostic_status_requires_exact_beta3_and_latches_transport_failure() {
+    let (unknown, record) = HidDevice::test_ak820_device(false);
+    assert!(unknown.ak820_diagnostic_status().is_err());
+    assert!(record.requests().is_empty());
+    let (hid, recorder) = HidDevice::test_beta3_ak820_device(
+        crate::app::ak820_beta1_profiles::ProfileId::Main, false);
+    recorder.respond_by(|_| Some(Err("synthetic timeout".into())));
+    assert!(hid.ak820_diagnostic_status().is_err());
+    assert_eq!(recorder.requests().len(), 1);
+    assert!(hid.ak820_diagnostic_status().is_err());
+    assert_eq!(recorder.requests().len(), 1);
+}
+
+#[test]
+fn diagnostic_status_reports_faults_without_getters_or_retry() {
+    for offset in [4, 6, 7, 10, 18] {
+        let (hid, recorder) = HidDevice::test_beta3_ak820_device(
+            crate::app::ak820_beta1_profiles::ProfileId::Main, false);
+        recorder.respond_by(move |_| {
+            let mut reply = [0; 32];
+            reply[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]);
+            reply[offset] = 1;
+            Some(Ok(reply))
+        });
+        let status = hid.ak820_diagnostic_status().unwrap();
+        assert!(status.ensure_ready().is_err());
+        assert_eq!(recorder.requests().len(), 1);
+        assert_eq!(&recorder.requests()[0][..2], &[0xfd, 1]);
+        assert!(!hid.ak820_editing_ready());
+    }
+}
+
 fn atomic_palette_device(
     initial_mode: u8,
     fail_chunk: Option<u8>,
@@ -810,10 +869,9 @@ fn full_verification_rejects_zero_code_trial_and_unknown_manifest_hash() {
         assert!(!hid.ak820_editing_ready());
         assert!(hid.ak820_enable_settings().is_err());
         let requests = log.requests();
-        assert!(requests.iter().all(|p| p[0] == 1
-            || p[..2] == [0xFE, 0]
-            || p[..2] == [0xFD, 0]
-            || p[..2] == [0xFD, 1]));
+        // Unknown CODE must receive only direct reads: normal VIA/Vial getters
+        // could flush dirty firmware NVM, and FD01 is not guessed on old images.
+        assert!(requests.iter().all(|p| p[..2] == [0xFD, 0]));
         let code_reads: Vec<_> = requests
             .iter()
             .filter(|p| {

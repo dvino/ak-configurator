@@ -19,18 +19,22 @@ Application source version: `0.1.0-alpha.1`. The prior `0.1.0-beta.2` was unpubl
 
 The firmware release is published and its release inputs have passed the documented source-identity and digest checks. CI itself skipped publishing and the profile qualification matrix. Release-input verification does not qualify physical behavior; a catalog entry, linked CODE fingerprint, synthetic fixture or CI artifact cannot prove device behavior. Private OEM inputs remain local. See [STATUS.md](STATUS.md) and [RGB-PLAN.md](RGB-PLAN.md).
 
-## MCP integration — planned, 2026-10-27
+## Handoff fixes and MCP integration — in progress, 2026-10-27
 
-[MCP_IMPLEMENTATION_PLAN.md](MCP_IMPLEMENTATION_PLAN.md) records the source audit
-at `f8a31854bae916d1b07f24bdcf5dde1d00fdbdce` against firmware
-`v0.6.0-beta.3` (`88d190abb156960915a0f1f8ac7f602bb401eab3`). The proposed entry
-point is a separate headless process of the existing executable over stdio,
-using the official Rust SDK and the existing HID helper/ownership and domain
-code. P0 is a bounded read-only diagnostic MVP with a strict mock; P1 adds shared
-settings, backups and reversible functional suites; P2 gates protected updating
-and optional hardware diagnostics. No MCP implementation, firmware change or
-device qualification is included in this documentation work. The current
-alpha.1 release is not made dependent on MCP.
+The current work starts at `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` and incorporates the supplied MCP plan. [MCP.md](MCP.md) describes the optional implementation; [MCP_IMPLEMENTATION_PLAN.md](MCP_IMPLEMENTATION_PLAN.md) retains the full original plan. Firmware identity and application version remain unchanged.
+
+| Work | Current implementation | Remaining acceptance |
+| --- | --- | --- |
+| Handoff UI/helper | Tray callback lock release, RGB tab preservation during temporary HID ownership, 100 ms layout sampling and 1 s active override renewal; indicator controls moved to application settings | Actual helper/LED latency and Windows reproduction on hardware |
+| Auto Shift | Controls follow exact active QSIDs; beta.3 Main/Typing show timeout only, with runtime key-action explanation; generic flags use checked readback | Persistent or remote enable control requires a future firmware contract; unchanged beta.3 cannot provide it |
+| Launch feedback | Supplied logo before full editor initialization, background cold discovery, phase timing and visible/hidden startup gates | Current Windows/macOS launch timing and graphics/loader delays |
+| Tray on supported OS families | Windows/macOS native tray; Linux StatusNotifier + Show/Quit menu, visible fallback and host-loss restore | Actual Windows/macOS runs and real Linux desktop panel/Wayland checks |
+| P0.1 | Optional pinned official SDK, headless stdio, six closed tools, public catalog/resources, development subprocess harness | Windows stdio/GUI qualification and third-party client interoperability |
+| P0.2 | FD00-first exact CODE recognition, typed FD01, diagnostics-only owner, stop-on-fault, no setters | Complete positive packed-image fixture, live helper/lease/cancellation qualification |
+| P0.3 | Strict synthetic FD01/error suite, operation state, bounded metadata trace and in-memory reports | Full bootstrap replay, broader acceptance suites and persistent report artifacts |
+| Runtime gate | Fresh private offline settings; actual native renderer, navigation and tray visibility checks; six-platform executable-bound candidate reports required | Execute the gate on all final candidates; source configuration alone is not a pass |
+
+P0 remains partial and default-off. P1 settings/backup/reversible suites and P2 protected updates have not started. The user requires pre-release native execution on Windows and Linux at minimum; the candidate verifier now requires the configured native smoke evidence on all six supported targets. No alpha is qualified or published by this work.
 
 ## Delivery order
 

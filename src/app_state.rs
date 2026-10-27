@@ -1,7 +1,7 @@
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 pub(crate) static TRAY_QUIT_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 pub(crate) static TRAY_RESTORE_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -5611,6 +5611,8 @@ pub struct EntropyApp {
     pub(crate) text_expander_settings_last_edit_at: f64,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
+    #[cfg(target_os = "linux")]
+    pub(crate) linux_window_hidden_to_tray: bool,
     #[cfg(target_os = "windows")]
     pub(crate) windows_hwnd: Option<isize>,
     #[cfg(target_os = "windows")]

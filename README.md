@@ -2,6 +2,8 @@
 
 # AK Configurator
 
+<img src="assets/ak-configurator-logo.png" alt="AK Configurator logo" width="240">
+
 AK Configurator adapts [Entropy](https://github.com/ergohaven/entropy) for the wired AK820. The native desktop application is being prepared for its first public alpha, `0.1.0-alpha.1`. It targets the published AK820 firmware `v0.6.0-beta.3`, with ten exact profiles: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. Browser support is a later stage.
 
 The editor provides profile-aware key and encoder mappings, six layers, macros, Combo, typed settings and Russian/English help. It retains Entropy's menus and key picker. Offline projects let users explore and edit all ten profile examples without connecting a keyboard.
@@ -16,6 +18,7 @@ Native workflows also cover complete settings backups, guarded restore/reset, fi
 
 - [Installation and updating](docs/INSTALL.md): download, checksums, launch, per-user installation and replacement of earlier development builds.
 - [Desktop guide](docs/DESKTOP.md): controls, backups, restoration, installation and platform limits.
+- [MCP diagnostic preview](docs/MCP.md): optional agent diagnostics, synthetic checks and native offline GUI testing.
 - [Current status](docs/STATUS.md) and [verification report](docs/REVIEW.md): completed checks and remaining qualification.
 - [Requirements](docs/REQUIREMENTS.md) and [implementation plan](docs/PLAN.md): supported scope and delivery gates.
 - [RGB plan](docs/RGB-PLAN.md) and [audio components](docs/THIRD-PARTY-AUDIO.md): protocol, source lifecycle, platform capture and redistribution details.

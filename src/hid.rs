@@ -218,6 +218,8 @@ pub(crate) struct ReadOnlyHidSession {
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Default)]
 struct ReadOnlyHidLedger {
+    #[cfg(feature = "mcp")]
+    trace: crate::mcp::trace::Recorder,
     refused: Vec<[u8; MSG_LEN]>,
     failed_reads: Vec<[u8; MSG_LEN]>,
 }
@@ -261,7 +263,11 @@ impl ReadOnlyHidSession {
         if !is_read_request(data) {
             return Err(self.refuse(data));
         }
+        #[cfg(feature = "mcp")]
+        let started = std::time::Instant::now();
         let result = send();
+        #[cfg(feature = "mcp")]
+        self.ledger().trace.record(data, started.elapsed(), result.is_ok());
         if result.is_err() {
             self.ledger().failed_reads.push(padded_request(data));
         }
@@ -276,6 +282,23 @@ impl ReadOnlyHidSession {
     /// Reads that reached the transport and failed there.
     pub(crate) fn failed_reads(&self) -> Vec<[u8; MSG_LEN]> {
         self.ledger().failed_reads.clone()
+    }
+
+    #[cfg(feature = "mcp")]
+    pub(crate) fn trace_start(&self, id: String, bytes: usize, seconds: u16) -> Result<(), ()> {
+        self.ledger().trace.start(id, bytes, seconds)
+    }
+    #[cfg(feature = "mcp")]
+    pub(crate) fn trace_status(&self, id: &str, stop: bool) -> Option<serde_json::Value> {
+        self.ledger().trace.status(id, stop)
+    }
+    #[cfg(feature = "mcp")]
+    pub(crate) fn trace_page(&self, id: &str, page: usize) -> Option<serde_json::Value> {
+        self.ledger().trace.page(id, page)
+    }
+    #[cfg(feature = "mcp")]
+    pub(crate) fn trace_synthetic_status(&self) {
+        self.ledger().trace.record(&[0xfd, 1], std::time::Duration::ZERO, true);
     }
 }
 
@@ -690,6 +713,10 @@ impl HidDevice {
     }
 
     pub fn open_fresh_for(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(not(test))]
+        if crate::isolated_runtime() {
+            bail!("Live HID is disabled in isolated application modes");
+        }
         #[cfg(test)]
         {
             let _ = device;
@@ -706,6 +733,10 @@ impl HidDevice {
 
     // Called only by the helper on its main thread, never by the UI process.
     fn open_in_helper(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(not(test))]
+        if crate::isolated_runtime() {
+            bail!("Live HID is disabled in isolated application modes");
+        }
         #[cfg(test)]
         {
             let _ = device;
@@ -841,6 +872,10 @@ impl HidDevice {
     }
 
     fn try_open_fresh_for(device: &crate::device::Device) -> Result<Self> {
+        #[cfg(not(test))]
+        if crate::isolated_runtime() {
+            bail!("Live HID is disabled in isolated application modes");
+        }
         #[cfg(target_os = "macos")]
         let _hid_lock = macos_hid_operation_lock();
         let api = hidapi::HidApi::new().context("Failed to init hidapi")?;

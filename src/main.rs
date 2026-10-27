@@ -4,6 +4,7 @@ mod action_icons;
 mod ak820;
 mod ak820_backup_capture;
 mod ak820_backup_files;
+mod ak820_diagnostics;
 mod ak820_help;
 mod ak820_image_pack;
 mod ak820_install_executor;
@@ -42,6 +43,8 @@ mod integration_icons;
 mod keyboard;
 mod keycode;
 mod keycode_picker;
+#[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+mod mcp;
 #[cfg(test)]
 mod layouts;
 #[cfg(target_os = "linux")]
@@ -56,7 +59,12 @@ mod popup_state;
 #[cfg(not(target_arch = "wasm32"))]
 mod qmk_hid_host;
 mod rmk_native;
+#[cfg(not(target_arch = "wasm32"))]
+mod runtime_safety;
+#[cfg(target_os = "linux")]
+mod runtime_smoke_linux;
 mod smart_input;
+mod startup;
 mod text_expander;
 mod ui_style;
 mod universal_symbols;
@@ -66,6 +74,19 @@ use app::EntropyApp;
 const APP_TITLE: &str = "AK Configurator";
 const APP_ID: &str = "ak-configurator";
 
+/// Offline test/demo processes cannot acquire native devices or host services.
+/// Resolve the mode before preferences, discovery, helpers or GUI bootstrap.
+pub(crate) fn isolated_runtime() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        cfg!(test) || runtime_safety::isolated()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        cfg!(test)
+    }
+}
+
 // Route configuration and cache lookup through isolated roots in unit tests.
 pub(crate) fn config_dir() -> Option<std::path::PathBuf> {
     #[cfg(test)]
@@ -74,6 +95,10 @@ pub(crate) fn config_dir() -> Option<std::path::PathBuf> {
     }
     #[cfg(not(test))]
     {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(root) = runtime_safety::config_dir() {
+            return Some(root);
+        }
         dirs::config_dir()
     }
 }
@@ -85,6 +110,10 @@ pub(crate) fn cache_dir() -> Option<std::path::PathBuf> {
     }
     #[cfg(not(test))]
     {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(root) = runtime_safety::config_dir() {
+            return Some(root.join("cache"));
+        }
         dirs::cache_dir()
     }
 }
@@ -96,7 +125,7 @@ static BACKGROUND_HELPER_REQUESTED: std::sync::atomic::AtomicBool =
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn background_helper_allowed() -> bool {
-    single_instance_enabled() && !std::env::args_os().any(|arg| arg == "--demo-ak820")
+    !isolated_runtime() && single_instance_enabled()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -192,6 +221,9 @@ fn single_instance_enabled_from_env(value: Option<&str>) -> bool {
 }
 
 fn single_instance_enabled() -> bool {
+    if isolated_runtime() {
+        return false;
+    }
     let value = std::env::var(SINGLE_INSTANCE_ENV).ok();
     single_instance_enabled_from_env(value.as_deref())
 }
@@ -360,6 +392,12 @@ fn initial_window_size() -> [f32; 2] {
 }
 
 fn main() -> eframe::Result<()> {
+    startup::mark_process_entry();
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Err(error) = runtime_safety::initialize(std::env::args_os()) {
+        eprintln!("{error}");
+        std::process::exit(2);
+    }
     // Packaging probes must return before proxy/device discovery, preferences,
     // single-instance signalling, platform HID initialization or GUI startup.
     #[cfg(not(target_arch = "wasm32"))]
@@ -370,6 +408,26 @@ fn main() -> eframe::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     if hid::run_hid_proxy_if_requested() {
         return Ok(());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let args: Vec<_> = std::env::args_os().skip(1).collect();
+        if args.iter().any(|arg| arg.to_string_lossy().starts_with("--mcp-")) {
+            #[cfg(feature = "mcp")]
+            {
+                if let Err(error) = mcp::run(&args) {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                }
+                return Ok(());
+            }
+            #[cfg(not(feature = "mcp"))]
+            {
+                eprintln!("MCP is not enabled in this build; build with --features mcp");
+                std::process::exit(2);
+            }
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -419,7 +477,9 @@ fn main() -> eframe::Result<()> {
     let _single_instance_available = try_acquire_single_instance();
 
     #[cfg(target_os = "macos")]
-    hid::initialize_macos_hid_on_main_thread();
+    if !isolated_runtime() {
+        hid::initialize_macos_hid_on_main_thread();
+    }
 
     // Autostart can enter the opted-in helper without creating a renderer or
     // loading GUI fonts. The same process retains the single-instance lock.
@@ -438,6 +498,16 @@ fn main() -> eframe::Result<()> {
 
     loop {
         run_native_gui(launch_minimized)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if runtime_safety::smoke_requested() {
+            let report = app::smoke_result().unwrap_or_else(|| serde_json::json!({
+                "format": "ak820-runtime-smoke-1", "status": "failed",
+                "error": "Native application exited before producing its smoke report"
+            }));
+            println!("{}", report);
+            if report["status"] != "passed" { std::process::exit(1); }
+            return Ok(());
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if BACKGROUND_HELPER_REQUESTED.swap(false, std::sync::atomic::Ordering::AcqRel)
             && background_helper_allowed()
@@ -473,143 +543,151 @@ fn run_native_gui(launch_minimized: bool) -> eframe::Result {
     eframe::run_native(
         APP_TITLE,
         options,
-        Box::new(move |cc| {
-            // Roboto as primary UI font, with Unicode/symbol fallbacks.
-            let mut fonts = egui::FontDefinitions::default();
-            fonts.font_data.insert(
-                "roboto".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/Roboto-Regular.ttf")).into(),
-            );
-            fonts.font_data.insert(
-                "montserrat_medium".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/Montserrat-Medium.ttf"))
-                    .into(),
-            );
-            fonts.font_data.insert(
-                "dejavu".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/DejaVuSans.ttf")).into(),
-            );
-            fonts.font_data.insert(
-                "noto_symbols".to_owned(),
-                egui::FontData::from_static(include_bytes!(
-                    "../assets/NotoSansSymbols2-Regular.ttf"
-                ))
-                .into(),
-            );
-            fonts.font_data.insert(
-                "noto_emoji".to_owned(),
-                egui::FontData::from_static(include_bytes!("../assets/NotoEmoji-Regular.ttf"))
-                    .into(),
-            );
-            for (name, data) in [
-                (
-                    "clock_ubuntu_sans",
-                    include_bytes!("../assets/Clock-UbuntuSans.ttf").as_slice(),
-                ),
-                (
-                    "clock_ubuntu_mono",
-                    include_bytes!("../assets/Clock-UbuntuMono.ttf").as_slice(),
-                ),
-                (
-                    "clock_liberation_mono",
-                    include_bytes!("../assets/Clock-LiberationMono.ttf").as_slice(),
-                ),
-                (
-                    "clock_dejavu_sans",
-                    include_bytes!("../assets/Clock-DejaVuSans.ttf").as_slice(),
-                ),
-                (
-                    "clock_dejavu_serif",
-                    include_bytes!("../assets/Clock-DejaVuSerif.ttf").as_slice(),
-                ),
-                (
-                    "clock_dejavu_mono",
-                    include_bytes!("../assets/Clock-DejaVuMono.ttf").as_slice(),
-                ),
-                (
-                    "clock_liberation_sans",
-                    include_bytes!("../assets/Clock-LiberationSans.ttf").as_slice(),
-                ),
-                (
-                    "clock_liberation_serif",
-                    include_bytes!("../assets/Clock-LiberationSerif.ttf").as_slice(),
-                ),
-                (
-                    "clock_liberation_narrow",
-                    include_bytes!("../assets/EntropyDisplay-Narrow.ttf").as_slice(),
-                ),
-            ] {
-                fonts
-                    .font_data
-                    .insert(name.to_owned(), egui::FontData::from_static(data).into());
-            }
-            let prop = fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default();
-            prop.insert(0, "roboto".to_owned());
-            prop.push("dejavu".to_owned());
-            prop.push("noto_symbols".to_owned());
-            prop.push("noto_emoji".to_owned());
-            let mono = fonts
-                .families
-                .entry(egui::FontFamily::Monospace)
-                .or_default();
-            mono.push("dejavu".to_owned());
-            mono.push("noto_symbols".to_owned());
-            mono.push("noto_emoji".to_owned());
-            fonts.families.insert(
-                egui::FontFamily::Name("emoji_preview".into()),
-                vec![
-                    "noto_emoji".to_owned(),
-                    "noto_symbols".to_owned(),
-                    "dejavu".to_owned(),
-                ],
-            );
-            fonts.families.insert(
-                egui::FontFamily::Name("display_preview".into()),
-                vec![
-                    "montserrat_medium".to_owned(),
-                    "dejavu".to_owned(),
-                    "noto_symbols".to_owned(),
-                ],
-            );
-            for (family, font) in [
-                ("clock_montserrat", "montserrat_medium"),
-                ("clock_ubuntu_sans", "clock_ubuntu_sans"),
-                ("clock_ubuntu_mono", "clock_ubuntu_mono"),
-                ("clock_liberation_mono", "clock_liberation_mono"),
-                ("clock_dejavu_sans", "clock_dejavu_sans"),
-                ("clock_dejavu_serif", "clock_dejavu_serif"),
-                ("clock_dejavu_mono", "clock_dejavu_mono"),
-                ("clock_liberation_sans", "clock_liberation_sans"),
-                ("clock_liberation_serif", "clock_liberation_serif"),
-                ("clock_liberation_narrow", "clock_liberation_narrow"),
-            ] {
-                fonts
-                    .families
-                    .insert(egui::FontFamily::Name(family.into()), vec![font.to_owned()]);
-            }
-            cc.egui_ctx.set_fonts(fonts);
-            let app = if std::env::args().any(|arg| arg == "--demo-ak820") {
-                EntropyApp::new_ak820_demo(cc)
-            } else {
-                EntropyApp::new(cc)
-            };
-            #[cfg(target_os = "windows")]
-            let app = if launch_minimized {
-                app.with_start_hidden_to_tray()
-            } else {
-                app
-            };
-            #[cfg(not(target_os = "windows"))]
-            if launch_minimized {
-                cc.egui_ctx
-                    .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-            }
-            Ok(Box::new(app))
-        }),
+        Box::new(move |_cc| Ok(Box::new(startup::StartupApp::new(launch_minimized)))),
     )
+}
+
+fn initialize_gui(ctx: &egui::Context, launch_minimized: bool) -> Box<dyn eframe::App> {
+    // Roboto as primary UI font, with Unicode/symbol fallbacks.
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "roboto".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/Roboto-Regular.ttf")).into(),
+    );
+    fonts.font_data.insert(
+        "montserrat_medium".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/Montserrat-Medium.ttf"))
+            .into(),
+    );
+    fonts.font_data.insert(
+        "dejavu".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/DejaVuSans.ttf")).into(),
+    );
+    fonts.font_data.insert(
+        "noto_symbols".to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/NotoSansSymbols2-Regular.ttf"
+        ))
+        .into(),
+    );
+    fonts.font_data.insert(
+        "noto_emoji".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoEmoji-Regular.ttf"))
+            .into(),
+    );
+    for (name, data) in [
+        (
+            "clock_ubuntu_sans",
+            include_bytes!("../assets/Clock-UbuntuSans.ttf").as_slice(),
+        ),
+        (
+            "clock_ubuntu_mono",
+            include_bytes!("../assets/Clock-UbuntuMono.ttf").as_slice(),
+        ),
+        (
+            "clock_liberation_mono",
+            include_bytes!("../assets/Clock-LiberationMono.ttf").as_slice(),
+        ),
+        (
+            "clock_dejavu_sans",
+            include_bytes!("../assets/Clock-DejaVuSans.ttf").as_slice(),
+        ),
+        (
+            "clock_dejavu_serif",
+            include_bytes!("../assets/Clock-DejaVuSerif.ttf").as_slice(),
+        ),
+        (
+            "clock_dejavu_mono",
+            include_bytes!("../assets/Clock-DejaVuMono.ttf").as_slice(),
+        ),
+        (
+            "clock_liberation_sans",
+            include_bytes!("../assets/Clock-LiberationSans.ttf").as_slice(),
+        ),
+        (
+            "clock_liberation_serif",
+            include_bytes!("../assets/Clock-LiberationSerif.ttf").as_slice(),
+        ),
+        (
+            "clock_liberation_narrow",
+            include_bytes!("../assets/EntropyDisplay-Narrow.ttf").as_slice(),
+        ),
+    ] {
+        fonts
+            .font_data
+            .insert(name.to_owned(), egui::FontData::from_static(data).into());
+    }
+    let prop = fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default();
+    prop.insert(0, "roboto".to_owned());
+    prop.push("dejavu".to_owned());
+    prop.push("noto_symbols".to_owned());
+    prop.push("noto_emoji".to_owned());
+    let mono = fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default();
+    mono.push("dejavu".to_owned());
+    mono.push("noto_symbols".to_owned());
+    mono.push("noto_emoji".to_owned());
+    fonts.families.insert(
+        egui::FontFamily::Name("emoji_preview".into()),
+        vec![
+            "noto_emoji".to_owned(),
+            "noto_symbols".to_owned(),
+            "dejavu".to_owned(),
+        ],
+    );
+    fonts.families.insert(
+        egui::FontFamily::Name("display_preview".into()),
+        vec![
+            "montserrat_medium".to_owned(),
+            "dejavu".to_owned(),
+            "noto_symbols".to_owned(),
+        ],
+    );
+    for (family, font) in [
+        ("clock_montserrat", "montserrat_medium"),
+        ("clock_ubuntu_sans", "clock_ubuntu_sans"),
+        ("clock_ubuntu_mono", "clock_ubuntu_mono"),
+        ("clock_liberation_mono", "clock_liberation_mono"),
+        ("clock_dejavu_sans", "clock_dejavu_sans"),
+        ("clock_dejavu_serif", "clock_dejavu_serif"),
+        ("clock_dejavu_mono", "clock_dejavu_mono"),
+        ("clock_liberation_sans", "clock_liberation_sans"),
+        ("clock_liberation_serif", "clock_liberation_serif"),
+        ("clock_liberation_narrow", "clock_liberation_narrow"),
+    ] {
+        fonts
+            .families
+            .insert(egui::FontFamily::Name(family.into()), vec![font.to_owned()]);
+    }
+    ctx.set_fonts(fonts);
+    startup::mark("editor_fonts_configured");
+    let mut app = if isolated_runtime() {
+        EntropyApp::new_ak820_demo_for_context(ctx)
+    } else {
+        EntropyApp::new_for_context(ctx)
+    };
+    app.apply_initial_ui_theme(ctx);
+    #[cfg(target_os = "windows")]
+    let app = if launch_minimized {
+        app.with_start_hidden_to_tray()
+    } else {
+        app
+    };
+    #[cfg(not(target_os = "windows"))]
+    if launch_minimized {
+        ctx
+            .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if runtime_safety::smoke_requested() {
+        return Box::new(app::RuntimeSmokeApp::new(app));
+    }
+    Box::new(app)
 }
 
 #[cfg(test)]

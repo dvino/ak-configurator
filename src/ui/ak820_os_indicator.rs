@@ -1,15 +1,33 @@
 //! Opt-in OS indication borrows the selected verified HID owner. It never
 //! opens a second handle, guesses a layout or retries a failed exchange.
 use super::*;
-use crate::ak820_os_indicator::{Mode, Scheduler, Settings, REFRESH_MS};
+use crate::ak820_os_indicator::{Mode, Scheduler, REFRESH_MS, SAMPLE_INTERVAL_MS};
 use std::time::{Duration, Instant};
 
-struct Job {
-    hid: crate::hid::HidDevice,
+enum Job {
+    Sample {
+        generation: u64,
+        queued: Instant,
+        enabled: bool,
+    },
+    Write {
+        hid: crate::hid::HidDevice,
+        generation: u64,
+        mode: Mode,
+        layout: Option<&'static str>,
+        sampled: Instant,
+    },
+}
+
+struct Sample {
     generation: u64,
-    settings: Settings,
-    previous: Option<Mode>,
-    queued: Instant,
+    layout: Option<&'static str>,
+    sampled: Instant,
+}
+
+enum WorkerResult {
+    Sample(Sample),
+    Write(Finished),
 }
 #[derive(Clone, Copy, Default)]
 enum IndicatorStatus {
@@ -29,6 +47,7 @@ struct Finished {
     mode: Mode,
     layout: Option<&'static str>,
     result: Result<(), String>,
+    sent: bool,
 }
 
 pub(super) struct Runtime {
@@ -36,8 +55,13 @@ pub(super) struct Runtime {
     checked_at: Option<Instant>,
     scheduler: Scheduler,
     worker: Option<mpsc::Sender<Job>>,
-    receiver: Option<mpsc::Receiver<Finished>>,
+    receiver: Option<mpsc::Receiver<WorkerResult>>,
+    sampling: bool,
+    sample: Option<Sample>,
     in_flight: bool,
+    loan_verified: bool,
+    loan_rgb_direct: bool,
+    loan_selected: Option<usize>,
     generation: u64,
     previous: Option<Mode>,
     status: IndicatorStatus,
@@ -50,7 +74,12 @@ impl Default for Runtime {
             scheduler: Scheduler::default(),
             worker: None,
             receiver: None,
+            sampling: false,
+            sample: None,
             in_flight: false,
+            loan_verified: false,
+            loan_rgb_direct: false,
+            loan_selected: None,
             generation: 0,
             previous: None,
             status: IndicatorStatus::Ready,
@@ -69,31 +98,46 @@ impl Runtime {
             // Native detector connections stay on their owning thread.
             let mut detector = crate::qmk_hid_host::Ak820LayoutDetector::new();
             while let Ok(job) = jobs.recv() {
-                let layout = if job.settings.enabled {
-                    detector.current()
-                } else {
-                    None
-                };
-                let mode = job.settings.mode(layout);
-                let result = if job.queued.elapsed() > Duration::from_secs(2) {
-                    Err("OS indication stopped: layout sample exceeded freshness limit".into())
-                } else if mode != Mode::Normal || job.previous.is_some_and(|m| m != Mode::Normal) {
-                    job.hid
-                        .ak820_os_indicator_set(mode)
-                        .map_err(|e| e.to_string())
-                } else {
-                    Ok(())
-                };
-                if finished
-                    .send(Finished {
-                        hid: job.hid,
-                        generation: job.generation,
+                let result = match job {
+                    Job::Sample {
+                        generation,
+                        queued,
+                        enabled,
+                    } => {
+                        // Sampling desktop state never borrows the HID owner.
+                        let layout = if enabled { detector.current() } else { None };
+                        WorkerResult::Sample(Sample {
+                            generation,
+                            layout,
+                            sampled: queued,
+                        })
+                    }
+                    Job::Write {
+                        hid,
+                        generation,
                         mode,
                         layout,
-                        result,
-                    })
-                    .is_err()
-                {
+                        sampled,
+                    } => {
+                        let result = if sampled.elapsed() > Duration::from_secs(2) {
+                            Err(
+                                "OS indication stopped: layout sample exceeded freshness limit"
+                                    .into(),
+                            )
+                        } else {
+                            hid.ak820_os_indicator_set(mode).map_err(|e| e.to_string())
+                        };
+                        WorkerResult::Write(Finished {
+                            hid,
+                            generation,
+                            mode,
+                            layout,
+                            result,
+                            sent: true,
+                        })
+                    }
+                };
+                if finished.send(result).is_err() {
                     break;
                 }
             }
@@ -103,18 +147,86 @@ impl Runtime {
     }
 }
 
+fn repaint_interval(enabled: bool, verified: bool, in_flight: bool) -> Option<Duration> {
+    if in_flight {
+        Some(Duration::from_millis(20))
+    } else if enabled && verified {
+        Some(Duration::from_millis(SAMPLE_INTERVAL_MS))
+    } else {
+        None
+    }
+}
+
 impl EntropyApp {
+    /// Keep the native event loop responsive enough to service the borrowed HID
+    /// owner while the main window is hidden. The hidden-window idle cadence is
+    /// deliberately coarse, so the indicator supplies its own bounded cadence.
+    pub(super) fn ak820_os_indicator_repaint_interval(&self) -> Option<std::time::Duration> {
+        let runtime = &self.ak820_os_indicator_runtime;
+        let verified = self.hid_device.as_ref().is_some_and(|h| {
+            h.ak820_editing_ready()
+                && h.ak820_image()
+                    .and_then(crate::ak820::ImageContract::profile)
+                    .is_some_and(|p| ak820_beta1_profiles::has_feature(p, "os-indicators"))
+        });
+        repaint_interval(
+            self.app_settings.ak820_os_indicator.enabled,
+            verified,
+            runtime.in_flight || runtime.sampling,
+        )
+    }
+
     pub(super) fn ak820_os_indicator_handoff_allowed(&self) -> bool {
         !self.ak820_os_indicator_runtime.scheduler.failed()
-            && self.hid_device.as_ref().is_none_or(|hid| hid.ak820_failure().is_none())
+            && self
+                .hid_device
+                .as_ref()
+                .is_none_or(|hid| hid.ak820_failure().is_none())
     }
 
     pub(super) fn ak820_os_indicator_owns_hid(&self) -> bool {
         self.ak820_os_indicator_runtime.in_flight
     }
 
+    /// Captured facts keep cached controls visible during an actual verified
+    /// loan. This grants no write permission and expires with the connection.
+    pub(super) fn ak820_os_indicator_display_connected(&self) -> bool {
+        let runtime = &self.ak820_os_indicator_runtime;
+        runtime.in_flight
+            && runtime.loan_verified
+            && runtime.generation == self.connection_generation
+            && runtime.loan_selected == self.selected_device
+    }
+
+    pub(super) fn ak820_os_indicator_display_rgb_direct(&self) -> bool {
+        self.ak820_os_indicator_display_connected()
+            && self.ak820_os_indicator_runtime.loan_rgb_direct
+    }
+
+    #[cfg(test)]
+    pub(super) fn begin_test_indicator_hid_loan(&mut self) -> crate::hid::HidDevice {
+        let hid = self.hid_device.take().expect("test HID owner");
+        let runtime = &mut self.ak820_os_indicator_runtime;
+        runtime.loan_verified = hid.ak820_editing_ready()
+            && hid
+                .ak820_image()
+                .and_then(crate::ak820::ImageContract::profile)
+                .is_some_and(|p| ak820_beta1_profiles::has_feature(p, "os-indicators"));
+        assert!(
+            runtime.loan_verified,
+            "test loan requires a verified indicator profile"
+        );
+        runtime.loan_rgb_direct = hid
+            .ak820_image()
+            .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1));
+        runtime.loan_selected = self.selected_device;
+        runtime.generation = self.connection_generation;
+        runtime.in_flight = true;
+        hid
+    }
+
     pub(super) fn poll_ak820_os_indicator_task(&mut self) {
-        if !self.ak820_os_indicator_runtime.in_flight {
+        if !self.ak820_os_indicator_runtime.in_flight && !self.ak820_os_indicator_runtime.sampling {
             return;
         }
         let received = self
@@ -129,6 +241,7 @@ impl EntropyApp {
             Err(mpsc::TryRecvError::Disconnected) => {
                 let runtime = &mut self.ak820_os_indicator_runtime;
                 runtime.in_flight = false;
+                runtime.sampling = false;
                 runtime.scheduler.completed(
                     runtime.clock.elapsed().as_millis() as u64,
                     Mode::Normal,
@@ -140,6 +253,18 @@ impl EntropyApp {
             }
         };
         let runtime = &mut self.ak820_os_indicator_runtime;
+        let result = match result {
+            WorkerResult::Sample(sample) => {
+                runtime.sampling = false;
+                if sample.generation == self.connection_generation
+                    && runtime.checked_at == Some(sample.sampled)
+                {
+                    runtime.sample = Some(sample);
+                }
+                return;
+            }
+            WorkerResult::Write(result) => result,
+        };
         runtime.in_flight = false;
         if result.generation != self.connection_generation {
             runtime.previous = None;
@@ -147,11 +272,13 @@ impl EntropyApp {
             return;
         }
         runtime.previous = Some(result.mode);
-        runtime.scheduler.completed(
-            runtime.clock.elapsed().as_millis() as u64,
-            result.mode,
-            result.result.is_ok(),
-        );
+        if result.sent || result.result.is_err() {
+            runtime.scheduler.completed(
+                runtime.clock.elapsed().as_millis() as u64,
+                result.mode,
+                result.result.is_ok(),
+            );
+        }
         runtime.status = if result.result.is_err() {
             IndicatorStatus::DeviceError
         } else if !self.app_settings.ak820_os_indicator.enabled {
@@ -195,8 +322,13 @@ impl EntropyApp {
         if busy || !verified || self.headless {
             runtime.scheduler.pause();
             runtime.previous = None;
+            runtime.sample = None;
+            runtime.checked_at = None;
             if self.app_settings.ak820_os_indicator.enabled
-                && !matches!(runtime.status, IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped)
+                && !matches!(
+                    runtime.status,
+                    IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped
+                )
             {
                 runtime.status = IndicatorStatus::Paused;
             }
@@ -206,6 +338,7 @@ impl EntropyApp {
             runtime.generation = self.connection_generation;
             runtime.previous = None;
             runtime.checked_at = None;
+            runtime.sample = None;
             runtime.status = IndicatorStatus::Ready;
         }
         runtime.scheduler.bind(self.connection_generation);
@@ -214,42 +347,210 @@ impl EntropyApp {
         {
             return;
         }
-        ctx.request_repaint_after(Duration::from_millis(REFRESH_MS));
-        if runtime.checked_at.is_some_and(|at| {
-            now.saturating_duration_since(at).as_millis() < u128::from(REFRESH_MS)
-        }) {
+        ctx.request_repaint_after(Duration::from_millis(SAMPLE_INTERVAL_MS));
+        if runtime.scheduler.failed() {
+            runtime.sample = None;
             return;
         }
-        // The scheduler failure latch prevents all further jobs in this session.
-        if !runtime
-            .scheduler
-            .due(runtime.clock.elapsed().as_millis() as u64, Mode::On)
+        // A completed sample is consumed only after the current connection and
+        // all competing write owners have been checked on the UI thread.
+        if let Some(sample) = runtime.sample.take() {
+            if sample.generation != self.connection_generation {
+                return;
+            }
+            if sample.sampled.elapsed() > Duration::from_secs(2) {
+                runtime.scheduler.completed(
+                    runtime.clock.elapsed().as_millis() as u64,
+                    Mode::Normal,
+                    false,
+                );
+                runtime.status = IndicatorStatus::DeviceError;
+                return;
+            }
+            let mode = self.app_settings.ak820_os_indicator.mode(sample.layout);
+            let refresh_due = runtime
+                .scheduler
+                .due(runtime.clock.elapsed().as_millis() as u64, mode);
+            if crate::ak820_os_indicator::should_send(mode, runtime.previous, refresh_due) {
+                let Some(hid) = self.hid_device.take() else {
+                    return;
+                };
+                runtime.loan_verified = verified;
+                runtime.loan_rgb_direct = hid.ak820_image().is_some_and(|image| {
+                    image.profile().is_some() && image.rgb_modes().contains(&1)
+                });
+                runtime.loan_selected = self.selected_device;
+                runtime.in_flight = true;
+                let job = Job::Write {
+                    hid,
+                    generation: sample.generation,
+                    mode,
+                    layout: sample.layout,
+                    sampled: sample.sampled,
+                };
+                if let Err(error) = runtime.worker.as_ref().unwrap().send(job) {
+                    if let Job::Write { hid, .. } = error.0 {
+                        self.hid_device = Some(hid);
+                    }
+                    runtime.in_flight = false;
+                    runtime.scheduler.completed(
+                        runtime.clock.elapsed().as_millis() as u64,
+                        mode,
+                        false,
+                    );
+                    runtime.status = IndicatorStatus::WorkerStopped;
+                }
+                ctx.request_repaint_after(Duration::from_millis(20));
+                return;
+            }
+            runtime.previous = Some(mode);
+            runtime.status = if !self.app_settings.ak820_os_indicator.enabled {
+                IndicatorStatus::Disabled
+            } else if let Some(layout) = sample.layout {
+                IndicatorStatus::LayoutDetected(layout == "ru")
+            } else {
+                IndicatorStatus::LayoutUnavailable
+            };
+        }
+        if runtime.sampling
+            || runtime.checked_at.is_some_and(|at| {
+                now.saturating_duration_since(at).as_millis() < u128::from(SAMPLE_INTERVAL_MS)
+            })
         {
             return;
         }
         runtime.start_worker();
-        let Some(hid) = self.hid_device.take() else {
-            return;
-        };
-        runtime.in_flight = true;
         runtime.checked_at = Some(now);
-        let job = Job {
-            hid,
-            generation: self.connection_generation,
-            settings: self.app_settings.ak820_os_indicator.clone(),
-            previous: runtime.previous,
-            queued: now,
-        };
-        if let Err(error) = runtime.worker.as_ref().unwrap().send(job) {
-            self.hid_device = Some(error.0.hid);
-            runtime.in_flight = false;
+        runtime.sampling = true;
+        if runtime
+            .worker
+            .as_ref()
+            .unwrap()
+            .send(Job::Sample {
+                generation: self.connection_generation,
+                queued: now,
+                enabled: self.app_settings.ak820_os_indicator.enabled,
+            })
+            .is_err()
+        {
+            runtime.sampling = false;
             runtime.scheduler.completed(
                 runtime.clock.elapsed().as_millis() as u64,
                 Mode::Normal,
                 false,
             );
+            runtime.status = IndicatorStatus::WorkerStopped;
         }
         ctx.request_repaint_after(Duration::from_millis(20));
+    }
+
+    /// OS layout indicator preferences are part of the general application
+    /// settings list; the runtime and its fault labels remain shared here.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn draw_ak820_os_indicator_app_settings_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        row: usize,
+        content_width: f32,
+        row_height: f32,
+        metrics: crate::ui_style::ResponsiveMetrics,
+    ) {
+        let lang = self.app_settings.language;
+        let ru = lang == crate::i18n::Language::Russian;
+        let tr = |r: &'static str, e: &'static str| if ru { r } else { e };
+        let switch_size = metrics.size(46.0, 24.0);
+        let control_width = metrics.settings_control_width();
+        match row {
+            13 => {
+                let mut enabled = self.app_settings.ak820_os_indicator.enabled;
+                crate::ui_style::settings_list_row(
+                    ui,
+                    content_width,
+                    row_height,
+                    tr("Индикатор раскладки OS", "OS layout indicator"),
+                    true,
+                    switch_size.x,
+                    |ui| {
+                        let _ = crate::ui_style::settings_switch_sized_stable(
+                            ui,
+                            "ak820_os_indicator_enabled",
+                            &mut enabled,
+                            switch_size,
+                        );
+                    },
+                );
+                if enabled != self.app_settings.ak820_os_indicator.enabled {
+                    self.app_settings.ak820_os_indicator.enabled = enabled;
+                    save_app_settings(&self.app_settings);
+                }
+            }
+            14 | 15 => {
+                let (key, label) = if row == 14 {
+                    ("en", tr("Английская раскладка", "English layout"))
+                } else {
+                    ("ru", tr("Русская раскладка", "Russian layout"))
+                };
+                let mode = self
+                    .app_settings
+                    .ak820_os_indicator
+                    .layouts
+                    .entry(key.into())
+                    .or_default();
+                let values = [Mode::Normal, Mode::Off, Mode::On, Mode::Breathing];
+                let labels: Vec<String> = values
+                    .iter()
+                    .map(|value| mode_label(*value, ru).to_owned())
+                    .collect();
+                let selected = values.iter().position(|value| *value == *mode).unwrap_or(0);
+                let enabled = self.app_settings.ak820_os_indicator.enabled;
+                let dropdown_id = ui.make_persistent_id(("ak820_os_layout", key));
+                let mut changed = false;
+                crate::ui_style::settings_list_row(
+                    ui,
+                    content_width,
+                    row_height,
+                    label,
+                    enabled,
+                    control_width,
+                    |ui| {
+                        if let (_, Some(index)) = crate::ui_style::modern_dropdown_select_sized(
+                            ui,
+                            dropdown_id,
+                            &labels,
+                            selected,
+                            control_width,
+                            row_height.min(40.0),
+                            metrics.value(12.5),
+                        ) {
+                            *mode = values[index];
+                            changed = true;
+                        }
+                    },
+                );
+                if changed {
+                    save_app_settings(&self.app_settings);
+                }
+            }
+            16 => {
+                let status = status_label(self.ak820_os_indicator_runtime.status, ru);
+                crate::ui_style::settings_list_row(
+                    ui,
+                    content_width,
+                    row_height,
+                    tr("Состояние", "Status"),
+                    true,
+                    content_width * 0.68,
+                    |ui| {
+                        ui.label(
+                            RichText::new(status)
+                                .size(metrics.value(12.5))
+                                .color(app_muted_text(ui.visuals().dark_mode)),
+                        );
+                    },
+                );
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn draw_ak820_os_indicator_page(
@@ -273,148 +574,23 @@ impl EntropyApp {
                 ui.add_space(metrics.value(6.0));
                 ui.label(
                     RichText::new(tr(
-                        "Показывает активную раскладку на подсветке клавиатуры.",
-                        "Shows the active keyboard layout through keyboard lighting.",
+                        "Настройки помощника перенесены в общие настройки приложения.",
+                        "Helper preferences are now part of general application settings.",
                     ))
                     .size(metrics.value(13.0))
                     .color(app_muted_text(dark)),
                 );
-                ui.add_space(metrics.value(24.0));
-                let content_width = metrics
-                    .settings_row_content_width()
-                    .min(ui.available_width() - 8.0);
-                egui::ScrollArea::vertical()
-                    .id_salt("ak820_os_indicator_scroll")
-                    .max_height(ui.available_height())
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.set_max_width(content_width);
-                        ui.spacing_mut().item_spacing.y = 8.0;
-                        let mut changed = false;
-                        let switch_size = metrics.size(46.0, 24.0);
-                        crate::ui_style::settings_list_row(
-                            ui,
-                            content_width,
-                            metrics.settings_row_height(),
-                            tr("Включить помощник", "Enable helper"),
-                            true,
-                            switch_size.x,
-                            |ui| {
-                                changed |= crate::ui_style::settings_switch_sized_stable(
-                                    ui,
-                                    "ak820_os_indicator_enabled",
-                                    &mut self.app_settings.ak820_os_indicator.enabled,
-                                    switch_size,
-                                )
-                                .changed();
-                            },
-                        );
-                        for (key, label) in [
-                            ("en", tr("Английская раскладка", "English layout")),
-                            ("ru", tr("Русская раскладка", "Russian layout")),
-                        ] {
-                            let mode = self
-                                .app_settings
-                                .ak820_os_indicator
-                                .layouts
-                                .entry(key.into())
-                                .or_default();
-                            let values = [Mode::Normal, Mode::Off, Mode::On, Mode::Breathing];
-                            let labels: Vec<String> = values
-                                .iter()
-                                .map(|v| mode_label(*v, ru).to_owned())
-                                .collect();
-                            let selected = values.iter().position(|v| *v == *mode).unwrap_or(0);
-                            let width = (content_width * 0.44).clamp(148.0, 220.0);
-                            let dropdown_id = ui.make_persistent_id(("ak820_os_layout", key));
-                            crate::ui_style::settings_list_row(
-                                ui,
-                                content_width,
-                                metrics.settings_row_height(),
-                                label,
-                                self.app_settings.ak820_os_indicator.enabled,
-                                width,
-                                |ui| {
-                                    if let (_, Some(index)) =
-                                        crate::ui_style::modern_dropdown_select_sized(
-                                            ui,
-                                            dropdown_id,
-                                            &labels,
-                                            selected,
-                                            width,
-                                            metrics.settings_row_height().min(40.0),
-                                            metrics.value(12.5),
-                                        )
-                                    {
-                                        *mode = values[index];
-                                        changed = true;
-                                    }
-                                },
-                            );
-                        }
-                        ui.add_space(metrics.value(14.0));
-                        ui.label(
-                            RichText::new(status_label(self.ak820_os_indicator_runtime.status, ru))
-                                .size(metrics.value(13.0)),
-                        );
-                        ui.add_space(metrics.value(12.0));
-                        if crate::ui_style::modern_button(
-                            ui,
-                            tr("Справка", "Help"),
-                            metrics.size(104.0, 32.0),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            super::ak820_help_ui::open_section(ui.ctx(), "os-layout-helper");
-                        }
-                        let can_hide = self.app_settings.ak820_os_indicator.enabled
-                            && !self.ak820_demo
-                            && !self.headless
-                            && crate::background_helper_allowed()
-                            && self.ak820_os_indicator_handoff_allowed()
-                            && !self.hid_write_lifecycle_busy()
-                            && matches!(self.connect_state, ConnectState::Idle)
-                            && !self.unlock_open
-                            && self.pending_file_dialog.is_none();
-                        if crate::ui_style::action_button(
-                            ui,
-                            tr(
-                                "Закрыть интерфейс, оставить помощник",
-                                "Close interface, keep helper",
-                            ),
-                            can_hide,
-                        )
-                        .clicked()
-                        {
-                            save_app_settings(&self.app_settings);
-                            crate::request_background_helper();
-                            self.force_close_requested = true;
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if crate::ui_style::action_button(
-                            ui,
-                            tr("Завершить приложение", "Quit application"),
-                            !self.ak820_install_runtime.blocks_exit(),
-                        )
-                        .clicked()
-                        {
-                            crate::cancel_background_helper_request();
-                            self.force_close_requested = true;
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        ui.label(
-                            RichText::new(tr(
-                                "Помощник работает, пока приложение запущено.",
-                                "The helper runs while the application is open.",
-                            ))
-                            .size(metrics.value(12.5))
-                            .color(app_muted_text(dark)),
-                        );
-                        if changed {
-                            save_app_settings(&self.app_settings);
-                        }
-                    });
+                ui.add_space(metrics.value(20.0));
+                if crate::ui_style::modern_button(
+                    ui,
+                    tr("Открыть настройки приложения", "Open application settings"),
+                    metrics.size(240.0, 34.0),
+                    true,
+                )
+                .clicked()
+                {
+                    self.open_app_settings_page();
+                }
             });
         });
     }
@@ -509,13 +685,15 @@ pub(crate) fn run_background_helper() -> HelperExit {
     let initial_signal = read_single_instance_signal();
     let mut detector = crate::qmk_hid_host::Ak820LayoutDetector::new();
     let mut faulted = FaultedEndpoints::default();
-    let mut active: Option<(String, crate::hid::HidDevice, Mode)> = None;
+    let mut active: Option<(String, crate::hid::HidDevice, Mode, Option<Instant>)> = None;
+    let mut last_scan_at: Option<Instant> = None;
+    let mut enumerated_devices = Vec::new();
     loop {
         let cycle_started = Instant::now();
         let settings = load_app_settings().ak820_os_indicator;
         let open_interface = read_single_instance_signal() != initial_signal;
         if open_interface || !settings.enabled {
-            if let Some((_, hid, previous)) = active.take() {
+            if let Some((_, hid, previous, _)) = active.take() {
                 if previous != Mode::Normal {
                     // Orderly release is attempted once. A failure cannot
                     // trigger a retry; firmware lease expiry is the fallback.
@@ -528,74 +706,81 @@ pub(crate) fn run_background_helper() -> HelperExit {
                 HelperExit::Disabled
             };
         }
-        let devices = match DeviceManager::scan_usb_devices() {
-            Ok(devices) => devices,
-            Err(_) => {
-                if let Some((key, _, _)) = active.take() {
-                    faulted.fault(key);
+        let scan_due = last_scan_at.is_none_or(|at| {
+            cycle_started.saturating_duration_since(at).as_millis() >= u128::from(REFRESH_MS)
+        });
+        if scan_due {
+            last_scan_at = Some(cycle_started);
+            let devices = match DeviceManager::scan_usb_devices() {
+                Ok(devices) => devices,
+                Err(_) => {
+                    if let Some((key, _, _, _)) = active.take() {
+                        faulted.fault(key);
+                    }
+                    // A scan error is not evidence of a physical disconnect.
+                    std::thread::sleep(Duration::from_millis(SAMPLE_INTERVAL_MS));
+                    continue;
                 }
-                // A scan error is not evidence of a physical disconnect.
-                std::thread::sleep(Duration::from_millis(REFRESH_MS));
-                continue;
+            };
+            enumerated_devices = devices;
+            let keys: Vec<String> = enumerated_devices.iter().map(endpoint_key).collect();
+            faulted.observed(&keys);
+            let candidate = if enumerated_devices.len() == 1 {
+                enumerated_devices.first()
+            } else {
+                None
+            };
+            if active
+                .as_ref()
+                .is_some_and(|(key, _, _, _)| candidate.is_none_or(|d| endpoint_key(d) != *key))
+            {
+                // Ambiguity or a replaced enumeration revokes the old handle.
+                // No report is sent to an identity that enumeration no longer proves.
+                active = None;
             }
-        };
-        let keys: Vec<String> = devices.iter().map(endpoint_key).collect();
-        faulted.observed(&keys);
-        let candidate = if devices.len() == 1 {
-            devices.first()
-        } else {
-            None
-        };
-        if active
-            .as_ref()
-            .is_some_and(|(key, _, _)| candidate.is_none_or(|d| endpoint_key(d) != *key))
-        {
-            // Ambiguity or a replaced enumeration revokes the old handle.
-            // No report is sent to an identity that enumeration no longer proves.
-            active = None;
-        }
-        if active.is_none() {
-            if let Some(device) = candidate {
-                let key = endpoint_key(device);
-                if !faulted.blocked(&key) {
-                    let loaded = crate::hid::HidDevice::open_fresh_for(device)
-                        .map_err(|e| e.to_string())
-                        .and_then(|hid| {
-                            super::ak820_connection::load_ak820(device, hid, |_| {
-                                if read_single_instance_signal() != initial_signal {
-                                    Err("OS helper connection cancelled for interface handoff"
-                                        .into())
-                                } else {
-                                    Ok(())
-                                }
-                            })
-                        });
-                    match loaded {
-                        Ok(mut result) => {
-                            // All layout/editor state is dropped here. The
-                            // only retained device object is its checked owner.
-                            if let Some(hid) = result.hid_device.take() {
-                                if hid
-                                    .ak820_image()
-                                    .and_then(crate::ak820::ImageContract::profile)
-                                    .is_some_and(|p| {
-                                        ak820_beta1_profiles::has_feature(p, "os-indicators")
-                                    })
-                                {
-                                    active = Some((key, hid, Mode::Normal));
+            if active.is_none() {
+                if let Some(device) = candidate {
+                    let key = endpoint_key(device);
+                    if !faulted.blocked(&key) {
+                        let loaded = crate::hid::HidDevice::open_fresh_for(device)
+                            .map_err(|e| e.to_string())
+                            .and_then(|hid| {
+                                super::ak820_connection::load_ak820(device, hid, |_| {
+                                    if read_single_instance_signal() != initial_signal {
+                                        Err("OS helper connection cancelled for interface handoff"
+                                            .into())
+                                    } else {
+                                        Ok(())
+                                    }
+                                })
+                            });
+                        match loaded {
+                            Ok(mut result) => {
+                                // All layout/editor state is dropped here. The
+                                // only retained device object is its checked owner.
+                                if let Some(hid) = result.hid_device.take() {
+                                    if hid
+                                        .ak820_image()
+                                        .and_then(crate::ak820::ImageContract::profile)
+                                        .is_some_and(|p| {
+                                            ak820_beta1_profiles::has_feature(p, "os-indicators")
+                                        })
+                                    {
+                                        active = Some((key, hid, Mode::Normal, None));
+                                    } else {
+                                        faulted.fault(key);
+                                    }
                                 } else {
                                     faulted.fault(key);
                                 }
-                            } else {
-                                faulted.fault(key);
                             }
+                            Err(_) => faulted.fault(key),
                         }
-                        Err(_) => faulted.fault(key),
                     }
                 }
             }
         }
-        if let Some((key, hid, previous)) = active.as_mut() {
+        if let Some((key, hid, previous, last_set_at)) = active.as_mut() {
             // Loading the complete image/settings may take time. Reopen host
             // preferences before choosing the mode rather than publishing the
             // pre-connection opt-in/mapping snapshot.
@@ -606,9 +791,14 @@ pub(crate) fn run_background_helper() -> HelperExit {
             // Do not make a stale queued report after a system suspension.
             let fresh = sampled.elapsed() <= Duration::from_secs(2)
                 && read_single_instance_signal() == initial_signal;
+            let refresh_due = last_set_at.is_some_and(|at| {
+                sampled.saturating_duration_since(at).as_millis() >= u128::from(REFRESH_MS)
+            });
+            let should_send =
+                crate::ak820_os_indicator::should_send(mode, Some(*previous), refresh_due);
             let result = if !fresh {
                 Err(anyhow::anyhow!("OS helper sample expired"))
-            } else if mode != Mode::Normal || *previous != Mode::Normal {
+            } else if should_send {
                 hid.ak820_os_indicator_set(mode)
             } else {
                 Ok(())
@@ -617,11 +807,14 @@ pub(crate) fn run_background_helper() -> HelperExit {
                 faulted.fault(key.clone());
                 active = None;
             } else {
-                *previous = mode;
+                if should_send {
+                    *previous = mode;
+                    *last_set_at = Some(Instant::now());
+                }
             }
         }
         std::thread::sleep(
-            Duration::from_millis(REFRESH_MS).saturating_sub(cycle_started.elapsed()),
+            Duration::from_millis(SAMPLE_INTERVAL_MS).saturating_sub(cycle_started.elapsed()),
         );
     }
 }
@@ -629,6 +822,220 @@ pub(crate) fn run_background_helper() -> HelperExit {
 #[cfg(test)]
 mod background_tests {
     use super::*;
+
+    #[test]
+    fn repaint_cadence_keeps_indicator_jobs_live_when_hidden() {
+        assert_eq!(
+            repaint_interval(true, true, false),
+            Some(Duration::from_millis(SAMPLE_INTERVAL_MS))
+        );
+        assert_eq!(
+            repaint_interval(true, true, true),
+            Some(Duration::from_millis(20))
+        );
+        assert_eq!(repaint_interval(true, false, false), None);
+        assert_eq!(repaint_interval(false, true, false), None);
+    }
+
+    fn sampled_app() -> (
+        EntropyApp,
+        mpsc::Receiver<Job>,
+        mpsc::Sender<WorkerResult>,
+        crate::hid::TestHidRecorder,
+    ) {
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, requests) = crate::hid::HidDevice::test_beta3_ak820_device(
+            ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        app.hid_device = Some(hid);
+        app.ak820_os_indicator_runtime.generation = app.connection_generation;
+        app.app_settings.ak820_os_indicator.enabled = true;
+        app.app_settings
+            .ak820_os_indicator
+            .layouts
+            .insert("en".into(), Mode::Off);
+        let (jobs, received) = mpsc::channel();
+        let (finished, results) = mpsc::channel();
+        app.ak820_os_indicator_runtime.worker = Some(jobs);
+        app.ak820_os_indicator_runtime.receiver = Some(results);
+        (app, received, finished, requests)
+    }
+
+    #[test]
+    fn unchanged_layout_samples_keep_hid_and_ui_availability() {
+        let (mut app, jobs, finished, requests) = sampled_app();
+        let runtime = &mut app.ak820_os_indicator_runtime;
+        runtime.scheduler.bind(app.connection_generation);
+        runtime.scheduler.completed(0, Mode::Off, true);
+        runtime.previous = Some(Mode::Off);
+        let ctx = egui::Context::default();
+        app.tick_ak820_os_indicator(&ctx);
+        let Job::Sample {
+            generation, queued, ..
+        } = jobs.try_recv().unwrap()
+        else {
+            panic!("layout sampling must not borrow HID");
+        };
+        assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
+        assert!(!app.ak820_os_indicator_owns_hid());
+        finished
+            .send(WorkerResult::Sample(Sample {
+                generation,
+                layout: Some("en"),
+                sampled: queued,
+            }))
+            .unwrap();
+        app.poll_ak820_os_indicator_task();
+        app.tick_ak820_os_indicator(&ctx);
+        assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
+        assert!(!app.ak820_os_indicator_owns_hid());
+        if let Ok(job) = jobs.try_recv() {
+            assert!(matches!(job, Job::Sample { .. }));
+        }
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn changed_sample_borrows_only_after_current_write_gates() {
+        let (mut app, jobs, finished, requests) = sampled_app();
+        let ctx = egui::Context::default();
+        app.tick_ak820_os_indicator(&ctx);
+        let Job::Sample {
+            generation, queued, ..
+        } = jobs.try_recv().unwrap()
+        else {
+            panic!("expected sample");
+        };
+        finished
+            .send(WorkerResult::Sample(Sample {
+                generation,
+                layout: Some("en"),
+                sampled: queued,
+            }))
+            .unwrap();
+        app.poll_ak820_os_indicator_task();
+        app.tick_ak820_os_indicator(&ctx);
+        let Job::Write { mode, hid, .. } = jobs.try_recv().unwrap() else {
+            panic!("changed mode requires exclusive write owner");
+        };
+        assert_eq!(mode, Mode::Off);
+        assert!(app.hid_device.is_none());
+        assert!(app.ak820_os_indicator_owns_hid());
+        assert!(requests.requests().is_empty());
+        drop(hid);
+    }
+
+    #[test]
+    fn stale_sample_latches_failure_without_a_hid_loan() {
+        let (mut app, jobs, _finished, requests) = sampled_app();
+        let runtime = &mut app.ak820_os_indicator_runtime;
+        runtime.sample = Some(Sample {
+            generation: app.connection_generation,
+            layout: Some("en"),
+            sampled: Instant::now() - Duration::from_secs(3),
+        });
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(app.ak820_os_indicator_runtime.scheduler.failed());
+        assert!(app.hid_device.is_some());
+        assert!(!app.ak820_os_indicator_owns_hid());
+        assert!(matches!(jobs.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn competing_work_discards_sample_before_borrowing_hid() {
+        let (mut app, jobs, finished, requests) = sampled_app();
+        let ctx = egui::Context::default();
+        app.tick_ak820_os_indicator(&ctx);
+        let Job::Sample {
+            generation, queued, ..
+        } = jobs.try_recv().unwrap()
+        else {
+            panic!("expected sample");
+        };
+        app.unlock_open = true;
+        app.tick_ak820_os_indicator(&ctx);
+        finished
+            .send(WorkerResult::Sample(Sample {
+                generation,
+                layout: Some("en"),
+                sampled: queued,
+            }))
+            .unwrap();
+        app.poll_ak820_os_indicator_task();
+        app.unlock_open = false;
+        app.tick_ak820_os_indicator(&ctx);
+        assert!(matches!(jobs.try_recv().unwrap(), Job::Sample { .. }));
+        assert!(app.hid_device.is_some());
+        assert!(!app.ak820_os_indicator_owns_hid());
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn rgb_scene_tab_survives_temporary_os_indicator_hid_borrow() {
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, _requests) = crate::hid::HidDevice::test_beta3_ak820_device(
+            ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        app.hid_device = Some(hid);
+        let selected = 2;
+        assert_eq!(
+            super::super::rgb_settings_ui::rgb_section_for_availability(selected, true),
+            selected
+        );
+
+        let borrowed = app.begin_test_indicator_hid_loan();
+        let during_borrow = app.ak820_os_indicator_display_connected();
+        assert!(during_borrow);
+        assert_eq!(
+            super::super::rgb_settings_ui::rgb_section_for_availability(selected, during_borrow),
+            selected
+        );
+
+        app.ak820_os_indicator_runtime.in_flight = false;
+        app.hid_device = Some(borrowed);
+        assert!(!app.ak820_os_indicator_owns_hid());
+        assert_eq!(
+            super::super::rgb_settings_ui::rgb_section_for_availability(selected, true),
+            selected
+        );
+    }
+
+    #[test]
+    fn indicator_loan_preserves_only_actual_direct_capability() {
+        for (profile, direct) in [
+            (ak820_beta1_profiles::ProfileId::Main, true),
+            (ak820_beta1_profiles::ProfileId::Typing, false),
+        ] {
+            let mut app = EntropyApp::new_inert_for_test();
+            let (hid, requests) = crate::hid::HidDevice::test_beta3_ak820_device(profile, true);
+            let before = hid
+                .ak820_image()
+                .is_some_and(|image| image.profile().is_some() && image.rgb_modes().contains(&1));
+            assert_eq!(before, direct);
+            let normal_section =
+                super::super::rgb_settings_ui::rgb_section_for_availability(2, before);
+            app.hid_device = Some(hid);
+            let borrowed = app.begin_test_indicator_hid_loan();
+            assert!(app.ak820_os_indicator_display_connected());
+            assert_eq!(app.ak820_os_indicator_display_rgb_direct(), direct);
+            assert_eq!(
+                super::super::rgb_settings_ui::rgb_section_for_availability(
+                    2,
+                    app.ak820_os_indicator_display_rgb_direct()
+                ),
+                normal_section
+            );
+            assert_eq!(normal_section, if direct { 2 } else { 0 });
+            app.connection_generation = app.connection_generation.wrapping_add(1);
+            assert!(!app.ak820_os_indicator_display_rgb_direct());
+            assert!(requests.requests().is_empty());
+            drop(borrowed);
+        }
+    }
+
     #[test]
     fn failed_session_cannot_handoff_or_hide_its_error() {
         let mut app = EntropyApp::new_inert_for_test();
@@ -639,7 +1046,10 @@ mod background_tests {
         app.ak820_os_indicator_runtime.status = IndicatorStatus::DeviceError;
         assert!(!app.ak820_os_indicator_handoff_allowed());
         app.tick_ak820_os_indicator(&egui::Context::default());
-        assert!(matches!(app.ak820_os_indicator_runtime.status, IndicatorStatus::DeviceError));
+        assert!(matches!(
+            app.ak820_os_indicator_runtime.status,
+            IndicatorStatus::DeviceError
+        ));
         assert!(requests.requests().is_empty());
     }
 
@@ -647,7 +1057,9 @@ mod background_tests {
     fn failed_indicator_scheduler_blocks_handoff_without_a_device() {
         let mut app = EntropyApp::new_inert_for_test();
         assert!(app.ak820_os_indicator_handoff_allowed());
-        app.ak820_os_indicator_runtime.scheduler.completed(0, Mode::Off, false);
+        app.ak820_os_indicator_runtime
+            .scheduler
+            .completed(0, Mode::Off, false);
         assert!(!app.ak820_os_indicator_handoff_allowed());
     }
 

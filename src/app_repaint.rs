@@ -109,6 +109,20 @@ mod tests {
             native_repaint_interval(true, None, true, false, None),
             CONNECT_POLL_INTERVAL
         );
+        // A hidden window still polls completed indicator jobs and maintains
+        // the one-second override refresh before the firmware's lease expires.
+        assert_eq!(
+            native_repaint_interval(
+                true,
+                None,
+                false,
+                false,
+                Some(std::time::Duration::from_millis(
+                    crate::ak820_os_indicator::SAMPLE_INTERVAL_MS,
+                )),
+            ),
+            std::time::Duration::from_millis(crate::ak820_os_indicator::SAMPLE_INTERVAL_MS)
+        );
         assert_eq!(
             native_repaint_interval(true, None, false, true, None),
             UPDATE_CHECK_POLL_INTERVAL

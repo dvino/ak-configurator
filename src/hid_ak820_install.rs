@@ -12,6 +12,9 @@ impl HidDevice {
     /// Read-only discovery; no HID handle or report is opened here. The caller
     /// explicitly selects one endpoint before opening an installation owner.
     pub(crate) fn ak820_install_candidates() -> Result<Vec<crate::device::Device>> {
+        if crate::isolated_runtime() {
+            return Ok(Vec::new());
+        }
         ensure!(
             !std::env::args().any(|a| a == "--demo-ak820"),
             "Physical installation is disabled in demo mode"
@@ -43,6 +46,7 @@ impl HidDevice {
         }
     }
     pub(crate) fn open_for_install(device: &crate::device::Device) -> Result<Self> {
+        ensure!(!crate::isolated_runtime(), "Installation is disabled in isolated application modes");
         ensure!(
             !std::env::args().any(|a| a == "--demo-ak820"),
             "Physical installation is disabled in demo mode"
@@ -279,6 +283,7 @@ pub(crate) struct InstallUsb {
 }
 impl InstallUsb {
     pub(crate) fn open(device: &crate::device::Device) -> Result<Self> {
+        ensure!(!crate::isolated_runtime(), "Installation is disabled in isolated application modes");
         ensure!(device.is_ak820(), "Not an AK820 USB device");
         let api = hidapi::HidApi::new()?;
         let mut matches = api

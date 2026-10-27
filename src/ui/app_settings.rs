@@ -665,6 +665,16 @@ impl EntropyApp {
                         save_app_settings(&self.app_settings);
                     }
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                13..=16 => {
+                    self.draw_ak820_os_indicator_app_settings_row(
+                        ui,
+                        row_idx,
+                        content_width,
+                        row_height,
+                        metrics,
+                    );
+                }
                 _ => {}
             }
         }
@@ -744,6 +754,8 @@ impl EntropyApp {
 
 fn total_app_settings_rows() -> usize {
     let rows = 13;
+    #[cfg(not(target_arch = "wasm32"))]
+    let rows = rows + 4;
     #[cfg(target_os = "linux")]
     {
         rows + 1

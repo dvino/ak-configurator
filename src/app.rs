@@ -73,6 +73,12 @@ use pictogram_origin::LEGACY_NAME_LOOKUPS;
 #[path = "app_init.rs"]
 mod app_init;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "runtime_smoke_app.rs"]
+mod runtime_smoke_app;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use runtime_smoke_app::{smoke_result, RuntimeSmokeApp};
+
 #[path = "app_storage.rs"]
 mod app_storage;
 use app_storage::*;

@@ -58,11 +58,15 @@ impl EntropyApp {
 
     /// Offline preview: no discovery, HID handle, typing hook or update worker.
     pub(crate) fn new_ak820_demo(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::new_ak820_demo_for_context(&cc.egui_ctx)
+    }
+
+    pub(crate) fn new_ak820_demo_for_context(ctx: &egui::Context) -> Self {
         let settings = AppSettings {
             onboarding_tour_seen_version: ONBOARDING_TOUR_VERSION,
             ..load_app_settings()
         };
-        cc.egui_ctx.set_zoom_factor(settings.ui_scale);
+        ctx.set_zoom_factor(settings.ui_scale);
         let mut app = Self::from_bootstrap(AppBootstrap {
             typing_trainer: TypingTrainerState::from_settings(settings.typing_trainer),
             app_settings: settings,
@@ -368,10 +372,15 @@ impl EntropyApp {
     }
 
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::new_for_context(&cc.egui_ctx)
+    }
+
+    pub(crate) fn new_for_context(ctx: &egui::Context) -> Self {
         let mut app_settings = load_app_settings();
+        crate::startup::mark("preferences_loaded");
         app_settings.ui_scale = clamp_ui_scale(app_settings.ui_scale);
         crate::diagnostics::set_enabled(app_settings.diagnostics_enabled);
-        cc.egui_ctx.set_zoom_factor(app_settings.ui_scale);
+        ctx.set_zoom_factor(app_settings.ui_scale);
         crate::ui_style::set_accent(app_settings.accent_color.color());
         crate::smart_input::set_text_expander_config(
             app_settings.text_expander_enabled,
@@ -391,9 +400,12 @@ impl EntropyApp {
             text_expander_rules_signature(&app_settings.text_expander_rule_files);
         let mut typing_trainer = TypingTrainerState::from_settings(app_settings.typing_trainer);
         typing_trainer.set_symbol_stats(load_typing_trainer_symbol_stats());
+        crate::startup::mark("local_editor_data_loaded");
         Self::from_bootstrap(AppBootstrap {
             app_settings,
-            device_manager: DeviceManager::new(),
+            // The existing lifecycle worker starts cold discovery after the UI
+            // becomes ready. HID enumeration must not block first paint.
+            device_manager: DeviceManager::empty(),
             typing_trainer,
             text_expander_rules_signature,
             last_single_instance_signal: read_single_instance_signal(),
@@ -576,6 +588,8 @@ impl EntropyApp {
             text_expander_settings_last_edit_at: 0.0,
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             tray_icon: None,
+            #[cfg(target_os = "linux")]
+            linux_window_hidden_to_tray: false,
             #[cfg(target_os = "windows")]
             windows_hwnd: None,
             #[cfg(target_os = "windows")]

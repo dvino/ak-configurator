@@ -161,6 +161,12 @@ pub(crate) fn with_macos_foreground_lock_for_test(action: impl FnOnce()) {
 }
 
 fn foreground_monitor_snapshot() -> ForegroundStatus {
+    if crate::isolated_runtime() {
+        return ForegroundStatus {
+            backend: "isolated runtime".to_owned(),
+            state: ForegroundState::BackendUnavailable("Host foreground monitoring is disabled in isolated runtime".to_owned()),
+        };
+    }
     let state = FOREGROUND_MONITOR.get_or_init(|| Mutex::new(ForegroundStatus::default()));
     FOREGROUND_MONITOR_STARTED.get_or_init(|| {
         let state = state;
@@ -274,6 +280,9 @@ fn foreground_monitor_loop(state: &'static Mutex<ForegroundStatus>) {
 }
 
 pub(crate) fn application_discovery_snapshot() -> ApplicationDiscoverySnapshot {
+    if crate::isolated_runtime() {
+        return ApplicationDiscoverySnapshot::default();
+    }
     let state = DISCOVERY.get_or_init(|| {
         Mutex::new(DiscoveryState {
             receiver: None,
@@ -892,6 +901,9 @@ impl GnomeIntegrationInstallTask {
 #[cfg(target_os = "linux")]
 pub(crate) fn start_gnome_shell_integration_install() -> Result<GnomeIntegrationInstallTask, String>
 {
+    if crate::isolated_runtime() {
+        return Err("GNOME integration installation is disabled in isolated runtime".to_owned());
+    }
     let (sender, receiver) = mpsc::channel();
     std::thread::Builder::new()
         .name("gnome-integration-install".to_owned())
@@ -913,6 +925,9 @@ pub(crate) fn gnome_shell_integration_needed() -> bool {
 
 #[cfg(target_os = "linux")]
 pub(crate) fn install_gnome_shell_integration() -> Result<String, String> {
+    if crate::isolated_runtime() {
+        return Err("GNOME integration installation is disabled in isolated runtime".to_owned());
+    }
     install_gnome_shell_integration_detailed().map(|report| report.message)
 }
 
@@ -1073,6 +1088,9 @@ fn gnome_extension_protocol_available() -> bool {
 
 #[cfg(target_os = "linux")]
 pub(crate) fn refresh_foreground_monitor_now() {
+    if crate::isolated_runtime() {
+        return;
+    }
     let Some(state) = FOREGROUND_MONITOR.get() else {
         return;
     };
@@ -2187,6 +2205,14 @@ fn parse_sway_apps(output: &str) -> Vec<DetectedApplication> {
 
 #[cfg(target_os = "linux")]
 fn parse_wmctrl_apps(output: &str) -> Vec<DetectedApplication> {
+    parse_wmctrl_apps_with(output, linux_app_from_pid)
+}
+
+#[cfg(target_os = "linux")]
+fn parse_wmctrl_apps_with(
+    output: &str,
+    resolve: impl Fn(u32, String) -> Option<DetectedApplication>,
+) -> Vec<DetectedApplication> {
     output
         .lines()
         .filter_map(|line| {
@@ -2196,7 +2222,7 @@ fn parse_wmctrl_apps(output: &str) -> Vec<DetectedApplication> {
             let pid = fields.next()?.parse::<u32>().ok()?;
             let _host = fields.next()?;
             let title = fields.collect::<Vec<_>>().join(" ");
-            linux_app_from_pid(pid, title)
+            resolve(pid, title)
         })
         .collect()
 }
@@ -2816,9 +2842,16 @@ mod tests {
 
     #[test]
     fn parses_wmctrl_process_and_title() {
-        let pid = std::process::id();
-        let output = format!("0x01 0 {pid} host Entropy test window");
-        let applications = parse_wmctrl_apps(&output);
+        let output = "0x01 0 42 host Entropy test window";
+        let applications = parse_wmctrl_apps_with(output, |pid, title| {
+            assert_eq!(pid, 42);
+            Some(DetectedApplication {
+                executable: "fixture-editor".into(),
+                display_name: "Fixture Editor".into(),
+                identities: vec!["fixture-editor".into()],
+                window_title: title,
+            })
+        });
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].window_title, "Entropy test window");
     }

@@ -1,0 +1,95 @@
+{
+  "application_version": "0.1.0-alpha.1",
+  "arch": "x86_64",
+  "error": null,
+  "executable_sha256": "534450d5376d9f402f2461565f75b670cb110087e752e7c9302c5e79ba6b6c12",
+  "exit_code": 0,
+  "format": "ak820-runtime-smoke-harness-1",
+  "os": "linux",
+  "runtime_smoke": {
+    "application_version": "0.1.0-alpha.1",
+    "arch": "x86_64",
+    "cases": [
+      {
+        "detail": "Native renderer completed at least three application frames",
+        "name": "window_launch",
+        "status": "passed"
+      },
+      {
+        "detail": "Actual RGB settings page remained selected across rendered frames",
+        "name": "rgb_navigation",
+        "status": "passed"
+      },
+      {
+        "detail": "Application settings rendered using private temporary preferences",
+        "name": "settings_navigation",
+        "status": "passed"
+      },
+      {
+        "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+        "name": "native_tray",
+        "status": "passed"
+      },
+      {
+        "detail": "Window restored after the isolated tray host disappeared",
+        "name": "native_tray_host_loss",
+        "status": "passed"
+      },
+      {
+        "detail": "Native application continued rendering after lifecycle exercise",
+        "name": "render_after_navigation",
+        "status": "passed"
+      }
+    ],
+    "elapsed_ms": 1679,
+    "error": null,
+    "evidence": "native_gui_offline_model",
+    "exclusions": [
+      "physical keyboard and LED behavior",
+      "actual tray mouse click routing",
+      "desktop panel rendering with synthetic tray host",
+      "Wayland qualification when run under Xvfb",
+      "live OS helper and HID latency"
+    ],
+    "format": "ak820-runtime-smoke-1",
+    "isolated_settings": true,
+    "live_hid_allowed": false,
+    "os": "linux",
+    "physical_behavior_validated": false,
+    "rendered_frames": 23,
+    "startup_timings": {
+      "display_fence_measured": false,
+      "phases": [
+        {
+          "elapsed_ms": 222.554831,
+          "phase": "window_creator"
+        },
+        {
+          "elapsed_ms": 718.427242,
+          "phase": "splash_first_frame_submitted"
+        },
+        {
+          "elapsed_ms": 756.489543,
+          "phase": "editor_initialization_started"
+        },
+        {
+          "elapsed_ms": 756.737457,
+          "phase": "editor_fonts_configured"
+        },
+        {
+          "elapsed_ms": 1401.39789,
+          "phase": "editor_initialization_finished"
+        },
+        {
+          "elapsed_ms": 1623.978683,
+          "phase": "editor_first_frame_submitted"
+        }
+      ],
+      "unit": "milliseconds_from_process_entry"
+    },
+    "status": "passed",
+    "tray_host": "synthetic_status_notifier_host"
+  },
+  "status": "passed",
+  "stderr_tail": " primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 12, serial_num: 32 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-10-27T06:22:46.730-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 34, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetLayout\"), body: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 22, serial_num: 34 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-10-27T06:22:46.731-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 36, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetGroupProperties\"), body: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 40, serial_num: 36 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetGroupProperties\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-10-27T06:22:46.732-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 38, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 38 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-10-27T06:22:46.733-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 40, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 40 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-10-27T06:22:46.734-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 42, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"AboutToShowGroup\"), body: Array(Dynamic { child: I32 }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 16, serial_num: 42 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"AboutToShowGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Array(Dynamic { child: I32 }), unix_fds: None } }\n2026-10-27T06:22:46.735-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 44, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"Event\"), body: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 28, serial_num: 44 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"Event\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), unix_fds: None } }\n2026-10-27T06:22:46.736-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 46, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"EventGroup\"), body: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 68, serial_num: 46 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"EventGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), unix_fds: None } }\n2026-10-27T06:22:46.737-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 48, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/StatusNotifierItem\"), iface: InterfaceName(\"org.kde.StatusNotifierItem\"), member: MemberName(\"Activate\"), body: Structure(Dynamic { fields: [I32, I32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 8, serial_num: 48 }, fields: Fields { path: Some(ObjectPath(\"/StatusNotifierItem\")), interface: Some(InterfaceName(\"org.kde.StatusNotifierItem\")), member: Some(MemberName(\"Activate\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32] }), unix_fds: None } }\n2026-10-27T06:22:46.767-07:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 53, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/StatusNotifierWatcher\"), iface: InterfaceName(\"org.freedesktop.DBus.Properties\"), member: MemberName(\"Get\"), body: Structure(Dynamic { fields: [Str, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 71, serial_num: 53 }, fields: Fields { path: Some(ObjectPath(\"/StatusNotifierWatcher\")), interface: Some(InterfaceName(\"org.freedesktop.DBus.Properties\")), member: Some(MemberName(\"Get\")), error_name: None, reply_serial: None, destination: Some(BusName::WellKnown(\"org.kde.StatusNotifierWatcher\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [Str, Str] }), unix_fds: None } }\n"
+}

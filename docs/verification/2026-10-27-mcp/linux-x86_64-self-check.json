@@ -1,0 +1,72 @@
+{
+  "application_version": "0.1.0-alpha.1",
+  "catalog_sha256": "cdf03e9fa4a9104ec715e9db58215b1061bfdafb9b239f16461871d278fe241b",
+  "firmware_release": "v0.6.0-beta.3",
+  "format": "ak-configurator-self-check-1",
+  "hardware_access": false,
+  "network_access": false,
+  "platform": "linux-x86_64",
+  "profiles": [
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "963aff70931a3ac4530fa8a8fd9f2dd4ad43125c3dce963ce1c8a7cce3009821",
+      "map_sha256": "cda913e667c2791a2925eeb3609d8d44b12766f2290d2a13f80dc69e0943afc2",
+      "profile": "mmo"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "6a97adeb76cc6333ee465b3b75dc000093843b884c08167e65a33f2ebba36946",
+      "map_sha256": "6642ecf8f4ae447adb075f9178e3d353267417c604e0f65b3b06e3b49ba56d30",
+      "profile": "pointer"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "f78f5f91f8382da4e8b60709a46b0e5cfb022f9a5cb925082434b04a3fb0fb8f",
+      "map_sha256": "6d41b63fa399d44095272b0cb15d866d04a9ccb784dcc8d2126dfbc99ba4996d",
+      "profile": "onehand"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "5351cfafa6eb8bc55272c55e67f86d60ab0dac04809cbe3f25df14c2137f5005",
+      "map_sha256": "7f70f3465cbbe9d4f1b8a240f9b358133852183439ecc7e23551a00bd2d6d70c",
+      "profile": "game"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "57ec708eb400a885b6c1b803d934383709e9942688e619299259d0a0068fda14",
+      "map_sha256": "647ba9767504bd27ba1f0ce643b667902b74808de33301b08e79d902ea7b8b1e",
+      "profile": "typing"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "35803dda2c647d7b4b1c2208de2b7ce9a03405a6d87d05e0d3f5e91d5ff195fb",
+      "map_sha256": "73e19c7cae2c7ceade49cfa98842d22587b3021e77f83e38a20a98c3d111609c",
+      "profile": "code"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "3154808d2012f55b5c46098d52c96bc5a0056bcfb9a4c8e3ec991090aab45f64",
+      "map_sha256": "b7e585afd12e4e026a6fd6bafa129ae12caf9a17de63ee3842b32750c7e8c561",
+      "profile": "shortcuts"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "476b1c667613712dfe302a4518f6bbd947bf994bc9e6fcb05323d5544b2b8c38",
+      "map_sha256": "88a04f3d0d87ddf483b4485358227b24e8f06ad3b2bd4d6e00047b99b9324a24",
+      "profile": "creative"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "391d6dbca948b46cfc4be989b0055f310fbdfaf832bdc634c76ff2bf5e23b34e",
+      "map_sha256": "d773582a094bb9896c2c1a170d6a13e8d4adcc3cc93dcb232a706a75f5d433b9",
+      "profile": "main"
+    },
+    {
+      "default_settings_sha256": "e95e9f8de0b81810bdcce192cba086431799e0437817184d2b9a4632cd18a0a1",
+      "ihx_sha256": "670b523bdc1a3e6eb28a3e874574bd3ba64eb7357d7040b40278a8ed37157a9f",
+      "map_sha256": "45f1557d7adff77e41ea1bc7c69086b24e2ee9affb5f34545a1ae453408f0ad9",
+      "profile": "multios"
+    }
+  ],
+  "status": "passed"
+}

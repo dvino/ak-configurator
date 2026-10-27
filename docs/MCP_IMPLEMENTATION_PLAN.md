@@ -2,6 +2,8 @@
 
 # MCP integration plan
 
+> Implementation update: the original audit below is retained as the plan baseline. A partial, optional read-only P0 preview now exists; see [MCP.md](MCP.md) for implemented commands and limits and [REVIEW.md](REVIEW.md) for actual verification. The remaining planned API is not available yet.
+
 ## 1. Decision, scope and audited versions
 
 **Status: proposed implementation plan, not an implemented MCP interface.**

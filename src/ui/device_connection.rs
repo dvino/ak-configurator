@@ -39,6 +39,39 @@ fn device_selection_needs_scroll(device_count: usize) -> bool {
 }
 
 impl EntropyApp {
+    /// Display cached device settings while the verified indicator worker owns
+    /// the handle. This is not permission to queue or perform a device write.
+    pub(super) fn hid_connected_for_display(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.hid_device.is_some() || self.ak820_os_indicator_display_connected()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+
+    /// A short background lease must suppress input without pulsing the page's
+    /// disabled opacity. Scope this to the device editor, not app preferences.
+    pub(super) fn preserve_device_editor_during_hid_loan(&self, ui: &mut egui::Ui) {
+        if !self.hid_available_for_ui_interaction() {
+            ui.visuals_mut().disabled_alpha = 1.0;
+            ui.disable();
+        }
+    }
+
+    pub(super) fn hid_available_for_ui_interaction(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            !self.ak820_os_indicator_owns_hid()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            true
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn bluetooth_reconnect_active(&self) -> bool {
         matches!(
@@ -514,5 +547,64 @@ mod tests {
             bluetooth_reconnect_retry_delay(u8::MAX),
             std::time::Duration::from_secs(2)
         );
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod indicator_display_tests {
+    use super::*;
+
+    fn draw_magic(app: &mut EntropyApp, ctx: &egui::Context) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 900.0),
+                )),
+                time: Some(10.0),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.max_rect();
+                    app.draw_magic_settings_page(ui, rect);
+                });
+            },
+        )
+    }
+
+    #[test]
+    fn indicator_hid_loan_preserves_cached_page_shapes_without_writes() {
+        let ctx = egui::Context::default();
+        let mut app = EntropyApp::new_inert_for_test();
+        let (hid, recorder) = crate::hid::HidDevice::test_beta3_ak820_device(
+            ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        app.hid_device = Some(hid);
+        app.magic_settings.supported = true;
+        let _ = draw_magic(&mut app, &ctx);
+        let normal = draw_magic(&mut app, &ctx);
+        let loan = app.begin_test_indicator_hid_loan();
+        assert!(app.hid_device.is_none());
+        assert!(app.hid_connected_for_display());
+        assert!(!app.hid_available_for_ui_interaction());
+        let borrowed = draw_magic(&mut app, &ctx);
+        assert_eq!(
+            format!("{:?}", normal.shapes),
+            format!("{:?}", borrowed.shapes)
+        );
+        assert!(recorder.requests().is_empty());
+        app.connection_generation = app.connection_generation.wrapping_add(1);
+        assert!(
+            !app.hid_connected_for_display(),
+            "stale worker must not mask disconnect"
+        );
+        let disconnected = draw_magic(&mut app, &ctx);
+        assert_ne!(
+            format!("{:?}", normal.shapes),
+            format!("{:?}", disconnected.shapes)
+        );
+        drop(loan);
     }
 }

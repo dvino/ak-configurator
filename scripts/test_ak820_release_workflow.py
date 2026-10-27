@@ -16,6 +16,7 @@ import zipfile
 from package_ak820_candidate import PLATFORMS, build_package
 from verify_ak820_release_candidate import EXPECTED, expected_runtime_identity, verify
 from test_ak820_installed_candidate import extract
+from test_ak820_runtime_smoke import STARTUP_PHASES
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
@@ -135,6 +136,28 @@ class ReleaseVerificationTests(unittest.TestCase):
             }
             report["installed_self_check"]["profiles"].reverse()
             (self.directory / f"install-smoke-{platform}.json").write_text(json.dumps(report), encoding="utf-8")
+            if platform.startswith(("linux-", "windows-", "macos-")):
+                os_name, arch, _ = {
+                    "linux-x86_64": ("linux", "x86_64", ""), "linux-arm64": ("linux", "aarch64", ""),
+                    "windows-x86_64": ("windows", "x86_64", ""), "windows-arm64": ("windows", "aarch64", ""),
+                    "macos-x86_64": ("macos", "x86_64", ""), "macos-arm64": ("macos", "aarch64", ""),
+                }[platform]
+                cases = [{"name": name, "status": "passed", "detail": "fixture"} for name in
+                         ("window_launch", "rgb_navigation", "settings_navigation", "render_after_navigation", "native_tray")]
+                runtime_smoke = {"format": "ak820-runtime-smoke-1", "application_version": VERSION,
+                                 "os": os_name, "arch": arch, "status": "passed", "rendered_frames": 16,
+                                 "cases": cases, "live_hid_allowed": False, "isolated_settings": True,
+                                 "startup_timings": {
+                                     "unit": "milliseconds_from_process_entry", "display_fence_measured": False,
+                                     "phases": [{"phase": phase, "elapsed_ms": index * 10}
+                                                for index, phase in enumerate(STARTUP_PHASES)]},
+                                 "physical_behavior_validated": False}
+                harness_smoke = {"format": "ak820-runtime-smoke-harness-1", "status": "passed",
+                                 "os": os_name, "arch": arch, "application_version": VERSION,
+                                 "exit_code": 0,
+                                 "executable_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                                 "runtime_smoke": runtime_smoke}
+                (self.directory / f"runtime-smoke-{platform}.json").write_text(json.dumps(harness_smoke), encoding="utf-8")
 
     def tearDown(self):
         self.temp.cleanup()
@@ -274,6 +297,36 @@ class ReleaseVerificationTests(unittest.TestCase):
     def test_rejects_missing_platform(self):
         (self.directory / f"ak-configurator-{VERSION}-macos-arm64.app.zip").unlink()
         with self.assertRaisesRegex(ValueError, "Missing candidate"):
+            verify(self.directory, VERSION, COMMIT)
+
+    def test_rejects_missing_gui_runtime_smoke_evidence(self):
+        (self.directory / "runtime-smoke-linux-x86_64.json").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing or malformed native GUI runtime smoke"):
+            verify(self.directory, VERSION, COMMIT)
+
+    def test_rejects_tampered_gui_runtime_smoke_executable_binding(self):
+        path = self.directory / "runtime-smoke-windows-x86_64.json"
+        report = json.loads(path.read_text(encoding="utf-8"))
+        report["executable_sha256"] = "0" * 64
+        path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "GUI runtime smoke identity"):
+            verify(self.directory, VERSION, COMMIT)
+
+    def test_rejects_missing_startup_feedback_evidence(self):
+        path = self.directory / "runtime-smoke-linux-x86_64.json"
+        report = json.loads(path.read_text(encoding="utf-8"))
+        report["runtime_smoke"].pop("startup_timings")
+        path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Startup timing evidence"):
+            verify(self.directory, VERSION, COMMIT)
+
+    def test_rejects_editor_initialization_before_splash(self):
+        path = self.directory / "runtime-smoke-windows-x86_64.json"
+        report = json.loads(path.read_text(encoding="utf-8"))
+        phases = report["runtime_smoke"]["startup_timings"]["phases"]
+        phases[1]["phase"], phases[2]["phase"] = phases[2]["phase"], phases[1]["phase"]
+        path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Editor initialized before startup feedback"):
             verify(self.directory, VERSION, COMMIT)
 
     def test_rejects_wrong_platform_manifest(self):
