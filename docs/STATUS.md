@@ -2,6 +2,8 @@
 
 # Project status
 
+Catalog navigation, window and approval labels now derive their release from the pinned catalog version. This changes presentation only and does not change device admission.
+
 A separate offline NVM preparation helper also preserves all non-QS bytes; it neither validates the complete backup nor authorizes a transition.
 
 An offline metadata projection checks provisional compact-controls and storage version consistency; it is not a complete image or catalog validator.

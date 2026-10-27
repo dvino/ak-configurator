@@ -578,7 +578,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             if app.ak820_demo {
                 ui.label(tr(ru, "Demo has no physical settings snapshot. Connect a supported keyboard to create a complete backup.", "В деморежиме нет снимка физической клавиатуры. Для полной копии подключите поддерживаемую клавиатуру."));
             } else if !can_capture && state.capture_pending.is_none() {
-                ui.label(tr(ru, "A verified beta.2 connection with no pending edits is required.", "Нужно проверенное подключение beta.2 без ожидающих изменений."));
+                ui.label(tr(ru, "A verified supported AK820 connection with no pending edits is required.", "Нужно проверенное подключение поддерживаемой AK820 без ожидающих изменений."));
             }
             if let Some((id, _)) = state.capture_pending {
                 #[cfg(not(target_arch = "wasm32"))]
