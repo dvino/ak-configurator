@@ -2,34 +2,28 @@
 
 # Agent routing
 
-Adapted from the AK820 firmware rules at `bef20f8`, 2026-10-25.
-
 | Role | Model | Reasoning | Scope |
 | --- | --- | --- | --- |
-| Lead | Current root agent | Current session | Verify state, split ownership, integrate, update plan and evidence |
-| Implementer | Fresh GPT-6 Luna | medium | Bounded implementation, documentation or build task |
-| Specialist | Fresh GPT-6.1 Sol | low | Complex ABI, NVM and technical contract decisions |
-| Architect (exceptional escalation) | Fresh GPT-6.1 Sol | high | Architecture and complex planning requiring deeper analysis |
-| Independent reviewer | Fresh GPT-6.1 Sol | low | Exact resulting code, documentation and verification evidence |
+| Lead | Current root agent | Current session | State, ownership, integration, plan and evidence |
+| Routine worker | Fresh GPT-6 Luna | medium | Small edits, docs and routine builds |
+| Implementer / visual worker | Fresh GPT-6.1 Terra (`gpt-6.1-terra`) | low | Bounded code implementation/refactoring, native UI and visual/browser/desktop tasks |
+| Specialist | Fresh GPT-6.1 Sol | low | Complex ABI, NVM and technical contracts |
+| Independent reviewer | Fresh GPT-6.1 Sol | low | Resulting code, docs and verification evidence |
+| Architect | Fresh GPT-6.1 Sol | high | Last-resort architecture and complex planning |
 
-Use the architect only as a last resort when implementation and ordinary review
-cannot resolve a material architecture or complex-planning question. Record the unresolved question
-and why deeper analysis is necessary before delegating. Routine implementation,
-documentation, builds and normal review stay on the routes above.
+The lead may adjust effort and routing within these role limits. Use the architect
+only when ordinary implementation/review cannot settle a material architecture
+or planning question; record the question and reason before delegation. Terra is
+an implementation option, not a replacement for independent review.
 
-The lead may adjust routing within these limits when the task requires it. Communicate with agents
-in English and with the user in their chosen language. Start fresh contexts
-for new bounded tasks; routine tasks receive a short self-contained handoff,
-not the complete conversation.
+Use English between agents and the user's language with the user. Start fresh
+contexts for new bounded tasks; give concise self-contained handoffs with owned
+files, verified baseline, required evidence, dependencies and stop conditions.
+Check ownership/dirty work first; avoid duplicate work and shared build outputs.
 
-Before delegation, check ownership and current dirty files. State owned files,
-verified baseline, required evidence, dependencies and stop conditions. Avoid
-duplicated work and simultaneous builds that share output paths. Authors cannot
-approve their own changes. Resolve findings, retest corrections and request a
-fresh independent review before commit or push.
-
-Update the implementation plan while working. Keep source checks, builds,
-offline models, platform launches and physical USB behavior separate. No agent
-may send device setters, reset, loader transitions or flash commands without
-explicit authorization for that operation. Never include OEM data, macros,
-personal layouts, credentials or private paths in public diagnostic reports.
+Keep the plan current. Authors cannot approve their own changes. Resolve findings,
+retest substantive corrections and obtain fresh independent review before commit
+or push. Separate source checks, builds, offline models, platform launches and
+physical USB behavior. Device setters, reset, loader and flash require existing
+operation-specific authorization; this routing adds no approval step. Keep OEM
+data, macros, personal layouts, credentials and private paths out of public reports.
