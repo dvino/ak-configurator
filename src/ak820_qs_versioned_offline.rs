@@ -125,6 +125,26 @@ impl SettingsRecord {
         }
         result.normalize(target)
     }
+    /// Offline boundary for a caller that already knows the source record
+    /// contract. The supplied version is not evidence of image admission.
+    /// Erased storage inherits the source contract before normalization, so a
+    /// v2 source cannot be downgraded even when it contains no saved values.
+    pub(crate) fn decode_for_source(
+        raw: &[u8],
+        source: RecordVersion,
+        target: RecordVersion,
+    ) -> CodecResult<Self> {
+        if raw.len() != 24 {
+            return Err("QS record requires 24 bytes".into());
+        }
+        if raw.iter().all(|&v| v == 0) || raw.iter().all(|&v| v == 255) {
+            return Self::defaults(source).normalize(target);
+        }
+        if RecordVersion::try_from(raw[2])? != source {
+            return Err("QS record version differs from explicit source contract".into());
+        }
+        Self::decode(raw, source)?.normalize(target)
+    }
     pub(crate) fn normalize(&self, target: RecordVersion) -> CodecResult<Self> {
         if self.version == RecordVersion::V2 && target == RecordVersion::V1 {
             return Err("QS record downgrade is forbidden".into());
@@ -223,6 +243,48 @@ mod tests {
         }
         for size in [0, 23, 25] {
             assert!(SettingsRecord::decode(&vec![0; size], V2).is_err());
+        }
+    }
+    #[test]
+    fn source_bound_decode_and_normalization() {
+        for version in [V1, V2] {
+            let mut model = SettingsRecord::defaults(version);
+            model.set(2, 913).unwrap();
+            assert_eq!(
+                SettingsRecord::decode_for_source(&model.encode(), version, version).unwrap(),
+                model
+            );
+            let other = if version == V1 { V2 } else { V1 };
+            assert!(SettingsRecord::decode_for_source(&model.encode(), other, V2).is_err());
+            for byte in 0..24 {
+                let mut bad = model.encode();
+                bad[byte] ^= 1;
+                assert!(SettingsRecord::decode_for_source(&bad, version, V2).is_err());
+            }
+        }
+        let mut old = SettingsRecord::defaults(V1);
+        for (id, value) in [(1, 15), (2, 913), (4, 996), (7, 1), (18, 99), (19, 100)] {
+            old.set(id, value).unwrap();
+        }
+        let upgraded = SettingsRecord::decode_for_source(&old.encode(), V1, V2).unwrap();
+        for &(id, _, _, _, _, _) in &FIELDS[..6] {
+            assert_eq!(upgraded.get(id).unwrap(), old.get(id).unwrap());
+        }
+        for (id, value) in [(3, 1), (6, 0), (22, 0)] {
+            assert_eq!(upgraded.get(id).unwrap(), value);
+        }
+        assert!(SettingsRecord::decode_for_source(&upgraded.encode(), V2, V1).is_err());
+        for blank in [0, 255] {
+            assert!(SettingsRecord::decode_for_source(&[blank; 24], V2, V1).is_err());
+            for (source, target) in [(V1, V1), (V1, V2), (V2, V2)] {
+                assert_eq!(
+                    SettingsRecord::decode_for_source(&[blank; 24], source, target).unwrap(),
+                    SettingsRecord::defaults(target)
+                );
+            }
+        }
+        for size in [0, 23, 25] {
+            assert!(SettingsRecord::decode_for_source(&vec![0; size], V1, V2).is_err());
         }
     }
     #[test]

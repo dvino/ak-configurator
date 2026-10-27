@@ -4,7 +4,7 @@
 
 ## Provisional QS v2 offline model — 2026-10-27
 
-A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Four targeted tests passed against synthetic vectors generated from the provisional firmware Python reference. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
+A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Five targeted tests passed against synthetic vectors generated from the provisional firmware Python reference, including explicit source-version binding and blank-record downgrade rejection. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
 
 ## Offline project correction — 2026-10-27
 
