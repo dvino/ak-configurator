@@ -36,6 +36,10 @@
 - Before commit or push, obtain independent review of code, docs and evidence.
   Authors cannot approve their own changes. Record findings and closure;
   substantive corrections need retesting and fresh independent review.
+- Before finishing a task, clean up temporary files, test processes and build
+  outputs created for that task after checking their ownership and whether they
+  are still needed. Preserve active builds, concurrent or uncommitted work,
+  unique evidence and artifacts promised to the user; report anything retained.
 
 ## Protocol and device operations
 
