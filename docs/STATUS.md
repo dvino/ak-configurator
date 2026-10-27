@@ -2,7 +2,11 @@
 
 # Project status
 
+Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. File access on slow regular or network files remains synchronous.
+
 Updated 2026-10-27. Application source version is `0.1.0-alpha.1`. The previous `0.1.0-beta.2` was an unpublished development version; GitHub has no application release or tag for it. The firmware target is AK820 `v0.6.0-beta.3`, tag object `4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit `88d190abb156960915a0f1f8ac7f602bb401eab3`. The [public firmware release](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was published on 2026-10-27 at 06:50:35 UTC. CI run [40461867751](https://github.com/dvino/ak820/actions/runs/40461867751) passed the shared-host job and “Revalidate and assemble all ten profiles”; its profile qualification matrix and publishing jobs were skipped. A later independent verification confirmed GitHub API SHA256 digests for the release catalog, firmware bundle, five JSON assets and `SHA256SUMS`; all ten published IHX/settings identities match reviewed candidates, and the ten published map hashes match the release matrix. All ten profiles are marked release-approved/installable in `approved-release.json`, which pins the exact hashes from `installer-release.json`. The published `independent-review.md` records reproduced CI/source-review evidence, not a new human review. This establishes release-input identity, not physical device behavior. See [REVIEW.md](REVIEW.md) for application source and test evidence.
+
+CI run `40534916601` failed both Windows native GUI smoke checks without retaining their JSON reports. The cause is not established. The workflow now retains a bounded failure report separately; a later run is required to diagnose the failure.
 
 ## Handoff follow-up and partial MCP preview
 

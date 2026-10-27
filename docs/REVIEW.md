@@ -2,6 +2,14 @@
 
 # Desktop adaptation and review
 
+## Offline project correction — 2026-10-27
+
+The Linux x86_64 candidate from CI `40534916601` was checked separately: outer and internal SHA256 files passed. Its executable SHA256 `cf4b602d8a8d3b6d982ef267a55e0dafa743e62c52401089c2f647fbaed70a24` passed the Xvfb/synthetic-tray runtime smoke again in an isolated Ubuntu 24.04 container. Its manifest identifies PR merge commit `0624d3a0398dda82c65d3ba0932196db1e120cb6`, whose parents are `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` and `b535d8feb93d5bfbdbf23455583befed7fe2ff0f`; it predates the offline-project correction. No physical keyboard was used.
+
+CI run `40534916601` failed both Windows runtime smoke checks, but the original workflow did not retain their reports; the cause is unknown. The reviewed workflow change uploads only the failure JSON separately for seven days and retains the existing success gates. The targeted workflow contract test passed; a fresh CI run is needed to obtain diagnostics.
+
+A fresh independent review found that the first proposed full-cache undo could discard later edits and that an initial regression fixture did not make its intended edits. Both were corrected and reviewed again. The final change restores only the imported profile and preserves other profiles, including later edits. Unix nonblocking open and handle checks reject FIFOs and directories. Nine targeted Linux x86_64 tests passed in an isolated container; the debug binary passed native Xvfb runtime smoke with a synthetic tray host and no live HID. The first smoke attempt failed because the container lacked `libxkbcommon-x11.so.0`; after adding the CI runtime dependency, it passed. Windows/macOS, real desktop panels, Wayland and hardware behavior were not tested by this local run. Slow regular-file I/O remains on the UI thread.
+
 ## Independent bundle follow-up — 2026-10-27
 
 A fresh independent source review of commit `2bd5084` covered the MCP read-only boundary, diagnostic bootstrap, stopped sessions, trace, startup and window lifecycle, tray, CI and release evidence binding. No confirmed blocking findings were identified. This review did not execute tests or establish hardware behavior. Linux Xvfb and synthetic tray evidence does not establish a real panel, Wayland, Windows, macOS or arm64 behavior.

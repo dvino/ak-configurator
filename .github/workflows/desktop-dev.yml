@@ -177,6 +177,7 @@ jobs:
           python scripts/test_mcp_stdio.py --binary "$binary"
 
       - name: Execute native GUI runtime smoke under Xvfb (Linux)
+        id: runtime_smoke_linux
         if: startsWith(matrix.platform, 'linux-')
         shell: bash
         run: |
@@ -184,6 +185,7 @@ jobs:
           dbus-run-session -- xvfb-run -a env AK820_RUNTIME_SMOKE_TRAY_FIXTURE=1 python scripts/test_ak820_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
 
       - name: Execute native GUI runtime smoke (Windows)
+        id: runtime_smoke_windows
         if: startsWith(matrix.platform, 'windows-')
         shell: pwsh
         run: |
@@ -192,11 +194,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Execute native GUI runtime smoke (macOS)
+        id: runtime_smoke_macos
         if: startsWith(matrix.platform, 'macos-')
         shell: bash
         run: |
           mkdir -p target/candidate
           python scripts/test_ak820_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
+
+      # Failure reports contain the bounded harness error/stderr and executable
+      # identity. Preserve them separately; candidate uploads still require success.
+      - name: Retain failed native GUI runtime smoke diagnostics
+        if: always() && (steps.runtime_smoke_linux.outcome == 'failure' || steps.runtime_smoke_windows.outcome == 'failure' || steps.runtime_smoke_macos.outcome == 'failure')
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-smoke-failure-${{ matrix.platform }}
+          path: target/candidate/runtime-smoke-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Write SHA-256 manifest (Linux and macOS)
         if: runner.os != 'Windows'

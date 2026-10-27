@@ -2,6 +2,8 @@
 
 # AK Configurator implementation plan
 
+Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. Moving slow regular-file I/O off the UI thread remains open.
+
 This plan tracks the agreed [requirements](REQUIREMENTS.md) for `dvino/ak-configurator`; firmware remains in `dvino/ak820`. Source implementation and offline verification do not authorize live keyboard operations or establish physical behavior.
 
 ## Alpha.1 release candidate — 2026-10-27

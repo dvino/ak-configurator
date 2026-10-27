@@ -88,6 +88,33 @@ def replace_archive(archive, transform):
         smoke_path.write_text(json.dumps(smoke), encoding="utf-8")
 
 
+class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_failed_runtime_reports_survive_without_publishing_candidates(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        diagnostic_name = "Retain failed native GUI runtime smoke diagnostics"
+        diagnostic = steps[diagnostic_name]
+        self.assertIn("if: always() && (", diagnostic)
+        for platform, suffix in (("Linux", " under Xvfb"), ("Windows", ""), ("macOS", "")):
+            smoke = steps[f"Execute native GUI runtime smoke{suffix} ({platform})"]
+            step_id = f"runtime_smoke_{platform.lower()}"
+            self.assertIn(f"id: {step_id}", smoke)
+            self.assertIn(f"steps.{step_id}.outcome == 'failure'", diagnostic)
+            self.assertNotIn("continue-on-error", smoke)
+            self.assertLess(workflow.index(smoke), workflow.index(diagnostic))
+        self.assertIn("uses: actions/upload-artifact@v7", diagnostic)
+        self.assertIn("name: runtime-smoke-failure-${{ matrix.platform }}", diagnostic)
+        self.assertIn("path: target/candidate/runtime-smoke-${{ matrix.platform }}.json", diagnostic)
+        self.assertIn("if-no-files-found: error", diagnostic)
+        self.assertIn("retention-days: 7", diagnostic)
+        self.assertNotIn("continue-on-error", workflow)
+        for name in ("Package unsigned desktop alpha candidate", "Upload development binary and checksum",
+                     "Upload candidate package and checksum"):
+            # These steps retain GitHub Actions' implicit success() gate.
+            self.assertNotIn("if:", steps[name])
+            self.assertLess(workflow.index(diagnostic), workflow.index(steps[name]))
+
+
 class ReleaseVerificationTests(unittest.TestCase):
     def test_release_workflow_only_retains_verified_artifacts(self):
         workflow = (ROOT / ".github/workflows/ak820-release.yml").read_text(encoding="utf-8")

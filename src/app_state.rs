@@ -5393,7 +5393,11 @@ pub struct EntropyApp {
     pub(crate) ak820_demo_profile: Option<super::ak820_beta1_profiles::ProfileId>,
     pub(crate) ak820_demo_seed: Option<crate::keyboard::KeyboardLayout>,
     pub(crate) ak820_demo_projects: Vec<Ak820OfflineProfileProject>,
-    pub(crate) ak820_offline_import_undo: Option<Ak820OfflineProfileProject>,
+    pub(crate) ak820_offline_import_undo: Option<(
+        Ak820OfflineProfileProject,
+        super::ak820_beta1_profiles::ProfileId,
+        Option<Ak820OfflineProfileProject>,
+    )>,
     pub(crate) ak820_offline_extensions:
         Option<crate::app::ak820_offline_extensions::OfflineExtensions>,
     pub(crate) device_manager: DeviceManager,
