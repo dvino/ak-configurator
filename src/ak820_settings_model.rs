@@ -43,9 +43,16 @@ pub(crate) struct NvmMetadata {
     pub(crate) logical_macro_length: usize,
     pub(crate) macro_offset: usize,
 }
-/// Validate exact schema, magic, typed records and published macro state.
-/// Reserved bytes and inactive valid typed entries are retained, never cleared.
-pub(crate) fn validate_nvm(nvm: &[u8], schema: u32) -> BackupResult<NvmMetadata> {
+/// Structural storage layout only; this does not admit an image or QS version.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NvmLayout {
+    schema: u32,
+    macro_metadata: usize,
+    macro_offset: usize,
+    macro_capacity: usize,
+}
+/// Validate the complete NVM size, magic and known schema before slicing records.
+pub(crate) fn validate_nvm_structure(nvm: &[u8], schema: u32) -> BackupResult<NvmLayout> {
     require(nvm.len() == 0x2800, "Incomplete NVM")?;
     require(
         nvm[..2] == [0xe6, 0xfe] && nvm[37..40] == schema.to_le_bytes()[..3],
@@ -56,22 +63,41 @@ pub(crate) fn validate_nvm(nvm: &[u8], schema: u32) -> BackupResult<NvmMetadata>
         0x082002 | 0x082003 => (0x7f0, 0x800, 8192),
         _ => return Err("Unknown NVM schema".into()),
     };
+    Ok(NvmLayout {
+        schema,
+        macro_metadata: meta,
+        macro_offset: start,
+        macro_capacity: capacity,
+    })
+}
+impl NvmLayout {
+    /// Recheck structure so a layout cannot validate bytes from a different schema.
+    pub(crate) fn validate_macros(self, nvm: &[u8]) -> BackupResult<NvmMetadata> {
+        validate_nvm_structure(nvm, self.schema)?;
+        let meta = self.macro_metadata;
+        require(nvm[meta] == 0, "Incomplete macro upload")?;
+        let length = le(&nvm[meta + 1..meta + 3]) as usize;
+        require(
+            (16..=self.macro_capacity).contains(&length),
+            "Invalid published macro length",
+        )?;
+        let logical = macro_logical_length(&nvm[self.macro_offset..self.macro_offset + length])?;
+        Ok(NvmMetadata {
+            schema: self.schema,
+            published_macro_length: length,
+            logical_macro_length: logical,
+            macro_offset: self.macro_offset,
+        })
+    }
+}
+/// Validate exact schema, magic, typed records and published macro state.
+/// Reserved bytes and inactive valid typed entries are retained, never cleared.
+pub(crate) fn validate_nvm(nvm: &[u8], schema: u32) -> BackupResult<NvmMetadata> {
+    let layout = validate_nvm_structure(nvm, schema)?;
     if schema == SCHEMA {
         Extensions::decode_nvm(nvm)?;
     }
-    require(nvm[meta] == 0, "Incomplete macro upload")?;
-    let length = le(&nvm[meta + 1..meta + 3]) as usize;
-    require(
-        (16..=capacity).contains(&length),
-        "Invalid published macro length",
-    )?;
-    let logical = macro_logical_length(&nvm[start..start + length])?;
-    Ok(NvmMetadata {
-        schema,
-        published_macro_length: length,
-        logical_macro_length: logical,
-        macro_offset: start,
-    })
+    layout.validate_macros(nvm)
 }
 fn macro_commands(stream: &[u8]) -> BackupResult<Value> {
     let logical = macro_logical_length(stream)?;
@@ -462,6 +488,62 @@ mod tests {
             n[0x740..0x74a].copy_from_slice(&[4, 0, 5, 0, 3, 0, 1, 0, 0, 1]);
         }
         n
+    }
+    #[test]
+    fn shared_structure_and_macro_validation_preserve_legacy_rejection() {
+        for schema in [0x082001, 0x082002, SCHEMA] {
+            let baseline = modeled_nvm(schema);
+            let layout = validate_nvm_structure(&baseline, schema).unwrap();
+            assert_eq!(
+                layout.validate_macros(&baseline).unwrap(),
+                validate_nvm(&baseline, schema).unwrap()
+            );
+            let meta = if schema == 0x082001 { 0x2f0 } else { 0x7f0 };
+            let start = if schema == 0x082001 { 0x300 } else { 0x800 };
+            for (stream, error) in [
+                (vec![0; 15], "Invalid published macro length"),
+                (vec![128; 16], "Macro text must be ASCII"),
+                (
+                    [vec![1, 8], vec![0; 16]].concat(),
+                    "Unsupported macro opcode",
+                ),
+                ([vec![1, 1, 0], vec![0; 16]].concat(), "Zero macro operand"),
+                (
+                    [vec![0; 16], vec![2]].concat(),
+                    "Nonzero tail after macro terminators",
+                ),
+                (vec![2; 16], "Incomplete macro stream"),
+            ] {
+                let mut bad = baseline.clone();
+                bad[meta + 1..meta + 3].copy_from_slice(&(stream.len() as u16).to_le_bytes());
+                bad[start..start + stream.len()].copy_from_slice(&stream);
+                assert_eq!(layout.validate_macros(&bad).unwrap_err(), error);
+                assert_eq!(validate_nvm(&bad, schema).unwrap_err(), error);
+            }
+            let mut busy = baseline.clone();
+            busy[meta] = 1;
+            assert_eq!(
+                layout.validate_macros(&busy).unwrap_err(),
+                "Incomplete macro upload"
+            );
+            assert!(layout.validate_macros(&baseline[..100]).is_err());
+            let mut wrong_schema = baseline.clone();
+            wrong_schema[37] ^= 1;
+            assert!(layout.validate_macros(&wrong_schema).is_err());
+        }
+    }
+    #[test]
+    fn production_still_rejects_persisted_qs_v2_before_macro_errors() {
+        let mut nvm = modeled_nvm(SCHEMA);
+        nvm[0x6a8..0x6c0]
+            .copy_from_slice(&crate::ak820_typed_storage::QmkSettings::default().encode());
+        nvm[0x6aa] = 2;
+        nvm[0x7f0] = 1;
+        assert_eq!(
+            validate_nvm(&nvm, SCHEMA).unwrap_err(),
+            "Invalid settings header, reserved bytes or CRC"
+        );
+        assert!(settings_from_nvm(&nvm, &[0; 6], true).is_err());
     }
     #[test]
     fn firmware_python_canonical_golden_supported_schemas() {

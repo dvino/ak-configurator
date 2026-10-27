@@ -194,6 +194,31 @@ pub(crate) fn slot_offset(tap_dance: bool, index: usize) -> CodecResult<usize> {
             64 + (index - 6) * 10
         })
 }
+/// Non-QS schema03 slots, shared independently of the persisted QS record codec.
+/// This validates storage only; the caller must establish the image/schema contract.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NonQsExtensions {
+    pub(crate) tap_dance: [TapDance; 8],
+    pub(crate) key_overrides: [KeyOverride; 8],
+}
+impl NonQsExtensions {
+    pub(crate) fn decode_nvm(nvm: &[u8]) -> CodecResult<Self> {
+        if nvm.len() != 0x2800 {
+            return fail("Extension NVM size or schema differs");
+        }
+        let mut result = Self {
+            tap_dance: [TapDance::default(); 8],
+            key_overrides: [KeyOverride::default(); 8],
+        };
+        for i in 0..8 {
+            let at = slot_offset(true, i)?;
+            result.tap_dance[i] = TapDance::decode(&nvm[at..at + 10])?;
+            let at = slot_offset(false, i)?;
+            result.key_overrides[i] = KeyOverride::decode(&nvm[at..at + 10])?;
+        }
+        Ok(result)
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Extensions {
     pub(crate) settings: QmkSettings,
@@ -205,18 +230,15 @@ impl Extensions {
         if nvm.len() != 0x2800 || nvm[37..40] != [3, 0x20, 8] {
             return fail("Extension NVM size or schema differs");
         }
-        let mut result = Self {
-            settings: QmkSettings::decode(&nvm[SETTINGS..SETTINGS + 24])?,
-            tap_dance: [TapDance::default(); 8],
-            key_overrides: [KeyOverride::default(); 8],
-        };
-        for i in 0..8 {
-            let at = slot_offset(true, i)?;
-            result.tap_dance[i] = TapDance::decode(&nvm[at..at + 10])?;
-            let at = slot_offset(false, i)?;
-            result.key_overrides[i] = KeyOverride::decode(&nvm[at..at + 10])?;
-        }
-        Ok(result)
+        // Image extension contract versions do not change this persisted v1 codec.
+        // Decode QS first to retain the established production rejection order.
+        let settings = QmkSettings::decode(&nvm[SETTINGS..SETTINGS + 24])?;
+        let non_qs = NonQsExtensions::decode_nvm(nvm)?;
+        Ok(Self {
+            settings,
+            tap_dance: non_qs.tap_dance,
+            key_overrides: non_qs.key_overrides,
+        })
     }
     /// Produce an offline candidate, preserving every byte outside changed records.
     /// Exact image admission and device writes remain the caller's separate gates.
@@ -282,6 +304,56 @@ mod tests {
             }
         }
         raw
+    }
+    #[test]
+    fn shared_non_qs_decoder_preserves_slots_and_rejects_invalid_records() {
+        let mut raw = nvm(0);
+        for i in 0..8 {
+            let td_at = slot_offset(true, i).unwrap();
+            raw[td_at..td_at + 10].copy_from_slice(
+                &TapDance {
+                    outputs: [4, 5, 0, 0],
+                    term: 200 + i as u16,
+                }
+                .encode()
+                .unwrap(),
+            );
+            let ko_at = slot_offset(false, i).unwrap();
+            raw[ko_at..ko_at + 10].copy_from_slice(
+                &KeyOverride {
+                    trigger: 4,
+                    replacement: 5,
+                    layers: 1,
+                    options: 1,
+                    ..KeyOverride::default()
+                }
+                .encode()
+                .unwrap(),
+            );
+        }
+        let decoded = NonQsExtensions::decode_nvm(&raw).unwrap();
+        let production = Extensions::decode_nvm(&raw).unwrap();
+        assert_eq!(decoded.tap_dance, production.tap_dance);
+        assert_eq!(decoded.key_overrides, production.key_overrides);
+        for i in 0..8 {
+            for (td, byte, value, error) in [
+                (true, 0, 1, "Invalid Tap Dance output or term"),
+                (true, 9, 128, "Invalid Tap Dance output or term"),
+                (false, 4, 0, "Invalid Key Override entry"),
+                (false, 9, 64, "Invalid Key Override entry"),
+            ] {
+                let mut bad = raw.clone();
+                bad[slot_offset(td, i).unwrap() + byte] = value;
+                assert_eq!(NonQsExtensions::decode_nvm(&bad).unwrap_err(), error);
+                assert_eq!(Extensions::decode_nvm(&bad).unwrap_err(), error);
+            }
+        }
+        assert!(NonQsExtensions::decode_nvm(&raw[..0x27ff]).is_err());
+        // Sharing non-QS slots must never opt production into a persisted QS v2.
+        raw[SETTINGS..SETTINGS + 24].copy_from_slice(&QmkSettings::default().encode());
+        raw[SETTINGS + 2] = 2;
+        assert!(NonQsExtensions::decode_nvm(&raw).is_ok());
+        assert!(Extensions::decode_nvm(&raw).is_err());
     }
     #[test]
     fn settings_firmware_golden_and_crc_reserved_checks() {
