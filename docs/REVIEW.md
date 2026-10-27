@@ -2,6 +2,12 @@
 
 # Desktop adaptation and review
 
+## Current packaged candidate checkpoint — 2026-10-27
+
+Final CI [40556287408](https://github.com/dvino/ak-configurator/actions/runs/40556287408) completed successfully on all six OS/CPU targets for PR head `b3ecae13d17e6f2f9be7312183d8ab454cf23ed7` merged with `desktop-dev` at `ef30da6e254a1b358a54cc937d93bc7ee01c0e60` (CI merge `d5617334d685f4bba5004cb5beae25c121e8fc94`). Downloaded archives, external SHA256 files, package manifests, executable-bound runtime reports and install/upgrade/uninstall reports were checked for all six candidates; user-data preservation checks passed. These are unsigned CI candidates, not a published application release. Earlier checkpoints below describe their own source and date, and do not override this result.
+
+The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. Offline beta.4 preparation remains disconnected from production admission until final release identities and transitions are supplied.
+
 ## Provisional QS v2 offline model — 2026-10-27
 
 The isolated NVM preparation helper checks length, magic, schema and an explicitly bound QS record, and changes only the QS slice. Six targeted synthetic tests passed, including v2 image contracts retaining v1 records; opaque NVM bytes are preserved, not validated. This is preparation only, not an authorized transition or proof of persistent firmware behavior.

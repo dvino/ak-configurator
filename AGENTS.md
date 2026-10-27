@@ -23,6 +23,10 @@
 - Update matching EN/RU documents with changes to behavior, formats, commands,
   versions, APIs and limits. Use plain, concise, impersonal wording and
   write-like-me for substantial text without claiming unavailable style retrieval.
+- Always check documentation consistency before commit or push: compare current
+  claims with source and verified evidence, match EN/RU counterparts, and mark
+  historical results as such. Resolve contradictions across README, INSTALL,
+  PLAN, STATUS, REVIEW and affected guides.
 - README introduces the app; INSTALL covers download, checksums, extraction
   and launch; STATUS/technical reports record verification and limits. Release
   notes describe user-visible changes and relevant limits.
