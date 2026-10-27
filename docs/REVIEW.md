@@ -12,6 +12,8 @@ A behavior-preserving refactor shares non-QS extension and NVM/macro checks with
 
 A separate offline envelope bridge reuses the five-file validator, requires an explicit contract and calls a supplied complete-ROM validator before deriving settings. Six synthetic tests passed for identity ambiguity, callback ordering, versioned settings, capability-gated media, hashes and semantic errors. Synthetic ROM callbacks are not evidence of trusted ROM or hardware; no production validator, restore plan or executor accepts the offline result.
 
+A guard excludes AK820 QSID 22 from generic permissive-hold reads and checks the actual device again before queued dispatch. Three tests passed with fake transports: generic behavior remains available, while AK820 produces no QSID 22 I/O or queued update. Independent review found no blocker. This does not expose the provisional Caps Word setting or prove device behavior.
+
 A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Six targeted tests passed against synthetic vectors generated from the provisional firmware Python reference, including distinct source image and persisted-record versions, v2 images retaining v1 records and blank-record downgrade rejection. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
 
 ## Offline project correction — 2026-10-27

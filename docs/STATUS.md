@@ -10,6 +10,8 @@ A separate offline full-settings decoder now combines explicit image versions wi
 
 A separate offline archive-envelope bridge reuses five-file validation and requires an injected exact-ROM validator; synthetic callbacks establish no image trust and its result cannot start a restore.
 
+AK820 sessions exclude QSID 22 from the inherited permissive-hold reader and writer because provisional compact controls assign it to Caps Word language. Generic non-AK820 behavior remains unchanged; this guard does not enable the new setting.
+
 A separate offline QS v1/v2 record model is prepared against provisional compact-controls source. It is not connected to device sessions, image admission, backup restore or installation; no new firmware support is enabled. The final release catalog, image and settings identities and directed transitions are still required.
 
 Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. The file dialog worker also handles reads and atomic writes, keeping slow file access off the UI thread; parsing and application remain on the UI thread.
