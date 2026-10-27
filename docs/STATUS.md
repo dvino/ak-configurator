@@ -8,6 +8,8 @@ An offline metadata projection checks provisional compact-controls and storage v
 
 A separate offline full-settings decoder now combines explicit image versions with structural, macro and non-QS extension checks; current production admission and v1 QS behavior remain unchanged. Provisional media Combo outputs are parsed only by the separate offline decoder with an explicit source-image capability; production paths still reject them.
 
+A separate offline archive-envelope bridge reuses five-file validation and requires an injected exact-ROM validator; synthetic callbacks establish no image trust and its result cannot start a restore.
+
 A separate offline QS v1/v2 record model is prepared against provisional compact-controls source. It is not connected to device sessions, image admission, backup restore or installation; no new firmware support is enabled. The final release catalog, image and settings identities and directed transitions are still required.
 
 Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. The file dialog worker also handles reads and atomic writes, keeping slow file access off the UI thread; parsing and application remain on the UI thread.

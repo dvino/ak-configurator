@@ -28,6 +28,7 @@ mod ak820_typed_storage;
 mod ak820_qs_versioned_offline;
 mod ak820_qs_nvm_migration_offline;
 mod ak820_settings_identity_metadata_offline;
+mod ak820_versioned_backup_offline;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod app_discovery;
