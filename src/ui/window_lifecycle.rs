@@ -623,6 +623,14 @@ impl EntropyApp {
         }
     }
 
+    // Unit tests must never modify the host startup registration. Fail closed
+    // rather than reporting a successful system operation that was not performed.
+    #[cfg(test)]
+    pub(super) fn set_launch_at_startup(&mut self, _enabled: bool, _launch_minimized: bool) -> bool {
+        false
+    }
+
+    #[cfg(not(test))]
     pub(super) fn set_launch_at_startup(&mut self, enabled: bool, launch_minimized: bool) -> bool {
         #[cfg(target_os = "windows")]
         {

@@ -91,7 +91,7 @@ pub(crate) fn start_check(channel: Channel) -> Job<Offer> {
 }
 pub(crate) fn start_download(offer: Offer) -> Job<VerifiedDownload> {
     spawn(move |cancel| {
-        let root = dirs::cache_dir()
+        let root = crate::cache_dir()
             .ok_or("No application cache directory")?
             .join("ak-configurator")
             .join("app-updates");

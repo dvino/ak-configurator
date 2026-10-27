@@ -195,7 +195,7 @@ pub(crate) fn active_log_path_display() -> String {
 }
 
 fn entropy_config_dir() -> std::path::PathBuf {
-    dirs::config_dir()
+    crate::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(crate::APP_ID)
 }

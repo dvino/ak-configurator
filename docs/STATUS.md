@@ -35,3 +35,5 @@ On a Russian-locale Windows host, the full suite reported 1691 passes, 11 failur
 The OS helper cannot enter the background after a session or helper error. The error stays visible while the device is unverified. Targeted offline tests passed, and the rebuilt Windows x86_64 package was installed and self-checked. Physical behavior remains unverified.
 
 The tray setting takes priority over the automatic helper handoff. The Windows close-event test passed; restoring a real window from the tray remains unverified.
+
+The local Windows full-suite rerun was stopped after test code wrote to the real application configuration. Unit-test storage, configuration and cache paths now use a temporary root; unit tests cannot change autostart. Five storage tests and one startup/cache path test passed. Other filesystem paths, system APIs, network access and spawned production binaries still need isolation review; this does not qualify the full suite as safe to run on a user account.

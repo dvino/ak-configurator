@@ -9,6 +9,43 @@ mod scoped_config_tests {
     use super::*;
 
     #[test]
+    fn unscoped_storage_uses_the_same_isolated_root_on_worker_threads() {
+        let root = test_process_config_dir();
+        assert!(root.is_absolute());
+        assert!(root.is_dir());
+        assert_eq!(storage_config_dir(), Some(root.clone()));
+        let threads: Vec<_> = (0..4)
+            .map(|_| std::thread::spawn(|| (storage_config_dir(), app_settings_path())))
+            .collect();
+        for thread in threads {
+            let (worker_root, settings) = thread.join().unwrap();
+            assert_eq!(worker_root, Some(root.clone()));
+            assert!(settings.starts_with(&root));
+        }
+    }
+
+    #[test]
+    fn worker_without_an_explicit_scope_remains_isolated_after_guard_drop() {
+        let fallback = test_process_config_dir();
+        let scoped = ScopedTempConfig::new();
+        assert_ne!(scoped.path(), fallback);
+        let (resume, waiting) = std::sync::mpsc::channel();
+        let (ready, started) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let before = storage_config_dir().unwrap();
+            ready.send(()).unwrap();
+            waiting.recv().unwrap();
+            assert_eq!(storage_config_dir(), Some(before.clone()));
+            before
+        });
+        started.recv().unwrap();
+        drop(scoped);
+        resume.send(()).unwrap();
+        assert_eq!(worker.join().unwrap(), fallback);
+        assert_eq!(storage_config_dir(), Some(fallback));
+    }
+
+    #[test]
     fn ak820_recovery_receipt_is_durable_and_survives_stale_preference_save() {
         let _guard = ScopedTempConfig::new();
         let stale = AppSettings::default();
@@ -90,7 +127,8 @@ struct TypingTrainerSymbolStatsFile {
     stats: TypingTrainerCharacterStatsMap,
 }
 
-// Test overrides are thread-local: parallel tests never mutate HOME/XDG state.
+// Explicit overrides are thread-local; other calls through this storage module
+// use a shared process fallback. Other filesystem paths need separate isolation.
 #[cfg(test)]
 thread_local! {
     static TEST_CONFIG_DIR: std::cell::RefCell<Option<std::path::PathBuf>> = const {
@@ -100,7 +138,8 @@ thread_local! {
 
 /// Own the temporary output root until all UI polling/persistence has finished.
 /// This guard must stay on the calling thread; workers that need paths must
-/// capture resolved paths before spawning (file-dialog workers only pick input).
+/// capture resolved paths before spawning to share this scope. Other workers
+/// use the isolated process fallback rather than the real user configuration.
 #[cfg(test)]
 pub(super) struct ScopedTempConfig {
     directory: tempfile::TempDir,
@@ -135,11 +174,36 @@ impl Drop for ScopedTempConfig {
     }
 }
 
+#[cfg(test)]
+fn test_process_config_dir() -> std::path::PathBuf {
+    // Keep the directory alive for the entire test process, including worker
+    // threads that outlive a scoped guard. Initialization failure must panic:
+    // falling back to user configuration or the working directory is unsafe.
+    // Static values are not dropped on exit, so this temporary directory remains
+    // available for inspection and is left to normal temporary-file cleanup.
+    static DIRECTORY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    DIRECTORY
+        .get_or_init(|| {
+            tempfile::Builder::new()
+                .prefix("ak-configurator-tests-")
+                .tempdir()
+                .expect("create isolated process test config")
+        })
+        .path()
+        .to_path_buf()
+}
+
+#[cfg(test)]
 pub(super) fn storage_config_dir() -> Option<std::path::PathBuf> {
-    #[cfg(test)]
-    if let Some(root) = TEST_CONFIG_DIR.with(|root| root.borrow().clone()) {
-        return Some(root);
-    }
+    Some(
+        TEST_CONFIG_DIR
+            .with(|root| root.borrow().clone())
+            .unwrap_or_else(test_process_config_dir),
+    )
+}
+
+#[cfg(not(test))]
+pub(super) fn storage_config_dir() -> Option<std::path::PathBuf> {
     dirs::config_dir()
 }
 

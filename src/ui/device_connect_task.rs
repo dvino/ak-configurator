@@ -14,7 +14,7 @@ pub(super) fn load_selected_display_settings(
 }
 
 fn vial_cache_dir() -> Option<std::path::PathBuf> {
-    let dir = dirs::config_dir()?.join(crate::APP_ID).join("vial_cache");
+    let dir = crate::config_dir()?.join(crate::APP_ID).join("vial_cache");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }

@@ -76,6 +76,11 @@ mod app_init;
 #[path = "app_storage.rs"]
 mod app_storage;
 use app_storage::*;
+
+#[cfg(test)]
+pub(crate) fn test_config_base_dir() -> std::path::PathBuf {
+    storage_config_dir().expect("isolated test config root")
+}
 #[path = "app_update.rs"]
 mod app_update;
 use app_update::*;

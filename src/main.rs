@@ -65,6 +65,29 @@ use app::EntropyApp;
 
 const APP_TITLE: &str = "AK Configurator";
 const APP_ID: &str = "ak-configurator";
+
+// Route configuration and cache lookup through isolated roots in unit tests.
+pub(crate) fn config_dir() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    {
+        Some(app::test_config_base_dir())
+    }
+    #[cfg(not(test))]
+    {
+        dirs::config_dir()
+    }
+}
+
+pub(crate) fn cache_dir() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    {
+        Some(app::test_config_base_dir().join("cache"))
+    }
+    #[cfg(not(test))]
+    {
+        dirs::cache_dir()
+    }
+}
 const SINGLE_INSTANCE_ENV: &str = "AK_CONFIGURATOR_SINGLE_INSTANCE";
 const LAUNCH_MINIMIZED_ARG: &str = "--minimized";
 #[cfg(not(target_arch = "wasm32"))]
@@ -149,7 +172,7 @@ fn try_acquire_single_instance() -> bool {
 }
 
 fn notify_existing_instance() {
-    let dir = dirs::config_dir()
+    let dir = crate::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(crate::APP_ID);
     let _ = std::fs::create_dir_all(&dir);
@@ -244,7 +267,7 @@ fn try_acquire_single_instance() -> bool {
     use std::fs::OpenOptions;
     use std::os::fd::IntoRawFd;
 
-    let dir = dirs::config_dir()
+    let dir = crate::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(crate::APP_ID);
     if std::fs::create_dir_all(&dir).is_err() {
@@ -303,7 +326,7 @@ fn try_acquire_single_instance() -> bool {
 }
 
 fn eframe_persistence_path() -> std::path::PathBuf {
-    let dir = dirs::config_dir()
+    let dir = crate::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(APP_ID);
     let _ = std::fs::create_dir_all(&dir);
@@ -317,7 +340,7 @@ fn initial_window_size() -> [f32; 2] {
         window_size: Option<[f32; 2]>,
     }
 
-    let path = dirs::config_dir()
+    let path = crate::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(APP_ID)
         .join("app_settings.json");
@@ -592,6 +615,23 @@ fn run_native_gui(launch_minimized: bool) -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_and_cache_paths_use_the_isolated_test_root() {
+        let root = app::test_config_base_dir();
+        assert_eq!(config_dir(), Some(root.clone()));
+        assert_eq!(cache_dir(), Some(root.join("cache")));
+        assert!(eframe_persistence_path().starts_with(&root));
+        let worker_root = std::thread::spawn(|| {
+            let root = app::test_config_base_dir();
+            assert_eq!(config_dir(), Some(root.clone()));
+            assert_eq!(cache_dir(), Some(root.join("cache")));
+            root
+        })
+        .join()
+        .unwrap();
+        assert_eq!(worker_root, root);
+    }
 
     #[test]
     fn single_instance_is_enabled_by_default() {
