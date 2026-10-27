@@ -2,6 +2,44 @@
 
 # Desktop adaptation and review
 
+## MCP implementation plan — 2026-10-27
+
+Documentation-only scope at configurator baseline
+`f8a31854bae916d1b07f24bdcf5dde1d00fdbdce`; firmware reference is
+`v0.6.0-beta.3`, commit `88d190abb156960915a0f1f8ac7f602bb401eab3`.
+[MCP_IMPLEMENTATION_PLAN.md](MCP_IMPLEMENTATION_PLAN.md) and its complete Russian
+translation describe proposed work; they do not introduce an MCP server.
+Application/firmware source, Cargo inputs, workflows and release assets remain
+unchanged. No build, application test suite or device operation was run for
+this documentation package.
+
+Independent architecture/source and firmware-protocol reviews found no
+architecture blocker. Their findings were incorporated:
+
+- Separate the development mock subprocess smoke from checks of real packaged
+  artifacts; production must reject mock/replay startup.
+- Apply opt-in sensitive-data rules to all action tables and to report/diff
+  values. Specify macro, Tap Dance and Key Override DTOs and the schema gate.
+- Distinguish cancellation before loader transition, after transition/before
+  erase and after erase. `NotAttempted` firmware outcome does not imply that
+  normal keyboard operation remains available; no automatic Restart is added.
+- Require verified unlock for matrix observations and locked/lock-lost negative
+  fixtures; an untouched reply cannot pass as all keys released.
+- Retain Direct's three coherent-read attempts (two generation-race restarts),
+  while transport errors and uncertain writes stop without retry.
+- Bilingual review clarified loss of unlocked state, clean-storage compensation,
+  beta.3 transition scope, the real-device fuzzing exclusion, pinned scenario
+  inputs, Cargo `--locked` and sensitive-data redaction. The remaining SDK
+  alternatives paragraph was translated.
+
+Documentation checks parsed all 14 JSON/TOML examples, matched all 16 fenced
+blocks between languages, checked 58 source-reference definitions and their
+pinned repository paths/line anchors, checked local links and Markdown table
+columns, and confirmed matching heading counts. Current official SDK release,
+tagged manifests, protocol documentation and client guidance were inspected.
+These are source/document checks, not evidence of an implemented MCP feature
+or physical device behavior.
+
 ## P1 beta.3 / alpha.1 integration — 2026-10-27
 
 Baseline: `5d565380b042d3b56f7c94a6393a26e4ff534680`. Application source version
