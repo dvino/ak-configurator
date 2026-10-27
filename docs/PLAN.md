@@ -19,6 +19,19 @@ Application source version: `0.1.0-alpha.1`. The prior `0.1.0-beta.2` was unpubl
 
 The firmware release is published and its release inputs have passed the documented source-identity and digest checks. CI itself skipped publishing and the profile qualification matrix. Release-input verification does not qualify physical behavior; a catalog entry, linked CODE fingerprint, synthetic fixture or CI artifact cannot prove device behavior. Private OEM inputs remain local. See [STATUS.md](STATUS.md) and [RGB-PLAN.md](RGB-PLAN.md).
 
+## MCP integration — planned, 2026-10-27
+
+[MCP_IMPLEMENTATION_PLAN.md](MCP_IMPLEMENTATION_PLAN.md) records the source audit
+at `f8a31854bae916d1b07f24bdcf5dde1d00fdbdce` against firmware
+`v0.6.0-beta.3` (`88d190abb156960915a0f1f8ac7f602bb401eab3`). The proposed entry
+point is a separate headless process of the existing executable over stdio,
+using the official Rust SDK and the existing HID helper/ownership and domain
+code. P0 is a bounded read-only diagnostic MVP with a strict mock; P1 adds shared
+settings, backups and reversible functional suites; P2 gates protected updating
+and optional hardware diagnostics. No MCP implementation, firmware change or
+device qualification is included in this documentation work. The current
+alpha.1 release is not made dependent on MCP.
+
 ## Delivery order
 
 1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve the verified beta.3 release pins. Keep release-input identity, platform execution and physical qualification as separate evidence.
