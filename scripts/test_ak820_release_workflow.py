@@ -89,6 +89,18 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_windows_uses_isolated_graphics_fixture_without_packaging_driver(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        windows = steps["Execute native GUI runtime smoke (Windows)"]
+        self.assertIn("python scripts/run_windows_ci_runtime_smoke.py", windows)
+        self.assertIn('--binary "${{ matrix.binary }}"', windows)
+        self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", windows)
+        for name in ("Upload development binary and checksum", "Upload candidate package and checksum",
+                     "Package unsigned desktop alpha candidate"):
+            self.assertNotIn("opengl32", steps[name])
+            self.assertNotIn("ak820-ci-gl", steps[name])
+
     def test_failed_runtime_reports_survive_without_publishing_candidates(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}

@@ -2,6 +2,8 @@
 
 # AK Configurator implementation plan
 
+Validate the isolated Windows CI software OpenGL fixture on both native architectures after independent review; keep renderer and packaging gates. Source and local test evidence: [CI-WINDOWS-GL.md](CI-WINDOWS-GL.md). No Windows fixture runtime pass is claimed.
+
 Prepare future compact-controls installation only after the final catalog, exact image and settings identities and allowed transitions are supplied and reviewed. The separate QS v1/v2 model is offline-only; integrate its codec, capability gates, backup/migration and failure-state tests before offering installation.
 
 Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.

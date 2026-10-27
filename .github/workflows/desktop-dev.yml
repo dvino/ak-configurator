@@ -190,7 +190,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/candidate | Out-Null
-          python scripts/test_ak820_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
+          python scripts/run_windows_ci_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Execute native GUI runtime smoke (macOS)
