@@ -2,7 +2,7 @@
 
 # AK Configurator implementation plan
 
-Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. Moving slow regular-file I/O off the UI thread remains open.
+Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.
 
 This plan tracks the agreed [requirements](REQUIREMENTS.md) for `dvino/ak-configurator`; firmware remains in `dvino/ak820`. Source implementation and offline verification do not authorize live keyboard operations or establish physical behavior.
 
