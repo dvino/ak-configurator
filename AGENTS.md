@@ -17,9 +17,10 @@
   shared changes rather than maintaining copies. Keep PLAN current.
 - Follow [agent routing](docs/AGENT-ROUTING.md). Check ownership and preserve
   concurrent work; do not run builds sharing output paths.
-- Delegate recurring checks of CI, releases or other awaited external state to
-  a monitor; do not repeatedly poll them in an agent turn. Act on monitor
-  notifications. One-time checks needed for active work remain allowed.
+- Agents must not perform recurring checks of CI, releases or other awaited
+  external state themselves; use a monitor and act on its notifications. Do not
+  repeatedly poll that state in an agent turn. One-time checks needed for active
+  work remain allowed.
 
 ## Documentation and review
 
