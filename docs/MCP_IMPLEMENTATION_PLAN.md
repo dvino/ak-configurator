@@ -2,6 +2,12 @@
 
 # MCP integration plan
 
+## Next work, in order
+
+1. Include the MCP feature in ordinary native candidates and document how a local client starts the packaged executable in headless read-only mode. Verify the actual Windows and Linux packages and the SDK handshake; the candidate from run 40632342950 omits MCP.
+2. Extend exact-image read-only recognition and diagnostic admission to the shipped beta.4 image. Keep unknown images blocked and test the packaged binary against host fixtures before any physical claim.
+3. Add backup inspection and restore preview through the existing checked services. Design the later settings-write scope as a separate opt-in process with exact source/target identity, safety backup, fresh physical confirmation, one attempt and final readback. Do not infer permission to write from MCP connection or read-only diagnostics.
+
 > Implementation update: the original audit below is retained as the plan baseline. A partial, optional read-only P0 preview now exists; see [MCP.md](MCP.md) for implemented commands and limits and [REVIEW.md](REVIEW.md) for actual verification. The remaining planned API is not available yet.
 
 ## 1. Decision, scope and audited versions

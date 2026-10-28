@@ -2,6 +2,10 @@
 
 # AK Configurator implementation plan
 
+## First priority: ship and connect MCP
+
+The Windows candidate from [run 40632342950](https://github.com/dvino/ak-configurator/actions/runs/40632342950) does not include the optional MCP feature. An agent therefore cannot connect to the installed application through MCP. Put the MCP-enabled production candidate and its local connection instructions ahead of the remaining work below. Keep the ordinary GUI and the headless MCP process separate, and verify the packaged executable on native Windows and Linux. First qualify read-only diagnostics for the exact beta.4 image; the current preview recognizes beta.3 only. Then add checked backup inspection and restore preview. Settings restore through MCP remains a separate, explicitly authorized write workflow with a fresh safety backup, physical confirmation and readback; do not expose a raw setter or treat diagnostic access as write consent. See [MCP integration plan](MCP_IMPLEMENTATION_PLAN.md) and the observed [restore issue](https://github.com/dvino/ak-configurator/issues/2).
+
 ## Beta.4.1 release integration — exact-image flashing prepared
 
 The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer selects beta.4.1 by default and requires explicit beta prerelease opt-in; beta.3 remains an alternate. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
@@ -48,12 +52,13 @@ P0 remains partial and default-off. Production integration of provisional QS v2,
 
 ## Delivery order
 
-1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separately pinned beta.4.1 exact-image flashing catalog; keep hardware-validation claims separate from image-install authorization. Keep release-input identity, platform execution and physical qualification as separate evidence.
-2. Review restore, reset, deletion and installation with safety snapshots, confirmation pins, ownership and one-attempt failure handling. A failed read, timeout, storage fault or mismatch stops without retry or automatic rollback.
-3. Qualify installation and OEM recovery only with explicit authorization and exact hardware procedures. Keep source, host-test and physical evidence distinct.
-4. Complete native OS helper, capture permission and GUI teardown/reopen qualification per platform; retain the completed source/host checks.
-5. Execute and inspect all six native packages, runtime/install reports and update index on the final source. Keep platform execution and signing evidence separate.
-6. Continue RGB resource/timing and physical qualification. Begin browser feasibility after a usable native milestone; browser flashing remains later work.
+1. Ship MCP in ordinary native candidates and verify local read-only connection to the packaged executable on Windows and Linux. Extend exact beta.4 diagnostics, then backup inspection and restore preview; keep settings writes behind separate authorization and safety gates.
+2. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separately pinned beta.4.1 exact-image flashing catalog; keep hardware-validation claims separate from image-install authorization. Keep release-input identity, platform execution and physical qualification as separate evidence.
+3. Review restore, reset, deletion and installation with safety snapshots, confirmation pins, ownership and one-attempt failure handling. A failed read, timeout, storage fault or mismatch stops without retry or automatic rollback.
+4. Qualify installation and OEM recovery only with explicit authorization and exact hardware procedures. Keep source, host-test and physical evidence distinct.
+5. Complete native OS helper, capture permission and GUI teardown/reopen qualification per platform; retain the completed source/host checks.
+6. Execute and inspect all six native packages, runtime/install reports and update index on the final source. Keep platform execution and signing evidence separate.
+7. Continue RGB resource/timing and physical qualification. Begin browser feasibility after a usable native milestone; browser flashing remains later work.
 
 ## Acceptance boundaries
 

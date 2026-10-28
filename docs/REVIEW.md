@@ -977,3 +977,7 @@ An independent automated reviewer checked the test-only isolation changes and th
 Follow-up unit-test safeguards reject the reviewed live HID open and discovery paths, require an explicit test HID for connection and skip native tray creation. Focused Windows tests for these safeguards, the indicator and tray-close policy passed; 42 connection and 15 scan tests also passed. They do not cover every operating-system or subprocess path, and the test suite is not qualified as fully isolated.
 
 An independent automated reviewer checked these safeguards and their documentation; no blocking findings remained. Private lower-level HID calls, macOS initialization and spawned production binaries remain outside this review's isolation claim.
+
+## MCP delivery priority — 2026-10-28
+
+The plan now puts MCP-enabled native packages and local connection checks first. Source inspection of the run 40632342950 workflow and `docs/MCP.md` confirmed that ordinary packages omit MCP and the existing read-only preview admits beta.3 only. An independent reviewer checked the four EN/RU plan changes and found no blocking issue; its wording suggestion for the Russian description of a separate write process was applied. This was documentation review only. No build or device check was run.
