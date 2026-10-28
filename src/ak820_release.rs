@@ -494,6 +494,7 @@ mod tests {
             "format": "ak820-beta-release-catalog-1",
             "tag": BETA4_1_RELEASE,
             "status": "beta",
+            "release_approved": true,
             "hardware_validated": false,
             "flashing_authorized": true,
             "settings_writes_authorized": false,
