@@ -286,6 +286,10 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
         valid,
         "This command or value is unavailable in the verified AK820 image"
     );
+    ensure!(
+        !write || !matches!(image, Some(ImageContract::Beta4(_))),
+        "AK820 beta.4 release metadata does not authorize device writes"
+    );
     Ok(write)
 }
 
@@ -1453,6 +1457,28 @@ impl HidDevice {
 #[cfg(test)]
 #[path = "hid_ak820_tests.rs"]
 mod transaction_tests;
+
+#[cfg(test)]
+mod beta4_write_policy_tests {
+    use super::*;
+
+    #[test]
+    fn beta4_release_metadata_never_authorizes_hid_writes() {
+        let image = ImageContract::Beta4(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        for packet in [
+            [0xFE, 11, 1, 0, 2, 0], // persisted setting write
+            [0x05, 0, 0, 0, 0, 4],  // keymap write
+            [0xFE, 6, 0, 0, 0, 0],  // unlock transition
+        ] {
+            let mut request = [0; MSG_LEN];
+            request[..packet.len()].copy_from_slice(&packet);
+            assert!(allowed_request(&request, Some(image)).is_err());
+        }
+        let mut read = [0; MSG_LEN];
+        read[..4].copy_from_slice(&[0xFE, 10, 22, 0]);
+        assert!(!allowed_request(&read, Some(image)).unwrap());
+    }
+}
 
 #[cfg(test)]
 mod os_indicator_tests {

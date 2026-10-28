@@ -2,13 +2,19 @@
 
 # Desktop adaptation and review
 
-## Current packaged candidate checkpoint — 2026-10-27
+## Beta.4 read-only integration — 2026-10-28
+
+The official AK820 `v0.6.0-beta.4` release bundle is pinned to SHA256 `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`. The implementation recognizes ten exact packed-code identities and uses the settings-record v2 contract for read-only connection reconciliation. QSID 22 is read as a u8 and shown as a localized Caps Word ruleset; the ID remains excluded from generic permissive-hold reads and from writers. Some profile rows say approved/installable, but release-level metadata sets `release_approved`, `hardware_validated`, `flashing_authorized` and `settings_writes_authorized` to false. Profile flags do not override the release denial, so installation, restore and device writes remain blocked.
+
+The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc). SHA256 is `70b3e46acdd249e53efc8dfc2b71dc4b9b016d3d51e9bff89d11f3f40f72c03e`. Its offline `--self-check` passed with `hardware_access=false` and `network_access=false`, but reports firmware release `v0.6.0-beta.3`; it covers the bundled beta.3 public profiles, not beta.4 packaging. The full offline suite passed 1916 tests, with 14 ignored and 0 failed. It includes exact beta.4 image recognition, blocked HID-write policy and localized QSID 22 display tests. The release build emitted 169 compiler warnings that were not triaged individually. These checks do not qualify GUI operation, Wayland, Alpine/musl or physical hardware.
+
+## Historical packaged candidate checkpoint — 2026-10-27
 
 Final CI [40556287408](https://github.com/dvino/ak-configurator/actions/runs/40556287408) completed successfully on all six OS/CPU targets for PR head `b3ecae13d17e6f2f9be7312183d8ab454cf23ed7` merged with `desktop-dev` at `ef30da6e254a1b358a54cc937d93bc7ee01c0e60` (CI merge `d5617334d685f4bba5004cb5beae25c121e8fc94`). Downloaded archives, external SHA256 files, package manifests, executable-bound runtime reports and install/upgrade/uninstall reports were checked for all six candidates; user-data preservation checks passed. These are unsigned CI candidates, not a published application release. Earlier checkpoints below describe their own source and date, and do not override this result.
 
 The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. Offline beta.4 preparation remains disconnected from production admission until final release identities and transitions are supplied.
 
-## Provisional QS v2 offline model — 2026-10-27
+## Historical provisional QS v2 offline model — 2026-10-27
 
 The isolated NVM preparation helper checks length, magic, schema and an explicitly bound QS record, and changes only the QS slice. Six targeted synthetic tests passed, including v2 image contracts retaining v1 records; opaque NVM bytes are preserved, not validated. This is preparation only, not an authorized transition or proof of persistent firmware behavior.
 

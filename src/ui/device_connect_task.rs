@@ -1588,6 +1588,7 @@ impl EntropyApp {
                     key_override_entries: key_override_entries.len(),
                     alt_repeat_entries: alt_repeat_entries.len(),
                     caps_word: vial_features.caps_word,
+                    caps_word_ruleset: None,
                     layer_lock: vial_features.layer_lock,
                     qmk_settings: !supported_qmk_settings.is_empty(),
                 };

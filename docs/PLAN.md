@@ -2,13 +2,13 @@
 
 # AK Configurator implementation plan
 
-## Beta.4 candidate gate
+## Beta.4 release integration — prepared, read-only
 
-Obtain a capability catalog bound to all ten exact beta.4 matrix identities, then independently verify the complete capability, QS v2 and directed migration contracts before integrating offline support. Keep production image admission, restore and installation blocked until separately approved release inputs are available. The currently pinned candidate catalog instead identifies beta.3 images; see [STATUS.md](STATUS.md).
+The official AK820 `v0.6.0-beta.4` release is published. Its catalog bundle is pinned to SHA256 `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`; the beta.4 capability catalog and firmware matrix bind all ten profile identities and QS record v2. This integration adds exact recognition and read-only settings decoding. The release metadata denies hardware validation, flashing and settings writes, so installation, restore and all writes remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
 
 Validate the isolated Windows CI software OpenGL fixture on both native architectures after independent review; keep renderer and packaging gates. Source and local test evidence: [CI-WINDOWS-GL.md](CI-WINDOWS-GL.md). No Windows fixture runtime pass is claimed.
 
-Prepare future compact-controls installation only after the final catalog, exact image and settings identities and allowed transitions are supplied and reviewed. The separate QS v1/v2 model is offline-only; integrate its codec, capability gates, backup/migration and failure-state tests before offering installation.
+Keep installation pinned to beta.3. Beta.4 remains read-only while its release metadata denies hardware validation, flashing and settings writes. Do not offer beta.4 installation, restore or other writes unless a release explicitly authorizes them and the exact image/settings identities, transitions, backup and failure gates are reviewed. The separate QS v1/v2 model does not grant that authority.
 
 Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.
 
@@ -48,7 +48,7 @@ P0 remains partial and default-off. Production integration of provisional QS v2,
 
 ## Delivery order
 
-1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve the verified beta.3 release pins. Keep release-input identity, platform execution and physical qualification as separate evidence.
+1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separate beta.4 read-only release pins. Keep release-input identity, platform execution and physical qualification as separate evidence.
 2. Review restore, reset, deletion and installation with safety snapshots, confirmation pins, ownership and one-attempt failure handling. A failed read, timeout, storage fault or mismatch stops without retry or automatic rollback.
 3. Qualify installation and OEM recovery only with explicit authorization and exact hardware procedures. Keep source, host-test and physical evidence distinct.
 4. Complete native OS helper, capture permission and GUI teardown/reopen qualification per platform; retain the completed source/host checks.

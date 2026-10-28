@@ -289,6 +289,9 @@ fn load_verified_ak820(
     let mut key_override_entries = Vec::new();
     let mut combo_term = Some(40);
     let mut auto_shift_timeout = None;
+    let mut auto_shift_options = AutoShiftOptionsState::default();
+    let mut one_shot_settings = OneShotSettingsState::default();
+    let mut caps_word_ruleset = None;
     let mut tap_hold_settings = TapHoldSettingsState::default();
     let mut grave_escape_settings = GraveEscapeSettingsState::default();
     let mut supported_qmk_settings = Vec::new();
@@ -297,7 +300,17 @@ fn load_verified_ak820(
         let nvm = dev_conn
             .ak820_read_rom(0xC700, 0x2800)
             .map_err(|e| format!("Complete NVM read failed: {e:#}"))?;
-        let metadata = crate::ak820_settings_model::validate_nvm(&nvm, image.schema())?;
+        let metadata = if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
+            let layout = crate::ak820_settings_model::validate_nvm_structure(&nvm, image.schema())?;
+            crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_image(
+                &nvm[0x6a8..0x6c0],
+                crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                crate::ak820_qs_versioned_offline::ImageVersion::V2,
+            )?;
+            layout.validate_macros(&nvm)?
+        } else {
+            crate::ak820_settings_model::validate_nvm(&nvm, image.schema())?
+        };
         if nvm[..40] != saved_header
             || nvm[0x40..0x640]
                 != keymap
@@ -324,11 +337,22 @@ fn load_verified_ak820(
         }
         // Derivation checks the saved Combo marker/version before comparing
         // its exposed wire fields. Reserved storage bytes remain untouched.
-        crate::ak820_settings_model::settings_from_nvm(
-            &nvm,
-            &[effect as u8, 0, speed, hue, saturation, brightness],
-            true,
-        )?;
+        if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
+            crate::ak820_settings_model::settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[effect as u8, 0, speed, hue, saturation, brightness],
+                true,
+                crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                crate::ak820_settings_model::OfflineSettingsCapabilities { combo_media: true },
+            )?;
+        } else {
+            crate::ak820_settings_model::settings_from_nvm(
+                &nvm,
+                &[effect as u8, 0, speed, hue, saturation, brightness],
+                true,
+            )?;
+        }
         for (index, combo) in combo_entries.iter().enumerate() {
             let raw = &nvm[0x658 + index * 10..0x662 + index * 10];
             let keys = [
@@ -343,7 +367,29 @@ fn load_verified_ak820(
                 return Err("AK820 Combo getter differs from NVM".into());
             }
         }
-        let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(&nvm)?;
+        let (settings, tap_dance_extensions, key_override_extensions) =
+            if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
+                let settings = crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_image(
+                    &nvm[0x6a8..0x6c0],
+                    crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                    crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                )?;
+                let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(&nvm)?;
+                let settings = image
+                    .qsid_ids()
+                    .iter()
+                    .map(|&id| Ok((id, settings.get(id)?)))
+                    .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
+                (settings, extensions.tap_dance, extensions.key_overrides)
+            } else {
+                let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(&nvm)?;
+                let settings = image
+                    .qsid_ids()
+                    .iter()
+                    .map(|&id| Ok((id, extensions.settings.get(id)?)))
+                    .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
+                (settings, extensions.tap_dance, extensions.key_overrides)
+            };
         supported_qmk_settings = dev_conn
             .query_qmk_settings()
             .map_err(|e| format!("QMK Settings query failed: {e:#}"))?;
@@ -351,13 +397,13 @@ fn load_verified_ak820(
             return Err("AK820 QMK Settings IDs differ from the image contract".into());
         }
         for &id in image.qsid_ids() {
-            let actual = if id == 1 {
+            let actual = if matches!(id, 1 | 3 | 22) {
                 dev_conn.get_qmk_setting_u8(id).map(u16::from)
             } else {
                 dev_conn.get_qmk_setting_u16(id)
             }
             .map_err(|e| format!("QSID {id} read failed: {e:#}"))?;
-            if actual != extensions.settings.get(id)? {
+            if settings.get(&id) != Some(&actual) {
                 return Err(format!(
                     "AK820 QSID {id} getter differs from stored settings"
                 ));
@@ -370,10 +416,20 @@ fn load_verified_ak820(
                     }
                 }
                 2 => combo_term = Some(actual),
+                3 => {
+                    auto_shift_options = AutoShiftOptionsState::from_bits(actual as u8);
+                    auto_shift_options.loaded = true;
+                }
                 4 => auto_shift_timeout = Some(actual),
+                6 => {
+                    one_shot_settings.timeout = actual;
+                    one_shot_settings.supported = true;
+                    one_shot_settings.set_qsid_supported(id);
+                }
                 7 => tap_hold_settings.tapping_term = actual,
                 18 => tap_hold_settings.tap_code_delay = actual,
                 19 => tap_hold_settings.tap_hold_caps_delay = actual,
+                22 => caps_word_ruleset = Some(actual as u8),
                 _ => return Err("Unknown AK820 QSID".into()),
             }
             if matches!(id, 7 | 18 | 19) {
@@ -386,7 +442,7 @@ fn load_verified_ak820(
             let actual = dev_conn
                 .get_tap_dance(index)
                 .map_err(|e| format!("Tap Dance {index}: {e:#}"))?;
-            let row = extensions.tap_dance[index as usize];
+            let row = tap_dance_extensions[index as usize];
             if actual
                 != (
                     row.outputs[0],
@@ -410,7 +466,7 @@ fn load_verified_ak820(
             let actual = dev_conn
                 .get_key_override(index)
                 .map_err(|e| format!("Key Override {index}: {e:#}"))?;
-            let row = extensions.key_overrides[index as usize];
+            let row = key_override_extensions[index as usize];
             if actual
                 != (
                     row.trigger,
@@ -482,6 +538,7 @@ fn load_verified_ak820(
         key_override_entries: key_override_entries.len(),
         alt_repeat_entries: 0,
         caps_word: true,
+        caps_word_ruleset,
         layer_lock: false,
         qmk_settings: !supported_qmk_settings.is_empty(),
     };
@@ -506,7 +563,7 @@ fn load_verified_ak820(
         tap_dance_entries,
         combo_entries,
         combo_term,
-        auto_shift_options: Default::default(),
+        auto_shift_options,
         auto_shift_timeout,
         mouse_keys_settings: Default::default(),
         touchpad_settings: Default::default(),
@@ -514,7 +571,7 @@ fn load_verified_ak820(
         module_settings: Default::default(),
         tap_hold_settings,
         magic_settings: Default::default(),
-        one_shot_settings: Default::default(),
+        one_shot_settings,
         grave_escape_settings,
         layer_led_settings: Default::default(),
         rgb_settings,

@@ -1,0 +1,202 @@
+{
+  "format": "ak820-installer-profile-catalog-1",
+  "default_profile": "main",
+  "profiles": [
+    {
+      "id": "main",
+      "bundle": "releases/beta3/main",
+      "approval": "releases/beta3/main/approved-release.json",
+      "name": {
+        "en": "Main",
+        "ru": "Универсальный"
+      },
+      "description": {
+        "en": "Universal reference configuration.",
+        "ru": "Повседневная работа: настройки, замены сочетаний, оба вида макросов и Direct."
+      },
+      "added_to_main": [],
+      "removed_from_main": []
+    },
+    {
+      "id": "game",
+      "bundle": "releases/beta3/game",
+      "approval": "releases/beta3/game/approved-release.json",
+      "name": {
+        "en": "Game",
+        "ru": "Игры"
+      },
+      "description": {
+        "en": "Games with NKRO, GUI lock and Direct.",
+        "ru": "NKRO и блокировка Win; Direct сохраняется. Leader убран, чтобы не запускать команды-префиксы во время игры."
+      },
+      "added_to_main": [
+        "gui-lock",
+        "nkro"
+      ],
+      "removed_from_main": [
+        "leader"
+      ]
+    },
+    {
+      "id": "mmo",
+      "bundle": "releases/beta3/mmo",
+      "approval": "releases/beta3/mmo/approved-release.json",
+      "name": {
+        "en": "Mmo",
+        "ru": "Много игровых назначений"
+      },
+      "description": {
+        "en": "Multi-action game bindings; Tap Dance replaces Key Overrides.",
+        "ru": "Tap Dance даёт четыре базовых/модифицированных действия на слот; NKRO, блокировка Win и Direct сохраняются. Key Overrides обменивается на Tap Dance ради выбранного состава."
+      },
+      "added_to_main": [
+        "gui-lock",
+        "nkro",
+        "tap-dance"
+      ],
+      "removed_from_main": [
+        "key-overrides",
+        "leader"
+      ]
+    },
+    {
+      "id": "typing",
+      "bundle": "releases/beta3/typing",
+      "approval": "releases/beta3/typing/approved-release.json",
+      "name": {
+        "en": "Typing",
+        "ru": "Набор текста"
+      },
+      "description": {
+        "en": "Text entry with Auto Shift and Space Cadet.",
+        "ru": "Auto Shift для поддерживаемых клавиш и Shift/скобки через Space Cadet. Встроенные RGB-эффекты сохраняются, Direct уступает место функциям ввода."
+      },
+      "added_to_main": [
+        "auto-shift",
+        "space-cadet"
+      ],
+      "removed_from_main": [
+        "vialrgb-direct"
+      ]
+    },
+    {
+      "id": "code",
+      "bundle": "releases/beta3/code",
+      "approval": "releases/beta3/code/approved-release.json",
+      "name": {
+        "en": "Code",
+        "ru": "Код и терминал"
+      },
+      "description": {
+        "en": "Manual-shift coding with Space Cadet and Grave Escape.",
+        "ru": "Space Cadet для скобок, Grave Escape для совмещённой Esc/обратной кавычки. Автоматический Shift не включён; Direct уступает место этим функциям."
+      },
+      "added_to_main": [
+        "grave-escape",
+        "space-cadet"
+      ],
+      "removed_from_main": [
+        "vialrgb-direct"
+      ]
+    },
+    {
+      "id": "pointer",
+      "bundle": "releases/beta3/pointer",
+      "approval": "releases/beta3/pointer/approved-release.json",
+      "name": {
+        "en": "Pointer",
+        "ru": "Управление курсором"
+      },
+      "description": {
+        "en": "Keyboard pointer control with macros and Leader retained.",
+        "ru": "Mouse Keys добавляет курсор, прокрутку и кнопки мыши. Leader и макросы сохраняются; Direct уступает место управлению курсором."
+      },
+      "added_to_main": [
+        "mouse-keys"
+      ],
+      "removed_from_main": [
+        "vialrgb-direct"
+      ]
+    },
+    {
+      "id": "onehand",
+      "bundle": "releases/beta3/onehand",
+      "approval": "releases/beta3/onehand/approved-release.json",
+      "name": {
+        "en": "Onehand",
+        "ru": "Меньше перемещений руки"
+      },
+      "description": {
+        "en": "Reduced-reach pointer and basic tap/hold bindings.",
+        "ru": "Mouse Keys, One Shot и Tap Dance для управления указателем и нескольких действий на доступных клавишах. Key Overrides и Direct уступают место этому набору."
+      },
+      "added_to_main": [
+        "mouse-keys",
+        "tap-dance"
+      ],
+      "removed_from_main": [
+        "key-overrides",
+        "vialrgb-direct"
+      ]
+    },
+    {
+      "id": "creative",
+      "bundle": "releases/beta3/creative",
+      "approval": "releases/beta3/creative/approved-release.json",
+      "name": {
+        "en": "Creative",
+        "ru": "Монтаж и графика"
+      },
+      "description": {
+        "en": "Application shortcut keys with Direct and runtime recording.",
+        "ru": "Tap Dance для одиночных/двойных нажатий и удержаний с базовыми клавишами и модификаторами; сохранены Direct и запись макросов. Key Overrides обменивается на Tap Dance."
+      },
+      "added_to_main": [
+        "tap-dance"
+      ],
+      "removed_from_main": [
+        "key-overrides"
+      ]
+    },
+    {
+      "id": "shortcuts",
+      "bundle": "releases/beta3/shortcuts",
+      "approval": "releases/beta3/shortcuts/approved-release.json",
+      "name": {
+        "en": "Shortcuts",
+        "ru": "Подготовленные команды"
+      },
+      "description": {
+        "en": "Prepared persistent commands and modifier overrides.",
+        "ru": "Сохранены Key Overrides, Leader и 16 заранее заданных макросов Vial; добавлен Tap Dance для базовых действий. Direct и запись макросов на лету убраны."
+      },
+      "added_to_main": [
+        "tap-dance"
+      ],
+      "removed_from_main": [
+        "dynamic-macros",
+        "vialrgb-direct"
+      ]
+    },
+    {
+      "id": "multios",
+      "bundle": "releases/beta3/multios",
+      "approval": "releases/beta3/multios/approved-release.json",
+      "name": {
+        "en": "Multios",
+        "ru": "Несколько ОС"
+      },
+      "description": {
+        "en": "Modifier switching between host workflows with built-in lighting.",
+        "ru": "Mac/PC и обмен Ctrl/GUI для переключения модификаторов; OS-индикатор сохраняется. Используются встроенные RGB-эффекты."
+      },
+      "added_to_main": [
+        "ctrl-gui-swap",
+        "mac-pc"
+      ],
+      "removed_from_main": [
+        "vialrgb-direct"
+      ]
+    }
+  ]
+}

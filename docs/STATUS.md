@@ -2,9 +2,15 @@
 
 # Project status
 
-## Beta.4 candidate contract — blocked
+## Official beta.4 release — read-only integration prepared
 
-The exact firmware PR candidate `eb6d01870411133c08bef4def2748000c3bcb785` supplies a development capability catalog (SHA256 `f33698e6329a66a3e4ade069d1eda50dfc45882109112860e76cebe41cf165c2`) and matrix (SHA256 `8bf90526a51e9879870a61d7de1c59b1df38e3489b77a67e67496503f0307658`). All ten catalog image IHX identities match the published beta.3 historical profiles, not the matrix's beta.4 profiles. The matrix lists 100 beta.3-to-beta.4 and 100 beta.4-to-beta.4 pairs; these are offline candidate declarations, not enabled restore transitions. `python3 tools/check_beta4_candidate.py` deliberately reports this mismatch and exits nonzero. Candidate editing, restore and installation remain unavailable pending a consistent exact-image catalog and release approval. No device behavior is established.
+The official AK820 `v0.6.0-beta.4` release was published on 2026-10-28. Its `AK820-Beta4-Catalog.zip` SHA256 is `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`, matching the published sidecar and GitHub release digest. The configurator pins the beta.4 firmware matrix and capability catalog, recognizes all ten exact packed-code identities, and uses the v2 settings-record contract for read-only connection reconciliation. Some profile rows mark images approved/installable, but release-level capability metadata keeps `release_approved`, hardware validation, flashing authorization and settings-write authorization false. Profile flags do not override that denial; device writes, installation and restore remain blocked.
+
+The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc); SHA256 is `70b3e46acdd249e53efc8dfc2b71dc4b9b016d3d51e9bff89d11f3f40f72c03e`. Its offline `--self-check` passed and reports `hardware_access=false` and `network_access=false`. The report identifies application version `0.1.0-alpha.1` and firmware release `v0.6.0-beta.3`, so it validates the built-in beta.3 public profiles and does not verify beta.4 packaging. The full offline command `cargo test --offline --locked --bin ak-configurator -- --test-threads=1` passed 1916 tests; 14 were ignored. This includes exact beta.4 image recognition, blocked HID writes and localized QSID 22 display tests. The build emitted 169 compiler warnings, not individually triaged. Neither the self-check nor unit tests verify GUI operation, Wayland, or physical hardware. The glibc binary is not qualified for Alpine/musl.
+
+### Superseded pre-release candidate audit
+
+The earlier firmware PR candidate `eb6d01870411133c08bef4def2748000c3bcb785` had a development capability catalog (SHA256 `f33698e6329a66a3e4ade069d1eda50dfc45882109112860e76cebe41cf165c2`) and matrix (SHA256 `8bf90526a51e9879870a61d7de1c59b1df38e3489b77a67e67496503f0307658`). Its catalog IHX identities matched published beta.3 profiles rather than the candidate beta.4 matrix. That earlier candidate audit does not describe the official release integrated above.
 
 The Linux x86_64 application candidate was built from base commit `771ac4fb4a4dcbfd15969f73e9a2a67a53decd87` and passed `--self-check` in Ubuntu 24.04.5 for all ten published beta.3 profiles. The report records `hardware_access=false` and `network_access=false`; SHA256 is `4e83c322245efdeac5b5b2173ac9bdc3e78183dcc79f7cda49be066357c73d69`. It remains a beta.3-targeting candidate, not beta.4 support; GUI operation was not checked. This glibc binary is not qualified for Alpine/musl. The builder reported 168 compiler warnings; build output was not retained and the warnings were not individually triaged.
 
@@ -19,9 +25,9 @@ A separate offline full-settings decoder now combines explicit image versions wi
 
 A separate offline archive-envelope bridge reuses five-file validation and requires an injected exact-ROM validator; synthetic callbacks establish no image trust and its result cannot start a restore.
 
-AK820 sessions exclude QSID 22 from the inherited permissive-hold reader and writer because provisional compact controls assign it to Caps Word language. Generic non-AK820 behavior remains unchanged; this guard does not enable the new setting.
+Beta.4 connection reads QSID 22 as a u8, reconciles it with the exact v2 NVM record, and displays the English/Russian Caps Word ruleset in About Device. QSID 22 remains excluded from the inherited permissive-hold reader and from all writers. Beta.3 behavior remains unchanged.
 
-A separate offline QS v1/v2 record model is prepared against provisional compact-controls source. It is not connected to device sessions, image admission, backup restore or installation; no new firmware support is enabled. The final release catalog, image and settings identities and directed transitions are still required.
+The explicit QS v1/v2 model is now used after exact beta.4 image/profile verification for read-only settings reconciliation. It does not authorize backup, restore, installation or writes. Beta.4 release metadata keeps all those device-write paths blocked.
 
 Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. The file dialog worker also handles reads and atomic writes, keeping slow file access off the UI thread; parsing and application remain on the UI thread.
 

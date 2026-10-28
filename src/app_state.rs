@@ -577,6 +577,8 @@ pub(crate) struct DeviceAboutInfo {
     pub(crate) key_override_entries: usize,
     pub(crate) alt_repeat_entries: usize,
     pub(crate) caps_word: bool,
+    /// Beta.4 QSID 22 readback: 0 is English and 1 is Russian.
+    pub(crate) caps_word_ruleset: Option<u8>,
     pub(crate) layer_lock: bool,
     pub(crate) qmk_settings: bool,
 }

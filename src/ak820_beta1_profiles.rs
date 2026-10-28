@@ -15,6 +15,13 @@ pub(crate) const SOURCE_MATRIX_SHA256: &str =
     "d07cbc6bb562e84193f6de121733d13e21aceb129b653e9ff97ae954da36920c";
 pub(crate) const SOURCE_MODULE_DESCRIPTIONS_SHA256: &str =
     "2947032a7f53c43d906c3ab909a7fb0beb31d83bae4e44368db422ef18afffc6";
+pub(crate) const BETA4_RELEASE: &str = "v0.6.0-beta.4";
+pub(crate) const BETA4_ARCHIVE_SHA256: &str =
+    "14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097";
+const BETA4_MATRIX_SHA256: &str =
+    "48001ce5d0e3f59d9c0244c3674fe5db8b91497e5a64f40350946bb5ec53e874";
+const BETA4_CAPABILITY_SHA256: &str =
+    "b3c91ea8d2f0b9f1d359a6e150d6cd386b0c77944b0ababbaaa2e2937c2b6ed8";
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -161,6 +168,12 @@ pub(crate) struct SettingsIdentity {
     pub(crate) code_sha256: String,
     pub(crate) ihx_sha256: String,
     pub(crate) nvm_schema: u32,
+    #[serde(default)]
+    pub(crate) settings_record_version: Option<u8>,
+    #[serde(default)]
+    pub(crate) compact_controls_version: Option<u8>,
+    #[serde(default)]
+    pub(crate) combo_media: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -367,6 +380,7 @@ impl LocalizedText {
 static CATALOG: OnceLock<CapabilityCatalog> = OnceLock::new();
 static FIRMWARE_MATRIX: OnceLock<FirmwareMatrix> = OnceLock::new();
 static MODULE_DESCRIPTIONS: OnceLock<ModuleDescriptionCatalog> = OnceLock::new();
+static BETA4_FIRMWARE_MATRIX: OnceLock<FirmwareMatrix> = OnceLock::new();
 
 pub(crate) fn catalog() -> &'static CapabilityCatalog {
     CATALOG.get_or_init(|| {
@@ -412,6 +426,46 @@ pub(crate) fn firmware_matrix() -> &'static FirmwareMatrix {
         validate_contracts(&matrix).expect("bundled beta.3 contracts must agree");
         matrix
     })
+}
+
+/// Exact beta.4 metadata is admitted for offline identity and read-only
+/// recognition. The release catalogs explicitly deny hardware writes.
+pub(crate) fn beta4_firmware_matrix() -> &'static FirmwareMatrix {
+    BETA4_FIRMWARE_MATRIX.get_or_init(|| {
+        let source = include_str!("../assets/ak820/beta4-firmware-matrix.json");
+        assert_sha256(source, BETA4_MATRIX_SHA256, "beta.4 firmware matrix");
+        let matrix: FirmwareMatrix = serde_json::from_str(source)
+            .expect("bundled beta.4 firmware matrix must be valid");
+        let capability_source = include_str!("../assets/ak820/beta4-capability-catalog.json");
+        assert_sha256(capability_source, BETA4_CAPABILITY_SHA256, "beta.4 capability catalog");
+        let catalog: CapabilityCatalog = serde_json::from_str(capability_source)
+            .expect("bundled beta.4 capability catalog must be valid");
+        assert_eq!(catalog.format, "ak820-development-capability-catalog-1");
+        assert!(!catalog.hardware_validated && !catalog.flashing_authorized);
+        assert!(!catalog.settings_writes_authorized);
+        assert_eq!(matrix.format, "ak820-firmware-matrix-1");
+        assert_eq!(matrix.profiles.len(), 10);
+        assert_eq!(matrix.historical_profiles.len(), 10);
+        for row in &matrix.profiles {
+            let image = catalog.images.iter().find(|image| image.profile == row.profile)
+                .expect("beta.4 matrix profile must have an exact capability row");
+            let identity = row.settings_identity.as_ref().expect("beta.4 settings identity");
+            assert!(row.installable && row.release_approved && image.release_approved);
+            assert!(!image.hardware_validated && !image.flashing_authorized && !image.settings_writes_authorized);
+            assert_eq!(row.identity.ihx_sha256, image.build_identity.ihx_sha256);
+            assert_eq!(identity.ihx_sha256, row.identity.ihx_sha256);
+            assert_eq!(identity.nvm_schema, 0x082003);
+            assert_eq!(identity.settings_record_version, Some(2));
+            assert_eq!(identity.compact_controls_version, Some(2));
+            assert_eq!(identity.combo_media, true);
+        }
+        matrix
+    })
+}
+
+pub(crate) fn beta4_matrix_profile(id: ProfileId) -> &'static MatrixProfile {
+    beta4_firmware_matrix().profiles.iter().find(|row| row.profile == id)
+        .expect("every beta.4 profile has an exact matrix row")
 }
 
 /// The bundled bytes are the trust root. This parser rejects every byte change,

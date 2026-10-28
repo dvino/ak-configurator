@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Isolated offline QS record model against the provisional 2026-10-27
-//! compact-controls firmware reference. This is not image admission, a profile
-//! capability, or a transport/write path. Existing typed storage stays separate.
+//! QS record model for explicit image-version contracts.
+//!
+//! Beta.4's exact image identity and profile capability are verified before the
+//! production connection path uses this model to reconcile settings read-only.
+//! This codec does not admit images or authorize transport writes, backup,
+//! restore or installation. Existing typed non-QS storage stays separate.
 #![allow(dead_code)]
 
 type CodecResult<T> = Result<T, String>;
@@ -177,11 +180,12 @@ impl SettingsRecord {
         }
         Self::decode(raw, source)?.normalize(target)
     }
-    /// Decode within an explicit source IMAGE contract, then migrate to the
-    /// target IMAGE contract. Mirrors provisional Python decode_settings with
-    /// the source image's settings_record_version, followed by normalization.
+    /// Decode within an explicit source IMAGE contract, then normalize to the
+    /// target IMAGE contract. Mirrors the published beta.4 reference behavior.
     /// Image downgrade is forbidden even if storage remains v1 or erased.
-    /// This produces an offline model only and has no production callers.
+    /// Production callers must first verify exact image identity and profile
+    /// capability. The beta.4 connection uses this only for readback; it does
+    /// not authorize writes, backup, restore or installation.
     pub(crate) fn decode_for_image(
         raw: &[u8],
         source: ImageVersion,
