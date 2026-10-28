@@ -213,7 +213,7 @@ impl WindowState {
         {
             self.target = None;
             self.capture_pending = None;
-            self.restore_pending = None;
+            // Keep the request token until its worker reports a safety copy.
             self.preview_plan = None;
             self.preview = None;
             self.error = Some(Problem::Changed);
@@ -228,7 +228,8 @@ impl WindowState {
         self.source = None;
         self.source_path = None;
         self.preview_plan = None;
-        self.restore_pending = None;
+        // A cancelled restore may already have saved a safety copy. Keep its
+        // token until the worker reports the final outcome.
         self.target = None;
         self.preview = None;
         self.saved_name = None;
@@ -493,7 +494,21 @@ fn draw_preview(ui: &mut egui::Ui, value: &Preview, ru: bool) {
     ui.label(tr(ru, "Before restore, the source and keyboard are checked again and a complete safety backup is saved. A fresh Esc + left Ctrl hold confirms this operation. Any error stops without retry or rollback.", "Перед восстановлением копия и клавиатура проверяются снова, затем сохраняется полный защитный бэкап. Новое удержание Esc + левого Ctrl подтверждает эту операцию. При ошибке запись останавливается без повтора или отката."));
 }
 
-pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
+/// Invalidate stale snapshots even while the page is closed. Restore completion
+/// is delivered separately by the HID worker, including after cancellation.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn invalidate_closed(ctx: &egui::Context, generation: u64) {
+    ctx.data_mut(|d| {
+        if let Some(mut state) = d.get_temp::<WindowState>(egui::Id::new(STATE_ID)) {
+            state.invalidate_target(generation);
+            d.insert_temp(egui::Id::new(STATE_ID), state);
+        }
+    });
+}
+
+pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    let ctx = &ctx;
     if !ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false)) {
         return;
     }
@@ -532,11 +547,8 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     let mut reset = false;
     let mut restore = false;
     let mut close = false;
-    let mut open = true;
-    crate::ui_style::utility_window(ctx, tr(ru, "AK820 backups", "Резервные копии AK820"),
-        egui::Id::new("ak820_backup_inspection_window"), &mut open, egui::vec2(650.0, 430.0))
-        .vscroll(true)
-        .show(ctx, |ui| {
+    egui::ScrollArea::vertical().id_salt("ak820_backup_inspection_page").show(ui, |ui| {
+            ui.heading(tr(ru, "AK820 backups", "Резервные копии AK820"));
             if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
                 super::ak820_help_ui::open_section(ctx, "backups-restore");
             }
@@ -772,7 +784,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             }
         }
     }
-    if cancel || close || !open {
+    if cancel || close {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((id, _)) = state.capture_pending {
             app.cancel_ak820_backup_capture(id);
@@ -794,7 +806,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (file_action, capture, restore);
-    if close || !open {
+    if close {
         state.close();
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
     }
@@ -919,6 +931,41 @@ mod tests {
     }
 
     #[test]
+    fn closed_page_keeps_restore_token_for_safety_result() {
+        let ctx = egui::Context::default();
+        let mut state = WindowState { restore_pending: Some((12, 4)), ..Default::default() };
+        state.close();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        let safety = BackupLocation { path: PathBuf::from("private-test-folder/safety"), manifest_sha256: "c".repeat(64) };
+        restore_failed(&ctx, 12, 4, Some(safety));
+        let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        assert!(state.restore_pending.is_none());
+        assert!(state.undo_backup.is_some());
+        assert_eq!(state.error, Some(Problem::Restore));
+    }
+
+    #[test]
+    fn stale_restore_result_retains_safety_after_reconnect_without_overriding_new_token() {
+        let ctx = egui::Context::default();
+        let mut state = WindowState { restore_pending: Some((12, 4)), ..Default::default() };
+        state.close();
+        state.invalidate_target(5);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        let safety = BackupLocation { path: PathBuf::from("private-test-folder/safety"), manifest_sha256: "d".repeat(64) };
+        restore_failed(&ctx, 12, 4, Some(safety.clone()));
+        let mut state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        assert!(state.undo_backup.is_some());
+        assert!(state.restore_pending.is_none());
+        assert!(!state.restore_verified);
+        state.restore_pending = Some((13, 5));
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        restore_failed(&ctx, 12, 4, Some(safety));
+        let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        assert_eq!(state.restore_pending, Some((13, 5)));
+        assert!(!state.restore_verified);
+    }
+
+    #[test]
     fn reconnect_invalidates_pending_restore_without_losing_existing_safety_copy() {
         let mut state = WindowState {
             restore_pending: Some((11, 4)),
@@ -929,7 +976,7 @@ mod tests {
             ..Default::default()
         };
         state.invalidate_target(5);
-        assert!(state.restore_pending.is_none());
+        assert_eq!(state.restore_pending, Some((11, 4)));
         assert!(state.preview_plan.is_none());
         assert!(state.undo_backup.is_some());
         assert_eq!(state.error, Some(Problem::Changed));
@@ -968,42 +1015,36 @@ mod tests {
         assert_eq!(short_text(&"x".repeat(10000)).len(), 96);
     }
     #[test]
-    fn backup_window_fits_small_viewport_without_hid_in_both_languages() {
-        for language in [
-            crate::i18n::Language::Russian,
-            crate::i18n::Language::English,
+    fn backup_page_controls_fit_small_viewport_in_both_languages() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        for (language, heading, help, close) in [
+            (crate::i18n::Language::Russian, "Резервные копии AK820", "Справка", "Закрыть"),
+            (crate::i18n::Language::English, "AK820 backups", "Help", "Close"),
         ] {
-            let ctx = egui::Context::default();
-            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
-            ctx.data_mut(|d| {
-                d.insert_temp(egui::Id::new(OPEN_ID), true);
-                d.insert_temp(
-                    egui::Id::new(STATE_ID),
-                    WindowState {
-                        error: Some(Problem::Capture),
-                        ..Default::default()
-                    },
-                );
-            });
-            for _ in 0..4 {
-                let _ = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(800.0, 500.0),
-                        )),
-                        ..Default::default()
-                    },
-                    |ctx| show(&mut app, ctx),
-                );
+            let mut harness = Harness::builder().with_size(egui::vec2(800.0, 500.0))
+                .build_ui_state(|ui, state: &mut (EntropyApp, bool)| {
+                    if !state.1 {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
+                        state.1 = true;
+                    }
+                    show(&mut state.0, ui);
+                }, (app, false));
+            harness.run();
+            for label in [heading, help] {
+                let rect = harness.get_by_label(label).rect();
+                assert!(rect.min.x >= 0.0 && rect.min.y >= 0.0 && rect.max.x <= 800.0 && rect.max.y <= 500.0, "{label}: {rect:?}");
             }
-            let rect = ctx
-                .memory(|m| m.area_rect(egui::Id::new("ak820_backup_inspection_window")))
-                .unwrap();
-            assert!(rect.width() <= 800.0 && rect.height() <= 500.0, "{rect:?}");
-            assert!(app.hid_device.is_none());
+            harness.get_by_label(close).scroll_to_me();
+            harness.run();
+            let rect = harness.get_by_label(close).rect();
+            assert!(rect.min.y >= 0.0 && rect.max.y <= 500.0, "{close}: {rect:?}");
+            harness.get_by_label(close).click();
+            harness.run();
+            assert!(harness.query_by_label(heading).is_none());
+            assert!(harness.state().0.hid_device.is_none());
         }
     }
 }

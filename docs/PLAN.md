@@ -7,6 +7,8 @@
 Issue #7: the application settings now distinguish detected OS layout from the selected LED behavior and show disabled/paused states. Offline indicator tests passed; Windows rendering and physical LED observation remain open.
 
 
+The Backups and restore view occupies the main content area and returns to the editor with Close. Native file dialogs and the remaining unified navigation work remain open.
+
 ## Planned issue fixes, unified navigation and MCP completion — 2026-10-28
 
 Planning baseline: `25cceb84567ad5721d056dde160aa22de2c76c7b`; [issues #2–#7](https://github.com/dvino/ak-configurator/issues). This section specifies future work, not completed fixes or authorization for device operations. Recheck the branch, issues and ownership before implementation.

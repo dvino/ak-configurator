@@ -36,6 +36,17 @@ pub(super) fn layer_name_write_error(language: crate::i18n::Language, error: &st
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn report_stale_restore(ctx: &egui::Context, generation: u64, operation: &VialHidOperation) {
+    if let VialHidOperation::Ak820Restore { request_id, request } = operation {
+        // Only the saved local safety reference survives a generation change.
+        // Neither the old device handle nor its result is adopted.
+        super::ak820_backup_inspection::restore_failed(
+            ctx, *request_id, generation, request.safety_location(),
+        );
+    }
+}
+
 impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn selected_layer_names_uncertain(&self) -> bool {
@@ -944,6 +955,9 @@ impl EntropyApp {
                     .vial_hid_task
                     .take()
                     .expect("Vial HID task checked above");
+                if task.generation != self.connection_generation {
+                    report_stale_restore(ctx, task.generation, &task.operation);
+                }
                 if task.generation == self.connection_generation {
                     self.hid_device = None;
                     if let VialHidOperation::Ak820BackupCapture { request_id } = &task.operation {
@@ -979,6 +993,7 @@ impl EntropyApp {
 
         self.vial_hid_task = None;
         if result.generation != self.connection_generation {
+            report_stale_restore(ctx, result.generation, &result.operation);
             self.resume_pending_device_connect();
             return;
         }

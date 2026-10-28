@@ -1766,8 +1766,18 @@ impl eframe::App for EntropyApp {
             super::ak820_help_ui::open(ctx);
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        super::ak820_backup_inspection::invalidate_closed(ctx, self.connection_generation);
+
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
+            if ctx.data(|d| {
+                d.get_temp::<bool>(egui::Id::new(super::ak820_backup_inspection::OPEN_ID))
+                    .unwrap_or(false)
+            }) {
+                super::ak820_backup_inspection::show(self, ui);
+                return;
+            }
             self.draw_canvas_footer(ui, ctx);
             #[cfg(not(target_arch = "wasm32"))]
             if self.ak820_install_runtime.owns_hid() {
@@ -2003,7 +2013,6 @@ impl eframe::App for EntropyApp {
         });
 
         super::ak820_offline_files::show(self, ctx);
-        super::ak820_backup_inspection::show(self, ctx);
         super::ak820_install_files::show(self, ctx);
         #[cfg(not(target_arch = "wasm32"))]
         super::ak820_install::show(self, ctx);
@@ -2623,6 +2632,37 @@ mod ak820_footer_window_tests {
 mod ak820_navigation_tests {
     use super::*;
     use egui_kittest::{kittest::Queryable, Harness};
+
+    #[test]
+    fn backups_menu_opens_main_page_and_close_returns_to_canvas() {
+        let _config = ScopedTempConfig::new();
+        let mut app = EntropyApp::new_inert_for_test();
+        app.app_settings.language = crate::i18n::Language::English;
+        let mut harness = Harness::builder().with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(|ui, app: &mut EntropyApp| {
+                eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+            }, app);
+        harness.run();
+        harness.get_by_label("Menu").click();
+        harness.run();
+        harness.get_by_label("Backups and restore…").click();
+        harness.run();
+        assert!(harness.query_by_label("AK820 backups").is_some());
+        harness.event(egui::Event::PointerMoved(egui::pos2(400.0, 300.0)));
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -500.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run();
+        let close_rect = harness.get_by_label("Close").rect();
+        assert!(close_rect.min.y >= 0.0 && close_rect.max.y <= 500.0, "{close_rect:?}");
+        harness.get_by_label("Close").click();
+        harness.run();
+        assert!(harness.query_by_label("AK820 backups").is_none());
+        assert!(harness.state().hid_device.is_none());
+    }
 
     #[test]
     fn disconnected_language_picker_persists_and_updates_demo_and_picker() {

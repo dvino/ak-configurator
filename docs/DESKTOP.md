@@ -33,6 +33,8 @@ Ten beta.3 profile sources and the published release assets are available for of
 
 ### Backup, restore, reset and deletion
 
+**Menu → Backups and restore** opens the backup page in the main window. **Close** returns to the editor and requests cancellation of an ongoing capture or restore. Already started file operations can continue; file pickers still use native dialogs.
+
 For a verified supported image with no pending edits, **Backups → Read complete snapshot** captures live getters and saved NVM, retains inactive typed bytes, and repeats NVM, ROM-manifest and storage checks. A failed check or cancellation stops without retry. The snapshot remains in memory until **Save new backup** publishes it to a separate dated folder through private staging, rereads and validation, and no-overwrite publication.
 
 The backup browser checks only immediate folders (up to 128 backups and 1024 root entries), fully validates entries, and pins the manifest digest when reopening one. Restore requires a fresh device snapshot matching the immutable preview, a verified safety backup, a new three-second Esc + left Control hold, and one checked attempt per whitelisted setter. Final ROM, getters, NVM and manifest are checked. Failure stops without retry or automatic rollback; the safety reference remains available for explicit undo/reopen. Read-only sessions refuse restore.
