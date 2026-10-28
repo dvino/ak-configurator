@@ -286,6 +286,16 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
         valid,
         "This command or value is unavailable in the verified AK820 image"
     );
+    let beta4_write_authorized = match image {
+        Some(ImageContract::Beta4(profile)) => {
+            crate::app::ak820_beta1_profiles::beta4_settings_writes_authorized(profile)
+        }
+        _ => true,
+    };
+    ensure!(
+        !write || beta4_write_authorized,
+        "AK820 beta.4 release metadata does not authorize device writes"
+    );
     Ok(write)
 }
 
@@ -1099,12 +1109,19 @@ impl HidDevice {
     }
 
     pub(crate) fn ak820_read_rom(&self, start: usize, length: usize) -> Result<Vec<u8>> {
+        self.ak820_read_rom_checked(start, length, || Ok(()))
+    }
+
+    fn ak820_read_rom_checked(
+        &self, start: usize, length: usize, boundary: impl Fn() -> Result<()>,
+    ) -> Result<Vec<u8>> {
         ensure!(
             start <= 65536 && length <= 65536 - start,
             "Invalid AK820 ROM read range"
         );
         let mut bytes = Vec::with_capacity(length);
         while bytes.len() < length {
+            boundary()?;
             let address = start + bytes.len();
             let count = (length - bytes.len()).min(27);
             let request = [0xFD, 0, (address >> 8) as u8, address as u8, count as u8];
@@ -1123,6 +1140,10 @@ impl HidDevice {
         progress: impl Fn(&str) -> Result<(), String>,
     ) -> Result<()> {
         ensure!(self.ak820.is_some(), "Not an AK820 connection");
+        let image = self.ak820_identify_code(progress)?;
+        // FD00 recognition precedes FD01; normal getters may flush an already
+        // dirty firmware cache and are admitted only after a clean snapshot.
+        self.ak820_storage_check()?;
         ensure!(
             self.get_protocol_version()? == 9,
             "Unknown AK820 VIA protocol"
@@ -1131,7 +1152,19 @@ impl HidDevice {
             self.get_keyboard_id()? == (6, crate::ak820::VIAL_UID),
             "Unknown AK820 Vial identity"
         );
-        let manifest = self.ak820_read_rom(0xEF80, 64)?;
+        self.ak820_storage_check()?;
+        self.ak820.as_ref().unwrap().lock().unwrap_or_else(|e| e.into_inner()).image = Some(image);
+        Ok(())
+    }
+
+    /// Shared exact CODE recognition for GUI loading and headless diagnostics.
+    /// No normal VIA/Vial getters, settings or diagnostic guesses are sent here.
+    fn ak820_identify_code(
+        &self,
+        progress: impl Fn(&str) -> Result<(), String>,
+    ) -> Result<ImageContract> {
+        let manifest = self.ak820_read_rom_checked(0xEF80, 64,
+            || progress("Reading AK820 manifest").map_err(anyhow::Error::msg))?;
         let parsed = crate::ak820::parse_manifest(&manifest).map_err(|e| {
             anyhow::anyhow!("Unknown or trial AK820 firmware ({e:?}); settings remain read-only")
         })?;
@@ -1146,25 +1179,71 @@ impl HidDevice {
         );
         let mut hash = Sha256::new();
         for start in (0x2800..0xC700).step_by(27 * 32) {
-            progress(&format!(
+            let message = format!(
                 "Checking AK820 firmware… {}%",
                 (start - 0x2800) * 100 / (0xC700 - 0x2800)
-            ))
-            .map_err(anyhow::Error::msg)?;
-            hash.update(self.ak820_read_rom(start, (0xC700 - start).min(27 * 32))?);
+            );
+            hash.update(self.ak820_read_rom_checked(start, (0xC700 - start).min(27 * 32),
+                || progress(&message).map_err(anyhow::Error::msg))?);
         }
         let digest: [u8; 32] = hash.finalize().into();
         let image = crate::ak820::identify_image(&manifest, &digest).context(
             "AK820 CODE differs from the catalog or manifest; settings remain read-only",
         )?;
-        self.ak820_storage_check()?;
-        self.ak820
-            .as_ref()
-            .unwrap()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .image = Some(image);
-        Ok(())
+        Ok(image)
+    }
+
+    /// Read-only bootstrap. An unhealthy snapshot is returned for diagnosis,
+    /// with no ordinary getters; the caller must keep that session stopped.
+    #[cfg(any(feature = "mcp", test))]
+    pub(crate) fn ak820_diagnostic_bootstrap(
+        &self,
+        cancel: &AtomicBool,
+    ) -> Result<(ImageContract, crate::ak820_diagnostics::Status)> {
+        ensure!(self.ak820.is_some(), "Not an AK820 connection");
+        ensure!(self.ak820_failure().is_none(), "AK820 diagnostic session is stopped");
+        let started = std::time::Instant::now();
+        let boundary = || -> Result<(), String> {
+            if cancel.load(Ordering::Acquire) { return Err("AK820 diagnostic operation cancelled".into()); }
+            if started.elapsed() > std::time::Duration::from_secs(120) {
+                return Err("AK820 diagnostic identity deadline exceeded".into());
+            }
+            Ok(())
+        };
+        let result = (|| {
+            let image = self.ak820_identify_code(|_| boundary())?;
+            ensure!(matches!(image, ImageContract::Beta3(_)),
+                "Diagnostic bootstrap supports exact beta.3 images only");
+            self.ak820.as_ref().unwrap().lock().unwrap_or_else(|e| e.into_inner()).image = Some(image);
+            boundary().map_err(anyhow::Error::msg)?;
+            let status = self.ak820_diagnostic_status()?;
+            if status.ensure_ready().is_err() {
+                return Ok((image, status));
+            }
+            boundary().map_err(anyhow::Error::msg)?;
+            ensure!(self.get_protocol_version()? == 9, "Unknown AK820 VIA protocol");
+            boundary().map_err(anyhow::Error::msg)?;
+            // Recheck before each ordinary group; a dirty status must never be
+            // consumed by a getter that can enter the firmware NVM batching.
+            let status = self.ak820_diagnostic_status()?;
+            if status.ensure_ready().is_err() { return Ok((image, status)); }
+            ensure!(self.get_keyboard_id()? == (6, crate::ak820::VIAL_UID),
+                "Unknown AK820 Vial identity");
+            boundary().map_err(anyhow::Error::msg)?;
+            Ok((image, self.ak820_diagnostic_status()?))
+        })();
+        if let Err(error) = &result { self.ak820_fail(error); }
+        result
+    }
+
+    #[cfg(any(feature = "mcp", test))]
+    pub(crate) fn ak820_diagnostic_status(&self) -> Result<crate::ak820_diagnostics::Status> {
+        ensure!(matches!(self.ak820_image(), Some(ImageContract::Beta3(_))),
+            "FD01 diagnostics require an exact beta.3 image");
+        ensure!(self.ak820_failure().is_none(), "AK820 diagnostic session is stopped");
+        let result = self.usb_send(&[0xfd, 1]).and_then(|reply| crate::ak820_diagnostics::Status::decode(&reply));
+        if let Err(error) = &result { self.ak820_fail(error); }
+        result
     }
 
     pub(super) fn ak820_send_or_passthrough(&self, data: &[u8]) -> Result<[u8; MSG_LEN]> {
@@ -1384,6 +1463,28 @@ impl HidDevice {
 #[cfg(test)]
 #[path = "hid_ak820_tests.rs"]
 mod transaction_tests;
+
+#[cfg(test)]
+mod beta4_write_policy_tests {
+    use super::*;
+
+    #[test]
+    fn beta4_release_metadata_never_authorizes_hid_writes() {
+        let image = ImageContract::Beta4(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        for packet in [
+            [0xFE, 11, 1, 0, 2, 0], // persisted setting write
+            [0x05, 0, 0, 0, 0, 4],  // keymap write
+            [0xFE, 6, 0, 0, 0, 0],  // unlock transition
+        ] {
+            let mut request = [0; MSG_LEN];
+            request[..packet.len()].copy_from_slice(&packet);
+            assert!(allowed_request(&request, Some(image)).is_err());
+        }
+        let mut read = [0; MSG_LEN];
+        read[..4].copy_from_slice(&[0xFE, 10, 22, 0]);
+        assert!(!allowed_request(&read, Some(image)).unwrap());
+    }
+}
 
 #[cfg(test)]
 mod os_indicator_tests {

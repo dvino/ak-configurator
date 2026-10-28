@@ -1,0 +1,75 @@
+
+FILTER startup::tests
+
+running 5 tests
+test startup::tests::editor_cannot_initialize_before_a_later_frame ... ok
+test startup::tests::editor_render_waits_for_fonts_and_root_style_to_reach_the_next_frame ... ok
+test startup::tests::initially_hidden_launch_initializes_once_without_a_ui_frame ... ok
+test startup::tests::repaint_without_splash_cannot_start_editor ... ok
+test startup::tests::visible_launch_still_requires_splash_then_a_later_frame ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1884 filtered out; finished in 0.00s
+
+
+FILTER startup_theme_is_active_before_the_first_root_ui_is_created
+
+running 1 test
+test app::app_lifecycle::tests::startup_theme_is_active_before_the_first_root_ui_is_created ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1888 filtered out; finished in 0.04s
+
+
+FILTER theme_is_applied_only_initially_and_after_changes
+
+running 1 test
+test app::app_lifecycle::tests::theme_is_applied_only_initially_and_after_changes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1888 filtered out; finished in 0.00s
+
+
+FILTER ak820_os_indicator::background_tests
+
+running 10 tests
+test app::ak820_os_indicator::background_tests::changed_sample_borrows_only_after_current_write_gates ... ok
+test app::ak820_os_indicator::background_tests::competing_work_discards_sample_before_borrowing_hid ... ok
+test app::ak820_os_indicator::background_tests::failed_indicator_scheduler_blocks_handoff_without_a_device ... ok
+test app::ak820_os_indicator::background_tests::failed_session_cannot_handoff_or_hide_its_error ... ok
+test app::ak820_os_indicator::background_tests::fault_cannot_be_regranted_by_time_or_repeated_same_endpoint ... ok
+test app::ak820_os_indicator::background_tests::indicator_loan_preserves_only_actual_direct_capability ... ok
+test app::ak820_os_indicator::background_tests::repaint_cadence_keeps_indicator_jobs_live_when_hidden ... ok
+test app::ak820_os_indicator::background_tests::rgb_scene_tab_survives_temporary_os_indicator_hid_borrow ... ok
+test app::ak820_os_indicator::background_tests::stale_sample_latches_failure_without_a_hid_loan ... ok
+test app::ak820_os_indicator::background_tests::unchanged_layout_samples_keep_hid_and_ui_availability ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1879 filtered out; finished in 0.54s
+
+
+FILTER auto_shift_settings_ui::tests
+
+running 7 tests
+test app::auto_shift_settings_ui::tests::auto_shift_disable_preserves_current_device_flags_including_reserved_bit ... ok
+test app::auto_shift_settings_ui::tests::auto_shift_enable_switch_changes_model_and_sends_only_flags_qsid ... ok
+test app::auto_shift_settings_ui::tests::auto_shift_failed_set_or_readback_stops_without_retry_or_success_state ... ok
+test app::auto_shift_settings_ui::tests::auto_shift_missing_owner_does_not_change_confirmed_switch ... ok
+test app::auto_shift_settings_ui::tests::auto_shift_render_is_read_only_and_missing_timeout_fails_closed ... ok
+test app::auto_shift_settings_ui::tests::auto_shift_timeout_edit_clamps_valid_input_and_rejects_non_numeric_input ... ok
+test app::auto_shift_settings_ui::tests::beta3_main_and_typing_show_only_editable_timeout_without_qsid3_traffic ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1882 filtered out; finished in 1.14s
+
+
+FILTER indicator_hid_loan_preserves_cached_page_shapes_without_writes
+
+running 1 test
+test app::device_connection::indicator_display_tests::indicator_hid_loan_preserves_cached_page_shapes_without_writes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1888 filtered out; finished in 0.54s
+
+
+FILTER ctrl_q_requests_full_quit_even_with_tray_enabled
+
+running 1 test
+test app::app_lifecycle::ak820_navigation_tests::ctrl_q_requests_full_quit_even_with_tray_enabled ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1888 filtered out; finished in 1.26s
+

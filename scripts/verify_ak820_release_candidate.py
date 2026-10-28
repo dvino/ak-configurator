@@ -12,6 +12,7 @@ import zipfile
 import io
 
 from package_ak820_candidate import DOCUMENTS, PLATFORMS, check_architecture, package_document
+from test_ak820_runtime_smoke import validate_startup
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = tuple(sorted(PLATFORMS))
@@ -96,6 +97,40 @@ def normalize_runtime_profiles(report):
             key=lambda item: item.get("profile", "") if isinstance(item, dict) else "",
         )
     return normalized
+
+
+def verify_gui_runtime_smoke(directory, platform, version, binary):
+    path = directory / f"runtime-smoke-{platform}.json"
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Missing or malformed native GUI runtime smoke report for {platform}") from exc
+    if not isinstance(report, dict):
+        raise ValueError(f"Native GUI runtime smoke report is not an object for {platform}")
+    os_name, arch = TARGETS[platform][:2]
+    runtime_arch = "aarch64" if arch == "arm64" else arch
+    runtime = report.get("runtime_smoke") if isinstance(report, dict) else None
+    cases = runtime.get("cases") if isinstance(runtime, dict) else None
+    statuses = {case.get("name"): case.get("status") for case in cases
+                if isinstance(case, dict) and isinstance(case.get("name"), str)} if isinstance(cases, list) else {}
+    required = ("window_launch", "rgb_navigation", "settings_navigation", "render_after_navigation", "native_tray")
+    if (report.get("format") != "ak820-runtime-smoke-harness-1" or report.get("status") != "passed"
+            or report.get("exit_code") != 0
+            or report.get("os") != os_name or report.get("arch") != runtime_arch
+            or report.get("application_version") != version
+            or report.get("executable_sha256") != sha256(binary)
+            or not isinstance(runtime, dict) or runtime.get("format") != "ak820-runtime-smoke-1"
+            or runtime.get("status") != "passed" or runtime.get("os") != os_name or runtime.get("arch") != runtime_arch
+            or not isinstance(runtime.get("rendered_frames"), int) or runtime.get("rendered_frames", 0) < 12
+            or runtime.get("application_version") != version
+            or runtime.get("live_hid_allowed") is not False
+            or runtime.get("physical_behavior_validated") is not False
+            or runtime.get("isolated_settings") is not True
+            or any(statuses.get(case) != "passed" for case in required)
+            ):
+        raise ValueError(f"Native GUI runtime smoke identity, executable binding, or cases are invalid for {platform}")
+    validate_startup(runtime.get("startup_timings"))
+    return report
 
 
 
@@ -275,17 +310,21 @@ def verify(directory: Path, version: str, commit: str):
         binary = contents[app_binary if platform.startswith("macos-") else binary_name]
         if manifest.get("binary_sha256") != sha256(binary):
             raise ValueError(f"Binary digest mismatch for {platform}")
+        # Establish the binary's declared target before validating runtime
+        # evidence that is cryptographically bound to those exact bytes.
+        check_architecture(binary, platform)
+        gui_smoke = verify_gui_runtime_smoke(directory, platform, version, binary)
         if smoke.get("audio_helper_sha256") != sha256(contents[cava_name]):
             raise ValueError(f"Installed helper digest mismatch for {platform}")
         if smoke.get("binary_sha256") != manifest.get("binary_sha256"):
             raise ValueError(f"Installed smoke binary digest mismatch for {platform}")
-        check_architecture(binary, platform)
         check_architecture(contents[cava_name], platform)
         cava_identity = json.loads((ROOT / "vendor/cava-provenance.json").read_text())
         if manifest.get("audio_helper") != {**cava_identity, "path": cava_name, "sha256": sha256(contents[cava_name])}:
             raise ValueError(f"CAVA helper identity mismatch for {platform}")
         result["platforms"][platform] = {"archive": name, "sha256": archive_hash,
-                                         "runtime_self_check": runtime, "installation_smoke": smoke}
+                                         "runtime_self_check": runtime, "installation_smoke": smoke,
+                                         **({"gui_runtime_smoke": gui_smoke} if gui_smoke is not None else {})}
     if set(result["platforms"]) != set(EXPECTED):
         raise ValueError("Candidate platform set is incomplete")
     index = {

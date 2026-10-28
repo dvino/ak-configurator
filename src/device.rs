@@ -522,6 +522,9 @@ impl DeviceManager {
     }
 
     pub fn new() -> Self {
+        if crate::isolated_runtime() {
+            return Self { devices: vec![] };
+        }
         // Unit tests must never enumerate the host's real HID devices.
         #[cfg(test)]
         {
@@ -551,6 +554,10 @@ impl DeviceManager {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan_usb_devices() -> Result<Vec<Device>, String> {
+        #[cfg(not(test))]
+        if crate::isolated_runtime() {
+            return Err("USB discovery is disabled in isolated application modes".into());
+        }
         #[cfg(test)]
         {
             return Err("USB discovery is disabled in unit tests; use explicit fixtures".to_owned());
@@ -562,6 +569,10 @@ impl DeviceManager {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn scan_devices() -> Result<Vec<Device>, String> {
+        #[cfg(not(test))]
+        if crate::isolated_runtime() {
+            return Err("HID discovery is disabled in isolated application modes".into());
+        }
         #[cfg(test)]
         {
             return Err("HID discovery is disabled in unit tests; use explicit fixtures".to_owned());

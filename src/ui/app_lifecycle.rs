@@ -175,7 +175,11 @@ impl EntropyApp {
         {
             self.macos_window_hidden_to_menu_bar
         }
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        #[cfg(target_os = "linux")]
+        {
+            self.linux_window_hidden_to_tray
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         {
             false
         }
@@ -1414,6 +1418,27 @@ mod tests {
     }
 
     #[test]
+    fn startup_theme_is_active_before_the_first_root_ui_is_created() {
+        for dark_mode in [false, true] {
+            let mut app = EntropyApp::new_inert_for_test();
+            app.dark_mode = dark_mode;
+            let ctx = egui::Context::default();
+            ctx.set_visuals(if dark_mode { egui::Visuals::light() } else { egui::Visuals::dark() });
+            app.apply_initial_ui_theme(&ctx);
+            let mut checked = false;
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    assert_eq!(ui.visuals().dark_mode, dark_mode);
+                    assert_eq!(ui.visuals().panel_fill, app_panel_fill(dark_mode));
+                    checked = true;
+                });
+            });
+            assert!(checked);
+            assert!(app.last_applied_theme == Some((dark_mode, app.app_settings.accent_color)));
+        }
+    }
+
+    #[test]
     fn theme_is_applied_only_initially_and_after_changes() {
         assert!(theme_application_required(
             None,
@@ -1509,13 +1534,25 @@ impl EntropyApp {
     }
 }
 
+impl EntropyApp {
+    /// Apply the editor theme before its first root Ui inherits the context style.
+    /// Also reused by normal rendering when the user changes the theme/accent.
+    pub(crate) fn apply_initial_ui_theme(&mut self, ctx: &egui::Context) {
+        let accent_color = self.app_settings.accent_color;
+        if theme_application_required(self.last_applied_theme, self.dark_mode, accent_color) {
+            ctx.set_visuals(app_visuals(self.dark_mode));
+            self.last_applied_theme = Some((self.dark_mode, accent_color));
+        }
+    }
+}
+
 impl eframe::App for EntropyApp {
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
         app_panel_fill(visuals.dark_mode).to_normalized_gamma_f32()
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         self.release_tray_before_gui_drop();
         #[cfg(not(target_arch = "wasm32"))]
         self.ak820_rgb_scene_stop();
@@ -1540,6 +1577,13 @@ impl eframe::App for EntropyApp {
         // Poll before its device-work early return; starting a job remains explicit.
         #[cfg(not(target_arch = "wasm32"))]
         self.app_update_runtime.poll(&mut self.update_check);
+        #[cfg(target_os = "linux")]
+        {
+            // Linux startup and tray actions must use the actual winit backend,
+            // including in the isolated demo/smoke path.
+            self.cache_parent_window_handles(frame);
+            self.handle_linux_start_minimized(ctx);
+        }
         if self.ak820_demo {
             #[cfg(not(target_arch = "wasm32"))]
             self.tick_ak820_rgb_scene(ctx);
@@ -1556,12 +1600,12 @@ impl eframe::App for EntropyApp {
             // Cache the winit window/display handles so native file dialogs can be
             // parented to the main window instead of opening behind it.
             self.cache_parent_window_handles(frame);
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             self.handle_tray_quit_request(ctx);
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             self.handle_tray_restore_request(ctx);
             self.handle_close_to_tray(ctx);
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             self.poll_tray_events(ctx);
             #[cfg(target_os = "macos")]
             self.handle_macos_dock_reopen(ctx);
@@ -1592,12 +1636,17 @@ impl eframe::App for EntropyApp {
                 .app_settings
                 .sticky_layout_window
                 .then(|| self.matrix_tester_poll_interval());
+            let os_indicator_interval = self.ak820_os_indicator_repaint_interval();
             ctx.request_repaint_after(native_repaint_interval(
                 main_window_hidden_to_tray,
                 bluetooth_visible_interval,
                 connect_pending,
                 update_check_pending,
-                layout_indicator_interval,
+                match (layout_indicator_interval, os_indicator_interval) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (Some(interval), None) | (None, Some(interval)) => Some(interval),
+                    (None, None) => None,
+                },
             ));
             self.update_native_background(
                 ctx,
@@ -1658,11 +1707,7 @@ impl eframe::App for EntropyApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.flush_pending_middle_click_assignments(ctx);
 
-        let accent_color = self.app_settings.accent_color;
-        if theme_application_required(self.last_applied_theme, self.dark_mode, accent_color) {
-            ctx.set_visuals(app_visuals(self.dark_mode));
-            self.last_applied_theme = Some((self.dark_mode, accent_color));
-        }
+        self.apply_initial_ui_theme(ctx);
 
         // Deliver results from any background file dialog (import/export pickers
         // run off the UI thread so the portal round-trip never freezes egui).
@@ -1708,6 +1753,14 @@ impl eframe::App for EntropyApp {
             connection_replaces_layout_canvas(&self.connect_state, self.layout.is_some());
         #[cfg(target_arch = "wasm32")]
         let is_loading = false;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if ctx.input_mut(|input| {
+            input.consume_key(egui::Modifiers::CTRL, egui::Key::Q)
+                || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Q)
+        }) {
+            self.request_explicit_quit(ctx);
+        }
 
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
             super::ak820_help_ui::open(ctx);
@@ -2608,6 +2661,27 @@ mod ak820_navigation_tests {
             reopened.keycode_picker.language,
             crate::i18n::Language::Russian
         );
+    }
+
+    #[test]
+    fn ctrl_q_requests_full_quit_even_with_tray_enabled() {
+        let _config = ScopedTempConfig::new();
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.minimize_to_tray_on_close = true;
+        app.app_settings.close_to_tray_behavior = CloseToTrayBehavior::Tray;
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(|ui, app: &mut EntropyApp| {
+                eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+            }, app);
+        harness.run();
+        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Q);
+        harness.run();
+        assert!(harness.state().force_close_requested);
+        assert!(!crate::background_helper_requested());
+        assert!(!harness.state().close_to_tray_prompt_open);
+        assert!(harness.state().hid_device.is_none());
     }
 
     #[test]

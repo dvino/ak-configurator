@@ -54,6 +54,11 @@ impl Bridge {
     /// Caller must check the exact image/Direct capability before starting.
     /// A new explicit start is required after a client disconnect or fault.
     pub(crate) fn start(port: u16) -> io::Result<Self> {
+        // Unit tests deliberately bind ephemeral loopback fixtures. Offline GUI
+        // modes must not start integrations merely by traversing their panels.
+        if !cfg!(test) && crate::isolated_runtime() {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "OpenRGB integration is disabled in isolated mode"));
+        }
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))?;
         listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();

@@ -1,0 +1,2 @@
+Production MCP metadata launch and mock-backend rejection passed; no hardware calls requested
+MCP stdio synthetic contract and HID metadata-only checks passed for 2025-11-25, 2026-07-28

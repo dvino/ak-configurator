@@ -204,7 +204,7 @@ pub(super) fn storage_config_dir() -> Option<std::path::PathBuf> {
 
 #[cfg(not(test))]
 pub(super) fn storage_config_dir() -> Option<std::path::PathBuf> {
-    dirs::config_dir()
+    crate::config_dir()
 }
 
 /// Sanitize a device name into a filesystem-safe slug.
@@ -497,6 +497,9 @@ pub(super) fn ensure_text_expander_rules_file(rules: &[crate::text_expander::Tex
 }
 
 pub(super) fn open_path_in_system_editor(path: &std::path::Path) -> bool {
+    if crate::isolated_runtime() {
+        return false;
+    }
     #[cfg(target_os = "windows")]
     {
         return std::process::Command::new("cmd")

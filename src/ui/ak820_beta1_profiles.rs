@@ -95,20 +95,45 @@ pub(crate) fn is_open(ctx: &egui::Context) -> bool {
     state(ctx).open
 }
 
+fn release_label() -> &'static str {
+    catalog::BETA_RELEASE.rsplit_once('-').map_or(catalog::BETA_RELEASE, |(_, suffix)| suffix)
+}
+
+pub(super) fn navigation_label(language: Language) -> String {
+    let release = release_label();
+    match language {
+        Language::Russian => format!("Профили прошивки {release}"),
+        Language::English => format!("{release} firmware profiles"),
+    }
+}
+
+fn window_title(language: Language) -> String {
+    let release = release_label();
+    match language {
+        Language::Russian => format!("Профили AK820 · {release}"),
+        Language::English => format!("AK820 profiles · {release}"),
+    }
+}
+
+fn release_status(language: Language, approved: bool) -> String {
+    let release = release_label();
+    match (language, approved) {
+        (Language::Russian, true) => format!("Релиз {release}: одобрен"),
+        (Language::Russian, false) => format!("Релиз {release}: не одобрен; профиль — кандидат каталога"),
+        (Language::English, true) => format!("{release} release: approved"),
+        (Language::English, false) => format!("{release} release: not approved; catalog candidate"),
+    }
+}
+
 pub(super) fn button(ui: &mut egui::Ui, ctx: &egui::Context, language: Language) -> egui::Response {
-    let label = if language == Language::Russian {
-        "Профили прошивки beta.2"
-    } else {
-        "beta.2 firmware profiles"
-    };
-    let response = crate::ui_style::modern_button(ui, label, egui::vec2(228.0, 34.0), true);
+    let response = crate::ui_style::modern_button(ui, &navigation_label(language), egui::vec2(228.0, 34.0), true);
     if response.clicked() {
         open(ctx);
     }
     response
 }
 
-/// Draw the beta.2 catalog and return a profile ID when the local selection changes.
+/// Draw the pinned catalog and return a profile ID when the local selection changes.
 pub(crate) fn show(
     ctx: &egui::Context,
     language: Language,
@@ -125,11 +150,7 @@ pub(crate) fn show(
     let mut close_clicked = false;
     let preferred_size =
         (ctx.content_rect().size() - egui::vec2(64.0, 100.0)).min(egui::vec2(960.0, 600.0));
-    crate::ui_style::utility_window(ctx, if russian {
-        "Профили AK820 · beta.2"
-    } else {
-        "AK820 profiles · beta.2"
-    }, egui::Id::new("ak820_beta1_profile_window"), &mut keep_open, preferred_size)
+    crate::ui_style::utility_window(ctx, window_title(language), egui::Id::new("ak820_beta1_profile_window"), &mut keep_open, preferred_size)
     .fixed_size(preferred_size)
     .resizable(false)
     .show(ctx, |ui| {
@@ -244,13 +265,7 @@ pub(crate) fn show(
                         format!("Settings identity status: {settings_status}")
                     });
                 }
-                ui.label(if russian {
-                    if matrix.release_approved { "Релиз beta.2: одобрен" } else { "Релиз beta.2: не одобрен; профиль — кандидат каталога" }
-                } else if matrix.release_approved {
-                    "beta.2 release: approved"
-                } else {
-                    "beta.2 release: not approved; catalog candidate"
-                });
+                ui.label(release_status(language, matrix.release_approved));
                 ui.add_space(4.0);
                 ui.heading(if russian {
                     "Идентичность образа"
@@ -516,6 +531,22 @@ mod tests {
     }
 
     #[test]
+    fn catalog_labels_follow_pinned_release_and_approval_in_both_languages() {
+        assert_eq!(catalog::BETA_RELEASE, "v0.6.0-beta.3");
+        for language in [Language::English, Language::Russian] {
+            let release = release_label();
+            assert_eq!(release, "beta.3");
+            assert!(navigation_label(language).contains(release));
+            assert!(window_title(language).contains(release));
+            assert!(release_status(language, true).contains(release));
+            assert!(release_status(language, false).contains(release));
+            assert_ne!(release_status(language, true), release_status(language, false));
+        }
+        assert_eq!(release_status(Language::English, false), "beta.3 release: not approved; catalog candidate");
+        assert_eq!(release_status(Language::Russian, false), "Релиз beta.3: не одобрен; профиль — кандидат каталога");
+    }
+
+    #[test]
     fn localized_navigation_buttons_open_the_catalog_window() {
         #[derive(Default)]
         struct NavigationState {
@@ -524,8 +555,8 @@ mod tests {
         }
 
         for (language, label) in [
-            (Language::English, "beta.2 firmware profiles"),
-            (Language::Russian, "Профили прошивки beta.2"),
+            (Language::English, "beta.3 firmware profiles"),
+            (Language::Russian, "Профили прошивки beta.3"),
         ] {
             let mut harness = egui_kittest::Harness::new_ui_state(
                 move |ctx, nav_state: &mut NavigationState| {

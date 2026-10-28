@@ -2,6 +2,136 @@
 
 # Desktop adaptation and review
 
+## Beta.4.1 exact-image install admission — 2026-10-28
+
+The official beta.4.1 release catalog and firmware matrix are pinned to SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1` and `7b38153e68d168718d04c5c8c8502daad875ca63298bf0e79c20a39c4648c570`. Their ten image bindings are checked against the beta.4.1 capability catalog, local linked IHX/map files, and packed-CODE identities. Release metadata authorizes flashing but leaves `hardware_validated` and `settings_writes_authorized` false. The installer selects beta.4.1 by default, retains beta.3 as an alternate, and requires prerelease opt-in. It uses only its exact release defaults and retains the existing safety backup, fresh confirmation, single loader attempt and full readback. Generic device settings writes and restore remain blocked. Physical tests were not run.
+
+An independent read-only review found no critical bypass in release admission, exact image validation, or execution gates. A targeted Linux `cargo check --locked --bin ak-configurator` passed with Rust 1.97.0; 171 project warnings remain. The beta4_1-filtered test build was interrupted before a result due to low free disk. A Linux release package was not rebuilt. Wayland and physical-device tests were not run.
+
+## Historical beta.4 read-only integration — 2026-10-28
+
+The official AK820 `v0.6.0-beta.4` release bundle is pinned to SHA256 `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`. The implementation recognizes ten exact packed-code identities and uses the settings-record v2 contract for read-only connection reconciliation. QSID 22 is read as a u8 and shown as a localized Caps Word ruleset; the ID remains excluded from generic permissive-hold reads and from writers. Some profile rows say approved/installable, but release-level metadata sets `release_approved`, `hardware_validated`, `flashing_authorized` and `settings_writes_authorized` to false. Profile flags do not override the release denial, so installation, restore and device writes remain blocked.
+
+The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc). SHA256 is `70b3e46acdd249e53efc8dfc2b71dc4b9b016d3d51e9bff89d11f3f40f72c03e`. Its offline `--self-check` passed with `hardware_access=false` and `network_access=false`, but reports firmware release `v0.6.0-beta.3`; it covers the bundled beta.3 public profiles, not beta.4 packaging. The full offline suite passed 1916 tests, with 14 ignored and 0 failed. It includes exact beta.4 image recognition, blocked HID-write policy and localized QSID 22 display tests. The release build emitted 169 compiler warnings that were not triaged individually. These checks do not qualify GUI operation, Wayland, Alpine/musl or physical hardware.
+
+## Historical packaged candidate checkpoint — 2026-10-27
+
+Final CI [40556287408](https://github.com/dvino/ak-configurator/actions/runs/40556287408) completed successfully on all six OS/CPU targets for PR head `b3ecae13d17e6f2f9be7312183d8ab454cf23ed7` merged with `desktop-dev` at `ef30da6e254a1b358a54cc937d93bc7ee01c0e60` (CI merge `d5617334d685f4bba5004cb5beae25c121e8fc94`). Downloaded archives, external SHA256 files, package manifests, executable-bound runtime reports and install/upgrade/uninstall reports were checked for all six candidates; user-data preservation checks passed. These are unsigned CI candidates, not a published application release. Earlier checkpoints below describe their own source and date, and do not override this result.
+
+The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. The final sentence in the 2026-10-27 checkpoint described the pre-release beta.4 preparation and is superseded by the beta.4.1 admission documented above.
+
+## Historical provisional QS v2 offline model — 2026-10-27
+
+The isolated NVM preparation helper checks length, magic, schema and an explicitly bound QS record, and changes only the QS slice. Six targeted synthetic tests passed, including v2 image contracts retaining v1 records; opaque NVM bytes are preserved, not validated. This is preparation only, not an authorized transition or proof of persistent firmware behavior.
+
+An isolated parser checks only the provisional three-field compact-controls identity projection and storage-version agreement. Three synthetic test groups passed, including malformed, duplicate and unknown fields and schemas. Image hashes, full metadata, capability admission and transitions remain outside that parser.
+
+A behavior-preserving refactor shares non-QS extension and NVM/macro checks with future offline decoding. Independent source review confirmed the existing validation order and rejection of QS v2 in the production path. Five targeted typed-storage and seven settings-model tests passed, including malformed non-QS and macro records. A separate offline full-settings decoder now uses those checks and explicit image versions. Twelve targeted settings-model tests passed, including legacy JSON equivalence, v2 images with retained v1 records, blank records, malformed non-QS data and explicitly capability-gated media Combo. An independent comparison of the provisional firmware predicate covered 589,824 output/trigger combinations; production paths continue to reject media Combo. This does not validate an archive, authorize an image or provide v2 restore.
+
+A separate offline envelope bridge reuses the five-file validator, requires an explicit contract and calls a supplied complete-ROM validator before deriving settings. Six synthetic tests passed for identity ambiguity, callback ordering, versioned settings, capability-gated media, hashes and semantic errors. Synthetic ROM callbacks are not evidence of trusted ROM or hardware; no production validator, restore plan or executor accepts the offline result.
+
+A guard excludes AK820 QSID 22 from generic permissive-hold reads and checks the actual device again before queued dispatch. Three tests passed with fake transports: generic behavior remains available, while AK820 produces no QSID 22 I/O or queued update. Independent review found no blocker. This does not expose the provisional Caps Word setting or prove device behavior.
+
+A separate codec requires an explicit v1/v2 target, validates the 24-byte record, CRC, reserved bytes and bounds, accepts v1 to v2 normalization with defaults, and rejects v2 to v1. Six targeted tests passed against synthetic vectors generated from the provisional firmware Python reference, including distinct source image and persisted-record versions, v2 images retaining v1 records and blank-record downgrade rejection. Independent source review found no parity defect. The model is not connected to current device, backup or installation paths and does not qualify a release or physical behavior. Final image identity, catalog, capability flags and explicit settings transitions are required before integration.
+
+## Offline project correction — 2026-10-27
+
+The Linux x86_64 candidate from CI `40534916601` was checked separately: outer and internal SHA256 files passed. Its executable SHA256 `cf4b602d8a8d3b6d982ef267a55e0dafa743e62c52401089c2f647fbaed70a24` passed the Xvfb/synthetic-tray runtime smoke again in an isolated Ubuntu 24.04 container. Its manifest identifies PR merge commit `0624d3a0398dda82c65d3ba0932196db1e120cb6`, whose parents are `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` and `b535d8feb93d5bfbdbf23455583befed7fe2ff0f`; it predates the offline-project correction. No physical keyboard was used.
+
+CI run `40534916601` failed both Windows runtime smoke checks, but the original workflow did not retain their reports; the cause is unknown. The reviewed workflow change uploads only the failure JSON separately for seven days and retains the existing success gates. The targeted workflow contract test passed; a fresh CI run is needed to obtain diagnostics.
+
+A fresh independent review found that the first proposed full-cache undo could discard later edits and that an initial regression fixture did not make its intended edits. Both were corrected and reviewed again. The final change restores only the imported profile and preserves other profiles, including later edits. Unix nonblocking open and handle checks reject FIFOs and directories. Nine targeted Linux x86_64 tests passed in an isolated container; the debug binary passed native Xvfb runtime smoke with a synthetic tray host and no live HID. The first smoke attempt failed because the container lacked `libxkbcommon-x11.so.0`; after adding the CI runtime dependency, it passed. Windows/macOS, real desktop panels, Wayland and hardware behavior were not tested by this local run. Reads and atomic writes now run in the dialog worker; parsing and applying the project remain on the UI thread. Thirteen targeted tests passed, including injected pending, completion and disconnect UI frames; native dialogs and slow network files were not exercised.
+
+## Independent bundle follow-up — 2026-10-27
+
+A fresh independent source review of commit `2bd5084` covered the MCP read-only boundary, diagnostic bootstrap, stopped sessions, trace, startup and window lifecycle, tray, CI and release evidence binding. No confirmed blocking findings were identified. This review did not execute tests or establish hardware behavior. Linux Xvfb and synthetic tray evidence does not establish a real panel, Wayland, Windows, macOS or arm64 behavior.
+
+## Handoff fixes, tray and first MCP implementation — 2026-10-27
+
+Base: `fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7` on `desktop-dev`. The supplied `docs/mcp-integration-plan` bundle was merged as reviewed documentation before implementation. Application version remains `0.1.0-alpha.1`; the firmware target and ten beta.3 profile identities are unchanged. This is an unpublished source bundle, not an alpha release. [MCP.md](MCP.md) documents the implemented preview. The plan-only review below is historical.
+
+### Changes and independent review
+
+- The Windows tray callback now copies its relay target and releases the mutex before native window/egui calls. This removes a plausible reentrant deadlock edge; the original Windows freeze was not reproduced on this Linux host.
+- Temporary OS-indicator HID ownership no longer makes the RGB scene subpage disappear/reset. Layout sampling targets 100 ms; worker completion polls at 20 ms; unchanged active override renewal remains one second. The former five-second hidden heartbeat could exceed the firmware's three-second lease. No-op samples do not move the renewal deadline or repeatedly send unchanged modes. Physical response time remains unmeasured.
+- The later whole-interface flicker report was traced to borrowing HID for every sample, including no-op samples. Sampling and writing are now separate jobs. Unchanged samples retain the UI owner; necessary transitions/renewals preserve cached pages while blocking interaction. The display snapshot checks verified identity, selected device and connection generation. Review caught an overly broad RGB capability fallback; the corrected snapshot preserves actual Direct capability, with Main/Typing and stale-generation regressions.
+- Auto Shift exposed inherited switches for unsupported QSID 3 because timeout QSID 4 was present. Exact beta.3 [settings source](https://github.com/dvino/ak820/blob/88d190abb156960915a0f1f8ac7f602bb401eab3/qmk-8051-ak820/keyboards/ajazz/ak820/ak820_settings.c) rejects QSID 3; its [compact runtime](https://github.com/dvino/ak820/blob/88d190abb156960915a0f1f8ac7f602bb401eab3/qmk-8051-ak820/keyboards/ajazz/ak820/ak820_autoshift.c) uses assigned on/off/toggle key actions. The page now exposes only advertised controls and allows the Main/Typing timeout without a fictitious enabled flag. Generic supported flag edits preserve unrelated bits and require readback; failures stop further edits until reread. No firmware change or physical enable/disable is claimed.
+- Visible launch paints the supplied logo before full editor initialization; cold HID discovery moved from the GUI constructor to the existing asynchronous scan worker. Phase timings distinguish window creation, splash, initialization and first editor frame. Independent review caught and closed an invisible Windows startup gate that could wait forever for an unrendered splash. Native inspection also caught a first editor frame using old root colors and missing glyphs. Theme setup now precedes root UI construction, and the startup gate waits for the next font/style-ready frame. The corrected native frames and focused tests passed. README in both languages uses the exact supplied image. Disk reads before window creation and graphics/OS loader delays remain outside the deferred initialization.
+- Linux now uses the existing zbus dependency for StatusNotifierItem and dbusmenu Show/Quit. A missing host prevents hiding; a bounded background monitor requests restore on watcher/host loss. macOS also refuses to hide when tray creation fails. Independent review required standard grouped menu methods and bounded fixture calls; both were added and exercised through D-Bus. Native mouse routing and real panel rendering are separate checks.
+- Indicator controls moved into application settings. The redundant close-interface action is gone. Normal close follows the tray preference; explicit Quit in the main menu, tray, or Ctrl+Q/Cmd+Q respects unlock/installation and pending-write guards and cancels helper handoff. EN/RU help was updated.
+- Offline GUI modes initialize fresh temporary preferences before application services and reject mixed startup modes. Reviewed HID/discovery, autostart, foreground discovery/hooks, update, capture/bridge, installer and integration entry points fail closed. The earlier test storage guards remain. Independent isolation review closed five missed production paths. Intentional loopback and fake child-process fixtures remain; inherited explicit macOS privacy-settings launch actions are outside automatic smoke. This is not universal OS isolation.
+- MCP uses official pinned rmcp 3.8.0, optional `mcp` and development-only `mcp-mock`, closed DTOs and a bounded device worker. Diagnostic bootstrap identifies exact CODE through FD00 before FD01/ordinary getters and never loads settings. Six tools expose only diagnostics, synthetic checks, operation lifecycle and bounded metadata traces. Review findings about global mock policy, unrelated cancellation, terminal-state publication, error mapping, quiet trace expiry and stale lease status were closed. Standard cancellation detaches a response; explicit operation cancellation and EOF control cooperative worker cancellation.
+
+Independent reviewers approved the isolation scope and the partial MCP source/subprocess contract. Tray/UI review found no remaining source blocker after its menu correction, with execution evidence required before integration. The successful Linux runtime evidence below closes that local condition. Windows/macOS, arm64, Wayland, live ownership/helper cancellation and physical input/LED/retention remain open.
+
+### Executed checks
+
+Host: Linux x86_64, Rust 1.97.0, pinned Cargo.lock. Builds used `--offline --locked`, the development profile, `CARGO_PROFILE_DEV_DEBUG=0`, and `CARGO_INCREMENTAL=0`. These are development executables, not optimized release/install qualification. An initial incremental native link failed on hidden Rust drop symbols; rebuilding without incremental cache succeeded. No source workaround or SDK downgrade was made for that toolchain/cache failure.
+
+| Check | Actual result and boundary |
+| --- | --- |
+| Default-feature, `mcp`, and `mcp-mock` builds | All three native development builds passed; default startup rejects MCP, and production MCP rejects mock startup |
+| Full Rust unit suite with `mcp-mock` | 1875 passed, 0 failed, 14 ignored; all 1889 listed final-source tests accounted for across four isolated serial processes (419.25 s total wall time). Ignored tests are not passes. |
+| Focused final regressions | 26 passed: startup gates and initial theme, indicator ownership/capabilities, Auto Shift, stable page rendering and Ctrl+Q; all filters matched actual tests |
+| MCP stdio subprocess | Both legacy `2025-11-25` initialize and modern `2026-07-28` discover/per-request-metadata routes passed; all six tools, schemas/errors, resources, traces, malformed/oversized framing, stale sessions, EOF and invalid flags |
+| Production HID-backend startup | Metadata-only handshake/discovery/catalog/suite listing passed for both versions; no enumeration, open or hardware read requested |
+| Native default GUI under Xvfb | Passed launch, RGB/app-settings navigation, native hide/restore, production Linux D-Bus activation/menu contract, continued rendering, and restoration after the synthetic tray host disappeared |
+| Native UI inspection | EN/RU indicator controls and dropdowns inspected in the actual offline window; EN Off/RU breathing selection exercised; focused native Ctrl+Q exited with status 0 |
+| Default offline self-check | All ten bundled public profiles passed, without device access |
+| Release verifier | 19 Python tests passed, including missing/reordered startup evidence, missing/wrong executable-bound native reports and all six target fixtures |
+| Localization and diff hygiene | `scripts/check_i18n.py`, Python syntax checks and `git diff --check` passed |
+| Windows/macOS/arm64, real panel/Wayland, physical device | Not executed on this host; no pass claimed |
+
+The first broad unit run reported 1846 passed, 8 failed and 14 ignored. Four failures came from restricted loopback/uid execution; the uid fixture also required a test executable in a traversable temporary directory. Three failures were dedicated unit-test error-text contracts shadowed by the new isolation guard; the test-specific fail-closed paths were restored. The wmctrl parser test depended on reading the current process from `/proc`; it now injects a deterministic resolver. A subsequent full run passed 1859 tests with 14 ignored. A later serial rerun had an incomplete retained log and is not counted as complete evidence. Final coverage uses every listed test from the final executable, split across four independent processes with exact name filters and one test thread in each process. Each terminal summary must account for every assigned test. Local socket/uid support is available in the isolated environment; unit-test device guards remain active. Ignored rendering/manual-fixture tests are not represented as passes.
+
+The final Linux smoke recorded window creation at 222.555 ms, submitted splash at 718.427 ms, editor initialization from 756.490 to 1401.398 ms, and first editor frame at 1623.979 ms from process entry. These development/offline observations include a synthetic tray fixture and are not a before/after benchmark or a Windows latency measurement. The report explicitly excludes display-fence timing. A separate frame capture confirmed the logo and corrected editor appearance; Ctrl+Q exited with status 0.
+
+Retained evidence: [all-test summary](verification/2026-10-27-mcp/unit-tests.json) and [complete per-process output](verification/2026-10-27-mcp/unit-tests.txt), [source/build identities](verification/2026-10-27-mcp/source-evidence.json), [default native GUI report](verification/2026-10-27-mcp/linux-x86_64-runtime.json), [ten-profile self-check](verification/2026-10-27-mcp/linux-x86_64-self-check.json), [MCP subprocess result](verification/2026-10-27-mcp/mcp-stdio.txt), [English settings](verification/2026-10-27-mcp/settings-en.png) and [Russian settings](verification/2026-10-27-mcp/settings-ru.png). The [startup logo frame](verification/2026-10-27-mcp/startup-splash.png), [first editor frame](verification/2026-10-27-mcp/startup-editor.png), [focused regressions](verification/2026-10-27-mcp/focused-tests.txt) and [release verifier result](verification/2026-10-27-mcp/release-verifier.txt) are also retained. Source-input hashing is specified in the evidence JSON. The runtime report binds its executable SHA256; it labels its synthetic tray host and excludes real panel/mouse/hardware qualification.
+
+### Release and MCP limits
+
+The candidate workflow now runs actual native GUI/tray smoke on all six configured Linux/Windows/macOS targets and the verifier requires a matching platform/version/executable-hash report. Linux CI uses an isolated D-Bus host fixture. Configuring this workflow does not establish that its new Windows/macOS jobs have run. The user requires Windows/Linux runtime before even an alpha; no release, tag, push, installation or hardware command was performed here.
+
+The basic agent diagnostic path is usable in the exercised Linux subprocess. P0 as a whole remains partial: the positive complete packed CODE fixture, broader replay/report acceptance and live helper/lease checks remain open. The synthetic FD01 backend is not a successful full bootstrap fixture. MCP does not manipulate an existing GUI, change settings, back up/restore or flash a device. P1/P2 have not started; UI lifecycle checks use the separate native runner. Reports/traces are bounded and process-local. A `protocol.smoke` pass explicitly skips physical behavior.
+
+## MCP implementation plan — 2026-10-27
+
+Documentation-only scope at configurator baseline
+`f8a31854bae916d1b07f24bdcf5dde1d00fdbdce`; firmware reference is
+`v0.6.0-beta.3`, commit `88d190abb156960915a0f1f8ac7f602bb401eab3`.
+[MCP_IMPLEMENTATION_PLAN.md](MCP_IMPLEMENTATION_PLAN.md) and its complete Russian
+translation describe proposed work; they do not introduce an MCP server.
+Application/firmware source, Cargo inputs, workflows and release assets remain
+unchanged. No build, application test suite or device operation was run for
+this documentation package.
+
+Independent architecture/source and firmware-protocol reviews found no
+architecture blocker. Their findings were incorporated:
+
+- Separate the development mock subprocess smoke from checks of real packaged
+  artifacts; production must reject mock/replay startup.
+- Apply opt-in sensitive-data rules to all action tables and to report/diff
+  values. Specify macro, Tap Dance and Key Override DTOs and the schema gate.
+- Distinguish cancellation before loader transition, after transition/before
+  erase and after erase. `NotAttempted` firmware outcome does not imply that
+  normal keyboard operation remains available; no automatic Restart is added.
+- Require verified unlock for matrix observations and locked/lock-lost negative
+  fixtures; an untouched reply cannot pass as all keys released.
+- Retain Direct's three coherent-read attempts (two generation-race restarts),
+  while transport errors and uncertain writes stop without retry.
+- Bilingual review clarified loss of unlocked state, clean-storage compensation,
+  beta.3 transition scope, the real-device fuzzing exclusion, pinned scenario
+  inputs, Cargo `--locked` and sensitive-data redaction. The remaining SDK
+  alternatives paragraph was translated.
+
+Documentation checks parsed all 14 JSON/TOML examples, matched all 16 fenced
+blocks between languages, checked 58 source-reference definitions and their
+pinned repository paths/line anchors, checked local links and Markdown table
+columns, and confirmed matching heading counts. Current official SDK release,
+tagged manifests, protocol documentation and client guidance were inspected.
+These are source/document checks, not evidence of an implemented MCP feature
+or physical device behavior.
+
 ## P1 beta.3 / alpha.1 integration — 2026-10-27
 
 Baseline: `5d565380b042d3b56f7c94a6393a26e4ff534680`. Application source version

@@ -1,0 +1,88 @@
+{
+  "format": "ak820-source-verification-1",
+  "date": "2026-10-27",
+  "base_commit": "fb4fb7b50c89d8fb99ed5e5cdac34aa3459ac4d7",
+  "scope": "pre-commit source verification; development binaries; no release qualification",
+  "rust": "1.97.0",
+  "cargo_flags": [
+    "--offline",
+    "--locked"
+  ],
+  "profiles": [
+    "dev, debug=0, incremental=false"
+  ],
+  "source_inputs_sha256": "98b631facf161c09f86a3917f3924daed7c1cadb8922c3b8869529e24cc08614",
+  "source_inputs_count": 232,
+  "source_hash_recipe": "Sort Cargo.toml, Cargo.lock, build.rs, assets/ak-configurator-logo.png, src/**/*.rs and i18n/*.toml by path; SHA256 concatenate relative UTF-8 path, NUL, file bytes, NUL for each.",
+  "default_binary_sha256": "534450d5376d9f402f2461565f75b670cb110087e752e7c9302c5e79ba6b6c12",
+  "mcp_mock_binary_sha256": "c23c5f25f3be1e49f674074862145e7eade0b3eb398a5762803c98bf4fb127e8",
+  "mcp_production_binary_sha256": "3b030369d3cd3895825403d7c537789cb1e95dd36c3fe30f9a98b32a4e101c46",
+  "full_test_binary_sha256": "a62df9e6853ee25d883ea18c330af2e82f3b54a4af0383aa8524c30ffc0bec20",
+  "full_test_scope": "All 1889 listed tests from the final source executable, after the startup font/theme correction, in four isolated processes using exact filters and one test thread per process.",
+  "focused_final_test_binary_sha256": "a62df9e6853ee25d883ea18c330af2e82f3b54a4af0383aa8524c30ffc0bec20",
+  "focused_final_tests": {
+    "passed": 26,
+    "failed": 0,
+    "ignored": 0,
+    "log": "focused-tests.txt"
+  },
+  "release_verifier_tests": {
+    "passed": 19,
+    "failed": 0,
+    "log": "release-verifier.txt"
+  },
+  "platform": "linux-x86_64",
+  "gui_protocol": "X11 under Xvfb with isolated synthetic StatusNotifier host",
+  "startup_timings": {
+    "display_fence_measured": false,
+    "phases": [
+      {
+        "elapsed_ms": 222.554831,
+        "phase": "window_creator"
+      },
+      {
+        "elapsed_ms": 718.427242,
+        "phase": "splash_first_frame_submitted"
+      },
+      {
+        "elapsed_ms": 756.489543,
+        "phase": "editor_initialization_started"
+      },
+      {
+        "elapsed_ms": 756.737457,
+        "phase": "editor_fonts_configured"
+      },
+      {
+        "elapsed_ms": 1401.39789,
+        "phase": "editor_initialization_finished"
+      },
+      {
+        "elapsed_ms": 1623.978683,
+        "phase": "editor_first_frame_submitted"
+      }
+    ],
+    "unit": "milliseconds_from_process_entry"
+  },
+  "screenshots": {
+    "startup": "final default-feature offline demo, actual X11 frames; focused Ctrl+Q exited0",
+    "settings": "earlier isolated EN/RU settings inspection; those controls are unchanged by the later startup wrapper"
+  },
+  "hardware_operations": false,
+  "pending": [
+    "Windows/macOS and arm64 execution",
+    "real Linux desktop panel and Wayland",
+    "live helper/LED timing",
+    "positive packed CODE bootstrap fixture",
+    "full P0/P1/P2 acceptance"
+  ],
+  "full_tests": {
+    "listed_tests": 1889,
+    "passed": 1875,
+    "failed": 0,
+    "ignored": 14,
+    "elapsed_seconds": 419.25,
+    "execution": "four separate test processes; round-robin sorted exact names; one test thread per process",
+    "summary": "unit-tests.json",
+    "log": "unit-tests.txt"
+  }
+}

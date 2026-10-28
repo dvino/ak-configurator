@@ -51,7 +51,15 @@ impl EntropyApp {
         let mut template = current.clone();
         template.profile = profile;
         let imported = crate::ak820_offline_project::import_project(raw, template)?;
-        self.ak820_offline_import_undo = Some(current.clone());
+        // Undo must restore the complete cache as well as the active project:
+        // an import can replace a previously edited target profile, or create
+        // a profile that did not exist in the cache before.
+        let previous_target = self
+            .ak820_demo_projects
+            .iter()
+            .find(|p| p.profile == profile)
+            .cloned();
+        self.ak820_offline_import_undo = Some((current.clone(), profile, previous_target));
         store_project(&mut self.ak820_demo_projects, current);
         store_project(&mut self.ak820_demo_projects, imported);
         self.ak820_demo_profile = None;
@@ -62,14 +70,33 @@ impl EntropyApp {
         if !self.ak820_demo {
             return false;
         }
-        let Some(previous) = self.ak820_offline_import_undo.take() else {
+        let Some((previous, imported_profile, previous_target)) =
+            self.ak820_offline_import_undo.take()
+        else {
             return false;
         };
+        // Preserve edits made to another profile after the import. The active
+        // profile may have changed since import, so save its current state
+        // before restoring only the target that the import replaced.
         if let Ok(current) = self.snapshot_current_ak820_project() {
-            store_project(&mut self.ak820_demo_projects, current);
+            if current.profile != imported_profile {
+                store_project(&mut self.ak820_demo_projects, current);
+            }
+        }
+        if let Some(previous_target) = previous_target {
+            store_project(&mut self.ak820_demo_projects, previous_target);
+        } else {
+            self.ak820_demo_projects
+                .retain(|p| p.profile != imported_profile);
         }
         let profile = previous.profile;
-        store_project(&mut self.ak820_demo_projects, previous);
+        // Cross-profile import already cached the prior active project before
+        // publication. Keep any later edits to it, even if it is no longer
+        // active now. Same-profile undo must restore its immediate pre-import
+        // state because it is also the import target.
+        if previous.profile == imported_profile {
+            store_project(&mut self.ak820_demo_projects, previous);
+        }
         self.ak820_demo_profile = None;
         self.configure_ak820_offline_profile(profile);
         true
@@ -88,8 +115,26 @@ fn store_project(
 }
 
 fn read_project(path: &Path) -> Result<Vec<u8>, String> {
+    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    if !metadata.is_file() {
+        return Err("Project path is not a regular file".into());
+    }
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(path)
+            .map_err(|e| e.to_string())?
+    };
+    #[cfg(not(unix))]
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    if file.metadata().map_err(|e| e.to_string())?.len() > MAX_PROJECT_BYTES {
+    let opened_metadata = file.metadata().map_err(|e| e.to_string())?;
+    if !opened_metadata.is_file() {
+        return Err("Project path is not a regular file".into());
+    }
+    if opened_metadata.len() > MAX_PROJECT_BYTES {
         return Err("Project exceeds 2 MiB size limit".into());
     }
     // Also bound a growing file after metadata was read. Never allocate using
@@ -120,11 +165,52 @@ fn write_project(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+enum FileOutcome {
+    Cancelled,
+    Saved,
+    Loaded(Vec<u8>),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_file_operation(
+    save: bool,
+    path: Option<std::path::PathBuf>,
+    exported: Option<Vec<u8>>,
+) -> Result<FileOutcome, String> {
+    let Some(path) = path else {
+        return Ok(FileOutcome::Cancelled);
+    };
+    if save {
+        write_project(
+            &path,
+            exported
+                .as_deref()
+                .ok_or("Export snapshot is unavailable")?,
+        )?;
+        Ok(FileOutcome::Saved)
+    } else {
+        Ok(FileOutcome::Loaded(read_project(&path)?))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn receive_file_result(
+    result: Result<Result<FileOutcome, String>, std::sync::mpsc::TryRecvError>,
+) -> Option<Result<FileOutcome, String>> {
+    match result {
+        Ok(result) => Some(result),
+        Err(std::sync::mpsc::TryRecvError::Empty) => None,
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            Some(Err("Local project operation worker disconnected".to_owned()))
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct PendingDialog {
-    save: bool,
-    exported: Option<Vec<u8>>,
-    result: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>>,
+    result:
+        std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<Result<FileOutcome, String>>>>,
 }
 
 /// Call once per frame; the controls and all their actions require demo mode.
@@ -143,29 +229,35 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
             return;
         }
         if let Some(pending) = &pending {
-            let result = pending.result.lock().unwrap().try_recv();
-            if !matches!(result, Err(std::sync::mpsc::TryRecvError::Empty)) {
+            let result = receive_file_result(pending.result.lock().unwrap().try_recv());
+            if let Some(result) = result {
                 ctx.data_mut(|d| d.remove::<PendingDialog>(pending_id));
-                let chosen = matches!(&result, Ok(Some(_)));
-                let outcome = match result {
-                    Ok(Some(path)) if pending.save => {
-                        write_project(&path, pending.exported.as_ref().unwrap())
+                match result {
+                    Err(error) => {
+                        // This local-only message never enters status/report/log APIs.
+                        ctx.data_mut(|d| d.insert_temp(message_id, error));
                     }
-                    Ok(Some(path)) => {
-                        read_project(&path).and_then(|raw| app.import_ak820_project_bytes(&raw))
+                    Ok(FileOutcome::Loaded(raw)) => {
+                        if let Err(error) = app.import_ak820_project_bytes(&raw) {
+                            ctx.data_mut(|d| d.insert_temp(message_id, error));
+                        } else {
+                            ctx.data_mut(|d| {
+                                d.insert_temp(
+                                    message_id,
+                                    tr("Local project ready", "Локальный проект готов").to_owned(),
+                                )
+                            });
+                        }
                     }
-                    _ => Ok(()),
-                };
-                if let Err(error) = outcome {
-                    // This local-only message never enters status/report/log APIs.
-                    ctx.data_mut(|d| d.insert_temp(message_id, error));
-                } else if chosen {
-                    ctx.data_mut(|d| {
-                        d.insert_temp(
-                            message_id,
-                            tr("Local project ready", "Локальный проект готов").to_owned(),
-                        )
-                    });
+                    Ok(FileOutcome::Saved) => {
+                        ctx.data_mut(|d| {
+                            d.insert_temp(
+                                message_id,
+                                tr("Local project ready", "Локальный проект готов").to_owned(),
+                            );
+                        });
+                    }
+                    Ok(FileOutcome::Cancelled) => {}
                 }
                 ctx.input_mut(|i| i.pointer = egui::PointerState::default());
             } else {
@@ -322,8 +414,6 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 d.insert_temp(
                     pending_id,
                     PendingDialog {
-                        save,
-                        exported,
                         result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
                     },
                 )
@@ -338,7 +428,7 @@ pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
                 } else {
                     dialog.pick_file()
                 };
-                let _ = tx.send(path);
+                let _ = tx.send(run_file_operation(save, path, exported));
                 repaint.request_repaint();
             });
         }
@@ -468,6 +558,154 @@ mod tests {
         file.set_len(MAX_PROJECT_BYTES + 1).unwrap();
         assert!(read_project(&path).is_err());
     }
+
+    #[test]
+    fn read_project_rejects_directories_and_fifos() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_project(dir.path()).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let fifo = dir.path().join("project.fifo");
+            let path = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+            // SAFETY: path is a valid NUL-terminated filesystem path.
+            assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+            // A blocking FIFO open here would hang forever because there is no
+            // writer; read_project must fail promptly during file preflight.
+            let fifo_for_read = fifo.clone();
+            let reader = std::thread::spawn(move || read_project(&fifo_for_read));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            while !reader.is_finished() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            assert!(reader.is_finished(), "FIFO preflight must not block");
+            assert!(reader.join().unwrap().is_err());
+        }
+    }
+
+    #[test]
+    fn worker_outcomes_report_cancel_save_load_errors_and_disconnect() {
+        assert!(matches!(
+            run_file_operation(false, None, None).unwrap(),
+            FileOutcome::Cancelled
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("worker.ak820project.json");
+        assert!(matches!(
+            run_file_operation(true, Some(path.clone()), Some(b"snapshot".to_vec())).unwrap(),
+            FileOutcome::Saved
+        ));
+        assert!(
+            matches!(run_file_operation(false, Some(path), None).unwrap(), FileOutcome::Loaded(bytes) if bytes == b"snapshot")
+        );
+        let missing = dir.path().join("missing");
+        assert!(run_file_operation(false, Some(missing), None).is_err());
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        assert!(receive_file_result(rx.try_recv()).is_none());
+        drop(tx);
+        assert!(receive_file_result(rx.try_recv()).unwrap().is_err());
+    }
+
+    #[test]
+    fn file_operation_runs_off_caller_thread_and_keeps_export_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snapshot.ak820project.json");
+        let snapshot = b"captured at click".to_vec();
+        let worker_path = path.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            release_rx.recv().unwrap();
+            let result = run_file_operation(true, Some(worker_path), Some(snapshot));
+            let _ = tx.send(result);
+        });
+        // Hold the worker at a deterministic gate while a complete UI frame runs.
+        assert!(receive_file_result(rx.try_recv()).is_none());
+        let frame_ran = std::cell::Cell::new(false);
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |_| frame_ran.set(true));
+        });
+        assert!(frame_ran.get());
+        assert!(receive_file_result(rx.try_recv()).is_none());
+        release_tx.send(()).unwrap();
+        let result = rx.recv().unwrap();
+        worker.join().unwrap();
+        assert!(matches!(result.unwrap(), FileOutcome::Saved));
+        assert_eq!(std::fs::read(path).unwrap(), b"captured at click");
+    }
+
+    #[test]
+    fn show_polls_worker_without_blocking_and_applies_import_once_with_undo() {
+        use crate::app::ak820_beta1_profiles::ProfileId;
+
+        let mut target = app();
+        target.configure_ak820_offline_profile(ProfileId::Creative);
+        assert!(target.rename_ak820_offline_layer(0, "Before"));
+        let before = export(&target);
+
+        let mut source = app();
+        source.configure_ak820_offline_profile(ProfileId::Creative);
+        assert!(source.rename_ak820_offline_layer(0, "Loaded"));
+        let loaded = export(&source);
+
+        let ctx = egui::Context::default();
+        open(&ctx);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pending_id = egui::Id::new("ak820_local_project_dialog");
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                pending_id,
+                PendingDialog {
+                    result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+                },
+            );
+        });
+
+        // A pending worker result leaves the dialog operation pending while the
+        // production UI frame completes on the GUI thread.
+        let _ = ctx.run(egui::RawInput::default(), |ctx| show(&mut target, ctx));
+        assert!(ctx.data(|data| data.get_temp::<PendingDialog>(pending_id).is_some()));
+        assert_eq!(export(&target), before);
+
+        assert!(tx.send(Ok(FileOutcome::Loaded(loaded))).is_ok());
+        let _ = ctx.run(egui::RawInput::default(), |ctx| show(&mut target, ctx));
+        assert_eq!(target.layer_names[0], "Loaded");
+        assert!(ctx.data(|data| data.get_temp::<PendingDialog>(pending_id).is_none()));
+
+        // A further production frame has no pending result to reapply. If it
+        // imported twice, the single-step undo would restore the imported state.
+        let _ = ctx.run(egui::RawInput::default(), |ctx| show(&mut target, ctx));
+        assert!(target.undo_ak820_project_import());
+        assert_eq!(export(&target), before);
+    }
+
+    #[test]
+    fn show_reports_disconnected_worker_in_local_message() {
+        let mut target = app();
+        let ctx = egui::Context::default();
+        open(&ctx);
+        let (tx, rx) = std::sync::mpsc::channel::<Result<FileOutcome, String>>();
+        drop(tx);
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("ak820_local_project_dialog"),
+                PendingDialog {
+                    result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+                },
+            );
+        });
+        let _ = ctx.run(egui::RawInput::default(), |ctx| show(&mut target, ctx));
+        let message = ctx.data(|data| {
+            data.get_temp::<String>(egui::Id::new("ak820_local_project_message"))
+        });
+        assert_eq!(
+            message.as_deref(),
+            Some("Local project operation worker disconnected")
+        );
+        assert!(!target.undo_ak820_project_import());
+    }
 }
 
 #[cfg(test)]
@@ -484,7 +722,7 @@ mod import_undo_tests {
             &app.snapshot_current_ak820_project().unwrap(),
         )
         .unwrap();
-        app.rename_ak820_offline_layer(0, "Imported");
+        assert!(app.rename_ak820_offline_layer(0, "Imported"));
         let imported = crate::ak820_offline_project::export_project(
             &app.snapshot_current_ak820_project().unwrap(),
         )
@@ -501,6 +739,141 @@ mod import_undo_tests {
         );
         assert!(!app.undo_ak820_project_import());
         assert!(app.hid_device.is_none());
+    }
+
+    #[test]
+    fn cross_profile_import_undo_restores_cached_target_edits() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut source = EntropyApp::new_ak820_demo(&cc);
+        source.configure_ak820_offline_profile(ProfileId::Creative);
+        assert!(source.rename_ak820_offline_layer(0, "Import edit"));
+        let imported = crate::ak820_offline_project::export_project(
+            &source.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.configure_ak820_offline_profile(ProfileId::Creative);
+        assert!(app.rename_ak820_offline_layer(0, "Target edit"));
+        let target_before = crate::ak820_offline_project::export_project(
+            &app.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        assert!(app.rename_ak820_offline_layer(0, "Active edit"));
+        let active_before = crate::ak820_offline_project::export_project(
+            &app.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        app.import_ak820_project_bytes(&imported).unwrap();
+        assert!(app.undo_ak820_project_import());
+        assert_eq!(app.ak820_demo_profile, Some(ProfileId::Main));
+        assert_eq!(
+            crate::ak820_offline_project::export_project(
+                &app.snapshot_current_ak820_project().unwrap()
+            )
+            .unwrap(),
+            active_before
+        );
+        app.configure_ak820_offline_profile(ProfileId::Creative);
+        assert_eq!(
+            crate::ak820_offline_project::export_project(
+                &app.snapshot_current_ak820_project().unwrap()
+            )
+            .unwrap(),
+            target_before
+        );
+    }
+
+    #[test]
+    fn cross_profile_import_undo_removes_new_target_cache_entry() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut source = EntropyApp::new_ak820_demo(&cc);
+        source.configure_ak820_offline_profile(ProfileId::Creative);
+        let imported = crate::ak820_offline_project::export_project(
+            &source.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        app.ak820_demo_projects
+            .retain(|p| p.profile != ProfileId::Creative);
+        assert!(app.rename_ak820_offline_layer(0, "Main edit"));
+        app.import_ak820_project_bytes(&imported).unwrap();
+        assert!(app.ak820_demo_projects.iter().any(|p| p.profile == ProfileId::Creative));
+        assert!(app.undo_ak820_project_import());
+        assert!(!app.ak820_demo_projects.iter().any(|p| p.profile == ProfileId::Creative));
+        assert_eq!(app.ak820_demo_profile, Some(ProfileId::Main));
+        assert!(app.hid_device.is_none());
+    }
+
+    #[test]
+    fn undo_preserves_edits_to_other_profiles_made_after_import() {
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut source = EntropyApp::new_ak820_demo(&cc);
+        source.configure_ak820_offline_profile(ProfileId::Creative);
+        assert!(source.rename_ak820_offline_layer(0, "Imported"));
+        let imported = crate::ak820_offline_project::export_project(
+            &source.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        app.import_ak820_project_bytes(&imported).unwrap();
+
+        // Editing the original active profile after import should survive.
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        assert!(app.rename_ak820_offline_layer(0, "Main later"));
+        let main_after = crate::ak820_offline_project::export_project(
+            &app.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        app.configure_ak820_offline_profile(ProfileId::Game);
+        assert!(app.rename_ak820_offline_layer(0, "Game later"));
+        let game_after_switch = crate::ak820_offline_project::export_project(
+            &app.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        assert!(app.undo_ak820_project_import());
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        assert_eq!(
+            crate::ak820_offline_project::export_project(
+                &app.snapshot_current_ak820_project().unwrap()
+            )
+            .unwrap(),
+            main_after,
+            "cached edits to the original profile must survive undo after switching away"
+        );
+        app.configure_ak820_offline_profile(ProfileId::Game);
+        assert_eq!(
+            crate::ak820_offline_project::export_project(
+                &app.snapshot_current_ak820_project().unwrap()
+            )
+            .unwrap(),
+            game_after_switch
+        );
+        app.configure_ak820_offline_profile(ProfileId::Creative);
+        assert_ne!(app.layer_names[0], "Imported");
+
+        // A third profile edited after import stays cached through undo too.
+        app.configure_ak820_offline_profile(ProfileId::Main);
+        app.import_ak820_project_bytes(&imported).unwrap();
+        app.configure_ak820_offline_profile(ProfileId::Game);
+        assert!(app.rename_ak820_offline_layer(0, "Game again"));
+        let game_after = crate::ak820_offline_project::export_project(
+            &app.snapshot_current_ak820_project().unwrap(),
+        )
+        .unwrap();
+        assert!(app.undo_ak820_project_import());
+        app.configure_ak820_offline_profile(ProfileId::Game);
+        assert_eq!(
+            crate::ak820_offline_project::export_project(
+                &app.snapshot_current_ak820_project().unwrap()
+            )
+            .unwrap(),
+            game_after
+        );
     }
 }
 

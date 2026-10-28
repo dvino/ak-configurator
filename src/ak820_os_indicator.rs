@@ -2,6 +2,12 @@
 use serde::{Deserialize, Serialize};
 
 pub(crate) const REFRESH_MS: u64 = 1000;
+/// Host layout is sampled frequently; the firmware lease is still renewed at REFRESH_MS.
+pub(crate) const SAMPLE_INTERVAL_MS: u64 = 100;
+
+pub(crate) fn should_send(mode: Mode, previous: Option<Mode>, refresh_due: bool) -> bool {
+    mode != previous.unwrap_or(Mode::Normal) || (mode != Mode::Normal && refresh_due)
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -133,6 +139,22 @@ mod tests {
         assert!(!s.due(10000, Mode::On));
         s.bind(2);
         assert!(s.due(10000, Mode::On));
+    }
+    #[test]
+    fn layout_transition_is_sampled_promptly_without_extra_same_mode_writes() {
+        assert!(SAMPLE_INTERVAL_MS <= 100);
+        assert!(SAMPLE_INTERVAL_MS * 2 < 2_000);
+        assert!(should_send(Mode::Off, Some(Mode::On), false));
+        assert!(should_send(Mode::On, Some(Mode::Off), false));
+        assert!(!should_send(Mode::Off, Some(Mode::Off), false));
+        assert!(should_send(Mode::Off, Some(Mode::Off), true));
+        assert!(!should_send(Mode::Normal, Some(Mode::Normal), true));
+
+        let mut scheduler = Scheduler::default();
+        scheduler.bind(9);
+        scheduler.completed(0, Mode::Off, true);
+        assert!(!scheduler.due(SAMPLE_INTERVAL_MS, Mode::Off));
+        assert!(scheduler.due(REFRESH_MS, Mode::Off));
     }
     #[test]
     fn unknown_disabled_and_shared_layouts_have_explicit_policy() {

@@ -419,6 +419,19 @@ fn run_settings_write(
     hid: &crate::hid::HidDevice,
     request: &SettingsWriteRequest,
 ) -> (Result<u16, ModuleSettingWritebackError>, bool) {
+    // Check the physical session at dispatch as well as enqueue: a queued
+    // generic request must never acquire AK820's different QSID 22 meaning.
+    if request.qsid == 22
+        && matches!(&request.target, SettingsWriteTarget::TapHold { .. })
+        && hid.is_ak820_session()
+    {
+        return (
+            Err(ModuleSettingWritebackError::SetFailed(
+                "AK820 QSID 22 is not permissive hold".to_owned(),
+            )),
+            false,
+        );
+    }
     let policy = if request
         .target
         .verifies_readback(hid.is_bluetooth_transport())
@@ -709,6 +722,10 @@ impl EntropyApp {
         old_value: u16,
         requested: u16,
     ) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if qsid == 22 && self.hid_device.as_ref().is_some_and(|hid| hid.is_ak820_session()) {
+            return;
+        }
         self.queue_settings_write(SettingsWriteRequest {
             id: 0,
             generation: self.settings_write_generation,
@@ -1594,6 +1611,54 @@ mod tests {
         assert_eq!(qmk_setting_write_policy(249),QmkSettingWritePolicy::VerifiedReadback);
 
 
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn qsid22_tap_hold_dispatch_checks_actual_session_without_io() {
+        let request = SettingsWriteRequest {
+            id: 1,
+            generation: 0,
+            qsid: 22,
+            width: 1,
+            old_value: 0,
+            requested: 1,
+            target: SettingsWriteTarget::TapHold {
+                display_label: "Permissive hold".to_owned(),
+            },
+        };
+        let (generic, recorder) = crate::hid::HidDevice::test_device();
+        assert_eq!(run_settings_write(&generic, &request), (Ok(1), false));
+        let requests = recorder.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0][..5], [0xfe, 11, 22, 0, 1]);
+
+        // A request originating from a generic session remains blocked if
+        // dispatched later with an AK820 session, regardless of readiness.
+        for ready in [false, true] {
+            let (ak820, recorder) = crate::hid::HidDevice::test_ak820_device(ready);
+            let (result, disconnected) = run_settings_write(&ak820, &request);
+            assert!(matches!(result, Err(ModuleSettingWritebackError::SetFailed(_))));
+            assert!(!disconnected);
+            assert!(recorder.requests().is_empty());
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn ak820_qsid22_tap_hold_is_not_enqueued_or_applied_to_model() {
+        let ctx = egui::Context::default();
+        let creation_context = eframe::CreationContext::_new_kittest(ctx);
+        let mut app = EntropyApp::new(&creation_context);
+        let (ak820, recorder) = crate::hid::HidDevice::test_ak820_device(true);
+        app.hid_device = Some(ak820);
+        app.tap_hold_settings.permissive_hold = false;
+        app.queue_tap_hold_setting_write("Permissive hold".to_owned(), 22, 1, 0, 1);
+        assert_eq!(app.pending_settings_write_value(22), None);
+        assert_eq!(app.settings_write_status(22), None);
+        assert!(!app.tap_hold_settings.permissive_hold);
+        assert!(app.hid_device.is_some());
+        assert!(recorder.requests().is_empty());
     }
 
     #[cfg(not(target_arch = "wasm32"))]

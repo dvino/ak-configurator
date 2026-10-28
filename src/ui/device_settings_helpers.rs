@@ -632,6 +632,11 @@ impl EntropyApp {
         };
 
         let tap_hold = {
+            // AK820 uses QSID 22 for Caps Word language, not permissive hold.
+            // Keep the upstream QSID meaning for other keyboard sessions.
+            let has_tap_hold_setting = |qsid: u16| {
+                has_qmk_setting(qsid) && !(qsid == 22 && dev_conn.is_ak820_session())
+            };
             let mut settings = TapHoldSettingsState::default();
             match has_qmk_setting(7).then(|| dev_conn.get_qmk_setting_u16(7)) {
                 Some(Ok(value)) => {
@@ -639,12 +644,12 @@ impl EntropyApp {
                     settings.supported = true;
                     settings.set_qsid_loaded(7);
                     for qsid in [7u16, 18, 19, 20, 22, 23, 24, 25, 26, 27] {
-                        if has_qmk_setting(qsid) {
+                        if has_tap_hold_setting(qsid) {
                             settings.set_qsid_supported(qsid);
                         }
                     }
                     let read_bool = |qsid: u16| -> Option<bool> {
-                        if !has_qmk_setting(qsid) {
+                        if !has_tap_hold_setting(qsid) {
                             return None;
                         }
                         match dev_conn.get_qmk_setting_u8(qsid) {
@@ -656,7 +661,7 @@ impl EntropyApp {
                         }
                     };
                     let read_u16 = |qsid: u16| -> Option<u16> {
-                        if !has_qmk_setting(qsid) {
+                        if !has_tap_hold_setting(qsid) {
                             return None;
                         }
                         match dev_conn.get_qmk_setting_u16(qsid) {
@@ -2369,6 +2374,39 @@ mod tests {
             Some("Text sensitivity")
         );
         assert!(EntropyApp::module_settings_groups(&json, &[120, 121, 122, 123, 124]).is_empty());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn behavior_reader_keeps_qsid22_permissive_hold_only_for_generic_sessions() {
+        let (generic, generic_recorder) = crate::hid::HidDevice::test_device();
+        let mut term = [0; 32];
+        term[1..3].copy_from_slice(&200u16.to_le_bytes());
+        let mut enabled = [0; 32];
+        enabled[1] = 1;
+        generic_recorder.respond_with([term, enabled]);
+        let generic_settings = EntropyApp::read_behavior_settings(&[7, 22], &generic);
+        assert!(generic_settings.tap_hold.supports_qsid(22));
+        assert!(generic_settings.tap_hold.qsid_loaded(22));
+        assert!(generic_settings.tap_hold.permissive_hold);
+        let requests = generic_recorder.requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.iter().all(|request| request[0..2] == [0xfe, 10]));
+        assert_eq!(requests[1][2..4], [22, 0]);
+
+        // Even a ready AK820 session with QSID 22 advertised must not read it
+        // through the generic tap-hold model.
+        for ready in [false, true] {
+            let (ak820, recorder) = crate::hid::HidDevice::test_ak820_device(ready);
+            recorder.respond_with([term]);
+            let settings = EntropyApp::read_behavior_settings(&[7, 22], &ak820);
+            assert!(!settings.tap_hold.supports_qsid(22));
+            assert!(!settings.tap_hold.qsid_loaded(22));
+            assert!(!settings.tap_hold.permissive_hold);
+            assert!(recorder.requests().iter().all(|request| {
+                request[0..2] == [0xfe, 10] && request[2..4] == [7, 0]
+            }));
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -92,6 +92,7 @@ jobs:
             candidate-artifacts/*.tar.gz
             candidate-artifacts/*.sha256
             candidate-artifacts/install-smoke-*.json
+            candidate-artifacts/runtime-smoke-*.json
             release-manifest.json
             app-update-index.json
           if-no-files-found: error

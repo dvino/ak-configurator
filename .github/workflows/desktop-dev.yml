@@ -99,6 +99,8 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-0 \
             libgl1-mesa-dev \
+            xvfb \
+            dbus-x11 \
             zenity
 
       - name: Check out pinned Windows audio build tools
@@ -158,6 +160,57 @@ jobs:
       - name: Build development binary (macOS)
         if: matrix.platform == 'macos-arm64' || matrix.platform == 'macos-x86_64'
         run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Test optional MCP contracts (x86_64 Linux and Windows only)
+        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+        run: cargo test --locked --features mcp-mock --bin ak-configurator 'mcp::' -- --test-threads=1
+
+      - name: Build optional MCP mock binary (x86_64 Linux and Windows only)
+        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+        run: cargo build --locked --bin ak-configurator --features mcp-mock
+
+      - name: Exercise MCP stdio with mock backend (x86_64 Linux and Windows only)
+        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then binary=target/debug/ak-configurator.exe; else binary=target/debug/ak-configurator; fi
+          python scripts/test_mcp_stdio.py --binary "$binary"
+
+      - name: Execute native GUI runtime smoke under Xvfb (Linux)
+        id: runtime_smoke_linux
+        if: startsWith(matrix.platform, 'linux-')
+        shell: bash
+        run: |
+          mkdir -p target/candidate
+          dbus-run-session -- xvfb-run -a env AK820_RUNTIME_SMOKE_TRAY_FIXTURE=1 python scripts/test_ak820_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
+
+      - name: Execute native GUI runtime smoke (Windows)
+        id: runtime_smoke_windows
+        if: startsWith(matrix.platform, 'windows-')
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/candidate | Out-Null
+          python scripts/run_windows_ci_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Execute native GUI runtime smoke (macOS)
+        id: runtime_smoke_macos
+        if: startsWith(matrix.platform, 'macos-')
+        shell: bash
+        run: |
+          mkdir -p target/candidate
+          python scripts/test_ak820_runtime_smoke.py --binary "${{ matrix.binary }}" --report "target/candidate/runtime-smoke-${{ matrix.platform }}.json"
+
+      # Failure reports contain the bounded harness error/stderr and executable
+      # identity. Preserve them separately; candidate uploads still require success.
+      - name: Retain failed native GUI runtime smoke diagnostics
+        if: always() && (steps.runtime_smoke_linux.outcome == 'failure' || steps.runtime_smoke_windows.outcome == 'failure' || steps.runtime_smoke_macos.outcome == 'failure')
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-smoke-failure-${{ matrix.platform }}
+          path: target/candidate/runtime-smoke-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Write SHA-256 manifest (Linux and macOS)
         if: runner.os != 'Windows'
@@ -221,5 +274,6 @@ jobs:
             target/candidate/*.tar.gz
             target/candidate/*.sha256
             target/candidate/install-smoke-${{ matrix.platform }}.json
+            target/candidate/runtime-smoke-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: 7

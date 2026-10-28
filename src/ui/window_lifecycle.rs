@@ -4,13 +4,13 @@ use super::*;
 
 // Pinned tray-icon/muda handlers are stored in OnceCell and cannot be
 // replaced or cleared. Their process-lifetime closures therefore own no GUI.
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 struct TrayGui {
     context: egui::Context,
     #[cfg(target_os = "windows")]
     windows_hwnd: Option<isize>,
 }
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 static TRAY_GUI: std::sync::Mutex<Option<TrayGui>> = std::sync::Mutex::new(None);
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 static TRAY_HANDLERS: std::sync::Once = std::sync::Once::new();
@@ -27,11 +27,47 @@ fn should_keep_vial_unlock_visible(unlock_open: bool, unlock_polling: bool) -> b
     unlock_open || unlock_polling
 }
 
-fn should_handoff_close_to_helper(enabled: bool, allowed: bool, explicit_quit: bool, faulted: bool) -> bool {
+fn should_handoff_close_to_helper(
+    enabled: bool,
+    allowed: bool,
+    explicit_quit: bool,
+    faulted: bool,
+) -> bool {
     enabled && allowed && !explicit_quit && !faulted
 }
 
+#[cfg(target_os = "linux")]
+fn linux_can_hide_window(display: Option<raw_window_handle::RawDisplayHandle>) -> bool {
+    matches!(display, Some(raw_window_handle::RawDisplayHandle::Xlib(_)
+        | raw_window_handle::RawDisplayHandle::Xcb(_)))
+}
+
 impl EntropyApp {
+    #[cfg(target_os = "linux")]
+    pub(crate) fn with_start_minimized_on_linux(mut self) -> Self {
+        self.linux_start_minimized_pending = true;
+        self
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn handle_linux_start_minimized(&mut self, ctx: &egui::Context) {
+        if !self.linux_start_minimized_pending { return; }
+        self.linux_start_minimized_pending = false;
+        if linux_can_hide_window(self.parent_display_handle) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        } else {
+            self.linux_hide_unavailable_status();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn linux_hide_unavailable_status(&mut self) {
+        self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+            "Сворачивание в трей недоступно в этом оконном окружении; окно остаётся открытым.".into()
+        } else {
+            "Hiding to the tray is unavailable on this window backend; the window remains open.".into()
+        };
+    }
     #[cfg(target_os = "windows")]
     pub(crate) fn with_start_hidden_to_tray(mut self) -> Self {
         self.windows_start_hidden_to_tray_pending = true;
@@ -160,6 +196,8 @@ impl EntropyApp {
     }
 
     pub(super) fn restore_from_tray(&mut self, ctx: &egui::Context) {
+        #[cfg(target_os = "linux")]
+        { self.linux_window_hidden_to_tray = false; }
         #[cfg(target_os = "windows")]
         if let Some(hwnd) = self.windows_hwnd {
             self.windows_window_hidden_to_tray = false;
@@ -221,6 +259,32 @@ impl EntropyApp {
         }
     }
 
+    /// Explicit Quit from the menu/shortcut respects pending work, but never
+    /// turns into a tray hide or a new background-helper handoff.
+    pub(super) fn request_explicit_quit(&mut self, ctx: &egui::Context) {
+        if should_keep_vial_unlock_visible(self.unlock_open, self.vial_unlock_polling) {
+            self.keep_vial_unlock_visible(ctx);
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.ak820_install_runtime.blocks_exit() {
+            self.defer_exit_until_hid_write_returns(ctx);
+            return;
+        }
+        crate::cancel_background_helper_request();
+        self.close_to_tray_prompt_open = false;
+        self.force_close_requested = true;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.flush_pending_qmk_setting_writes();
+            if self.defer_exit_until_hid_write_returns(ctx) {
+                return;
+            }
+        }
+        save_app_settings(&self.app_settings);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
     fn close_to_tray_prompt_needed(&self) -> bool {
         self.app_settings.text_expander_enabled
     }
@@ -239,7 +303,7 @@ impl EntropyApp {
             return;
         }
 
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         if self.consume_tray_quit_request() {
             #[cfg(not(target_arch = "wasm32"))]
             if self.defer_exit_until_hid_write_returns(ctx) {
@@ -336,12 +400,32 @@ impl EntropyApp {
         }
         #[cfg(target_os = "linux")]
         {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-            self.status_msg = background_status.into();
+            // Winit cannot hide or restore a Wayland window. Never mark it hidden
+            // or minimize it: Wayland cannot programmatically unminimize either.
+            if !linux_can_hide_window(self.parent_display_handle) {
+                self.linux_window_hidden_to_tray = false;
+                self.linux_hide_unavailable_status();
+                return;
+            }
+            self.ensure_tray_icon(ctx);
+            // A desktop without a StatusNotifier host has no restore affordance.
+            // Leave its window accessible instead of hiding it permanently.
+            if linux_tray_available() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                self.linux_window_hidden_to_tray = true;
+                self.status_msg = background_status.into();
+            } else {
+                self.restore_from_tray(ctx);
+                self.status_msg = "No system tray host is available".into();
+            }
             return;
         }
         #[cfg(target_os = "macos")]
         {
+            if self.tray_icon.is_none() {
+                self.restore_from_tray(ctx);
+                return;
+            }
             self.macos_window_hidden_to_menu_bar = true;
             self.macos_hidden_to_menu_bar_at = Some(std::time::Instant::now());
             self.macos_app_was_hidden = true;
@@ -626,12 +710,19 @@ impl EntropyApp {
     // Unit tests must never modify the host startup registration. Fail closed
     // rather than reporting a successful system operation that was not performed.
     #[cfg(test)]
-    pub(super) fn set_launch_at_startup(&mut self, _enabled: bool, _launch_minimized: bool) -> bool {
+    pub(super) fn set_launch_at_startup(
+        &mut self,
+        _enabled: bool,
+        _launch_minimized: bool,
+    ) -> bool {
         false
     }
 
     #[cfg(not(test))]
     pub(super) fn set_launch_at_startup(&mut self, enabled: bool, launch_minimized: bool) -> bool {
+        if crate::isolated_runtime() {
+            return false;
+        }
         #[cfg(target_os = "windows")]
         {
             let Ok(exe) = std::env::current_exe() else {
@@ -752,6 +843,49 @@ impl EntropyApp {
         }
     }
 
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    pub(super) fn native_tray_available(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        { linux_tray_available() }
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        { self.tray_icon.is_some() }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn ensure_tray_icon(&mut self, ctx: &egui::Context) {
+        #[cfg(not(test))]
+        {
+            *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(TrayGui { context: ctx.clone() });
+            let mut tray = LINUX_TRAY.lock().unwrap_or_else(|e| e.into_inner());
+            if tray.as_ref().is_some_and(|tray| !tray.available.load(std::sync::atomic::Ordering::Acquire)) {
+                *tray = None;
+            }
+            if tray.is_none() {
+                match create_linux_tray() {
+                    Ok(connection) => *tray = Some(connection),
+                    Err(error) => log::warn!("failed to create Linux tray icon: {error}"),
+                }
+            }
+        }
+        #[cfg(test)]
+        let _ = (self, ctx);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn release_tray_before_gui_drop(&mut self) {
+        *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let tray = LINUX_TRAY.lock().unwrap_or_else(|e| e.into_inner()).take();
+        drop(tray);
+        TRAY_RESTORE_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+        TRAY_QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn poll_tray_events(&mut self, _ctx: &egui::Context) {
+        // zbus dispatches SNI methods on its executor and wakes egui directly.
+    }
+
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(super) fn ensure_tray_icon(&mut self, ctx: &egui::Context) {
         // Unit tests exercise close policy without creating native tray state
@@ -763,109 +897,137 @@ impl EntropyApp {
 
         #[cfg(not(test))]
         {
-        *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = Some(TrayGui {
-            context: ctx.clone(),
-            #[cfg(target_os = "windows")]
-            windows_hwnd: self.windows_hwnd,
-        });
-        if self.tray_icon.is_some() {
-            return;
-        }
-        let Some(icon) = crate::app_icon::tray_icon(32) else {
-            return;
-        };
-        TRAY_HANDLERS.call_once(|| {
-            tray_icon::TrayIconEvent::set_event_handler(Some(|event| {
-                use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-                match event {
-                    TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    }
-                    | TrayIconEvent::DoubleClick {
-                        button: MouseButton::Left,
-                        ..
-                    } => {
-                        let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
-                        let Some(gui) = relay.as_ref() else {
-                            return;
-                        };
-                        TRAY_RESTORE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                        #[cfg(target_os = "windows")]
-                        if let Some(hwnd) = gui.windows_hwnd {
-                            unsafe {
-                                use windows_sys::Win32::UI::WindowsAndMessaging::{
-                                    SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
-                                };
-                                let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
-                                ShowWindow(hwnd, SW_SHOW);
-                                ShowWindow(hwnd, SW_RESTORE);
-                                SetForegroundWindow(hwnd);
+            *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = Some(TrayGui {
+                context: ctx.clone(),
+                #[cfg(target_os = "windows")]
+                windows_hwnd: self.windows_hwnd,
+            });
+            if self.tray_icon.is_some() {
+                return;
+            }
+            let Some(icon) = crate::app_icon::tray_icon(32) else {
+                return;
+            };
+            TRAY_HANDLERS.call_once(|| {
+                tray_icon::TrayIconEvent::set_event_handler(Some(|event| {
+                    use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+                    match event {
+                        TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        }
+                        | TrayIconEvent::DoubleClick {
+                            button: MouseButton::Left,
+                            ..
+                        } => {
+                            let target = {
+                                let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
+                                relay.as_ref().map(|gui| {
+                                    (gui.context.clone(), {
+                                        #[cfg(target_os = "windows")]
+                                        {
+                                            gui.windows_hwnd
+                                        }
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            ()
+                                        }
+                                    })
+                                })
+                            };
+                            let Some((context, hwnd)) = target else {
+                                return;
+                            };
+                            TRAY_RESTORE_REQUESTED
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                            #[cfg(target_os = "windows")]
+                            if let Some(hwnd) = hwnd {
+                                unsafe {
+                                    use windows_sys::Win32::UI::WindowsAndMessaging::{
+                                        SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+                                    };
+                                    let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+                                    ShowWindow(hwnd, SW_SHOW);
+                                    ShowWindow(hwnd, SW_RESTORE);
+                                    SetForegroundWindow(hwnd);
+                                }
                             }
+                            context.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                            context.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                            context.send_viewport_cmd(egui::ViewportCommand::Focus);
+                            context.request_repaint();
                         }
-                        gui.context
-                            .send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                        gui.context
-                            .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                        gui.context.send_viewport_cmd(egui::ViewportCommand::Focus);
-                        gui.context.request_repaint();
+                        _ => {}
                     }
-                    _ => {}
-                }
-            }));
-            tray_icon::menu::MenuEvent::set_event_handler(Some(
-                |event: tray_icon::menu::MenuEvent| {
-                    if event.id == "entropy_tray_quit" {
-                        let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
-                        let Some(gui) = relay.as_ref() else {
-                            return;
-                        };
-                        TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                        #[cfg(target_os = "windows")]
-                        if let Some(hwnd) = gui.windows_hwnd {
-                            request_windows_window_close_from_tray(hwnd);
+                }));
+                tray_icon::menu::MenuEvent::set_event_handler(Some(
+                    |event: tray_icon::menu::MenuEvent| {
+                        if event.id == "entropy_tray_quit" {
+                            let target = {
+                                let relay = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner());
+                                relay.as_ref().map(|gui| {
+                                    (gui.context.clone(), {
+                                        #[cfg(target_os = "windows")]
+                                        {
+                                            gui.windows_hwnd
+                                        }
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            ()
+                                        }
+                                    })
+                                })
+                            };
+                            let Some((context, hwnd)) = target else {
+                                return;
+                            };
+                            TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                            #[cfg(target_os = "windows")]
+                            if let Some(hwnd) = hwnd {
+                                request_windows_window_close_from_tray(hwnd);
+                            }
+                            context.request_repaint();
                         }
-                        gui.context.request_repaint();
-                    }
-                },
-            ));
-        });
-        let tray_menu = tray_icon::menu::Menu::new();
-        let quit_item = tray_icon::menu::MenuItem::with_id(
-            "entropy_tray_quit",
-            "Quit AK Configurator",
-            true,
-            None,
-        );
-        if let Err(e) = tray_menu.append(&quit_item) {
-            log::warn!("failed to create tray menu: {e}");
-        }
-        match tray_icon::TrayIconBuilder::new()
-            .with_tooltip("AK Configurator")
-            .with_menu(Box::new(tray_menu))
-            .with_menu_on_left_click(false)
-            .with_menu_on_right_click(true)
-            .with_icon(icon)
-            .build()
-        {
-            Ok(icon) => self.tray_icon = Some(icon),
-            Err(e) => log::warn!("failed to create tray icon: {e}"),
-        }
+                    },
+                ));
+            });
+            let tray_menu = tray_icon::menu::Menu::new();
+            let quit_item = tray_icon::menu::MenuItem::with_id(
+                "entropy_tray_quit",
+                "Quit AK Configurator",
+                true,
+                None,
+            );
+            if let Err(e) = tray_menu.append(&quit_item) {
+                log::warn!("failed to create tray menu: {e}");
+            }
+            match tray_icon::TrayIconBuilder::new()
+                .with_tooltip("AK Configurator")
+                .with_menu(Box::new(tray_menu))
+                .with_menu_on_left_click(false)
+                .with_menu_on_right_click(true)
+                .with_icon(icon)
+                .build()
+            {
+                Ok(icon) => self.tray_icon = Some(icon),
+                Err(e) => log::warn!("failed to create tray icon: {e}"),
+            }
         }
     }
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(super) fn release_tray_before_gui_drop(&mut self) {
-        // Clearing the relay also waits for any current callback to finish;
-        // process-global handlers retain neither the old Context nor its HWND.
+        // Clear the target for subsequent callbacks and drop the tray before
+        // GUI teardown. An already-running callback may retain its own clone;
+        // this mutex is not a callback join mechanism.
         *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = None;
         self.tray_icon = None;
         TRAY_RESTORE_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
         TRAY_QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     fn consume_tray_quit_request(&mut self) -> bool {
         if !TRAY_QUIT_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             return false;
@@ -876,7 +1038,7 @@ impl EntropyApp {
         true
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     pub(super) fn handle_tray_quit_request(&mut self, ctx: &egui::Context) {
         if should_keep_vial_unlock_visible(self.unlock_open, self.vial_unlock_polling)
             && TRAY_QUIT_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed)
@@ -899,7 +1061,7 @@ impl EntropyApp {
         }
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     pub(super) fn handle_tray_restore_request(&mut self, ctx: &egui::Context) {
         if TRAY_RESTORE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             self.restore_from_tray(ctx);
@@ -1169,6 +1331,59 @@ fn linux_close_to_tray_prompt_copy(
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "linux")]
+    fn wayland_display() -> raw_window_handle::RawDisplayHandle {
+        raw_window_handle::RawDisplayHandle::Wayland(
+            raw_window_handle::WaylandDisplayHandle::new(std::ptr::NonNull::dangling()))
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_backend_policy_uses_actual_handle_and_fails_closed() {
+        use raw_window_handle::{RawDisplayHandle, XcbDisplayHandle, XlibDisplayHandle};
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0)))));
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xcb(XcbDisplayHandle::new(None, 0)))));
+        assert!(!linux_can_hide_window(Some(wayland_display())));
+        assert!(!linux_can_hide_window(None));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wayland_close_and_tray_action_keep_window_accessible() {
+        let mut app = EntropyApp::new_inert_for_test();
+        app.parent_display_handle = Some(wayland_display());
+        app.app_settings.minimize_to_tray_on_close = true;
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().events.push(egui::ViewportEvent::Close);
+        let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
+        let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+        assert!(commands.contains(&egui::ViewportCommand::CancelClose));
+        assert!(!commands.contains(&egui::ViewportCommand::Visible(false)));
+        assert!(!commands.contains(&egui::ViewportCommand::Minimized(true)));
+        assert!(!app.linux_window_hidden_to_tray);
+        assert!(app.status_msg.contains("unavailable"));
+        let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.minimize_window_to_tray(&ctx));
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        assert!(!app.linux_window_hidden_to_tray);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_start_minimized_only_uses_x11_and_runs_once() {
+        use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle};
+        for (handle, expected) in [(Some(wayland_display()), false), (None, false),
+            (Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0))), true)] {
+            let mut app = EntropyApp::new_inert_for_test().with_start_minimized_on_linux();
+            app.parent_display_handle = handle;
+            let ctx = egui::Context::default();
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
+            assert_eq!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)), expected);
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
+            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        }
+    }
+
     #[test]
     fn active_vial_unlock_blocks_close_and_tray_actions() {
         assert!(should_keep_vial_unlock_visible(true, false));
@@ -1220,9 +1435,16 @@ mod tests {
         save_app_settings(&app.app_settings);
         let ctx = egui::Context::default();
         let mut input = egui::RawInput::default();
-        input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().events.push(egui::ViewportEvent::Close);
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .events
+            .push(egui::ViewportEvent::Close);
         let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
-        assert!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::CancelClose));
+        assert!(output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .contains(&egui::ViewportCommand::CancelClose));
         assert!(!crate::background_helper_requested());
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         app.release_tray_before_gui_drop();
@@ -1299,5 +1521,285 @@ mod tests {
                 .count()
                 >= 2
         );
+    }
+}
+
+// StatusNotifierItem uses the session bus directly: no GTK loop is mixed into
+// winit's event loop. Keeping the connection owns the exported object, and
+// dropping it unregisters the icon before the GUI is destroyed.
+#[cfg(target_os = "linux")]
+static LINUX_TRAY: std::sync::Mutex<Option<LinuxTray>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(target_os = "linux")]
+struct LinuxTrayItem;
+
+#[cfg(target_os = "linux")]
+fn request_linux_tray_restore() {
+    let context = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner())
+        .as_ref().map(|gui| gui.context.clone());
+    if let Some(context) = context {
+        TRAY_RESTORE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+        context.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        context.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        context.send_viewport_cmd(egui::ViewportCommand::Focus);
+        context.request_repaint();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[zbus::interface(name = "org.kde.StatusNotifierItem")]
+impl LinuxTrayItem {
+    fn activate(&self, _x: i32, _y: i32) { request_linux_tray_restore(); }
+    fn secondary_activate(&self, _x: i32, _y: i32) { request_linux_tray_restore(); }
+    fn context_menu(&self, _x: i32, _y: i32) {}
+    fn scroll(&self, _delta: i32, _orientation: &str) {}
+    #[zbus(property)]
+    fn category(&self) -> &str { "ApplicationStatus" }
+    #[zbus(property)]
+    fn id(&self) -> &str { "ak-configurator" }
+    #[zbus(property)]
+    fn title(&self) -> &str { "AK Configurator" }
+    #[zbus(property)]
+    fn status(&self) -> &str { "Active" }
+    #[zbus(property)]
+    fn window_id(&self) -> u32 { 0 }
+    #[zbus(property)]
+    fn icon_name(&self) -> &str { "" }
+    #[zbus(property)]
+    fn icon_pixmap(&self) -> Vec<(i32, i32, Vec<u8>)> {
+        let rgba = crate::app_icon::rgba_icon(32);
+        let mut argb = Vec::with_capacity(rgba.len());
+        for pixel in rgba.chunks_exact(4) {
+            argb.extend_from_slice(&[pixel[3], pixel[0], pixel[1], pixel[2]]);
+        }
+        vec![(32, 32, argb)]
+    }
+    #[zbus(property)]
+    fn item_is_menu(&self) -> bool { false }
+    #[zbus(property)]
+    fn menu(&self) -> zbus::zvariant::ObjectPath<'static> {
+        zbus::zvariant::ObjectPath::try_from("/MenuBar").expect("static menu path")
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn create_linux_tray() -> anyhow::Result<LinuxTray> {
+    let connection = zbus::blocking::connection::Builder::session()?
+        .method_timeout(std::time::Duration::from_millis(750))
+        .serve_at("/StatusNotifierItem", LinuxTrayItem)?
+        .serve_at("/MenuBar", LinuxTrayMenu)?
+        .build()?;
+    let watcher = zbus::blocking::Proxy::new(
+        &connection, "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher",
+    )?;
+    anyhow::ensure!(watcher.get_property::<bool>("IsStatusNotifierHostRegistered")?,
+        "no StatusNotifier host registered");
+    let owner = linux_watcher_owner(&connection)?;
+    let _: () = watcher.call("RegisterStatusNotifierItem", &("/StatusNotifierItem",))?;
+    anyhow::ensure!(linux_watcher_owner(&connection)? == owner,
+        "StatusNotifier watcher changed during registration");
+    let available = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let worker_available = available.clone();
+    let (stop, stopped) = std::sync::mpsc::channel();
+    let monitor = connection.clone();
+    std::thread::Builder::new().name("linux-tray-monitor".into()).spawn(move || {
+        while matches!(stopped.recv_timeout(std::time::Duration::from_millis(500)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)) {
+            let healthy = linux_watcher_owner(&monitor).is_ok_and(|current| current == owner)
+                && linux_tray_host_registered(&monitor).unwrap_or(false);
+            if !healthy {
+                worker_available.store(false, std::sync::atomic::Ordering::Release);
+                // Teardown disconnects the stop channel and clears the GUI relay.
+                // Never hold the tray mutex while calling back into egui.
+                if matches!(stopped.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)) {
+                    request_linux_tray_restore();
+                }
+                break;
+            }
+        }
+    })?;
+    Ok(LinuxTray { _connection: connection, available, stop })
+}
+
+#[cfg(target_os = "linux")]
+struct LinuxTray {
+    _connection: zbus::blocking::Connection,
+    available: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    stop: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for LinuxTray {
+    fn drop(&mut self) {
+        self.available.store(false, std::sync::atomic::Ordering::Release);
+        let _ = self.stop.send(());
+        // The worker exits after its current bounded call. No GUI-thread join.
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_watcher_owner(connection: &zbus::blocking::Connection) -> zbus::Result<String> {
+    let bus = zbus::blocking::Proxy::new(connection, "org.freedesktop.DBus",
+        "/org/freedesktop/DBus", "org.freedesktop.DBus")?;
+    bus.call("GetNameOwner", &("org.kde.StatusNotifierWatcher",))
+}
+
+#[cfg(target_os = "linux")]
+fn linux_tray_host_registered(connection: &zbus::blocking::Connection) -> anyhow::Result<bool> {
+    // Explicit Properties.Get avoids the proxy property cache after host loss.
+    let properties = zbus::blocking::Proxy::new(connection, "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties")?;
+    let value: zbus::zvariant::OwnedValue = properties.call("Get",
+        &("org.kde.StatusNotifierWatcher", "IsStatusNotifierHostRegistered"))?;
+    Ok(bool::try_from(value)?)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_tray_available() -> bool {
+    LINUX_TRAY.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        .is_some_and(|tray| tray.available.load(std::sync::atomic::Ordering::Acquire))
+}
+
+#[cfg(target_os = "linux")]
+struct LinuxTrayMenu;
+
+#[cfg(target_os = "linux")]
+type LinuxMenuProperties = std::collections::HashMap<String, zbus::zvariant::OwnedValue>;
+#[cfg(target_os = "linux")]
+type LinuxMenuLayout = (i32, LinuxMenuProperties, Vec<zbus::zvariant::OwnedValue>);
+
+#[cfg(target_os = "linux")]
+const LINUX_TRAY_MENU_ITEMS: [(i32, &str); 2] =
+    [(1, "Show AK Configurator"), (2, "Quit AK Configurator")];
+
+#[cfg(target_os = "linux")]
+fn linux_menu_properties(id: i32, names: &[String]) -> zbus::fdo::Result<LinuxMenuProperties> {
+    use zbus::zvariant::{OwnedValue, Value};
+    let mut properties = LinuxMenuProperties::new();
+    if id == 0 {
+        properties.insert("children-display".into(),
+            OwnedValue::try_from(Value::from("submenu")).expect("static menu property"));
+    } else {
+        let (_, label) = LINUX_TRAY_MENU_ITEMS.iter().find(|(item, _)| *item == id)
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("Unknown menu item {id}")))?;
+        properties.insert("label".into(),
+            OwnedValue::try_from(Value::from(*label)).expect("static menu property"));
+        properties.insert("enabled".into(), true.into());
+        properties.insert("visible".into(), true.into());
+    }
+    if !names.is_empty() { properties.retain(|name, _| names.contains(name)); }
+    Ok(properties)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_menu_event(id: i32, event_id: &str) -> zbus::fdo::Result<()> {
+    linux_menu_properties(id, &[])?;
+    if event_id != "clicked" { return Ok(()); }
+    if id == 1 { request_linux_tray_restore(); }
+    if id == 2 {
+        let context = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner())
+            .as_ref().map(|gui| gui.context.clone());
+        if let Some(context) = context {
+            TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+            context.request_repaint();
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[zbus::interface(name = "com.canonical.dbusmenu")]
+impl LinuxTrayMenu {
+    #[zbus(property)]
+    fn version(&self) -> u32 { 3 }
+    #[zbus(property)]
+    fn text_direction(&self) -> &str { "ltr" }
+    #[zbus(property)]
+    fn status(&self) -> &str { "normal" }
+    #[zbus(property)]
+    fn icon_theme_path(&self) -> Vec<String> { Vec::new() }
+    fn get_layout(&self, parent_id: i32, recursion_depth: i32,
+        property_names: Vec<String>) -> zbus::fdo::Result<(u32, LinuxMenuLayout)> {
+        use zbus::zvariant::{OwnedValue, Value};
+        if recursion_depth < -1 {
+            return Err(zbus::fdo::Error::InvalidArgs("Invalid recursion depth".into()));
+        }
+        let properties = linux_menu_properties(parent_id, &property_names)?;
+        let mut children = Vec::new();
+        if parent_id == 0 && recursion_depth != 0 {
+            for (id, _) in LINUX_TRAY_MENU_ITEMS {
+                let properties = linux_menu_properties(id, &property_names)?;
+                children.push(OwnedValue::try_from(Value::new(
+                    (id, properties, Vec::<OwnedValue>::new())))
+                    .expect("static menu layout"));
+            }
+        }
+        Ok((1, (parent_id, properties, children)))
+    }
+    fn get_group_properties(&self, ids: Vec<i32>, property_names: Vec<String>)
+        -> zbus::fdo::Result<Vec<(i32, LinuxMenuProperties)>> {
+        let ids = if ids.is_empty() {
+            std::iter::once(0).chain(LINUX_TRAY_MENU_ITEMS.iter().map(|(id, _)| *id)).collect()
+        } else { ids };
+        ids.into_iter().map(|id| Ok((id, linux_menu_properties(id, &property_names)?))).collect()
+    }
+    fn get_property(&self, id: i32, name: &str) -> zbus::fdo::Result<zbus::zvariant::OwnedValue> {
+        linux_menu_properties(id, &[])?.remove(name)
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("Unknown menu property {name}")))
+    }
+    fn about_to_show(&self, id: i32) -> zbus::fdo::Result<bool> {
+        linux_menu_properties(id, &[])?;
+        Ok(false)
+    }
+    fn about_to_show_group(&self, ids: Vec<i32>) -> (Vec<i32>, Vec<i32>) {
+        let errors = ids.into_iter().filter(|id| linux_menu_properties(*id, &[]).is_err()).collect();
+        (Vec::new(), errors)
+    }
+    fn event(&self, id: i32, event_id: &str, _data: zbus::zvariant::Value<'_>, _timestamp: u32)
+        -> zbus::fdo::Result<()> {
+        linux_menu_event(id, event_id)
+    }
+    fn event_group(&self, events: Vec<(i32, String, zbus::zvariant::OwnedValue, u32)>) -> Vec<i32> {
+        events.into_iter().filter_map(|(id, event_id, _, _)|
+            linux_menu_event(id, &event_id).err().map(|_| id)).collect()
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_menu_tests {
+    use super::*;
+
+    #[test]
+    fn layout_obeys_parent_depth_and_property_filter() {
+        let menu = LinuxTrayMenu;
+        let (_, (id, properties, children)) = menu.get_layout(0, 0, vec![]).unwrap();
+        assert_eq!(id, 0);
+        assert!(properties.contains_key("children-display"));
+        assert!(children.is_empty());
+        let (_, (_, _, children)) = menu.get_layout(0, 1, vec!["label".into()]).unwrap();
+        assert_eq!(children.len(), LINUX_TRAY_MENU_ITEMS.len());
+        let (_, (id, properties, children)) = menu.get_layout(1, -1, vec!["label".into()]).unwrap();
+        assert_eq!(id, 1);
+        assert_eq!(properties.len(), 1);
+        assert!(properties.contains_key("label"));
+        assert!(children.is_empty());
+        assert!(menu.get_layout(99, -1, vec![]).is_err());
+        assert!(menu.get_layout(0, -2, vec![]).is_err());
+    }
+
+    #[test]
+    fn grouped_menu_reads_and_invalid_ids_follow_contract() {
+        let menu = LinuxTrayMenu;
+        let properties = menu.get_group_properties(vec![1, 2], vec!["enabled".into()]).unwrap();
+        assert_eq!(properties.len(), 2);
+        assert!(properties.iter().all(|(_, values)| values.len() == 1 && values.contains_key("enabled")));
+        assert_eq!(menu.get_group_properties(vec![], vec![]).unwrap().len(), 3);
+        assert!(menu.get_group_properties(vec![99], vec![]).is_err());
+        assert!(menu.get_property(1, "label").is_ok());
+        assert!(menu.get_property(1, "missing").is_err());
+        assert_eq!(menu.about_to_show_group(vec![0, 1, 99]), (vec![], vec![99]));
+        assert_eq!(menu.event_group(vec![(99, "clicked".into(), true.into(), 0)]), vec![99]);
     }
 }

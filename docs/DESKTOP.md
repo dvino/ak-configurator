@@ -12,6 +12,12 @@ The desktop UI integrates the AK820 workflows into Entropy navigation. Language 
 
 Profile-aware editors include keys, encoders, macros, Combo and typed settings. Combo uses two distinct ordinary-key triggers and supports CapsWord as its result. For `LT(layer0..5, MC0..15)`, select a physical key, then **Special → Macro → Hold layer / tap macro → L0–L5 → M0–M15**. This action is valid only on the physical matrix; it is unavailable inside a macro stream, in Combo and on an encoder. AutoShift QSID 4 is available in Main and Typing, not beta.2 Main. Dynamic Macro and runtime modes remain firmware features and are not emulated on the host.
 
+## Startup and Auto Shift
+
+A visible launch shows the application logo and preparation state before the full editor loads. Device discovery then runs in the background. Minimized Windows startup goes directly to its tray lifecycle without waiting for an invisible splash.
+
+In beta.3 Main and Typing, the Auto Shift page exposes the supported timeout. This firmware does not offer an enable switch through its settings protocol. Assign AS_ON, AS_OFF or AS_TOGGLE to a supported physical key to control its runtime state. The configurator does not display inactive switches or imply that changing a stored flag enables this feature.
+
 ## RGB
 
 RGB is available only where the exact image advertises the capability. The beta.3 Direct path reads the current palette, commits complete frames atomically in firmware RAM, and supports explicit restoration of the previously read Direct palette. `direct-ram.json` is an explicit sidecar for volatile palette save/restore; it is separate from settings backups and does not write NVM. Geometry is 82 LEDs over 83 physical keys; encoder press has no LED. HSV V is at most 160; reads are limited to seven LEDs and writes to eight per chunk.
@@ -34,6 +40,16 @@ The backup browser checks only immediate folders (up to 128 backups and 1024 roo
 Reset is separate: read a complete snapshot, choose **Preview reset to release defaults…**, review changes, then confirm. It uses defaults for the exact image, a matching fresh capture, safety backup, fresh hold and the same one-attempt executor. Inactive, reserved and inaccessible bytes stay unchanged. **Delete this backup…** reopens and validates the archive against its pinned manifest digest before deleting only known files after a separate permanent-deletion confirmation; it does not recursively remove folders. A filesystem error can leave a partially deleted archive.
 
 Backup file operations are implemented on Linux, macOS and Windows. Unix paths are directory anchored; macOS rejects parent ACLs. Windows uses local-drive handle-relative operations, rejects reparse points and hard links, applies private user/SYSTEM ACLs, syncs files and publishes without replacement. Windows does not promise Unix parent-directory fsync semantics; UNC/device paths are unsupported. A cooperative per-device guard is advisory and is not honored by external Vial. `.entlayout` is a partial editor snapshot, `.ak820project.json` an offline project, and RGB palettes/scenes or `direct-ram.json` are separate sidecars; none replaces a complete device backup.
+
+## Application settings, tray and exit
+
+The OS layout indicator is configured in **Application settings**. Its enabled state and EN/RU mappings are application preferences. The helper samples layout at a 100 ms target interval, polls in-flight completion at 20 ms and renews an unchanged active override at one second. The same policy applies while the window is hidden. Host scheduling, native layout queries and transport latency can add time; physical LED timing is unqualified.
+
+With close-to-tray enabled, the normal window close action hides the window and preserves background operation. Explicit **Quit application**, Ctrl+Q (also Cmd+Q), or the tray's Quit action requests full exit and does not start another helper. Existing pending-write, unlock and installation guards still apply. There is no separate “Close interface” button.
+
+Windows uses the system tray and macOS the menu bar. Linux uses the session bus StatusNotifier protocol and a Show/Quit menu. A compatible desktop tray host is required; otherwise the window stays accessible. Loss or replacement of the host requests restoration. A synthetic host validates the protocol in CI; it does not qualify a real panel or Wayland. Protocol reference: [Status Notifier Item](https://specifications.freedesktop.org/status-notifier-item/latest-single/).
+
+Offline GUI launch with `--demo-ak820` or `--runtime-smoke` uses fresh temporary settings and blocks reviewed live device/system entry points. These flags cannot be combined with other application modes. The native smoke and optional read-only agent diagnostic entry point are described in [MCP.md](MCP.md); exact execution evidence is in [REVIEW.md](REVIEW.md).
 
 ## Platforms and qualification
 

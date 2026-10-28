@@ -425,6 +425,22 @@ fn device_about_rows(
         ),
     ];
 
+    if let Some(ruleset) = info.caps_word_ruleset {
+        let language = match ruleset {
+            0 => if lang == crate::i18n::Language::Russian { "Английский" } else { "English" },
+            1 => if lang == crate::i18n::Language::Russian { "Русский" } else { "Russian" },
+            _ => if lang == crate::i18n::Language::Russian { "Неизвестно" } else { "Unknown" },
+        };
+        rows.push(localized_row(
+            lang,
+            "Язык Caps Word",
+            "Caps Word language",
+            "Правила переключения регистра Caps Word, прочитанные из QSID 22",
+            "Caps Word ruleset read from QSID 22",
+            language.to_owned(),
+        ));
+    }
+
     let firmware_update_row_count = if let Some(target) = &info.firmware_update_target {
         let update_rows = firmware_update_rows(lang, target, firmware_update_check);
         let count = update_rows.len();
@@ -883,6 +899,30 @@ impl EntropyApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn beta4_caps_word_language_readback_is_localized_in_about_device() {
+        for (lang, expected_label, expected_value) in [
+            (
+                crate::i18n::Language::English,
+                "Caps Word language",
+                "Russian",
+            ),
+            (
+                crate::i18n::Language::Russian,
+                "Язык Caps Word",
+                "Русский",
+            ),
+        ] {
+            let info = DeviceAboutInfo {
+                caps_word_ruleset: Some(1),
+                ..Default::default()
+            };
+            let rows = device_about_rows(lang, &info, &FirmwareUpdateCheckState::Unsupported);
+            let row = rows.iter().find(|row| row.label == expected_label).unwrap();
+            assert_eq!(row.value, expected_value);
+        }
+    }
 
     fn update_state(asset: UpdateAssetState) -> UpdateCheckState {
         UpdateCheckState::Ready(UpdateCheckResult {

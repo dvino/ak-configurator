@@ -8,18 +8,10 @@ impl EntropyApp {
     ) {
         let lang = self.app_settings.language;
         let dark = ui.visuals().dark_mode;
-        let hid_ready = {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                self.hid_device.is_some()
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                false
-            }
-        };
+        let hid_ready = self.hid_connected_for_display();
 
         crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
+            self.preserve_device_editor_during_hid_loan(ui);
             ui.vertical_centered(|ui| {
                 ui.add_space(18.0);
                 ui.label(

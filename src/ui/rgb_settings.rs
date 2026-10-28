@@ -64,6 +64,14 @@ fn rgb_picker_contrast(color: impl Into<egui::Rgba>) -> Color32 {
     }
 }
 
+pub(super) fn rgb_section_for_availability(section: usize, scene_available: bool) -> usize {
+    if scene_available {
+        section.min(3)
+    } else {
+        0
+    }
+}
+
 fn compact_rgb_slider_1d(
     ui: &mut egui::Ui,
     value: &mut f32,
@@ -215,7 +223,9 @@ impl EntropyApp {
         let hid_ready = {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                self.ak820_demo || self.hid_device.is_some() || self.ak820_rgb_scene_owns_hid()
+                self.ak820_demo
+                    || self.hid_connected_for_display()
+                    || self.ak820_rgb_scene_owns_hid()
             }
             #[cfg(target_arch = "wasm32")]
             {
@@ -229,6 +239,9 @@ impl EntropyApp {
             .is_some_and(|p| ak820_beta1_profiles::has_feature(p, "vialrgb-direct"))
             || self.ak820_rgb_scene_running()
             || self.ak820_rgb_scene_owns_hid()
+            // Preserve only capabilities captured from the verified image;
+            // indicator support alone does not imply Direct RGB support.
+            || self.ak820_os_indicator_display_rgb_direct()
             || self
                 .hid_device
                 .as_ref()
@@ -238,6 +251,7 @@ impl EntropyApp {
         let scene_available = false;
 
         crate::ui_style::allocate_ui_at_rect(ui, content_rect, |ui| {
+            self.preserve_device_editor_during_hid_loan(ui);
             ui.vertical_centered(|ui| {
                 ui.add_space(18.0);
                 ui.label(
@@ -280,9 +294,8 @@ impl EntropyApp {
                         .to_owned(),
                         "OpenRGB".to_owned(),
                     ]);
-                } else {
-                    section_index = 0;
                 }
+                section_index = rgb_section_for_availability(section_index, scene_available);
                 ui.horizontal(|ui| {
                     let nav_width = (ui.available_width() - 88.0).max(120.0);
                     if let Some(index) = crate::ui_style::settings_segmented_control(
@@ -383,6 +396,7 @@ impl EntropyApp {
 
                         let can_write = self.ak820_demo
                             || (!self.hid_write_task_owner_active()
+                                && !self.ak820_os_indicator_owns_hid()
                                 && matches!(self.connect_state, ConnectState::Idle)
                                 && self.hid_device.as_ref().is_some_and(|h| {
                                     !h.is_ak820_session() || h.ak820_editing_ready()

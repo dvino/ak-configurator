@@ -87,10 +87,14 @@ fn spawn<T: Send + 'static>(
     }
 }
 pub(crate) fn start_check(channel: Channel) -> Job<Offer> {
-    spawn(move |cancel| check(channel, &cancel))
+    spawn(move |cancel| {
+        if crate::isolated_runtime() { return Err("Network updates are disabled in isolated mode".into()); }
+        check(channel, &cancel)
+    })
 }
 pub(crate) fn start_download(offer: Offer) -> Job<VerifiedDownload> {
     spawn(move |cancel| {
+        if crate::isolated_runtime() { return Err("Network updates are disabled in isolated mode".into()); }
         let root = crate::cache_dir()
             .ok_or("No application cache directory")?
             .join("ak-configurator")

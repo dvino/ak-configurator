@@ -109,6 +109,7 @@ pub(crate) struct Runtime {
     mode: Mode,
     source: Source,
     profile: crate::app::ak820_beta1_profiles::ProfileId,
+    beta4_1: bool,
     prerelease_opt_in: bool,
     start_with_defaults: bool,
     external_payload: Option<SelectedFile>,
@@ -134,6 +135,7 @@ impl Default for Runtime {
             mode: Mode::Firmware,
             source: Source::Bundled,
             profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
+            beta4_1: true,
             prerelease_opt_in: false,
             start_with_defaults: false,
             external_payload: None,
@@ -395,7 +397,13 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
         }
     };
     let profile = app.ak820_install_runtime.profile;
-    let defaults = app.ak820_install_runtime.start_with_defaults;
+    let beta4_1 = app.ak820_install_runtime.beta4_1;
+    let image = if beta4_1 {
+        crate::ak820::ImageContract::Beta4(profile)
+    } else {
+        crate::ak820::ImageContract::Beta3(profile)
+    };
+    let defaults = app.ak820_install_runtime.start_with_defaults || beta4_1;
     let source = app.ak820_install_runtime.source;
     let opt_in = app.ak820_install_runtime.prerelease_opt_in;
     let observation = app.app_settings.ak820_release_observation.clone();
@@ -470,13 +478,14 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                             .bytes
                             .clone();
                         let expected = if defaults {
-                            crate::ak820_release::bundled_defaults(profile)?
+                            crate::ak820_release::bundled_defaults_for_image(image)?
                         } else {
                             build_preserved_nvm(capture.as_ref().ok_or("Complete saved settings are required to preserve/migrate payload settings")?, profile)?
                         };
                         let digest = validate_payload_nvm(&payload, &expected)?;
                         InstallRequest::Firmware {
                             profile,
+                            image,
                             payload,
                             recovery: recovery.bytes.clone(),
                             settings: if defaults {
@@ -520,6 +529,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                         };
                         InstallRequest::BundledFirmware {
                             profile,
+                            image,
                             recovery: recovery.as_ref().map(|recovery| recovery.bytes.clone()),
                             settings,
                         }
@@ -527,10 +537,13 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                 }
             };
             let admission = if mode == Mode::Firmware {
-                Some(
+                let admission = if beta4_1 {
+                    crate::ak820_release::ReleaseAdmission::beta4_1(profile, opt_in)?
+                } else {
                     crate::ak820_release::ReleaseAdmission::bundled(profile, opt_in)?
-                        .with_observation(&observation)?,
-                )
+                        .with_observation(&observation)?
+                };
+                Some(admission)
             } else {
                 None
             };
@@ -877,11 +890,19 @@ fn launch_execute(app: &mut EntropyApp, confirmed_pin: String) {
     let admission = if firmware_action {
         let profile = app.ak820_install_runtime.profile;
         let observation = &app.app_settings.ak820_release_observation;
-        match crate::ak820_release::ReleaseAdmission::bundled(
-            profile,
-            app.ak820_install_runtime.prerelease_opt_in,
-        )
-        .and_then(|admission| admission.with_observation(observation))
+        let admission = if app.ak820_install_runtime.beta4_1 {
+            crate::ak820_release::ReleaseAdmission::beta4_1(
+                profile,
+                app.ak820_install_runtime.prerelease_opt_in,
+            )
+        } else {
+            crate::ak820_release::ReleaseAdmission::bundled(
+                profile,
+                app.ak820_install_runtime.prerelease_opt_in,
+            )
+            .and_then(|admission| admission.with_observation(observation))
+        };
+        match admission
         {
             Ok(admission) => Some(admission),
             Err(error) => {
@@ -1152,6 +1173,18 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     }
                 });
             if runtime.mode == Mode::Firmware {
+                ui.label(tr(ru, "Release", "Выпуск"));
+                egui::ComboBox::from_id_salt("ak820_install_release")
+                    .selected_text(if runtime.beta4_1 { "v0.6.0-beta.4.1" } else { "v0.6.0-beta.3" })
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_value(&mut runtime.beta4_1, false, "v0.6.0-beta.3").changed() {
+                            retire = true;
+                        }
+                        if ui.selectable_value(&mut runtime.beta4_1, true, "v0.6.0-beta.4.1").changed() {
+                            runtime.start_with_defaults = true;
+                            retire = true;
+                        }
+                    });
                 ui.label(tr(ru, "Profile", "Профиль"));
                 egui::ComboBox::from_id_salt("ak820_install_profile")
                     .selected_text(
@@ -1186,7 +1219,11 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     .selectable_value(
                         &mut runtime.source,
                         Source::Bundled,
-                        tr(ru, "Bundled beta3 image", "Встроенный образ beta3"),
+                        if runtime.beta4_1 {
+                            tr(ru, "Bundled beta4.1 image", "Встроенный образ beta4.1")
+                        } else {
+                            tr(ru, "Bundled beta3 image", "Встроенный образ beta3")
+                        },
                     )
                     .changed()
                 {
@@ -1223,17 +1260,16 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             {
                 retire = true;
             }
-            if ui
-                .checkbox(
-                    &mut runtime.start_with_defaults,
-                    tr(
-                        ru,
-                        "Start with defaults (explicit)",
-                        "Начать с настроек по умолчанию (явный выбор)",
-                    ),
-                )
-                .changed()
-            {
+            if runtime.beta4_1 {
+                ui.label(tr(
+                    ru,
+                    "Beta.4.1 installs exact release defaults; saved-settings writes and restore are not authorized.",
+                    "Beta.4.1 устанавливает точные настройки выпуска; запись сохранённых настроек и восстановление не разрешены.",
+                ));
+            } else if ui
+                .checkbox(&mut runtime.start_with_defaults,
+                    tr(ru, "Start with defaults (explicit)", "Начать с настроек по умолчанию (явный выбор)"))
+                .changed() {
                 retire = true;
             }
             ui.label(tr(

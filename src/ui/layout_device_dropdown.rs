@@ -50,13 +50,6 @@ fn about_device_label(lang: crate::i18n::Language) -> &'static str {
     }
 }
 
-fn beta1_profiles_label(lang: crate::i18n::Language) -> &'static str {
-    match lang {
-        crate::i18n::Language::Russian => "Профили прошивки beta.2",
-        crate::i18n::Language::English => "beta.2 firmware profiles",
-    }
-}
-
 impl EntropyApp {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn draw_layout_device_dropdown(
@@ -113,7 +106,7 @@ impl EntropyApp {
             device_menu_labels.push(crate::i18n::tr_catalog(lang, "layer_actions.menu").to_owned());
             device_menu_labels
                 .push(crate::i18n::tr_catalog(lang, "main_menu.show_hide_keys").to_owned());
-            device_menu_labels.push(beta1_profiles_label(lang).to_owned());
+            device_menu_labels.push(super::ak820_beta1_profiles_ui::navigation_label(lang));
             #[cfg(not(target_arch = "wasm32"))]
             {
                 device_menu_labels.push(entlayout_import_label(lang).to_owned());
@@ -304,7 +297,7 @@ impl EntropyApp {
                         ui,
                         dropdown_size.x - 16.0,
                         TopMenuIcon::Modules,
-                        beta1_profiles_label(lang),
+                        &super::ak820_beta1_profiles_ui::navigation_label(lang),
                         self.layout.is_some() && self.keycode_picker.ak820_profile,
                         false,
                     )

@@ -2,7 +2,7 @@
 //! Pinned public release inputs and admission. No device authorization is
 //! implied: fresh per-operation confirmation belongs to the installer.
 use crate::ak820_image_pack::{
-    EntryMode, default_nvm, pack_candidate, read_symbols, validate_catalog_payload,
+    EntryMode, default_nvm, read_symbols,
 };
 use crate::ak820_settings_backup::{BackupResult, sha256};
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
@@ -13,6 +13,10 @@ const RELEASE_SHA256: &str = "bf1ce6f0287131bbe9a2d80dbb245c6be9eda3d31436451cda
 const RELEASE_API: &str = "https://api.github.com/repos/dvino/ak820/releases/tags/v0.6.0-beta.3";
 const RELEASE_PAGE: &str = "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3";
 const MANIFEST_SHA256: &str = "6495d6c075807362453a4831600b58779da98b0dc1d38f37cff9e9227a6b6159";
+const BETA4_1_RELEASE: &str = beta::BETA4_1_RELEASE;
+const BETA4_1_CATALOG: &str = include_str!("../assets/ak820/beta4.1-release-catalog.json");
+const BETA4_1_CATALOG_SHA256: &str =
+    "5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1";
 
 /// Block-only observations persist separately from firmware and cannot grant
 /// support to a new image. A network failure never clears a known block.
@@ -65,9 +69,76 @@ impl ReleaseObservation {
 #[derive(Clone, Debug)]
 pub(crate) struct ReleaseAdmission {
     profile: ProfileId,
+    image: crate::ak820::ImageContract,
+    version: &'static str,
+    metadata_sha256: &'static str,
     ihx_sha256: String,
     packed_code_sha256: String,
 }
+
+/// Proof that a future beta.4.1 descriptor explicitly authorizes this exact
+/// image. The current pinned beta.4 catalog is intentionally not admitted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Beta4InstallAuthorization {
+    pub(crate) profile: ProfileId,
+    pub(crate) ihx_sha256: String,
+    pub(crate) code_sha256: String,
+    pub(crate) catalog_sha256: String,
+}
+
+/// Validate a separately pinned beta.4.1 release catalog against the image
+/// selected from its pinned matrix. Callers must supply the expected catalog
+/// digest from the source pin; test fixtures use synthetic metadata only.
+pub(crate) fn authorize_beta4_1_image(
+    catalog_bytes: &[u8],
+    expected_catalog_sha256: &str,
+    profile: ProfileId,
+    expected_ihx_sha256: &str,
+    expected_code_sha256: &str,
+) -> BackupResult<Beta4InstallAuthorization> {
+    let catalog_sha256 = sha256(catalog_bytes);
+    if catalog_sha256 != expected_catalog_sha256 {
+        return Err("Beta.4.1 release catalog differs from its pinned digest".into());
+    }
+    let catalog: serde_json::Value =
+        serde_json::from_slice(catalog_bytes).map_err(|_| "Invalid beta.4.1 release catalog")?;
+    if catalog["tag"].as_str() != Some(BETA4_1_RELEASE)
+        || catalog["format"].as_str() != Some("ak820-beta-release-catalog-1")
+        || catalog["status"].as_str() != Some("beta")
+        || catalog["release_approved"].as_bool() != Some(true)
+        || catalog["hardware_validated"].as_bool() != Some(false)
+        || catalog["flashing_authorized"].as_bool() != Some(true)
+        || catalog["settings_writes_authorized"].as_bool() != Some(false)
+        || !catalog["catalog_profiles"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(|r| r.as_str() == Some(profile.as_str())))
+        || !catalog["installable_profiles"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(|r| r.as_str() == Some(profile.as_str())))
+    {
+        return Err("Beta.4.1 release metadata does not authorize this operation".into());
+    }
+    let authorized_images = catalog["flashing_authorized_images"]
+        .as_array()
+        .ok_or("Beta.4.1 release metadata has no exact flashing image bindings")?;
+    let selected: Vec<_> = authorized_images
+        .iter()
+        .filter(|image| image["profile"].as_str() == Some(profile.as_str()))
+        .collect();
+    if selected.len() != 1
+        || selected[0]["ihx_sha256"].as_str() != Some(expected_ihx_sha256)
+        || selected[0]["code_sha256"].as_str() != Some(expected_code_sha256)
+    {
+        return Err("Beta.4.1 flashing authorization does not match the exact profile image".into());
+    }
+    Ok(Beta4InstallAuthorization {
+        profile,
+        ihx_sha256: expected_ihx_sha256.into(),
+        code_sha256: expected_code_sha256.into(),
+        catalog_sha256,
+    })
+}
+
 impl ReleaseAdmission {
     pub(crate) fn bundled(profile: ProfileId, prerelease_opt_in: bool) -> BackupResult<Self> {
         if !prerelease_opt_in {
@@ -100,10 +171,48 @@ impl ReleaseAdmission {
             .ok_or("Missing packed image policy")?;
         Ok(Self {
             profile,
+            image: crate::ak820::ImageContract::Beta3(profile),
+            version: beta::BETA_RELEASE,
+            metadata_sha256: RELEASE_SHA256,
             ihx_sha256: exact.ihx_sha256.clone(),
             packed_code_sha256: exact.code_sha256.clone(),
         })
     }
+    pub(crate) fn beta4_1(profile: ProfileId, prerelease_opt_in: bool) -> BackupResult<Self> {
+        if !prerelease_opt_in {
+            return Err("The bundled firmware is a prerelease; enable prerelease installation explicitly".into());
+        }
+        if sha256(BETA4_1_CATALOG.as_bytes()) != BETA4_1_CATALOG_SHA256 {
+            return Err("Bundled beta.4.1 release catalog differs from its reviewed digest".into());
+        }
+        let catalog: serde_json::Value = serde_json::from_str(BETA4_1_CATALOG)
+            .map_err(|_| "Invalid bundled beta.4.1 release catalog")?;
+        if catalog["assets"]["firmware-matrix.json"]["sha256"].as_str()
+            != Some(beta::BETA4_1_MATRIX_SHA256)
+            || catalog["assets"]["capability-catalog.json"]["sha256"].as_str()
+                != Some(beta::BETA4_1_CAPABILITY_SHA256)
+        {
+            return Err("Beta.4.1 release catalog does not bind the pinned matrix and capability catalog".into());
+        }
+        let exact = beta::beta4_1_matrix_profile(profile)
+            .settings_identity.as_ref().ok_or("Missing beta.4.1 packed image policy")?;
+        authorize_beta4_1_image(
+            BETA4_1_CATALOG.as_bytes(),
+            BETA4_1_CATALOG_SHA256,
+            profile,
+            &exact.ihx_sha256,
+            &exact.code_sha256,
+        )?;
+        Ok(Self {
+            profile,
+            image: crate::ak820::ImageContract::Beta4(profile),
+            version: BETA4_1_RELEASE,
+            metadata_sha256: BETA4_1_CATALOG_SHA256,
+            ihx_sha256: exact.ihx_sha256.clone(),
+            packed_code_sha256: exact.code_sha256.clone(),
+        })
+    }
+    pub(crate) fn image(&self) -> crate::ak820::ImageContract { self.image }
     pub(crate) fn with_observation(self, observation: &ReleaseObservation) -> BackupResult<Self> {
         if observation.blocks_current_release() {
             return Err(
@@ -114,7 +223,7 @@ impl ReleaseAdmission {
         Ok(self)
     }
     pub(crate) fn validate_payload(&self, profile: ProfileId, payload: &[u8]) -> BackupResult<()> {
-        let exact = beta::matrix_profile(profile)
+        let exact = self.image.matrix_profile().ok_or("Missing exact image matrix")?
             .settings_identity
             .as_ref()
             .ok_or("Missing packed image policy")?;
@@ -124,17 +233,21 @@ impl ReleaseAdmission {
         {
             return Err("Release admission is bound to a different image".into());
         }
-        validate_catalog_payload(payload, profile)?;
+        crate::ak820_image_pack::validate_catalog_payload_for_image(payload, self.image)?;
         Ok(())
     }
     pub(crate) fn metadata_sha256(&self) -> &'static str {
-        RELEASE_SHA256
+        self.metadata_sha256
     }
     pub(crate) fn version(&self) -> &'static str {
-        beta::BETA_RELEASE
+        self.version
     }
     pub(crate) fn offline_notice(&self) -> &'static str {
-        "Pinned published beta.3 release metadata; a later withdrawal may be unknown offline."
+        if self.version == BETA4_1_RELEASE {
+            "Pinned published beta.4.1 catalog; a later withdrawal may be unknown offline."
+        } else {
+            "Pinned published beta.3 release metadata; a later withdrawal may be unknown offline."
+        }
     }
 }
 
@@ -194,6 +307,18 @@ pub(crate) fn sources_for_image(
             ProfileId::Shortcuts => source!("firmware-beta3", "shortcuts"),
             ProfileId::Multios => source!("firmware-beta3", "multios"),
         },
+        crate::ak820::ImageContract::Beta4(_) => match profile {
+            ProfileId::Main => source!("firmware-beta4", "main"),
+            ProfileId::Game => source!("firmware-beta4", "game"),
+            ProfileId::Mmo => source!("firmware-beta4", "mmo"),
+            ProfileId::Typing => source!("firmware-beta4", "typing"),
+            ProfileId::Code => source!("firmware-beta4", "code"),
+            ProfileId::Pointer => source!("firmware-beta4", "pointer"),
+            ProfileId::Onehand => source!("firmware-beta4", "onehand"),
+            ProfileId::Creative => source!("firmware-beta4", "creative"),
+            ProfileId::Shortcuts => source!("firmware-beta4", "shortcuts"),
+            ProfileId::Multios => source!("firmware-beta4", "multios"),
+        },
         _ => return Err("Unsupported public default image".into()),
     };
     let identity = &image
@@ -210,6 +335,9 @@ pub(crate) fn sources_for_image(
 pub(crate) fn bundled_defaults(profile: ProfileId) -> BackupResult<Vec<u8>> {
     defaults_for_image(crate::ak820::ImageContract::Beta3(profile))
 }
+pub(crate) fn bundled_defaults_for_image(image: crate::ak820::ImageContract) -> BackupResult<Vec<u8>> {
+    defaults_for_image(image)
+}
 pub(crate) fn defaults_for_image(image: crate::ak820::ImageContract) -> BackupResult<Vec<u8>> {
     let (ihx, map) = sources_for_image(image)?;
     default_nvm(ihx, &read_symbols(map)?)
@@ -221,7 +349,15 @@ pub(crate) fn bundled_payload(
     recovery: &[u8],
     nvm: Option<&[u8]>,
 ) -> BackupResult<Vec<u8>> {
-    let (ihx, map) = bundled_sources(profile)?;
+    bundled_payload_for_image(crate::ak820::ImageContract::Beta3(profile), recovery, nvm)
+}
+pub(crate) fn bundled_payload_for_image(
+    image: crate::ak820::ImageContract,
+    recovery: &[u8],
+    nvm: Option<&[u8]>,
+) -> BackupResult<Vec<u8>> {
+    image.profile().ok_or("Image has no profile")?;
+    let (ihx, map) = sources_for_image(image)?;
     let symbols = read_symbols(map)?;
     let defaults;
     let nvm = match nvm {
@@ -232,7 +368,9 @@ pub(crate) fn bundled_payload(
         }
     };
     Ok(
-        pack_candidate(ihx, &symbols, recovery, nvm, EntryMode::Permanent, profile)?
+        crate::ak820_image_pack::pack_candidate_for_image(
+            ihx, &symbols, recovery, nvm, EntryMode::Permanent, image,
+        )?
             .bytes()
             .to_vec(),
     )
@@ -350,6 +488,133 @@ pub(crate) fn check_bundled_release() -> BackupResult<ReleaseObservation> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn beta4_1_test_catalog() -> serde_json::Value {
+        serde_json::json!({
+            "format": "ak820-beta-release-catalog-1",
+            "tag": BETA4_1_RELEASE,
+            "status": "beta",
+            "hardware_validated": false,
+            "flashing_authorized": true,
+            "settings_writes_authorized": false,
+            "catalog_profiles": ["main"],
+            "installable_profiles": ["main"],
+            "flashing_authorized_images": [{
+                "profile": "main",
+                "ihx_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "code_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }]
+        })
+    }
+
+    fn authorize_synthetic(catalog: &serde_json::Value) -> BackupResult<Beta4InstallAuthorization> {
+        let bytes = serde_json::to_vec(catalog).unwrap();
+        let digest = sha256(&bytes);
+        authorize_beta4_1_image(
+            &bytes,
+            &digest,
+            ProfileId::Main,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+    }
+
+    #[test]
+    fn beta4_1_synthetic_descriptor_admits_only_its_exact_flash_image() {
+        let catalog = beta4_1_test_catalog();
+        assert_eq!(catalog["hardware_validated"], false);
+        assert_eq!(catalog["settings_writes_authorized"], false);
+        let admission = authorize_synthetic(&catalog).unwrap();
+        assert_eq!(admission.profile, ProfileId::Main);
+        assert_eq!(admission.ihx_sha256, "a".repeat(64));
+        assert_eq!(admission.code_sha256, "b".repeat(64));
+        assert_eq!(admission.catalog_sha256, sha256(&serde_json::to_vec(&catalog).unwrap()));
+    }
+
+    #[test]
+    fn beta4_1_flash_admission_fails_closed_on_flags_and_identity_mismatch() {
+        for (field, value) in [
+            ("flashing_authorized", serde_json::Value::Bool(false)),
+            ("settings_writes_authorized", serde_json::Value::Bool(true)),
+        ] {
+            let mut catalog = beta4_1_test_catalog();
+            catalog[field] = value;
+            assert!(authorize_synthetic(&catalog).is_err(), "{field}");
+        }
+        for field in ["flashing_authorized", "settings_writes_authorized"] {
+            let mut catalog = beta4_1_test_catalog();
+            catalog.as_object_mut().unwrap().remove(field);
+            assert!(authorize_synthetic(&catalog).is_err(), "missing {field}");
+        }
+
+        let mut missing_images = beta4_1_test_catalog();
+        missing_images.as_object_mut().unwrap().remove("flashing_authorized_images");
+        assert!(authorize_synthetic(&missing_images).is_err());
+
+        let mut wrong_profile = beta4_1_test_catalog();
+        wrong_profile["flashing_authorized_images"][0]["profile"] = "game".into();
+        assert!(authorize_synthetic(&wrong_profile).is_err());
+
+        let mut wrong_ihx = beta4_1_test_catalog();
+        wrong_ihx["flashing_authorized_images"][0]["ihx_sha256"] = "c".repeat(64).into();
+        assert!(authorize_synthetic(&wrong_ihx).is_err());
+
+        let mut wrong_code = beta4_1_test_catalog();
+        wrong_code["flashing_authorized_images"][0]["code_sha256"] = "d".repeat(64).into();
+        assert!(authorize_synthetic(&wrong_code).is_err());
+
+        let bytes = serde_json::to_vec(&beta4_1_test_catalog()).unwrap();
+        assert!(authorize_beta4_1_image(
+            &bytes,
+            &"0".repeat(64),
+            ProfileId::Main,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn published_beta4_1_catalog_pins_all_ten_exact_images_without_claiming_hardware_validation() {
+        assert_eq!(sha256(BETA4_1_CATALOG.as_bytes()), BETA4_1_CATALOG_SHA256);
+        let catalog: serde_json::Value = serde_json::from_str(BETA4_1_CATALOG).unwrap();
+        assert_eq!(catalog["release_approved"], true);
+        assert_eq!(catalog["hardware_validated"], false);
+        assert_eq!(catalog["flashing_authorized"], true);
+        assert_eq!(catalog["settings_writes_authorized"], false);
+        let matrix = beta::beta4_1_firmware_matrix();
+        assert_eq!(matrix.profiles.len(), 10);
+        for row in &matrix.profiles {
+            let admission = ReleaseAdmission::beta4_1(row.profile, true).unwrap();
+            assert_eq!(admission.image(), crate::ak820::ImageContract::Beta4(row.profile));
+            let (ihx, map) = sources_for_image(admission.image()).unwrap();
+            assert_eq!(sha256(ihx.as_bytes()), admission.ihx_sha256);
+            assert_eq!(sha256(map.as_bytes()), row.identity.map_sha256);
+        }
+        assert!(ReleaseAdmission::beta4_1(ProfileId::Main, false).is_err());
+    }
+
+    #[test]
+    fn published_beta4_catalog_remains_read_only_until_beta4_1() {
+        let catalog: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/ak820/beta4-release-catalog.json"
+        ))
+        .unwrap();
+        assert_eq!(catalog["flashing_authorized"], false);
+        assert_eq!(catalog["settings_writes_authorized"], false);
+        assert!(!beta::beta4_settings_writes_authorized(ProfileId::Main));
+        let bytes = serde_json::to_vec(&catalog).unwrap();
+        let digest = sha256(&bytes);
+        assert!(authorize_beta4_1_image(
+            &bytes,
+            &digest,
+            ProfileId::Main,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .is_err());
+    }
+
     #[test]
     fn release_observations_bind_tag_catalog_and_publication() {
         let mut legacy: ReleaseObservation = serde_json::from_str(

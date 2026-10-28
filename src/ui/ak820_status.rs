@@ -133,13 +133,6 @@ impl EntropyApp {
                                         && self.settings_tab == SettingsTab::AppSettings,
                                 ),
                                 (
-                                    "helper",
-                                    "ak820_ui.os_helper",
-                                    TopMenuIcon::LayoutIndicator,
-                                    self.main_menu_tab == MainMenuTab::Settings
-                                        && self.settings_tab == SettingsTab::OsIndicator,
-                                ),
-                                (
                                     "about",
                                     "ak820_ui.about",
                                     TopMenuIcon::AboutEntropy,
@@ -191,6 +184,19 @@ impl EntropyApp {
                                     picked = Some("reread");
                                 }
                             }
+                            top_dropdown_divider(ui, item_width);
+                            if top_dropdown_icon_item(
+                                ui,
+                                item_width,
+                                TopMenuIcon::AboutEntropy,
+                                text(lang, "ak820_ui.quit_with_shortcut"),
+                                true,
+                                false,
+                            )
+                            .clicked()
+                            {
+                                picked = Some("quit");
+                            }
                         });
                     if let Some(action) = picked {
                         self.close_top_dropdowns(&ctx);
@@ -215,11 +221,8 @@ impl EntropyApp {
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), true));
                             }
                             "settings" => self.open_app_settings_page(),
-                            "helper" => {
-                                self.settings_tab = SettingsTab::OsIndicator;
-                                self.main_menu_tab = MainMenuTab::Settings;
-                            }
                             "about" => self.open_about_entropy_page(),
+                            "quit" => self.request_explicit_quit(&ctx),
                             "help" => super::ak820_help_ui::open(&ctx),
                             "reread" => {
                                 if let Some(index) = self.selected_device {

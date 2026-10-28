@@ -1,7 +1,7 @@
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 pub(crate) static TRAY_QUIT_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 pub(crate) static TRAY_RESTORE_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -577,6 +577,8 @@ pub(crate) struct DeviceAboutInfo {
     pub(crate) key_override_entries: usize,
     pub(crate) alt_repeat_entries: usize,
     pub(crate) caps_word: bool,
+    /// Beta.4 QSID 22 readback: 0 is English and 1 is Russian.
+    pub(crate) caps_word_ruleset: Option<u8>,
     pub(crate) layer_lock: bool,
     pub(crate) qmk_settings: bool,
 }
@@ -5393,7 +5395,11 @@ pub struct EntropyApp {
     pub(crate) ak820_demo_profile: Option<super::ak820_beta1_profiles::ProfileId>,
     pub(crate) ak820_demo_seed: Option<crate::keyboard::KeyboardLayout>,
     pub(crate) ak820_demo_projects: Vec<Ak820OfflineProfileProject>,
-    pub(crate) ak820_offline_import_undo: Option<Ak820OfflineProfileProject>,
+    pub(crate) ak820_offline_import_undo: Option<(
+        Ak820OfflineProfileProject,
+        super::ak820_beta1_profiles::ProfileId,
+        Option<Ak820OfflineProfileProject>,
+    )>,
     pub(crate) ak820_offline_extensions:
         Option<crate::app::ak820_offline_extensions::OfflineExtensions>,
     pub(crate) device_manager: DeviceManager,
@@ -5611,6 +5617,10 @@ pub struct EntropyApp {
     pub(crate) text_expander_settings_last_edit_at: f64,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
+    #[cfg(target_os = "linux")]
+    pub(crate) linux_window_hidden_to_tray: bool,
+    #[cfg(target_os = "linux")]
+    pub(crate) linux_start_minimized_pending: bool,
     #[cfg(target_os = "windows")]
     pub(crate) windows_hwnd: Option<isize>,
     #[cfg(target_os = "windows")]

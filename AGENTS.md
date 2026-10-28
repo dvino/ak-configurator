@@ -17,12 +17,20 @@
   shared changes rather than maintaining copies. Keep PLAN current.
 - Follow [agent routing](docs/AGENT-ROUTING.md). Check ownership and preserve
   concurrent work; do not run builds sharing output paths.
+- Agents must not perform recurring checks of CI, releases or other awaited
+  external state themselves; use a monitor and act on its notifications. Do not
+  repeatedly poll that state in an agent turn. One-time checks needed for active
+  work remain allowed.
 
 ## Documentation and review
 
 - Update matching EN/RU documents with changes to behavior, formats, commands,
   versions, APIs and limits. Use plain, concise, impersonal wording and
   write-like-me for substantial text without claiming unavailable style retrieval.
+- Always check documentation consistency before commit or push: compare current
+  claims with source and verified evidence, match EN/RU counterparts, and mark
+  historical results as such. Resolve contradictions across README, INSTALL,
+  PLAN, STATUS, REVIEW and affected guides.
 - README introduces the app; INSTALL covers download, checksums, extraction
   and launch; STATUS/technical reports record verification and limits. Release
   notes describe user-visible changes and relevant limits.
@@ -32,6 +40,10 @@
 - Before commit or push, obtain independent review of code, docs and evidence.
   Authors cannot approve their own changes. Record findings and closure;
   substantive corrections need retesting and fresh independent review.
+- Before finishing a task, clean up temporary files, test processes and build
+  outputs created for that task after checking their ownership and whether they
+  are still needed. Preserve active builds, concurrent or uncommitted work,
+  unique evidence and artifacts promised to the user; report anything retained.
 
 ## Protocol and device operations
 
