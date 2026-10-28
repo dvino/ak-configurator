@@ -324,13 +324,15 @@ impl EntropyApp {
             runtime.previous = None;
             runtime.sample = None;
             runtime.checked_at = None;
-            if self.app_settings.ak820_os_indicator.enabled
-                && !matches!(
-                    runtime.status,
-                    IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped
-                )
-            {
-                runtime.status = IndicatorStatus::Paused;
+            if !matches!(
+                runtime.status,
+                IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped
+            ) {
+                runtime.status = if self.app_settings.ak820_os_indicator.enabled {
+                    IndicatorStatus::Paused
+                } else {
+                    IndicatorStatus::Disabled
+                };
             }
             return;
         }
@@ -345,6 +347,12 @@ impl EntropyApp {
         if !self.app_settings.ak820_os_indicator.enabled
             && runtime.previous.is_none_or(|m| m == Mode::Normal)
         {
+            if !matches!(
+                runtime.status,
+                IndicatorStatus::DeviceError | IndicatorStatus::WorkerStopped
+            ) {
+                runtime.status = IndicatorStatus::Disabled;
+            }
             return;
         }
         ctx.request_repaint_after(Duration::from_millis(SAMPLE_INTERVAL_MS));
@@ -486,9 +494,18 @@ impl EntropyApp {
             }
             14 | 15 => {
                 let (key, label) = if row == 14 {
-                    ("en", tr("Английская раскладка", "English layout"))
+                    (
+                        "en",
+                        tr(
+                            "Индикатор при английской раскладке",
+                            "LED for English layout",
+                        ),
+                    )
                 } else {
-                    ("ru", tr("Русская раскладка", "Russian layout"))
+                    (
+                        "ru",
+                        tr("Индикатор при русской раскладке", "LED for Russian layout"),
+                    )
                 };
                 let mode = self
                     .app_settings
@@ -537,7 +554,7 @@ impl EntropyApp {
                     ui,
                     content_width,
                     row_height,
-                    tr("Состояние", "Status"),
+                    tr("Раскладка ОС", "OS layout"),
                     true,
                     content_width * 0.68,
                     |ui| {
@@ -617,10 +634,10 @@ fn status_label(status: IndicatorStatus, ru: bool) -> &'static str {
         (IndicatorStatus::LayoutDetected(false), true) => "Определена английская раскладка.",
         (IndicatorStatus::LayoutDetected(true), true) => "Определена русская раскладка.",
         (IndicatorStatus::LayoutUnavailable, false) => {
-            "Layout unavailable; normal lighting is restored."
+            "Layout unavailable; normal LED behavior requested."
         }
         (IndicatorStatus::LayoutUnavailable, true) => {
-            "Раскладка недоступна; включена обычная подсветка."
+            "Раскладка недоступна; запрошен обычный режим индикатора."
         }
     }
 }
@@ -628,11 +645,11 @@ fn status_label(status: IndicatorStatus, ru: bool) -> &'static str {
 fn mode_label(mode: Mode, ru: bool) -> &'static str {
     match (mode, ru) {
         (Mode::Normal, false) => "Normal",
-        (Mode::Normal, true) => "Обычный",
-        (Mode::Off, false) => "Off",
-        (Mode::Off, true) => "Выключен",
-        (Mode::On, false) => "On",
-        (Mode::On, true) => "Включён",
+        (Mode::Normal, true) => "Как обычно",
+        (Mode::Off, false) => "LED off",
+        (Mode::Off, true) => "Выкл.",
+        (Mode::On, false) => "LED on",
+        (Mode::On, true) => "Вкл.",
         (Mode::Breathing, false) => "Slow breathing",
         (Mode::Breathing, true) => "Медленное дыхание",
     }
@@ -860,6 +877,66 @@ mod background_tests {
         app.ak820_os_indicator_runtime.worker = Some(jobs);
         app.ak820_os_indicator_runtime.receiver = Some(results);
         (app, received, finished, requests)
+    }
+
+    #[test]
+    fn busy_state_does_not_claim_a_new_layout_or_change_mappings() {
+        let (mut app, _jobs, _finished, requests) = sampled_app();
+        app.app_settings
+            .ak820_os_indicator
+            .layouts
+            .insert("ru".into(), Mode::On);
+        app.ak820_os_indicator_runtime.status = IndicatorStatus::LayoutDetected(false);
+        app.unlock_open = true;
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(matches!(
+            app.ak820_os_indicator_runtime.status,
+            IndicatorStatus::Paused
+        ));
+        assert_eq!(
+            app.app_settings.ak820_os_indicator.mode(Some("en")),
+            Mode::Off
+        );
+        assert_eq!(
+            app.app_settings.ak820_os_indicator.mode(Some("ru")),
+            Mode::On
+        );
+        assert!(requests.requests().is_empty());
+        app.app_settings.ak820_os_indicator.enabled = false;
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(matches!(
+            app.ak820_os_indicator_runtime.status,
+            IndicatorStatus::Disabled
+        ));
+    }
+
+    #[test]
+    fn disabling_with_verified_idle_device_clears_old_layout_status() {
+        let (mut app, _jobs, _finished, requests) = sampled_app();
+        app.ak820_os_indicator_runtime.status = IndicatorStatus::LayoutDetected(false);
+        app.ak820_os_indicator_runtime.previous = Some(Mode::Normal);
+        app.app_settings.ak820_os_indicator.enabled = false;
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(matches!(
+            app.ak820_os_indicator_runtime.status,
+            IndicatorStatus::Disabled
+        ));
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn status_and_mapping_labels_describe_different_states() {
+        for ru in [false, true] {
+            assert_ne!(
+                status_label(IndicatorStatus::LayoutDetected(false), ru),
+                mode_label(Mode::Off, ru)
+            );
+            assert_ne!(mode_label(Mode::Off, ru), mode_label(Mode::On, ru));
+            assert_ne!(
+                status_label(IndicatorStatus::Paused, ru),
+                status_label(IndicatorStatus::LayoutDetected(false), ru)
+            );
+        }
     }
 
     #[test]

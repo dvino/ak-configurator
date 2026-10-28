@@ -43,6 +43,8 @@ Backup file operations are implemented on Linux, macOS and Windows. Unix paths a
 
 ## Application settings, tray and exit
 
+The detected OS layout and the LED behavior selected for each layout are separate. Off and On refer to the LED; Normal returns control to the keyboard. When enabled and no error is latched, the helper shows a pause while the device is busy or unverified; saved mappings are retained.
+
 The OS layout indicator is configured in **Application settings**. Its enabled state and EN/RU mappings are application preferences. The helper samples layout at a 100 ms target interval, polls in-flight completion at 20 ms and renews an unchanged active override at one second. The same policy applies while the window is hidden. Host scheduling, native layout queries and transport latency can add time; physical LED timing is unqualified.
 
 With close-to-tray enabled, the normal window close action hides the window and preserves background operation. Explicit **Quit application**, Ctrl+Q (also Cmd+Q), or the tray's Quit action requests full exit and does not start another helper. Existing pending-write, unlock and installation guards still apply. There is no separate “Close interface” button.
