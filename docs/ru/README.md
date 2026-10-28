@@ -4,7 +4,7 @@ English source of truth: [AK Configurator](../../README.md).
 
 <img src="../../assets/ak-configurator-logo.png" alt="Логотип AK Configurator" width="240">
 
-AK Configurator адаптирует [Entropy](https://github.com/ergohaven/entropy) для проводной AK820. Нативное десктопное приложение готовится к первой публичной альфе `0.1.0-alpha.1`. Целевая прошивка — опубликованная AK820 `v0.6.0-beta.3` с десятью точными профилями: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts и Multios. Браузерная версия относится к следующему этапу.
+AK Configurator адаптирует [Entropy](https://github.com/ergohaven/entropy) для проводной AK820. Нативное десктопное приложение готовится к первой публичной альфе `0.1.0-alpha.1`. Установщик по умолчанию выбирает опубликованную прошивку AK820 `v0.6.0-beta.4.1` с десятью точными профилями beta.4: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts и Multios. Beta.3 остаётся доступной как отдельный вариант. Браузерная версия относится к следующему этапу.
 
 Дополнительный read-only путь распознаёт официальные образы beta.4 и сверяет настройки QS v2. Отдельный опубликованный выпуск beta.4.1 явно разрешает прошивку точных образов beta.4; установщик закрепляет каталог и хеши образов. Это не подтверждает проверку оборудования и не разрешает запись сохранённых настроек или восстановление.
 

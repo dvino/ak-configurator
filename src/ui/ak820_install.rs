@@ -135,7 +135,7 @@ impl Default for Runtime {
             mode: Mode::Firmware,
             source: Source::Bundled,
             profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
-            beta4_1: false,
+            beta4_1: true,
             prerelease_opt_in: false,
             start_with_defaults: false,
             external_payload: None,

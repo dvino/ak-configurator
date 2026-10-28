@@ -4,11 +4,11 @@
 
 ## Beta.4.1 release integration — exact-image flashing prepared
 
-The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer defaults to beta.3 and requires explicit beta prerelease opt-in before beta.4.1. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
+The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer selects beta.4.1 by default and requires explicit beta prerelease opt-in; beta.3 remains an alternate. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
 
 Validate the isolated Windows CI software OpenGL fixture on both native architectures after independent review; keep renderer and packaging gates. Source and local test evidence: [CI-WINDOWS-GL.md](CI-WINDOWS-GL.md). No Windows fixture runtime pass is claimed.
 
-Keep beta.3 as the default installation target. Beta.4.1 flashing uses only its exact pinned catalog and image bindings; do not infer authorization from beta.4 profile flags. Keep hardware validation false and settings writes/restore blocked. The separate QS v1/v2 model does not grant write authority.
+Use beta.4.1 as the default installation target and retain beta.3 as an explicit alternate. Beta.4.1 flashing uses only its exact pinned catalog and image bindings; do not infer authorization from beta.4 profile flags. Keep hardware validation false and settings writes/restore blocked. The separate QS v1/v2 model does not grant write authority.
 
 Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.
 
