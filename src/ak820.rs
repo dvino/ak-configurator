@@ -92,7 +92,7 @@ impl ImageContract {
             Self::Alpha3 => None,
             Self::Beta2(p) => Some(beta::previous_matrix_profile(p)),
             Self::Beta3(p) => Some(beta::matrix_profile(p)),
-            Self::Beta4(p) => Some(beta::beta4_matrix_profile(p)),
+            Self::Beta4(p) => Some(beta::beta4_1_matrix_profile(p)),
         }
     }
     pub(crate) fn valid_combo_record(self, record: &[u8]) -> bool {

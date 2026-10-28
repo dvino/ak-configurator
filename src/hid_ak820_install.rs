@@ -178,6 +178,7 @@ mod install_session_tests {
             .ak820_prepare_install(
                 InstallRequest::BundledFirmware {
                     profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
+                    image: crate::ak820::ImageContract::Beta3(crate::app::ak820_beta1_profiles::ProfileId::Main),
                     recovery: None,
                     settings: engine::InstallSettingsChoice::Defaults,
                 },

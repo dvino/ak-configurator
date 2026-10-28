@@ -2,7 +2,13 @@
 
 # Desktop adaptation and review
 
-## Beta.4 read-only integration — 2026-10-28
+## Beta.4.1 exact-image install admission — 2026-10-28
+
+The official beta.4.1 release catalog and firmware matrix are pinned to SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1` and `7b38153e68d168718d04c5c8c8502daad875ca63298bf0e79c20a39c4648c570`. Their ten image bindings are checked against the beta.4.1 capability catalog, local linked IHX/map files, and packed-CODE identities. Release metadata authorizes flashing but leaves `hardware_validated` and `settings_writes_authorized` false. The installer retains beta.3 as default, requires prerelease opt-in for beta.4.1, always uses its exact release defaults, and requires the existing safety backup, fresh confirmation, single loader attempt and full readback. Generic device settings writes and restore remain blocked. Physical tests were not run.
+
+An independent read-only review found no critical bypass in release admission, exact image validation, or execution gates. A targeted Linux `cargo check --locked --bin ak-configurator` passed with Rust 1.97.0; 171 project warnings remain. The beta4_1-filtered test build was interrupted before a result due to low free disk. A Linux release package was not rebuilt. Wayland and physical-device tests were not run.
+
+## Historical beta.4 read-only integration — 2026-10-28
 
 The official AK820 `v0.6.0-beta.4` release bundle is pinned to SHA256 `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`. The implementation recognizes ten exact packed-code identities and uses the settings-record v2 contract for read-only connection reconciliation. QSID 22 is read as a u8 and shown as a localized Caps Word ruleset; the ID remains excluded from generic permissive-hold reads and from writers. Some profile rows say approved/installable, but release-level metadata sets `release_approved`, `hardware_validated`, `flashing_authorized` and `settings_writes_authorized` to false. Profile flags do not override the release denial, so installation, restore and device writes remain blocked.
 
@@ -12,7 +18,7 @@ The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc
 
 Final CI [40556287408](https://github.com/dvino/ak-configurator/actions/runs/40556287408) completed successfully on all six OS/CPU targets for PR head `b3ecae13d17e6f2f9be7312183d8ab454cf23ed7` merged with `desktop-dev` at `ef30da6e254a1b358a54cc937d93bc7ee01c0e60` (CI merge `d5617334d685f4bba5004cb5beae25c121e8fc94`). Downloaded archives, external SHA256 files, package manifests, executable-bound runtime reports and install/upgrade/uninstall reports were checked for all six candidates; user-data preservation checks passed. These are unsigned CI candidates, not a published application release. Earlier checkpoints below describe their own source and date, and do not override this result.
 
-The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. Offline beta.4 preparation remains disconnected from production admission until final release identities and transitions are supplied.
+The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. The final sentence in the 2026-10-27 checkpoint described the pre-release beta.4 preparation and is superseded by the beta.4.1 admission documented above.
 
 ## Historical provisional QS v2 offline model — 2026-10-27
 

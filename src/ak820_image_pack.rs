@@ -11,7 +11,7 @@
 //! beta2 compressed defaults follow the pinned release packer contract.
 use crate::ak820_settings_backup::{sha256, BackupResult};
 use crate::ak820_settings_model::validate_nvm;
-use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use crate::app::ak820_beta1_profiles::ProfileId;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -386,7 +386,25 @@ pub(crate) fn pack_candidate(
     mode: EntryMode,
     profile: ProfileId,
 ) -> BackupResult<OfflineCandidate> {
-    let exact = matrix_profile(profile)
+    pack_candidate_for_image(
+        ihx,
+        symbols,
+        stock,
+        nvm,
+        mode,
+        crate::ak820::ImageContract::Beta3(profile),
+    )
+}
+pub(crate) fn pack_candidate_for_image(
+    ihx: &str,
+    symbols: &Symbols,
+    stock: &[u8],
+    nvm: &[u8],
+    mode: EntryMode,
+    image: crate::ak820::ImageContract,
+) -> BackupResult<OfflineCandidate> {
+    image.profile().ok_or("Image has no profile")?;
+    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;
@@ -398,7 +416,7 @@ pub(crate) fn pack_candidate(
     validate_nvm(nvm, exact.nvm_schema)?;
     let data = read_ihex(ihx)?;
     let payload = pack_core(&data, symbols, stock, nvm, mode, exact.nvm_schema)?;
-    validate_catalog_payload(&payload, profile)?;
+    validate_catalog_payload_for_image(&payload, image)?;
     Ok(OfflineCandidate { payload, mode })
 }
 /// Structural verification is separate from catalog approval. A self-consistent
@@ -407,7 +425,13 @@ pub(crate) fn validate_catalog_payload(
     payload: &[u8],
     profile: ProfileId,
 ) -> BackupResult<EntryMode> {
-    let exact = matrix_profile(profile)
+    validate_catalog_payload_for_image(payload, crate::ak820::ImageContract::Beta3(profile))
+}
+pub(crate) fn validate_catalog_payload_for_image(
+    payload: &[u8],
+    image: crate::ak820::ImageContract,
+) -> BackupResult<EntryMode> {
+    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;

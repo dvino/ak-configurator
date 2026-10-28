@@ -2,13 +2,13 @@
 
 # AK Configurator implementation plan
 
-## Beta.4 release integration — prepared, read-only
+## Beta.4.1 release integration — exact-image flashing prepared
 
-The official AK820 `v0.6.0-beta.4` release is published. Its catalog bundle is pinned to SHA256 `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`; the beta.4 capability catalog and firmware matrix bind all ten profile identities and QS record v2. This integration adds exact recognition and read-only settings decoding. The release metadata denies hardware validation, flashing and settings writes, so installation, restore and all writes remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
+The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer defaults to beta.3 and requires explicit beta prerelease opt-in before beta.4.1. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
 
 Validate the isolated Windows CI software OpenGL fixture on both native architectures after independent review; keep renderer and packaging gates. Source and local test evidence: [CI-WINDOWS-GL.md](CI-WINDOWS-GL.md). No Windows fixture runtime pass is claimed.
 
-Keep installation pinned to beta.3. Beta.4 remains read-only while its release metadata denies hardware validation, flashing and settings writes. Do not offer beta.4 installation, restore or other writes unless a release explicitly authorizes them and the exact image/settings identities, transitions, backup and failure gates are reviewed. The separate QS v1/v2 model does not grant that authority.
+Keep beta.3 as the default installation target. Beta.4.1 flashing uses only its exact pinned catalog and image bindings; do not infer authorization from beta.4 profile flags. Keep hardware validation false and settings writes/restore blocked. The separate QS v1/v2 model does not grant write authority.
 
 Offline project import undo preserves unrelated subsequent profile edits; nonregular imports are rejected. File reads and atomic writes run in the dialog worker; native dialog and slow-filesystem behavior still need platform checks.
 
@@ -48,7 +48,7 @@ P0 remains partial and default-off. Production integration of provisional QS v2,
 
 ## Delivery order
 
-1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separate beta.4 read-only release pins. Keep release-input identity, platform execution and physical qualification as separate evidence.
+1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separately pinned beta.4.1 exact-image flashing catalog; keep hardware-validation claims separate from image-install authorization. Keep release-input identity, platform execution and physical qualification as separate evidence.
 2. Review restore, reset, deletion and installation with safety snapshots, confirmation pins, ownership and one-attempt failure handling. A failed read, timeout, storage fault or mismatch stops without retry or automatic rollback.
 3. Qualify installation and OEM recovery only with explicit authorization and exact hardware procedures. Keep source, host-test and physical evidence distinct.
 4. Complete native OS helper, capture permission and GUI teardown/reopen qualification per platform; retain the completed source/host checks.

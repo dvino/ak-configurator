@@ -286,8 +286,14 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
         valid,
         "This command or value is unavailable in the verified AK820 image"
     );
+    let beta4_write_authorized = match image {
+        Some(ImageContract::Beta4(profile)) => {
+            crate::app::ak820_beta1_profiles::beta4_settings_writes_authorized(profile)
+        }
+        _ => true,
+    };
     ensure!(
-        !write || !matches!(image, Some(ImageContract::Beta4(_))),
+        !write || beta4_write_authorized,
         "AK820 beta.4 release metadata does not authorize device writes"
     );
     Ok(write)

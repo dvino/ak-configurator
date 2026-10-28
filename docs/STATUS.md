@@ -2,9 +2,11 @@
 
 # Project status
 
-## Official beta.4 release — read-only integration prepared
+## beta.4.1 exact-image installation integration — prepared, not device-tested
 
-The official AK820 `v0.6.0-beta.4` release was published on 2026-10-28. Its `AK820-Beta4-Catalog.zip` SHA256 is `14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097`, matching the published sidecar and GitHub release digest. The configurator pins the beta.4 firmware matrix and capability catalog, recognizes all ten exact packed-code identities, and uses the v2 settings-record contract for read-only connection reconciliation. Some profile rows mark images approved/installable, but release-level capability metadata keeps `release_approved`, hardware validation, flashing authorization and settings-write authorization false. Profile flags do not override that denial; device writes, installation and restore remain blocked.
+The published beta.4.1 release catalog is pinned to SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; its firmware matrix is pinned to `7b38153e68d168718d04c5c8c8502daad875ca63298bf0e79c20a39c4648c570`. It authorizes flashing and binds each of ten profiles to exact IHX and packed-CODE SHA256 values; `hardware_validated=false` and `settings_writes_authorized=false`. The installer defaults to beta.3; beta.4.1 requires explicit prerelease opt-in, uses beta.4.1 defaults, and retains fresh backup, confirmation, one-attempt loader and full readback gates. Beta.4 settings writes and restore remain blocked. No physical-device operation was run.
+
+A targeted Linux `cargo check --locked --bin ak-configurator` passed with Rust 1.97.0 in the Debian-based build container; 171 compiler warnings remain across the project. The beta.4.1-filtered test build was stopped before producing a test result when temporary compilation approached the host's low free-disk limit. No Linux release package was rebuilt; Wayland and physical-device tests remain deferred.
 
 The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc); SHA256 is `70b3e46acdd249e53efc8dfc2b71dc4b9b016d3d51e9bff89d11f3f40f72c03e`. Its offline `--self-check` passed and reports `hardware_access=false` and `network_access=false`. The report identifies application version `0.1.0-alpha.1` and firmware release `v0.6.0-beta.3`, so it validates the built-in beta.3 public profiles and does not verify beta.4 packaging. The full offline command `cargo test --offline --locked --bin ak-configurator -- --test-threads=1` passed 1916 tests; 14 were ignored. This includes exact beta.4 image recognition, blocked HID writes and localized QSID 22 display tests. The build emitted 169 compiler warnings, not individually triaged. Neither the self-check nor unit tests verify GUI operation, Wayland, or physical hardware. The glibc binary is not qualified for Alpine/musl.
 
@@ -27,7 +29,7 @@ A separate offline archive-envelope bridge reuses five-file validation and requi
 
 Beta.4 connection reads QSID 22 as a u8, reconciles it with the exact v2 NVM record, and displays the English/Russian Caps Word ruleset in About Device. QSID 22 remains excluded from the inherited permissive-hold reader and from all writers. Beta.3 behavior remains unchanged.
 
-The explicit QS v1/v2 model is now used after exact beta.4 image/profile verification for read-only settings reconciliation. It does not authorize backup, restore, installation or writes. Beta.4 release metadata keeps all those device-write paths blocked.
+The explicit QS v1/v2 model is used for read-only settings reconciliation after exact beta.4 image identification. It does not authorize saved-settings writes or restore; exact beta.4.1 firmware installation is separately admitted by the pinned release catalog described above.
 
 Offline project import undo now restores the replaced profile without discarding subsequent edits to other profiles. Project import rejects nonregular files; Unix opens are nonblocking and rechecked after opening. The file dialog worker also handles reads and atomic writes, keeping slow file access off the UI thread; parsing and application remain on the UI thread.
 

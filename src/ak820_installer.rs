@@ -2,9 +2,7 @@
 //! Native local-input validation. Local files are evidence about bytes only;
 //! they cannot prove snapshot freshness, physical ownership or release authority.
 //! No HID open, transition, erase, write, restart or settings restore is connected.
-use crate::ak820_image_pack::{
-    validate_catalog_payload, validate_native_revision, APP_END, APP_START,
-};
+use crate::ak820_image_pack::{validate_native_revision, APP_END, APP_START};
 use crate::ak820_loader::{checksum, PayloadReports};
 use crate::ak820_settings_backup::{sha256, BackupResult, ImageIdentity};
 use crate::ak820_settings_model::decode_trusted_rom;
@@ -45,9 +43,27 @@ impl CheckedLocalPackage {
         snapshot: &[u8],
         recovery: &[u8],
     ) -> BackupResult<Self> {
+        Self::prepare_for_image(
+            target,
+            payload,
+            snapshot,
+            recovery,
+            crate::ak820::ImageContract::Beta3(target),
+        )
+    }
+    pub(crate) fn prepare_for_image(
+        target: ProfileId,
+        payload: &[u8],
+        snapshot: &[u8],
+        recovery: &[u8],
+        image: crate::ak820::ImageContract,
+    ) -> BackupResult<Self> {
         // Validate complete sizes before taking any slices. A full-ROM payload
         // is forbidden even when it happens to contain the approved CODE.
-        validate_catalog_payload(payload, target)?;
+        if image.profile() != Some(target) {
+            return Err("Selected image/profile binding differs".into());
+        }
+        crate::ak820_image_pack::validate_catalog_payload_for_image(payload, image)?;
         if snapshot.len() != 65536 || recovery.len() != 65536 {
             return Err("A complete 65536-byte snapshot and OEM recovery ROM are required".into());
         }
@@ -143,6 +159,18 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
         };
         if decode_trusted_rom(rom, &rom[0xc700..0xef00], &identity, profile).is_ok() {
             return Ok(SnapshotKind::Project(profile));
+        }
+    }
+    for row in &crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles {
+        let Some(exact) = row.settings_identity.as_ref() else { continue; };
+        let identity = ImageIdentity {
+            ihx_sha256: exact.ihx_sha256.clone(),
+            code_sha256: exact.code_sha256.clone(),
+            definition_sha256: exact.definition_sha256.clone(),
+            schema: exact.nvm_schema,
+        };
+        if decode_trusted_rom(rom, &rom[0xc700..0xef00], &identity, row.profile).is_ok() {
+            return Ok(SnapshotKind::Project(row.profile));
         }
     }
     Err("Snapshot is neither a supported OEM revision nor an exact supported project image".into())

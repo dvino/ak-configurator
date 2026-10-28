@@ -6,7 +6,7 @@
 
 AK Configurator adapts [Entropy](https://github.com/ergohaven/entropy) for the wired AK820. The native desktop application is being prepared for its first public alpha, `0.1.0-alpha.1`. It targets the published AK820 firmware `v0.6.0-beta.3`, with ten exact profiles: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. Browser support is a later stage.
 
-An additional read-only path recognizes official beta.4 images and reconciles QS v2 settings. Beta.4 release metadata does not authorize firmware installation, settings writes or restore.
+An additional read-only path recognizes official beta.4 images and reconciles QS v2 settings. The separately published beta.4.1 release authorizes flashing its exact beta.4 images; the installer pins its catalog and image hashes. This does not claim hardware validation or authorize saved-settings writes and restore.
 
 The editor provides profile-aware key and encoder mappings, six layers, macros, Combo, typed settings and Russian/English help. It retains Entropy's menus and key picker. Offline projects let users explore and edit all ten profile examples without connecting a keyboard.
 

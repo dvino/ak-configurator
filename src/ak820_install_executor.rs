@@ -12,11 +12,13 @@ pub(crate) enum InstallRequest {
     /// are permitted solely when that source itself is verified OEM firmware.
     BundledFirmware {
         profile: ProfileId,
+        image: crate::ak820::ImageContract,
         recovery: Option<Vec<u8>>,
         settings: InstallSettingsChoice,
     },
     Firmware {
         profile: ProfileId,
+        image: crate::ak820::ImageContract,
         payload: Vec<u8>,
         recovery: Vec<u8>,
         settings: InstallSettingsChoice,
@@ -135,14 +137,18 @@ impl PreparedInstallation {
         let source_kind = crate::ak820_installer::classify_snapshot(&source)?;
         if let InstallRequest::BundledFirmware {
             profile,
+            image,
             recovery,
             settings,
         } = request
         {
             let recovery = bundled_recovery(source_kind, &source, recovery)?;
             let nvm = match &settings {
-                InstallSettingsChoice::Defaults => crate::ak820_release::bundled_defaults(profile)?,
+                InstallSettingsChoice::Defaults => crate::ak820_release::bundled_defaults_for_image(image)?,
                 InstallSettingsChoice::PreservedInPayload { nvm_sha256 } => {
+                    if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
+                        return Err("Beta.4.1 does not authorize preserving saved settings".into());
+                    }
                     let nvm = preserved_nvm(source_kind, &source, profile)?;
                     if sha256(&nvm) != *nvm_sha256 {
                         return Err(
@@ -153,10 +159,11 @@ impl PreparedInstallation {
                     nvm
                 }
             };
-            let payload = crate::ak820_release::bundled_payload(profile, &recovery, Some(&nvm))?;
+            let payload = crate::ak820_release::bundled_payload_for_image(image, &recovery, Some(&nvm))?;
             return Self::prepare(
                 InstallRequest::Firmware {
                     profile,
+                    image,
                     payload,
                     recovery,
                     settings,
@@ -186,24 +193,33 @@ impl PreparedInstallation {
             }
             InstallRequest::Firmware {
                 profile,
+                image,
                 payload,
                 recovery,
                 settings,
             } => {
-                admission
-                    .ok_or("Firmware release admission is required")?
-                    .validate_payload(profile, &payload)?;
-                let package = CheckedLocalPackage::prepare(profile, &payload, &source, &recovery)?;
+                let admission = admission.ok_or("Firmware release admission is required")?;
+                if admission.image() != image {
+                    return Err("Selected firmware image differs from its release authorization".into());
+                }
+                admission.validate_payload(profile, &payload)?;
+                let package = CheckedLocalPackage::prepare_for_image(profile, &payload, &source, &recovery, image)?;
                 if source_kind == SnapshotKind::Oem && recovery != source {
                     return Err(
                         "Initial OEM reference must equal the complete fresh device capture".into(),
                     );
                 }
-                let hold = matches!(package.summary().snapshot_kind, SnapshotKind::Project(_));
+                if matches!(image, crate::ak820::ImageContract::Beta4(_))
+                    && !matches!(&settings, InstallSettingsChoice::Defaults)
+                {
+                    return Err("Beta.4.1 installation requires explicit image defaults; saved settings are not authorized".into());
+                }
+                let hold = matches!(package.summary().snapshot_kind, SnapshotKind::Project(_))
+                    || matches!(image, crate::ak820::ImageContract::Beta4(_));
                 let outcome = match settings {
                     InstallSettingsChoice::Defaults => {
                         if payload[0xc700 - APP_START..0xef00 - APP_START]
-                            != crate::ak820_release::bundled_defaults(profile)?
+                            != crate::ak820_release::bundled_defaults_for_image(image)?
                         {
                             return Err("Payload does not contain the selected defaults".into());
                         }
@@ -222,7 +238,7 @@ impl PreparedInstallation {
                 };
                 (
                     payload,
-                    format!("firmware:{}", profile.as_str()),
+                    format!("firmware:{}:{}", admission.version(), profile.as_str()),
                     hold,
                     outcome,
                 )
@@ -575,6 +591,7 @@ mod tests {
         assert!(preserved_nvm(SnapshotKind::Oem, &source, ProfileId::Main).is_err());
         let request = InstallRequest::BundledFirmware {
             profile: ProfileId::Main,
+            image: crate::ak820::ImageContract::Beta3(ProfileId::Main),
             recovery: None,
             settings: InstallSettingsChoice::Defaults,
         };
