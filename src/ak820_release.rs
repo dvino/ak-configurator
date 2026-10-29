@@ -154,6 +154,9 @@ impl ReleaseAdmission {
             serde_json::from_str(RELEASE_CATALOG).map_err(|_| "Invalid bundled release catalog")?;
         let row = beta::matrix_profile(profile);
         let image = beta::profile(profile);
+        if catalog["flashing_authorized"].as_bool() != Some(true) {
+            return Err("Beta.3 release catalog does not authorize flashing".into());
+        }
         if catalog["tag"].as_str() != Some(beta::BETA_RELEASE)
             || catalog["format"].as_str() != Some("ak820-beta-release-catalog-1")
             || !catalog["installable_profiles"]
@@ -169,6 +172,13 @@ impl ReleaseAdmission {
             .settings_identity
             .as_ref()
             .ok_or("Missing packed image policy")?;
+        let bindings = catalog["flashing_authorized_images"].as_array()
+            .ok_or("Beta.3 release catalog has no exact flashing image bindings")?;
+        let selected: Vec<_> = bindings.iter().filter(|entry| entry["profile"].as_str() == Some(profile.as_str())).collect();
+        if selected.len() != 1 || selected[0]["ihx_sha256"].as_str() != Some(exact.ihx_sha256.as_str())
+            || selected[0]["code_sha256"].as_str() != Some(exact.code_sha256.as_str()) {
+            return Err("Beta.3 flashing authorization does not match the exact profile image".into());
+        }
         Ok(Self {
             profile,
             image: crate::ak820::ImageContract::Beta3(profile),
@@ -374,6 +384,31 @@ pub(crate) fn bundled_payload_for_image(
             .bytes()
             .to_vec(),
     )
+}
+
+/// Prepare from an exact project capture; this neither creates an OEM backup
+/// nor replaces fresh-device and transaction checks by the installer.
+pub(crate) fn bundled_payload_from_project(
+    admission: &ReleaseAdmission,
+    source: &[u8],
+    nvm: Option<&[u8]>,
+) -> BackupResult<Vec<u8>> {
+    let image = admission.image();
+    let (ihx, map) = sources_for_image(image)?;
+    let symbols = read_symbols(map)?;
+    let defaults;
+    let nvm = match nvm {
+        Some(nvm) => nvm,
+        None => {
+            defaults = default_nvm(ihx, &symbols)?;
+            &defaults
+        }
+    };
+    let candidate = crate::ak820_image_pack::pack_candidate_from_project_for_image(
+        ihx, &symbols, source, nvm, EntryMode::Permanent, image,
+    )?;
+    admission.validate_payload(admission.profile, candidate.bytes())?;
+    Ok(candidate.bytes().to_vec())
 }
 
 #[derive(Deserialize)]
@@ -617,6 +652,13 @@ mod tests {
     }
 
     #[test]
+    fn project_payload_rejects_unknown_and_incomplete_sources() {
+        let admission = ReleaseAdmission::beta4_1(ProfileId::Main, true).unwrap();
+        assert!(bundled_payload_from_project(&admission, &[0; 65536], None).is_err());
+        assert!(bundled_payload_from_project(&admission, &[0; 100], None).is_err());
+    }
+
+    #[test]
     fn release_observations_bind_tag_catalog_and_publication() {
         let mut legacy: ReleaseObservation = serde_json::from_str(
             r#"{"checked_at":null,"blocked":true,"reason":"old beta2 block"}"#,
@@ -657,15 +699,11 @@ mod tests {
         for image in beta::profiles() {
             let profile = image.profile;
             assert!(ReleaseAdmission::bundled(profile, false).is_err());
-            let admission = ReleaseAdmission::bundled(profile, true).unwrap();
-            assert_eq!(admission.version(), beta::BETA_RELEASE);
+            assert!(ReleaseAdmission::bundled(profile, true).unwrap_err().contains("does not authorize flashing"));
             let nvm = bundled_defaults(profile).unwrap();
             assert_eq!(sha256(&nvm), expected[profile.as_str()].as_str().unwrap());
-            assert!(
-                admission
-                    .validate_payload(profile, &vec![0; 51136])
-                    .is_err()
-            );
+            assert!(ReleaseAdmission::beta4_1(profile, true).unwrap()
+                .validate_payload(profile, &vec![0; 51136]).is_err());
             // Public linked files do not substitute for a private OEM source.
             assert!(bundled_payload(profile, &[0; 65536], None).is_err());
         }
@@ -698,7 +736,7 @@ mod tests {
         remembered.apply(observe(&api()).unwrap());
         assert!(remembered.blocked);
         assert!(
-            ReleaseAdmission::bundled(ProfileId::Main, true)
+            ReleaseAdmission::beta4_1(ProfileId::Main, true)
                 .unwrap()
                 .with_observation(&remembered)
                 .is_err()

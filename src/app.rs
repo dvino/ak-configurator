@@ -171,6 +171,9 @@ mod display_preview;
 mod display_settings_ui;
 #[path = "ui/encoder_visibility_settings.rs"]
 mod encoder_visibility_settings_ui;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "ui/file_browser.rs"]
+mod file_browser;
 #[path = "ui/file_dialog.rs"]
 mod file_dialog;
 #[path = "ui/grave_escape_settings.rs"]

@@ -435,7 +435,7 @@ fn draw_key_legend_dropdown(
 /// Shared by the picker (spawn) and the writer so every format — PNG, SVG, and
 /// PDF — goes through the same async worker dialog and cannot silently diverge.
 #[cfg(not(target_arch = "wasm32"))]
-fn layout_image_export_descriptor(format: LayoutImageExportFormat) -> (&'static str, &'static str) {
+pub(super) fn layout_image_export_descriptor(format: LayoutImageExportFormat) -> (&'static str, &'static str) {
     match format {
         LayoutImageExportFormat::Png => ("png", "PNG image"),
         LayoutImageExportFormat::Svg => ("svg", "SVG image"),
@@ -749,12 +749,13 @@ impl EntropyApp {
         // The picker runs on a worker thread; rendering + writing happen in
         // write_layout_image_export once a path comes back. All three formats
         // (PNG, SVG, PDF) go through this same async parented-dialog path.
-        self.spawn_file_dialog(
+        self.spawn_file_dialog_with_default(
             crate::app::file_dialog::FileDialogAction::ExportLayoutImage,
             rfd::FileDialog::new()
                 .add_filter(filter_label, &[extension])
                 .set_file_name(&file_name),
             true,
+            Some(&file_name),
         );
     }
 

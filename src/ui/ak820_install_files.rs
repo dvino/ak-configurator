@@ -4,7 +4,7 @@ use crate::ak820_installer::{CheckedLocalPackage, LocalPlanSummary, SnapshotKind
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use crate::app::EntropyApp;
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -86,6 +86,9 @@ struct State {
     summary: Option<LocalPlanSummary>,
     error: Option<Problem>,
     pending: Option<Pending>,
+    path_entry: Option<(Slot, String)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    browser: Option<(Slot, Arc<Mutex<super::file_browser::FileBrowser>>)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -98,6 +101,9 @@ impl Default for State {
             summary: None,
             error: None,
             pending: None,
+            path_entry: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            browser: None,
         }
     }
 }
@@ -224,17 +230,34 @@ fn apply_message(state: &mut State, msg: Message) -> bool {
 fn snapshot_kind_text(kind: SnapshotKind, ru: bool) -> String {
     match kind {
         SnapshotKind::Oem => tr(ru, "Supported OEM", "Поддерживаемая OEM").to_owned(),
-        SnapshotKind::Project(profile) => beta::profile_description(profile)
-            .title
-            .for_language(ru)
+        SnapshotKind::Project(image) => image.profile()
+            .map(|profile| beta::profile_description(profile).title.for_language(ru))
+            .unwrap_or_else(|| tr(ru, "Unknown project profile", "Неизвестный профиль проекта"))
             .to_owned(),
     }
 }
 
-fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot>, bool, bool) {
+#[cfg(not(target_arch = "wasm32"))]
+fn browser_result(state: &mut State, result: super::file_browser::BrowserResult) -> Option<(Slot, PathBuf)> {
+    use super::file_browser::BrowserResult;
+    match result {
+        BrowserResult::Selected(path) if state.pending.is_none() => {
+            let (slot, _) = state.browser.take()?;
+            state.path_entry = None;
+            Some((slot, path))
+        }
+        BrowserResult::Cancelled => {
+            state.browser = None;
+            state.path_entry = None;
+            None
+        }
+        _ => None,
+    }
+}
+
+fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<(Slot, PathBuf)>, bool) {
     let mut pick = None;
     let mut check = false;
-    let mut close = false;
     ui.label(tr(
         ru,
         "Checks the selected files locally. Use Install firmware for a separate device-bound installation plan.",
@@ -295,7 +318,13 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
             )
             .clicked()
             {
-                pick = Some(slot);
+                state.path_entry = Some((slot, String::new()));
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    state.browser = Some((slot, Arc::new(Mutex::new(super::file_browser::FileBrowser::new(
+                        PathBuf::from("."), super::file_browser::BrowserMode::File, ui.ctx(),
+                    )))));
+                }
             }
             let input = match slot {
                 Slot::Payload => &state.payload,
@@ -313,11 +342,50 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
         });
     }
 
+    if let Some((slot, path)) = &mut state.path_entry {
+        let mut cancel = false;
+        ui.label(tr(
+            ru,
+            "Enter a local file path",
+            "Введите путь к локальному файлу",
+        ));
+        ui.add(egui::TextEdit::singleline(path).desired_width(ui.available_width()));
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui_style::action_button(
+                ui,
+                tr(ru, "Open", "Открыть"),
+                !path.is_empty() && state.pending.is_none(),
+            )
+            .clicked()
+            {
+                pick = Some((*slot, PathBuf::from(path.as_str())));
+            }
+            if ui.button(tr(ru, "Cancel", "Отмена")).clicked() {
+                cancel = true;
+            }
+        });
+        if cancel || pick.is_some() {
+            state.path_entry = None;
+            #[cfg(not(target_arch = "wasm32"))]
+            { state.browser = None; }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some((_, browser)) = &state.browser {
+        let result = browser.lock().unwrap_or_else(|e| e.into_inner()).show(ui, ru);
+        if let Some(result) = result {
+            pick = browser_result(state, result);
+        }
+    }
+
     ui.horizontal(|ui| {
         let ready = state.payload.is_some()
             && state.snapshot.is_some()
             && state.recovery.is_some()
-            && state.pending.is_none();
+            && state.pending.is_none()
+            && pick.is_none();
+        #[cfg(not(target_arch = "wasm32"))]
+        let ready = ready && state.browser.is_none();
         if crate::ui_style::action_button(ui, tr(ru, "Check files", "Проверить файлы"), ready)
             .clicked()
         {
@@ -419,19 +487,20 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<Slot
             },
         );
     }
-    if crate::ui_style::action_button(ui, tr(ru, "Close", "Закрыть"), true).clicked() {
-        close = true;
-    }
-    (pick, check, close)
+    (pick, check)
 }
 
-pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
-    if !ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false)) {
-        // Fence caller-driven close as well as the Close button below.
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), State::default()));
-        return;
-    }
-    let ru = _app.app_settings.language == crate::i18n::Language::Russian;
+pub(crate) fn page_busy(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<State>(egui::Id::new(STATE_ID)).is_some_and(|s| s.pending.is_some()))
+}
+
+pub(crate) fn reset(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), State::default()));
+}
+
+pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) -> bool {
+    let ctx = ui.ctx().clone();
+    let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let mut s = ctx
         .data(|d| d.get_temp::<State>(egui::Id::new(STATE_ID)))
         .unwrap_or_default();
@@ -453,36 +522,29 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
             }
         }
     }
-    let mut open = true;
-    let (pick, check, close) = crate::ui_style::utility_window(
-        ctx,
-        tr(
+    let mut back = false;
+    ui.horizontal_wrapped(|ui| {
+        if crate::ui_style::action_button(ui, tr(ru, "Back", "Назад"), s.pending.is_none()).clicked() {
+            back = true;
+        }
+        ui.heading(tr(
             ru,
             "Check AK820 local files",
             "Проверка локальных файлов AK820",
-        ),
-        egui::Id::new("ak820_install_files_window"),
-        &mut open,
-        egui::vec2(620.0, 430.0),
-    )
-    .vscroll(true)
-    .show(ctx, |ui| {
+        ));
         if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
-            super::ak820_help_ui::open_section(ctx, "firmware-files");
+            super::ak820_help_ui::open_section(&ctx, "firmware-files");
         }
-        draw_contents(ui, ru, &mut s)
-    })
-    .and_then(|response| response.inner)
-    .unwrap_or_default();
-    if !open || close {
-        s.invalidate();
-        ctx.data_mut(|d| {
-            d.insert_temp(egui::Id::new(OPEN_ID), false);
-            d.insert_temp(egui::Id::new(STATE_ID), State::default());
-        });
-        return;
+    });
+    if back {
+        reset(&ctx);
+        return true;
     }
-    if let Some(slot) = pick {
+    let (pick, check) = egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| draw_contents(ui, ru, &mut s))
+        .inner;
+    if let Some((slot, path)) = pick {
         let token = s.token.wrapping_add(1);
         s.token = token;
         s.summary = None;
@@ -491,11 +553,7 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
         let rx = Arc::new(Mutex::new(rx));
         s.pending = Some(Pending { token, rx });
         std::thread::spawn(move || {
-            let chosen = rfd::FileDialog::new().pick_file();
-            let result = match chosen {
-                Some(path) => read_bounded(&path, slot_expected(slot)).map(Some),
-                None => Ok(None),
-            };
+            let result = read_bounded(&path, slot_expected(slot)).map(Some);
             let _ = tx.send(Message {
                 token,
                 slot: Some(slot),
@@ -531,6 +589,7 @@ pub(crate) fn show(_app: &mut EntropyApp, ctx: &egui::Context) {
         }
     }
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), s));
+    false
 }
 
 #[cfg(test)]
@@ -600,7 +659,69 @@ mod tests {
     }
 
     #[test]
-    fn local_file_window_fits_800_by_500_in_both_languages_without_hid() {
+    fn reset_discards_pending_work_and_path_entry() {
+        let ctx = egui::Context::default();
+        let (_tx, rx) = mpsc::channel();
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new(STATE_ID),
+                State {
+                    pending: Some(Pending {
+                        token: 1,
+                        rx: Arc::new(Mutex::new(rx)),
+                    }),
+                    path_entry: Some((Slot::Payload, "local.bin".into())),
+                    ..State::default()
+                },
+            );
+        });
+        reset(&ctx);
+        let state = ctx
+            .data(|d| d.get_temp::<State>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert!(state.pending.is_none());
+        assert!(state.path_entry.is_none());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(state.browser.is_none());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn browser_selection_is_slot_bound_and_rejects_directories_and_busy_results() {
+        use crate::app::file_browser::{BrowserMode, BrowserResult, FileBrowser};
+        let ctx = egui::Context::default();
+        for slot in [Slot::Payload, Slot::Snapshot, Slot::Recovery] {
+            let browser = Arc::new(Mutex::new(FileBrowser::new(PathBuf::from("."), BrowserMode::File, &ctx)));
+            let mut state = State { browser: Some((slot, browser)), path_entry: Some((slot, String::new())), ..State::default() };
+            assert!(browser_result(&mut state, BrowserResult::Directory(PathBuf::from("."))).is_none());
+            let (_tx, rx) = mpsc::channel();
+            state.pending = Some(Pending { token: 1, rx: Arc::new(Mutex::new(rx)) });
+            assert!(browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file"))).is_none());
+            state.pending = None;
+            assert_eq!(browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file"))), Some((slot, PathBuf::from("file"))));
+            assert!(state.browser.is_none() && state.path_entry.is_none());
+            assert_eq!(slot_expected(slot), if slot == Slot::Payload { 51136 } else { 65536 });
+        }
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn browser_cancel_discards_picker_without_changing_inputs() {
+        use crate::app::file_browser::{BrowserMode, BrowserResult, FileBrowser};
+        let ctx = egui::Context::default();
+        let mut state = State {
+            payload: Some(Input { name: "kept".into(), bytes: vec![1] }),
+            browser: Some((Slot::Payload, Arc::new(Mutex::new(FileBrowser::new(PathBuf::from("."), BrowserMode::File, &ctx))))),
+            path_entry: Some((Slot::Payload, String::new())),
+            ..State::default()
+        };
+        assert!(browser_result(&mut state, BrowserResult::Cancelled).is_none());
+        assert!(state.browser.is_none() && state.path_entry.is_none());
+        assert_eq!(state.payload.unwrap().name, "kept");
+    }
+
+    #[test]
+    fn local_file_page_renders_800_by_500_in_both_languages_without_hid() {
         for language in [
             crate::i18n::Language::English,
             crate::i18n::Language::Russian,
@@ -610,7 +731,6 @@ mod tests {
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
             ctx.data_mut(|data| {
-                data.insert_temp(egui::Id::new(OPEN_ID), true);
                 data.insert_temp(
                     egui::Id::new(STATE_ID),
                     State {
@@ -628,13 +748,13 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| show(&mut app, ctx),
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            assert!(!show(&mut app, ui));
+                        });
+                    },
                 );
             }
-            let rect = ctx
-                .memory(|memory| memory.area_rect(egui::Id::new("ak820_install_files_window")))
-                .unwrap();
-            assert!(rect.width() <= 800.0 && rect.height() <= 500.0, "{rect:?}");
             assert!(app.hid_device.is_none());
         }
     }

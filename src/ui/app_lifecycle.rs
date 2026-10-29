@@ -1546,6 +1546,190 @@ impl EntropyApp {
     }
 }
 
+impl EntropyApp {
+    pub(super) fn draw_ak820_offline_modules_page(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        let open_id = egui::Id::new("ak820_offline_extensions_open");
+        let language = self.app_settings.language;
+        if crate::ui_style::action_button(
+            ui,
+            match language {
+                crate::i18n::Language::English => "Back",
+                crate::i18n::Language::Russian => "Назад",
+            },
+            true,
+        )
+        .clicked()
+        {
+            ctx.data_mut(|data| data.insert_temp(open_id, false));
+            return;
+        }
+        ui.heading(match language {
+            crate::i18n::Language::English => "Offline profile modules",
+            crate::i18n::Language::Russian => "Модули офлайн-профиля",
+        });
+        if !self.ak820_demo {
+            ctx.data_mut(|data| data.insert_temp(open_id, false));
+            return;
+        }
+        let (Some(profile), Some(extensions)) = (
+            self.ak820_demo_profile,
+            self.ak820_offline_extensions.as_mut(),
+        ) else {
+            ctx.data_mut(|data| data.insert_temp(open_id, false));
+            return;
+        };
+        if super::ak820_beta1_profiles::matrix_profile(profile)
+            .identity
+            .nvm_schema
+            != crate::ak820_typed_storage::SCHEMA
+        {
+            ctx.data_mut(|data| data.insert_temp(open_id, false));
+            return;
+        }
+        let mut changed = false;
+        let mut td_assignment = None;
+        let language = self.app_settings.language;
+        let layer_count = self.layer_count;
+        let key_coords = self
+            .layout
+            .as_ref()
+            .map(|layout| {
+                layout
+                    .keys
+                    .iter()
+                    .map(|key| (key.row, key.col))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            if crate::ui_style::action_button(
+                ui,
+                if language == crate::i18n::Language::Russian {
+                    "Справка"
+                } else {
+                    "Help"
+                },
+                true,
+            )
+            .clicked()
+            {
+                super::ak820_help_ui::open_section(&ctx, "layers-modules");
+            }
+            if super::ak820_beta1_profiles::matrix_profile(profile)
+                .capabilities
+                .dynamic_entries
+                .tap_dance
+                > 0
+            {
+                let tap_count = super::ak820_beta1_profiles::matrix_profile(profile)
+                    .capabilities
+                    .dynamic_entries
+                    .tap_dance as usize;
+                ui.heading(match self.app_settings.language {
+                    crate::i18n::Language::English => "Offline Tap Dance assignments",
+                    crate::i18n::Language::Russian => "Назначения Tap Dance офлайн",
+                });
+                let target_id = egui::Id::new("ak820_offline_td_target");
+                let mut target = ctx
+                    .data(|data| data.get_temp::<(usize, usize)>(target_id))
+                    .unwrap_or((0, 0));
+                egui::ComboBox::from_id_salt("ak820_offline_td_layer")
+                    .selected_text(format!(
+                        "{} {}",
+                        if language == crate::i18n::Language::Russian {
+                            "Слой"
+                        } else {
+                            "Layer"
+                        },
+                        target.0 + 1
+                    ))
+                    .show_ui(ui, |ui| {
+                        for layer in 0..layer_count {
+                            ui.selectable_value(
+                                &mut target.0,
+                                layer,
+                                format!(
+                                    "{} {}",
+                                    if language == crate::i18n::Language::Russian {
+                                        "Слой"
+                                    } else {
+                                        "Layer"
+                                    },
+                                    layer + 1
+                                ),
+                            );
+                        }
+                    });
+                egui::ComboBox::from_id_salt("ak820_offline_td_key")
+                    .selected_text(format!(
+                        "{} {}",
+                        if language == crate::i18n::Language::Russian {
+                            "Клавиша"
+                        } else {
+                            "Key"
+                        },
+                        target.1 + 1
+                    ))
+                    .show_ui(ui, |ui| {
+                        for (index, (row, col)) in key_coords.iter().enumerate() {
+                            ui.selectable_value(
+                                &mut target.1,
+                                index,
+                                format!(
+                                    "{} {} ({}, {})",
+                                    if language == crate::i18n::Language::Russian {
+                                        "Клавиша"
+                                    } else {
+                                        "Key"
+                                    },
+                                    index + 1,
+                                    row,
+                                    col
+                                ),
+                            );
+                        }
+                    });
+                ctx.data_mut(|data| data.insert_temp(target_id, target));
+                ui.horizontal_wrapped(|ui| {
+                    for slot in 0..tap_count {
+                        if crate::ui_style::action_button(
+                            ui,
+                            format!(
+                                "{} TD({slot})",
+                                if language == crate::i18n::Language::Russian {
+                                    "Назначить"
+                                } else {
+                                    "Assign"
+                                }
+                            ),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            td_assignment = Some((target.0, target.1, slot));
+                        }
+                    }
+                });
+                ui.separator();
+            }
+            changed |= super::ak820_offline_extensions::show(ui, language, profile, extensions);
+        });
+        if let Some((layer, key, slot)) = td_assignment {
+            changed |= self.assign_offline_tap_dance(layer, key, slot);
+        }
+        // Preserve edits from the Tap Dance controls above as well.
+        if changed {
+            self.status_msg = match self.app_settings.language {
+                crate::i18n::Language::English => {
+                    "Offline module candidate updated in memory".into()
+                }
+                crate::i18n::Language::Russian => "Офлайн-вариант модуля обновлён в памяти".into(),
+            };
+        }
+    }
+}
+
 impl eframe::App for EntropyApp {
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
         app_panel_fill(visuals.dark_mode).to_normalized_gamma_f32()
@@ -1769,13 +1953,42 @@ impl eframe::App for EntropyApp {
         #[cfg(not(target_arch = "wasm32"))]
         super::ak820_backup_inspection::invalidate_closed(ctx, self.connection_generation);
 
+        // Persistent navigation stays available while service pages replace the editor canvas.
+        egui::TopBottomPanel::top("ak820_service_navigation_panel").show_inside(root_ui, |ui| {
+            self.draw_service_navigation(ui);
+        });
+
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.pending_file_dialog.is_some() {
+                self.show_inline_file_dialog(ui);
+                return;
+            }
+            if super::ak820_offline_files::is_open(ctx) {
+                super::ak820_offline_files::show(self, ui);
+                return;
+            }
+            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new(super::ak820_install_files::OPEN_ID)).unwrap_or(false)) {
+                if super::ak820_install_files::show(self, ui) {
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(super::ak820_install_files::OPEN_ID), false));
+                }
+                return;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new(super::ak820_install::OPEN_ID)).unwrap_or(false)) {
+                super::ak820_install::show(self, ui);
+                return;
+            }
             if ctx.data(|d| {
                 d.get_temp::<bool>(egui::Id::new(super::ak820_backup_inspection::OPEN_ID))
                     .unwrap_or(false)
             }) {
                 super::ak820_backup_inspection::show(self, ui);
+                return;
+            }
+            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ak820_offline_extensions_open")).unwrap_or(false)) {
+                self.draw_ak820_offline_modules_page(ui);
                 return;
             }
             self.draw_canvas_footer(ui, ctx);
@@ -1855,11 +2068,9 @@ impl eframe::App for EntropyApp {
                                 self.start_device_scan();
                             }
                             ui.add_space(8.0);
-                            super::ak820_beta1_profiles_ui::button(
-                                ui,
-                                ctx,
-                                self.app_settings.language,
-                            );
+                            if ui.button(if self.app_settings.language == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
+                                self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                            }
                         });
                     });
                     return;
@@ -1919,7 +2130,9 @@ impl eframe::App for EntropyApp {
                             }
                         }
                         ui.add_space(8.0);
-                        super::ak820_beta1_profiles_ui::button(ui, ctx, self.app_settings.language);
+                        if ui.button(if self.app_settings.language == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
+                            self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                        }
                     });
                 });
                 return;
@@ -2011,209 +2224,6 @@ impl eframe::App for EntropyApp {
                 self.draw_placeholder(ui);
             }
         });
-
-        super::ak820_offline_files::show(self, ctx);
-        super::ak820_install_files::show(self, ctx);
-        #[cfg(not(target_arch = "wasm32"))]
-        super::ak820_install::show(self, ctx);
-        if self.ak820_demo {
-            if let Some(profile) = self.ak820_demo_profile {
-                super::ak820_beta1_profiles_ui::sync_offline_project(ctx, profile);
-            }
-        }
-
-        // Catalog browsing is read-only; demo projects use a separate explicit action.
-        if let Some(profile) =
-            super::ak820_beta1_profiles_ui::show(ctx, self.app_settings.language, self.ak820_demo)
-        {
-            self.configure_ak820_offline_profile(profile);
-            self.status_msg = match self.app_settings.language {
-                crate::i18n::Language::English => {
-                    format!("Offline project profile: {}", profile.as_str())
-                }
-                crate::i18n::Language::Russian => {
-                    format!("Профиль офлайн-проекта: {}", profile.as_str())
-                }
-            };
-        }
-        if self.ak820_demo {
-            if let (Some(profile), Some(extensions)) = (
-                self.ak820_demo_profile,
-                self.ak820_offline_extensions.as_mut(),
-            ) {
-                let is_schema03 = super::ak820_beta1_profiles::matrix_profile(profile)
-                    .identity
-                    .nvm_schema
-                    == crate::ak820_typed_storage::SCHEMA;
-                if is_schema03 {
-                    let open_id = egui::Id::new("ak820_offline_extensions_open");
-                    let mut open = ctx
-                        .data(|data| data.get_temp::<bool>(open_id))
-                        .unwrap_or(false);
-                    if open {
-                        let mut changed = false;
-                        let mut td_assignment = None;
-                        let language = self.app_settings.language;
-                        let layer_count = self.layer_count;
-                        let key_coords = self
-                            .layout
-                            .as_ref()
-                            .map(|layout| {
-                                layout
-                                    .keys
-                                    .iter()
-                                    .map(|key| (key.row, key.col))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default();
-                        crate::ui_style::utility_window(
-                            ctx,
-                            match self.app_settings.language {
-                                crate::i18n::Language::English => "Offline profile modules",
-                                crate::i18n::Language::Russian => "Модули офлайн-профиля",
-                            },
-                            egui::Id::new("ak820_offline_extensions_window"),
-                            &mut open,
-                            egui::vec2(580.0, 480.0),
-                        )
-                        .vscroll(true)
-                        .show(ctx, |ui| {
-                            if crate::ui_style::action_button(
-                                ui,
-                                if language == crate::i18n::Language::Russian {
-                                    "Справка"
-                                } else {
-                                    "Help"
-                                },
-                                true,
-                            )
-                            .clicked()
-                            {
-                                super::ak820_help_ui::open_section(ctx, "layers-modules");
-                            }
-                            if super::ak820_beta1_profiles::matrix_profile(profile)
-                                .capabilities
-                                .dynamic_entries
-                                .tap_dance
-                                > 0
-                            {
-                                let tap_count = super::ak820_beta1_profiles::matrix_profile(profile)
-                                    .capabilities
-                                    .dynamic_entries
-                                    .tap_dance
-                                    as usize;
-                                ui.heading(match self.app_settings.language {
-                                    crate::i18n::Language::English => {
-                                        "Offline Tap Dance assignments"
-                                    }
-                                    crate::i18n::Language::Russian => "Назначения Tap Dance офлайн",
-                                });
-                                let target_id = egui::Id::new("ak820_offline_td_target");
-                                let mut target = ctx
-                                    .data(|data| data.get_temp::<(usize, usize)>(target_id))
-                                    .unwrap_or((0, 0));
-                                egui::ComboBox::from_id_salt("ak820_offline_td_layer")
-                                    .selected_text(format!(
-                                        "{} {}",
-                                        if language == crate::i18n::Language::Russian {
-                                            "Слой"
-                                        } else {
-                                            "Layer"
-                                        },
-                                        target.0 + 1
-                                    ))
-                                    .show_ui(ui, |ui| {
-                                        for layer in 0..layer_count {
-                                            ui.selectable_value(
-                                                &mut target.0,
-                                                layer,
-                                                format!(
-                                                    "{} {}",
-                                                    if language == crate::i18n::Language::Russian {
-                                                        "Слой"
-                                                    } else {
-                                                        "Layer"
-                                                    },
-                                                    layer + 1
-                                                ),
-                                            );
-                                        }
-                                    });
-                                egui::ComboBox::from_id_salt("ak820_offline_td_key")
-                                    .selected_text(format!(
-                                        "{} {}",
-                                        if language == crate::i18n::Language::Russian {
-                                            "Клавиша"
-                                        } else {
-                                            "Key"
-                                        },
-                                        target.1 + 1
-                                    ))
-                                    .show_ui(ui, |ui| {
-                                        for (index, (row, col)) in key_coords.iter().enumerate() {
-                                            ui.selectable_value(
-                                                &mut target.1,
-                                                index,
-                                                format!(
-                                                    "{} {} ({}, {})",
-                                                    if language == crate::i18n::Language::Russian {
-                                                        "Клавиша"
-                                                    } else {
-                                                        "Key"
-                                                    },
-                                                    index + 1,
-                                                    row,
-                                                    col
-                                                ),
-                                            );
-                                        }
-                                    });
-                                ctx.data_mut(|data| data.insert_temp(target_id, target));
-                                ui.horizontal_wrapped(|ui| {
-                                    for slot in 0..tap_count {
-                                        if crate::ui_style::action_button(
-                                            ui,
-                                            format!(
-                                                "{} TD({slot})",
-                                                if language == crate::i18n::Language::Russian {
-                                                    "Назначить"
-                                                } else {
-                                                    "Assign"
-                                                }
-                                            ),
-                                            true,
-                                        )
-                                        .clicked()
-                                        {
-                                            td_assignment = Some((target.0, target.1, slot));
-                                        }
-                                    }
-                                });
-                                ui.separator();
-                            }
-                            changed |= super::ak820_offline_extensions::show(
-                                ui, language, profile, extensions,
-                            );
-                        });
-                        if let Some((layer, key, slot)) = td_assignment {
-                            changed |= self.assign_offline_tap_dance(layer, key, slot);
-                        }
-                        // Preserve edits from the Tap Dance controls above as well.
-                        if changed {
-                            self.status_msg = match self.app_settings.language {
-                                crate::i18n::Language::English => {
-                                    "Offline module candidate updated in memory".into()
-                                }
-                                crate::i18n::Language::Russian => {
-                                    "Офлайн-вариант модуля обновлён в памяти".into()
-                                }
-                            };
-                        }
-                    }
-                    ctx.data_mut(|data| data.insert_temp(open_id, open));
-                }
-            }
-        }
 
         #[cfg(not(target_arch = "wasm32"))]
         if self.bluetooth_reconnect_active() && self.layout.is_none() {
@@ -2520,7 +2530,8 @@ impl eframe::App for EntropyApp {
             let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
             let rclick = ctx.input(|i| i.pointer.secondary_clicked());
             if esc_pressed || rclick {
-                self.close_top_dropdowns(ctx);
+                self.close_hover_top_dropdowns(ctx);
+                egui::Popup::close_all(ctx);
                 self.main_menu_tab = MainMenuTab::Keyboard;
                 settings_page_navigation_handled = true;
             }

@@ -52,10 +52,11 @@ impl EntropyApp {
         } else {
             crate::app::file_dialog::FileDialogAction::ImportApplicationLayout(id.clone())
         };
+        let file_name = format!("{}.entlayout", device_id_slug(&id));
         let dialog = rfd::FileDialog::new()
             .add_filter("Entropy layout", &["entlayout"])
-            .set_file_name(format!("{}.entlayout", device_id_slug(&id)));
-        self.spawn_file_dialog(action, dialog, export);
+            .set_file_name(&file_name);
+        self.spawn_file_dialog_with_default(action, dialog, export, export.then_some(file_name.as_str()));
     }
 
     pub(super) fn write_application_layout_export(&self, path: &Path, id: &str) -> Result<()> {

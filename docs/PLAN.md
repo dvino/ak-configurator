@@ -4,6 +4,8 @@
 
 
 
+Initial OEM installation uses explicit preview confirmation instead of a physical hold; OEM-to-OEM rollback is blocked, while project-source operations retain the fresh hold. The focused regression tests remain unrun.
+
 Issue #7: the application settings now distinguish detected OS layout from the selected LED behavior and show disabled/paused states. Offline indicator tests passed; Windows rendering and physical LED observation remain open.
 
 
@@ -25,7 +27,7 @@ Planning baseline: `25cceb84567ad5721d056dde160aa22de2c76c7b`; [issues #2–#7](
 
 ## Beta.4.1 release integration — exact-image flashing prepared
 
-The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer selects beta.4.1 by default and requires explicit beta prerelease opt-in; beta.3 remains an alternate. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
+The official beta.4 release remains pinned for read-only recognition. The separately published [`v0.6.0-beta.4.1`](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.4.1) catalog has SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1`; it authorizes flashing exact beta.4 images for ten profiles, keeps settings writes false, and does not claim hardware validation. The installer selects beta.4.1 by default and requires explicit beta prerelease opt-in; beta.3 remains selectable as an alternate, but its bundled catalog has `flashing_authorized=false` and no authorized image bindings, so installation is currently blocked. Beta.4.1 uses release defaults and the existing fresh backup, confirmation, one-attempt loader and full readback gates. Saved-settings writes and restore remain blocked. See [STATUS.md](STATUS.md) for build and test evidence.
 
 Validate the isolated Windows CI software OpenGL fixture on both native architectures after independent review; keep renderer and packaging gates. Source and local test evidence: [CI-WINDOWS-GL.md](CI-WINDOWS-GL.md). No Windows fixture runtime pass is claimed.
 
@@ -37,7 +39,7 @@ This plan tracks the agreed [requirements](REQUIREMENTS.md) for `dvino/ak-config
 
 ## Alpha.1 release candidate — 2026-10-27
 
-Application source version: `0.1.0-alpha.1`. The prior `0.1.0-beta.2` was unpublished development naming; no application release/tag exists. Firmware target: AK820 `v0.6.0-beta.3`, tag object `4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit `88d190abb156960915a0f1f8ac7f602bb401eab3`. The [public firmware release](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was published on 2026-10-27 at 06:50:35 UTC. Firmware CI run [40461867751](https://github.com/dvino/ak820/actions/runs/40461867751) passed the shared-host job and “Revalidate and assemble all ten profiles”; its profile qualification matrix and publishing jobs were skipped. A later independent check confirmed the GitHub API digests for the catalog, firmware bundle, five JSON assets and `SHA256SUMS`; all ten IHX/settings identities match reviewed candidates, map hashes match the release matrix, and approved release metadata pins all ten installable images to the exact installer release. Physical device behavior remains unqualified. Exact application evidence belongs in [REVIEW.md](REVIEW.md).
+Application source version: `0.1.0-alpha.1`. The prior `0.1.0-beta.2` was unpublished development naming; no application release/tag exists. Firmware target: AK820 `v0.6.0-beta.3`, tag object `4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit `88d190abb156960915a0f1f8ac7f602bb401eab3`. The [public firmware release](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was published on 2026-10-27 at 06:50:35 UTC. Firmware CI run [40461867751](https://github.com/dvino/ak820/actions/runs/40461867751) passed the shared-host job and “Revalidate and assemble all ten profiles”; its profile qualification matrix and publishing jobs were skipped. A later independent check confirmed the GitHub API digests for the catalog, firmware bundle, five JSON assets and `SHA256SUMS`; all ten IHX/settings identities match reviewed candidates, map hashes match the release matrix, and approved release metadata pins all ten release images to the exact installer release. Physical device behavior remains unqualified. Exact application evidence belongs in [REVIEW.md](REVIEW.md).
 
 | Workstream | Current source and checks | Limits and remaining evidence |
 | --- | --- | --- |
@@ -69,7 +71,7 @@ P0 remains partial and default-off. Production integration of provisional QS v2,
 
 ## Delivery order
 
-1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separately pinned beta.4.1 exact-image flashing catalog; keep hardware-validation claims separate from image-install authorization. Keep release-input identity, platform execution and physical qualification as separate evidence.
+1. Keep exact image identity, source-aware capability checks and directed transitions fail-closed. Preserve verified beta.3 installer pins and the separately pinned beta.4.1 exact-image flashing catalog; keep hardware-validation claims separate from image-install authorization. Keep release-input identity, platform execution and physical qualification as separate evidence. The product decision permits beta.3 → beta.4.1 and profile changes within or across versions, subject to these checks; beta-release downgrades, including beta.4.1 → beta.3, remain blocked. After the first stable release, plan and evaluate a safe downgrade path separately, with explicit source/target admission, settings compatibility, safety backup and verification; do not imply it is already supported.
 2. Review restore, reset, deletion and installation with safety snapshots, confirmation pins, ownership and one-attempt failure handling. A failed read, timeout, storage fault or mismatch stops without retry or automatic rollback.
 3. Qualify installation and OEM recovery only with explicit authorization and exact hardware procedures. Keep source, host-test and physical evidence distinct.
 4. Complete native OS helper, capture permission and GUI teardown/reopen qualification per platform; retain the completed source/host checks.

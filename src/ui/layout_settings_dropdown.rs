@@ -134,7 +134,7 @@ impl EntropyApp {
             );
             let show_lock_item = lock_menu_state.visible;
             let default_lock_label = crate::i18n::tr_catalog(lang, "ui.unlock_keyboard_action");
-            let settings_item_count = 2
+            let settings_item_count = 1 + cfg!(target_arch = "wasm32") as usize
                 + show_matrix_item as usize
                 + show_rgb_item as usize
                 + show_display_item as usize
@@ -162,11 +162,14 @@ impl EntropyApp {
                     + show_live_features_item as usize,
                 show_tap_hold_item as usize + show_magic_item as usize,
                 show_matrix_item as usize + show_lock_item as usize,
-                2,
+                1 + cfg!(target_arch = "wasm32") as usize,
             ]);
             let divider_count = dividers.iter().filter(|shown| **shown).count();
             let dropdown_height = top_dropdown_height(settings_item_count, divider_count);
-            let mut settings_menu_labels = vec![crate::i18n::tr(lang, TrKey::AppSettingsTitle)];
+            let mut settings_menu_labels = Vec::new();
+            if cfg!(target_arch = "wasm32") {
+                settings_menu_labels.push(crate::i18n::tr(lang, TrKey::AppSettingsTitle));
+            }
             if show_matrix_item {
                 settings_menu_labels.push(crate::i18n::tr(lang, TrKey::MatrixTesterTitle));
             }
@@ -419,15 +422,15 @@ impl EntropyApp {
                         if dividers[3] {
                             top_dropdown_divider(ui, item_width);
                         }
-                        let app_resp = top_dropdown_icon_item(
-                            ui,
-                            item_width,
-                            TopMenuIcon::AppSettings,
-                            crate::i18n::tr(lang, TrKey::AppSettingsTitle),
-                            true,
-                            self.main_menu_tab == MainMenuTab::Settings
-                                && self.settings_tab == SettingsTab::AppSettings,
-                        );
+                        let app_resp = cfg!(target_arch = "wasm32").then(|| top_dropdown_icon_item(
+                            ui, item_width, TopMenuIcon::AppSettings,
+                            crate::i18n::tr(lang, TrKey::AppSettingsTitle), true,
+                            self.main_menu_tab == MainMenuTab::Settings && self.settings_tab == SettingsTab::AppSettings,
+                        ));
+                        if app_resp.as_ref().is_some_and(|response| response.clicked()) {
+                            self.close_top_dropdowns(ui.ctx());
+                            self.open_app_settings_page();
+                        }
                         let about_entropy_resp = top_dropdown_icon_item_with_indicator(
                             ui,
                             item_width,
@@ -438,10 +441,6 @@ impl EntropyApp {
                                 && self.settings_tab == SettingsTab::AboutEntropy,
                             show_update_indicator,
                         );
-                        if app_resp.clicked() {
-                            self.close_top_dropdowns(ui.ctx());
-                            self.open_app_settings_page();
-                        }
                         if matrix_resp.as_ref().map(|r| r.clicked()).unwrap_or(false) {
                             self.close_top_dropdowns(ui.ctx());
                             self.settings_tab = SettingsTab::MatrixTester;
@@ -553,7 +552,7 @@ impl EntropyApp {
                             self.open_about_entropy_page();
                         }
                         (
-                            app_resp.hovered(),
+                            app_resp.as_ref().is_some_and(|response| response.hovered()),
                             matrix_resp.as_ref().map(|r| r.hovered()).unwrap_or(false),
                             rgb_resp
                                 .as_ref()
@@ -586,7 +585,7 @@ impl EntropyApp {
                             tap_hold_resp.as_ref().map(|r| r.hovered()).unwrap_or(false),
                             lock_resp.as_ref().map(|r| r.hovered()).unwrap_or(false),
                             about_entropy_resp.hovered(),
-                            app_resp.clicked()
+                            app_resp.as_ref().is_some_and(|response| response.clicked())
                                 || matrix_resp.as_ref().map(|r| r.clicked()).unwrap_or(false)
                                 || rgb_resp
                                     .as_ref()

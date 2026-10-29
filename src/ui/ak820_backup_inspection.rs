@@ -6,6 +6,7 @@ use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use crate::app::EntropyApp;
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) const OPEN_ID: &str = "ak820_backup_inspection_open";
 const STATE_ID: &str = "ak820_backup_inspection_state";
@@ -133,8 +134,13 @@ struct PendingFile {
 struct WindowState {
     next_id: u64,
     root: Option<PathBuf>,
+    path_entry: String,
+    choosing_path: Option<bool>,
+    #[cfg(not(target_arch = "wasm32"))]
+    browser: Option<Arc<Mutex<super::file_browser::FileBrowser>>>,
     history: Option<Arc<BackupHistory>>,
     pending: Option<PendingFile>,
+    file_in_flight: Arc<AtomicBool>,
     capture_pending: Option<(u64, u64)>,
     source: Option<LoadedBackup>,
     source_path: Option<PathBuf>,
@@ -153,6 +159,9 @@ impl WindowState {
     fn id(&mut self) -> u64 {
         self.next_id = self.next_id.wrapping_add(1);
         self.next_id
+    }
+    fn file_busy(&self) -> bool {
+        self.pending.is_some() || self.file_in_flight.load(Ordering::Acquire)
     }
     fn accept(&mut self, message: FileMessage) -> bool {
         if self.pending.as_ref().map(|p| p.id) != Some(message.id) {
@@ -222,6 +231,10 @@ impl WindowState {
     fn close(&mut self) {
         self.reset_preview = false;
         self.delete_confirm = false;
+        self.choosing_path = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        { self.browser = None; }
+        self.path_entry.clear();
         self.id();
         self.pending = None;
         self.capture_pending = None;
@@ -339,23 +352,47 @@ pub(super) fn restore_failed(
     restore_finished(ctx, id, generation, Err(()));
 }
 
+fn backup_directory_from_manifest(path: &std::path::Path) -> Result<PathBuf, Problem> {
+    if path.file_name() != Some(std::ffi::OsStr::new("manifest.json")) {
+        return Err(Problem::File);
+    }
+    let parent = path.parent().ok_or(Problem::File)?;
+    Ok(if parent.as_os_str().is_empty() { PathBuf::from(".") } else { parent.to_path_buf() })
+}
+
 enum FileAction {
+    OpenManifest(PathBuf),
     Delete {
         path: PathBuf,
         manifest_sha256: String,
     },
-    Open(Option<(PathBuf, String)>),
-    History(Option<PathBuf>),
+    Open(PathBuf, Option<String>),
+    History(PathBuf),
     Save {
         root: PathBuf,
         snapshot: Arc<CapturedBackup>,
     },
 }
 #[cfg(not(target_arch = "wasm32"))]
+struct FilePermit(Arc<AtomicBool>);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for FilePermit {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) {
+    if state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some() {
+        return;
+    }
     let id = state.id();
     state.error = None;
-    if matches!(action, FileAction::Open(_)) {
+    state.choosing_path = None;
+    state.browser = None;
+    if matches!(action, FileAction::Open(..) | FileAction::OpenManifest(_)) {
         state.source = None;
         state.source_path = None;
         state.preview_plan = None;
@@ -364,14 +401,8 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
     if matches!(action, FileAction::History(_)) {
         state.history = None;
     }
-    let (tx, rx) = mpsc::channel();
-    state.pending = Some(PendingFile {
-        id,
-        receiver: Arc::new(Mutex::new(rx)),
-    });
-    let repaint = ctx.clone();
-    std::thread::spawn(move || {
-        let result = (|| -> Result<Option<FilePayload>, Problem> {
+    start_file_worker(ctx, state, id, move || {
+        (|| -> Result<Option<FilePayload>, Problem> {
             match action {
                 FileAction::Delete {
                     path,
@@ -381,23 +412,18 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
                         .map_err(|_| Problem::File)?;
                     Ok(Some(FilePayload::Deleted { path }))
                 }
-                FileAction::Open(selected) => {
-                    let (path, pin) = match selected {
-                        Some((path, pin)) => (path, Some(pin)),
-                        None => match rfd::FileDialog::new().pick_folder() {
-                            Some(path) => (path, None),
-                            None => return Ok(None),
-                        },
-                    };
+                FileAction::OpenManifest(manifest) => {
+                    let path = backup_directory_from_manifest(&manifest)?;
+                    files::read_backup_auto(&path, None)
+                        .map(|source| Some(FilePayload::Source { path, source }))
+                        .map_err(|_| Problem::File)
+                }
+                FileAction::Open(path, pin) => {
                     files::read_backup_auto(&path, pin.as_deref())
                         .map(|source| Some(FilePayload::Source { path, source }))
                         .map_err(|_| Problem::File)
                 }
-                FileAction::History(selected) => {
-                    let root = match selected.or_else(|| rfd::FileDialog::new().pick_folder()) {
-                        Some(path) => path,
-                        None => return Ok(None),
-                    };
+                FileAction::History(root) => {
                     let history = files::scan_backup_history(&root).map_err(|_| Problem::File)?;
                     Ok(Some(FilePayload::History { root, history }))
                 }
@@ -420,10 +446,33 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
                     Ok(Some(FilePayload::Saved { name, source, path }))
                 }
             }
-        })();
+        })()
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn start_file_worker(
+    ctx: &egui::Context,
+    state: &mut WindowState,
+    id: u64,
+    work: impl FnOnce() -> Result<Option<FilePayload>, Problem> + Send + 'static,
+) {
+    if state.file_in_flight.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+        return;
+    }
+    let permit = FilePermit(state.file_in_flight.clone());
+    let (tx, rx) = mpsc::channel();
+    state.pending = Some(PendingFile { id, receiver: Arc::new(Mutex::new(rx)) });
+    let repaint = ctx.clone();
+    if std::thread::Builder::new().spawn(move || {
+        let _permit = permit;
+        let result = work();
         let _ = tx.send(FileMessage { id, result });
         repaint.request_repaint();
-    });
+    }).is_err() {
+        state.pending = None;
+        state.error = Some(Problem::File);
+    }
 }
 
 fn draw_source(ui: &mut egui::Ui, source: &LoadedBackup, ru: bool) {
@@ -506,6 +555,20 @@ pub(super) fn invalidate_closed(ctx: &egui::Context, generation: u64) {
     });
 }
 
+pub(super) fn close_page(ctx: &egui::Context) {
+    ctx.data_mut(|d| {
+        if let Some(mut state) = d.get_temp::<WindowState>(egui::Id::new(STATE_ID)) {
+            state.close();
+            d.insert_temp(egui::Id::new(STATE_ID), state);
+        }
+    });
+}
+
+pub(super) fn page_busy(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+        .is_some_and(|state| state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some())
+}
+
 pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     let ctx = &ctx;
@@ -537,9 +600,12 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
         }
     }
-    let busy = state.pending.is_some()
+    let busy = state.file_busy()
         || state.capture_pending.is_some()
         || state.restore_pending.is_some();
+    if state.file_in_flight.load(Ordering::Acquire) {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
     let mut file_action = None;
     let mut capture = false;
     let mut cancel = false;
@@ -557,14 +623,43 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 ui.label(tr(ru, "Backup folder access is unavailable on this platform.", "Работа с папками копий недоступна на этой платформе."));
             }
             ui.horizontal_wrapped(|ui| {
-                if crate::ui_style::action_button(ui, tr(ru, "Open backup…", "Открыть копию…"), !busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() { file_action = Some(FileAction::Open(None)); }
-                if crate::ui_style::action_button(ui, tr(ru, "Choose backup folder…", "Папка для копий…"), !busy && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() { file_action = Some(FileAction::History(None)); }
+                if crate::ui_style::action_button(ui, tr(ru, "Open backup…", "Открыть копию…"), !busy).clicked() { state.choosing_path = Some(false); state.path_entry.clear(); #[cfg(not(target_arch = "wasm32"))] { state.browser = None; } }
+                if crate::ui_style::action_button(ui, tr(ru, "Choose backup folder…", "Папка для копий…"), !busy).clicked() { state.choosing_path = Some(true); state.path_entry.clear(); #[cfg(not(target_arch = "wasm32"))] { state.browser = None; } }
             });
+            if let Some(history) = state.choosing_path {
+                ui.label(if history { tr(ru, "Select or enter the backup folder path", "Выберите папку копий или введите путь к ней") } else { tr(ru, "Select or enter the backup manifest.json file", "Выберите файл manifest.json резервной копии или введите путь к нему") });
+                ui.text_edit_singleline(&mut state.path_entry);
+                ui.horizontal_wrapped(|ui| {
+                    if crate::ui_style::action_button(ui, tr(ru, "Open", "Открыть"), !busy && !state.path_entry.trim().is_empty()).clicked() {
+                        let path = PathBuf::from(&state.path_entry);
+                        file_action = Some(if history { FileAction::History(path) } else { FileAction::OpenManifest(path) });
+                        state.choosing_path = None;
+                    }
+                    if crate::ui_style::action_button(ui, tr(ru, "Cancel", "Отмена"), true).clicked() { state.choosing_path = None; #[cfg(not(target_arch = "wasm32"))] { state.browser = None; } }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if crate::ui_style::action_button(ui, tr(ru, "Browse…", "Обзор…"), !busy).clicked() {
+                        let mode = if history { super::file_browser::BrowserMode::Directory } else { super::file_browser::BrowserMode::File };
+                        state.browser = Some(Arc::new(Mutex::new(super::file_browser::FileBrowser::new(PathBuf::from("."), mode, ctx))));
+                    }
+                });
+                #[cfg(not(target_arch = "wasm32"))]
+                if !busy {
+                    let result = state.browser.as_ref().and_then(|browser| browser.lock().unwrap_or_else(|e| e.into_inner()).show(ui, ru));
+                    if let Some(result) = result {
+                        state.browser = None;
+                        match result {
+                            super::file_browser::BrowserResult::Selected(path) => { file_action = Some(FileAction::OpenManifest(path)); state.choosing_path = None; }
+                            super::file_browser::BrowserResult::Cancelled => { state.choosing_path = None; }
+                            super::file_browser::BrowserResult::Directory(path) => { if history { file_action = Some(FileAction::History(path)); state.choosing_path = None; } }
+                        }
+                    }
+                }
+            }
             if let Some(root) = &state.root {
                 let name = root.file_name().unwrap_or_else(|| root.as_os_str()).to_string_lossy();
                 ui.label(format!("{}: {}", tr(ru, "Folder", "Папка"), short_text(&name)));
                 ui.label(tr(ru, "Backup folder selected. New copies are saved to separate dated folders.", "Папка выбрана. Новые копии сохраняются в отдельных папках с датой."));
-                if crate::ui_style::action_button(ui, tr(ru, "Refresh list", "Обновить список"), !busy).clicked() { file_action = Some(FileAction::History(state.root.clone())); }
+                if crate::ui_style::action_button(ui, tr(ru, "Refresh list", "Обновить список"), !busy).clicked() { file_action = Some(FileAction::History(root.clone())); }
             }
             if let Some(history) = &state.history {
                 ui.collapsing(format!("{} ({})", tr(ru, "Saved backups", "Сохранённые копии"), history.entries.len()), |ui| {
@@ -572,7 +667,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     for entry in &history.entries {
                         let label = format!("{} · {} · {}", short_text(&entry.created_utc), profile_label(entry.source_profile, ru), short_text(&entry.name));
                         if ui.add_enabled(!busy, egui::Button::new(label).wrap()).clicked() {
-                            file_action = Some(FileAction::Open(Some((entry.path.clone(), entry.manifest_sha256.clone()))));
+                            file_action = Some(FileAction::Open(entry.path.clone(), Some(entry.manifest_sha256.clone())));
                         }
                     }
                 });
@@ -616,7 +711,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
             if let Some(location) = &state.undo_backup {
                 if crate::ui_style::action_button(ui, tr(ru, "Open safety backup to undo restore", "Открыть защитную копию для отмены восстановления"), !busy).clicked() {
-                    file_action = Some(FileAction::Open(Some((location.path.clone(), location.manifest_sha256.clone()))));
+                    file_action = Some(FileAction::Open(location.path.clone(), Some(location.manifest_sha256.clone())));
                 }
                 ui.label(tr(ru, "Undo uses the same preview, fresh confirmation and verified restore workflow.", "Для отмены используются тот же предпросмотр, новое подтверждение и проверяемое восстановление."));
             }
@@ -662,7 +757,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
             if let Some(error) = state.error { ui.colored_label(egui::Color32::LIGHT_RED, problem_text(error, ru)); }
-            if state.pending.is_some() { ui.spinner(); ui.label(tr(ru, "Checking local files…", "Проверка локальных файлов…")); }
+            if state.file_busy() { ui.spinner(); ui.label(tr(ru, "Checking local files…", "Проверка локальных файлов…")); }
             if crate::ui_style::action_button(ui, tr(ru, "Close", "Закрыть"), true).clicked() { close = true; }
         });
     if compare {
@@ -720,6 +815,8 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if capture {
+        state.choosing_path = None;
+        state.browser = None;
         let id = state.id();
         state.target = None;
         state.preview = None;
@@ -737,6 +834,8 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if restore {
+        state.choosing_path = None;
+        state.browser = None;
         if state.reset_preview {
             if let (Some(plan), Some(target), Some(root)) = (
                 state.preview_plan.clone(),
@@ -825,6 +924,93 @@ mod tests {
         });
         tx
     }
+    #[test]
+    fn only_manifest_selection_maps_to_an_archive_directory() {
+        assert_eq!(backup_directory_from_manifest(std::path::Path::new("backup/manifest.json")), Ok(PathBuf::from("backup")));
+        assert_eq!(backup_directory_from_manifest(std::path::Path::new("manifest.json")), Ok(PathBuf::from(".")));
+        for path in ["backup", "backup/saved-nvm.bin", "backup/MANIFEST.JSON", ""] {
+            assert!(backup_directory_from_manifest(std::path::Path::new(path)).is_err());
+        }
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn selected_manifest_still_requires_complete_archive_validation() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("manifest.json"), b"{}").unwrap();
+        let ctx = egui::Context::default();
+        let mut state = WindowState::default();
+        start_file(&ctx, &mut state, FileAction::OpenManifest(temp.path().join("manifest.json")));
+        let message = state.pending.as_ref().unwrap().receiver.lock().unwrap()
+            .recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        assert!(state.accept(message));
+        assert_eq!(state.error, Some(Problem::File));
+        assert!(state.source.is_none());
+        assert!(state.source_path.is_none());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn file_action_cannot_replace_a_pending_operation() {
+        let ctx = egui::Context::default();
+        let mut state = WindowState::default();
+        let tx = pending(&mut state);
+        let id = state.pending.as_ref().unwrap().id;
+        start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
+        assert_eq!(state.pending.as_ref().unwrap().id, id);
+        assert!(tx.send(FileMessage { id, result: Ok(None) }).is_ok());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn held_file_worker_remains_bounded_across_close_and_reopen() {
+        let ctx = egui::Context::default();
+        let mut state = WindowState::default();
+        let (release, held) = mpsc::channel();
+        let (started, entered) = mpsc::channel();
+        let id = state.id();
+        start_file_worker(&ctx, &mut state, id, move || {
+            started.send(()).unwrap();
+            held.recv().unwrap();
+            Ok(None)
+        });
+        entered.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        state.close();
+        assert!(state.pending.is_none());
+        for _ in 0..3 {
+            start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
+            assert!(state.pending.is_none());
+            assert!(state.file_busy());
+            state.close();
+        }
+        assert!(!state.accept(FileMessage { id, result: Err(Problem::File) }));
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.file_busy() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert!(!state.file_busy());
+        start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
+        let message = state.pending.as_ref().unwrap().receiver.lock().unwrap()
+            .recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        assert!(state.accept(message));
+    }
+
+    #[test]
+    fn leaving_page_clears_destructive_confirmation_and_path_entry() {
+        let ctx = egui::Context::default();
+        let mut state = WindowState::default();
+        state.delete_confirm = true;
+        state.choosing_path = Some(false);
+        state.path_entry = "private path".into();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        close_page(&ctx);
+        let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)).unwrap());
+        assert!(!state.delete_confirm);
+        assert!(state.choosing_path.is_none());
+        assert!(state.path_entry.is_empty());
+    }
+
     #[test]
     fn stale_file_completion_and_closed_window_cannot_replace_current_state() {
         let mut state = WindowState::default();
@@ -1014,6 +1200,44 @@ mod tests {
         assert_eq!(short_text("a\n\t\u{0}b"), "ab");
         assert_eq!(short_text(&"x".repeat(10000)).len(), 96);
     }
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn backup_folder_can_be_selected_through_inline_browser() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.language = crate::i18n::Language::English;
+        let mut harness = Harness::builder().with_size(egui::vec2(800.0, 700.0))
+            .build_ui_state(|ui, state: &mut (EntropyApp, bool, Option<PathBuf>)| {
+                if !state.1 {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
+                    state.1 = true;
+                }
+                show(&mut state.0, ui);
+                state.2 = ui.ctx().data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+                    .and_then(|s| s.root);
+            }, (app, false, None));
+        harness.run();
+        harness.get_by_label("Choose backup folder…").click();
+        harness.run();
+        harness.get_by_label("Browse…").click();
+        harness.run();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while harness.query_by_label("Select this directory").is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            harness.run();
+        }
+        harness.get_by_label("Select this directory").click();
+        harness.step();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while harness.state().2.is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            harness.step();
+        }
+        assert_eq!(harness.state().2.as_deref(), Some(std::fs::canonicalize(".").unwrap().as_path()));
+        assert!(harness.state().0.hid_device.is_none());
+    }
+
     #[test]
     fn backup_page_controls_fit_small_viewport_in_both_languages() {
         use egui_kittest::{kittest::Queryable, Harness};

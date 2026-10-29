@@ -6,8 +6,8 @@
 use crate::ak820_settings_backup::{
     BackupResult, FILES, FORMAT, FORMAT_V2, ImageIdentity, ValidatedArchive, canonical, sha256,
 };
-use crate::ak820_settings_model::{validate_historical_archive, validate_profile_archive};
-use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity, matrix_profile};
+use crate::ak820_settings_model::{profile_image_for_identity, validate_historical_archive, validate_image_archive, validate_profile_archive};
+use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 #[cfg(test)]
@@ -543,15 +543,14 @@ fn validate_loaded_bytes(
     let code = text_field("code_sha256")?;
     let definition = text_field("definition_sha256")?;
     let mut found: Option<(ValidatedArchive, Option<ProfileId>)> = None;
+    let identity = ImageIdentity {
+        ihx_sha256: ihx.into(),
+        code_sha256: code.into(),
+        definition_sha256: definition.into(),
+        schema,
+    };
     for profile in PROFILES {
-        let Some(id) = matrix_profile(profile).settings_identity.as_ref() else {
-            continue;
-        };
-        if id.ihx_sha256 == ihx
-            && id.code_sha256 == code
-            && id.definition_sha256 == definition
-            && id.nvm_schema == schema
-        {
+        if matches!(profile_image_for_identity(profile, &identity), Some(crate::ak820::ImageContract::Beta3(_) | crate::ak820::ImageContract::Beta4(_))) {
             let archive = validate_profile_archive(&raw, &files, profile, expected_manifest)
                 .map_err(|_| "Backup validation failed".to_owned())?;
             found = Some((archive, Some(profile)));
@@ -694,7 +693,7 @@ pub(crate) fn validate_captured(
     capture: &crate::ak820_backup_capture::CapturedBackup,
 ) -> BackupResult<ValidatedArchive> {
     let manifest = make_manifest(capture.profile(), capture.files())?;
-    validate_profile_archive(&manifest, capture.files(), capture.profile(), None)
+    validate_image_archive(&manifest, capture.files(), capture.image(), None)
 }
 
 /// Durable complete ROM safety copy for installation, including OEM sources.

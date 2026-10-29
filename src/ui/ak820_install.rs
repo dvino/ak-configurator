@@ -101,7 +101,46 @@ enum Pick {
 
 struct Dialog {
     rx: mpsc::Receiver<Option<PathBuf>>,
+    tx: mpsc::Sender<Option<PathBuf>>,
+    path: String,
     pick: Pick,
+    browser: Option<super::file_browser::FileBrowser>,
+    generation: u64,
+    mode: Mode,
+    source: Source,
+    pending: Option<mpsc::Receiver<Result<PickedInput, String>>>,
+    recovery_pins: Option<std::collections::BTreeSet<String>>,
+}
+
+enum PickedInput {
+    File(SelectedFile),
+    Oem(Vec<u8>, crate::ak820_install_executor::RecoveryProvenance, String),
+}
+
+static INPUT_READER_BUSY: AtomicBool = AtomicBool::new(false);
+struct InputReaderPermit;
+impl Drop for InputReaderPermit {
+    fn drop(&mut self) {
+        INPUT_READER_BUSY.store(false, Ordering::Release);
+    }
+}
+
+impl Pick {
+    fn browser_mode(self) -> super::file_browser::BrowserMode {
+        match self {
+            Self::BackupRoot => super::file_browser::BrowserMode::Directory,
+            _ => super::file_browser::BrowserMode::File,
+        }
+    }
+}
+
+fn recovery_directory(path: &std::path::Path) -> Option<&std::path::Path> {
+    if path.file_name()? != "manifest.json" {
+        return None;
+    }
+    path.parent().map(|parent| {
+        if parent.as_os_str().is_empty() { std::path::Path::new(".") } else { parent }
+    })
 }
 
 pub(crate) struct Runtime {
@@ -112,6 +151,7 @@ pub(crate) struct Runtime {
     beta4_1: bool,
     prerelease_opt_in: bool,
     start_with_defaults: bool,
+    without_oem_archive: bool,
     external_payload: Option<SelectedFile>,
     recovery: Option<SelectedFile>,
     rollback_recovery: Option<(
@@ -123,6 +163,7 @@ pub(crate) struct Runtime {
     candidate_index: Option<usize>,
     backup_root: Option<PathBuf>,
     dialog: Option<Dialog>,
+    picker_generation: u64,
     release_check: Option<mpsc::Receiver<Result<crate::ak820_release::ReleaseObservation, String>>>,
     release_check_text: Option<String>,
     candidate_scan: Option<mpsc::Receiver<Result<Vec<crate::device::Device>, String>>>,
@@ -138,6 +179,7 @@ impl Default for Runtime {
             beta4_1: true,
             prerelease_opt_in: false,
             start_with_defaults: false,
+            without_oem_archive: false,
             external_payload: None,
             recovery: None,
             rollback_recovery: None,
@@ -145,6 +187,7 @@ impl Default for Runtime {
             candidate_index: None,
             backup_root: None,
             dialog: None,
+            picker_generation: 0,
             release_check: None,
             release_check_text: None,
             candidate_scan: None,
@@ -160,7 +203,10 @@ impl Runtime {
         )
     }
     pub(super) fn blocks_exit(&self) -> bool {
-        self.owns_hid()
+        self.owns_hid() || self.dialog.as_ref().is_some_and(|dialog| dialog.pending.is_some())
+    }
+    pub(super) fn has_path_entry(&self) -> bool {
+        self.dialog.is_some()
     }
 }
 
@@ -329,18 +375,26 @@ fn capture_for_preparation<T>(
     Ok(None)
 }
 
+fn beta3_admission_error(profile: crate::app::ak820_beta1_profiles::ProfileId) -> Option<String> {
+    crate::ak820_release::ReleaseAdmission::bundled(profile, true).err()
+}
+
 fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
     if app.ak820_install_runtime.owns_hid() || app.hid_write_lifecycle_busy() || app.headless {
         return;
     }
+    if app.ak820_install_runtime.mode == Mode::Firmware && !app.ak820_install_runtime.beta4_1 {
+        if let Some(error) = beta3_admission_error(app.ak820_install_runtime.profile) {
+            app.status_msg = format!("{}: {error}", tr(
+                app.app_settings.language == crate::i18n::Language::Russian,
+                "Release admission denied", "Допуск выпуска отклонён"));
+            return;
+        }
+    }
     let device = app
         .ak820_install_runtime
         .candidate_index
-        .and_then(|index| app.ak820_install_runtime.candidates.get(index).cloned())
-        .or_else(|| {
-            app.selected_device
-                .and_then(|index| app.device_manager.devices().get(index).cloned())
-        });
+        .and_then(|index| app.ak820_install_runtime.candidates.get(index).cloned());
     let Some(device) = device else {
         let ru = app.app_settings.language == crate::i18n::Language::Russian;
         app.status_msg = tr(
@@ -363,18 +417,6 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
     let mode = app.ak820_install_runtime.mode;
     let recovery = app.ak820_install_runtime.recovery.clone();
     let rollback_recovery = app.ak820_install_runtime.rollback_recovery.clone();
-    if mode == Mode::Firmware
-        && app.ak820_install_runtime.source == Source::PreparedFile
-        && recovery.is_none()
-    {
-        app.status_msg = tr(
-            app.app_settings.language == crate::i18n::Language::Russian,
-            "Choose the personal OEM recovery ROM first",
-            "Сначала выберите личную OEM-копию ROM для восстановления",
-        )
-        .into();
-        return;
-    }
     if mode == Mode::OemRollback && rollback_recovery.is_none() {
         app.status_msg = tr(
             app.app_settings.language == crate::i18n::Language::Russian,
@@ -385,7 +427,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
         return;
     }
     let root = match app.ak820_install_runtime.backup_root.clone() {
-        Some(x) if x.is_dir() => x,
+        Some(x) => x,
         _ => {
             app.status_msg = tr(
                 app.app_settings.language == crate::i18n::Language::Russian,
@@ -404,6 +446,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
         crate::ak820::ImageContract::Beta3(profile)
     };
     let defaults = app.ak820_install_runtime.start_with_defaults || beta4_1;
+    let without_oem_archive = app.ak820_install_runtime.without_oem_archive;
     let source = app.ak820_install_runtime.source;
     let opt_in = app.ak820_install_runtime.prerelease_opt_in;
     let observation = app.app_settings.ak820_release_observation.clone();
@@ -440,6 +483,9 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = (|| -> Result<Preview, String> {
+            if !root.is_dir() {
+                return Err("Choose an existing backup folder first".into());
+            }
             let hid = match hid {
                 Some(h) => h,
                 None => crate::hid::HidDevice::open_for_install(&device)
@@ -469,9 +515,6 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
             } else {
                 match source {
                     Source::PreparedFile => {
-                        let recovery = recovery.as_ref().ok_or(
-                            "Choose the personal OEM recovery ROM required for prepared payloads",
-                        )?;
                         let payload = external
                             .as_ref()
                             .ok_or("Choose the prepared firmware file")?
@@ -487,7 +530,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                             profile,
                             image,
                             payload,
-                            recovery: recovery.bytes.clone(),
+                            recovery: recovery.as_ref().map(|recovery| recovery.bytes.clone()),
                             settings: if defaults {
                                 InstallSettingsChoice::Defaults
                             } else {
@@ -506,14 +549,6 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                                 && !defaults
                             {
                                 return Err("Initial OEM installation requires the explicit Start with defaults choice".into());
-                            }
-                            if recovery.is_none()
-                                && crate::ak820_installer::classify_snapshot(source_rom)?
-                                    != crate::ak820_installer::SnapshotKind::Oem
-                            {
-                                return Err(
-                                    "Project updates require your personal OEM recovery ROM".into(),
-                                );
                             }
                         }
                         let settings = if defaults {
@@ -562,7 +597,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                     );
                 }
             }
-            let provenance = plan.recovery_provenance().cloned();
+            let provenance = if without_oem_archive { None } else { plan.recovery_provenance().cloned() };
             Ok(Preview {
                 hid,
                 plan,
@@ -679,94 +714,95 @@ impl EntropyApp {
             let current = safety.lock().unwrap_or_else(|e| e.into_inner()).clone();
             self.persist_install_receipts(&current);
         }
-        if let Some(dialog) = &self.ak820_install_runtime.dialog {
-            match dialog.rx.try_recv() {
-                Ok(Some(path)) => {
-                    let pick = dialog.pick;
-                    self.ak820_install_runtime.dialog = None;
-                    match pick {
-                        Pick::BackupRoot => self.ak820_install_runtime.backup_root = Some(path),
-                        Pick::OemRecovery => {
-                            match crate::ak820_backup_files::read_install_recovery(
-                                &path,
-                                &self.app_settings.ak820_recovery_manifests,
-                            ) {
-                                Ok((rom, provenance)) => {
-                                    let label = path
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string();
-                                    self.ak820_install_runtime.rollback_recovery =
-                                        Some((rom, provenance, label));
-                                    self.retire_install_preview();
-                                }
-                                Err(error) => {
-                                    self.status_msg = format!(
-                                        "{}: {error}",
-                                        tr(
-                                            ru,
-                                            "Could not load the selected OEM recovery snapshot",
-                                            "Не удалось загрузить выбранный снимок восстановления OEM"
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                        Pick::Payload | Pick::Recovery => {
-                            let expected = if pick == Pick::Payload { 51136 } else { 65536 };
-                            match super::ak820_install_files::read_input_bytes(
-                                &path,
-                                expected,
-                                self.app_settings.language == crate::i18n::Language::Russian,
-                            ) {
-                                Ok(bytes) => {
-                                    let input = SelectedFile {
-                                        name: path
-                                            .file_name()
-                                            .unwrap_or_default()
-                                            .to_string_lossy()
-                                            .chars()
-                                            .filter(|c| !c.is_control())
-                                            .take(72)
-                                            .collect(),
-                                        bytes,
-                                    };
-                                    if pick == Pick::Payload {
-                                        self.ak820_install_runtime.external_payload = Some(input);
-                                        self.ak820_install_runtime.source = Source::PreparedFile;
-                                    } else {
-                                        self.ak820_install_runtime.recovery = Some(input);
-                                    }
-                                    self.retire_install_preview();
-                                }
-                                Err(error) => {
-                                    self.status_msg = format!(
-                                        "{}: {error}",
-                                        tr(
-                                            ru,
-                                            "Could not read the selected file",
-                                            "Не удалось прочитать выбранный файл"
-                                        )
-                                    )
-                                }
-                            }
-                        }
+        let runtime = &mut self.ak820_install_runtime;
+        if runtime.dialog.as_ref().is_some_and(|dialog| {
+            dialog.generation != runtime.picker_generation
+                || dialog.mode != runtime.mode || dialog.source != runtime.source
+                || dialog.recovery_pins.as_ref().is_some_and(|pins| *pins != self.app_settings.ak820_recovery_manifests)
+        }) {
+            runtime.dialog = None;
+        }
+        let mut chosen = None;
+        let mut completed_input = None;
+        let mut close_dialog = false;
+        if let Some(dialog) = &mut runtime.dialog {
+            if let Some(rx) = &dialog.pending {
+                match rx.try_recv() {
+                    Ok(result) => { completed_input = Some((dialog.pick, result)); close_dialog = true; }
+                    Err(mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(80)),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        completed_input = Some((dialog.pick, Err("File reader stopped unexpectedly".into())));
+                        close_dialog = true;
                     }
                 }
-                Ok(None) => self.ak820_install_runtime.dialog = None,
-                Err(mpsc::TryRecvError::Empty) => {
-                    ctx.request_repaint_after(std::time::Duration::from_millis(80))
+            } else {
+                match dialog.rx.try_recv() {
+                    Ok(Some(path)) => chosen = Some((dialog.pick, path)),
+                    Ok(None) | Err(mpsc::TryRecvError::Disconnected) => close_dialog = true,
+                    Err(mpsc::TryRecvError::Empty) => {}
                 }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.ak820_install_runtime.dialog = None;
-                    self.status_msg = tr(
-                        ru,
-                        "File selection stopped unexpectedly",
-                        "Выбор файла неожиданно остановился",
-                    )
-                    .into();
+            }
+        }
+        if close_dialog { runtime.dialog = None; }
+        if let Some((pick, path)) = chosen {
+            if pick == Pick::BackupRoot {
+                runtime.backup_root = Some(path);
+                runtime.dialog = None;
+            } else if INPUT_READER_BUSY.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+                runtime.dialog = None;
+                self.status_msg = tr(ru, "A previous file read is still running; try again later", "Предыдущее чтение файла ещё выполняется; повторите позже").into();
+            } else {
+                let permit = InputReaderPermit;
+                let pins = self.app_settings.ak820_recovery_manifests.clone();
+                if pick == Pick::OemRecovery {
+                    runtime.dialog.as_mut().unwrap().recovery_pins = Some(pins.clone());
                 }
+                let worker_ctx = ctx.clone();
+                let (tx, rx) = mpsc::channel();
+                let started = std::thread::Builder::new().spawn(move || {
+                    let _permit = permit;
+                    let result = if pick == Pick::OemRecovery {
+                        recovery_directory(&path)
+                            .ok_or_else(|| "Select the archive's manifest.json file".to_owned())
+                            .and_then(|directory| crate::ak820_backup_files::read_install_recovery(directory, &pins))
+                            .map(|(rom, provenance)| PickedInput::Oem(rom, provenance,
+                                path.parent().and_then(|p| p.file_name()).unwrap_or_default().to_string_lossy().into_owned()))
+                    } else {
+                        let expected = if pick == Pick::Payload { 51136 } else { 65536 };
+                        super::ak820_install_files::read_input_bytes(&path, expected, ru).map(|bytes| {
+                            PickedInput::File(SelectedFile {
+                                name: path.file_name().unwrap_or_default().to_string_lossy().chars().filter(|c| !c.is_control()).take(72).collect(),
+                                bytes,
+                            })
+                        })
+                    };
+                    let _ = tx.send(result);
+                    worker_ctx.request_repaint();
+                });
+                match started {
+                    Ok(_) => runtime.dialog.as_mut().unwrap().pending = Some(rx),
+                    Err(_) => {
+                        runtime.dialog = None;
+                        self.status_msg = tr(ru, "Could not start file reader", "Не удалось запустить чтение файла").into();
+                    }
+                }
+            }
+        }
+        if let Some((pick, result)) = completed_input {
+            match result {
+                Ok(PickedInput::File(input)) => {
+                    if pick == Pick::Payload {
+                        self.ak820_install_runtime.external_payload = Some(input);
+                    } else {
+                        self.ak820_install_runtime.recovery = Some(input);
+                    }
+                    self.retire_install_preview();
+                }
+                Ok(PickedInput::Oem(rom, provenance, label)) => {
+                    self.ak820_install_runtime.rollback_recovery = Some((rom, provenance, label));
+                    self.retire_install_preview();
+                }
+                Err(error) => self.status_msg = format!("{}: {error}", tr(ru, "Could not read the selected input", "Не удалось прочитать выбранные данные")),
             }
         }
         if let Some(rx) = self.ak820_install_runtime.release_check.take() {
@@ -1041,15 +1077,12 @@ fn pick(runtime: &mut Runtime, kind: Pick) {
         return;
     }
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let path = if matches!(kind, Pick::BackupRoot | Pick::OemRecovery) {
-            rfd::FileDialog::new().pick_folder()
-        } else {
-            rfd::FileDialog::new().pick_file()
-        };
-        let _ = tx.send(path);
+    runtime.picker_generation = runtime.picker_generation.wrapping_add(1);
+    runtime.dialog = Some(Dialog {
+        rx, tx, path: String::new(), pick: kind, browser: None,
+        generation: runtime.picker_generation, mode: runtime.mode, source: runtime.source,
+        pending: None, recovery_pins: None,
     });
-    runtime.dialog = Some(Dialog { rx, pick: kind });
 }
 
 fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
@@ -1072,6 +1105,52 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
     {
         let runtime = &mut app.ak820_install_runtime;
         let busy = runtime.owns_hid();
+        let mut cancel_picker = false;
+        if let Some(dialog) = &mut runtime.dialog {
+            if dialog.pending.is_some() {
+                ui.spinner();
+                ui.label(tr(ru, "Reading selected input…", "Чтение выбранных данных…"));
+                if ui.button(tr(ru, "Cancel", "Отмена")).clicked() {
+                    cancel_picker = true;
+                }
+            } else {
+            ui.label(match dialog.pick {
+                Pick::BackupRoot => tr(ru, "Enter directory path", "Введите путь к папке"),
+                Pick::OemRecovery => tr(ru, "Select manifest.json from the OEM recovery archive", "Выберите manifest.json из архива восстановления OEM"),
+                _ => tr(ru, "Enter file path", "Введите путь к файлу"),
+            });
+            ui.text_edit_singleline(&mut dialog.path);
+            if dialog.browser.is_none() && ui.button(tr(ru, "Browse…", "Обзор…")).clicked() {
+                dialog.browser = Some(super::file_browser::FileBrowser::new(
+                    PathBuf::from("."), dialog.pick.browser_mode(), ui.ctx(),
+                ));
+            }
+            if let Some(browser) = &mut dialog.browser {
+                if let Some(result) = browser.show(ui, ru) {
+                    match result {
+                        super::file_browser::BrowserResult::Selected(path)
+                        | super::file_browser::BrowserResult::Directory(path) => {
+                            let _ = dialog.tx.send(Some(path));
+                        }
+                        super::file_browser::BrowserResult::Cancelled => {}
+                    }
+                    dialog.browser = None;
+                }
+            }
+            ui.horizontal_wrapped(|ui| {
+                if crate::ui_style::action_button(ui, tr(ru, "Select", "Выбрать"), !dialog.path.trim().is_empty()).clicked() {
+                    let _ = dialog.tx.send(Some(PathBuf::from(&dialog.path)));
+                }
+                if crate::ui_style::action_button(ui, tr(ru, "Cancel", "Отмена"), true).clicked() {
+                    let _ = dialog.tx.send(None);
+                }
+            });
+            }
+        }
+        if cancel_picker {
+            runtime.dialog = None;
+            runtime.picker_generation = runtime.picker_generation.wrapping_add(1);
+        }
         ui.label(tr(ru, "Select the exact image and local safety inputs. Preparation reads the device; no flash write occurs until you review the preview and explicitly start.", "Выберите точный образ и локальные защитные данные. Подготовка читает устройство; запись прошивки начнётся только после проверки плана и явного запуска."));
         ui.horizontal(|ui| {
             if crate::ui_style::action_button(
@@ -1260,6 +1339,11 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             {
                 retire = true;
             }
+            if !runtime.beta4_1 {
+                if let Some(error) = beta3_admission_error(runtime.profile) {
+                    ui.label(format!("{}: {error}", tr(ru, "Release admission denied", "Допуск выпуска отклонён")));
+                }
+            }
             if runtime.beta4_1 {
                 ui.label(tr(
                     ru,
@@ -1272,16 +1356,26 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 .changed() {
                 retire = true;
             }
+            if ui.add_enabled(!busy, egui::Checkbox::new(&mut runtime.without_oem_archive, tr(ru,
+                "Proceed without creating an OEM recovery archive",
+                "Продолжить без создания архива восстановления OEM"))).changed() {
+                retire = true;
+            }
+            if runtime.without_oem_archive {
+                ui.label(tr(ru,
+                    "Without a verified compatible OEM copy, stock recovery cannot be relied on. The required full-ROM safety snapshot is still saved and may contain OEM data.",
+                    "Без проверенной совместимой OEM-копии восстановление заводской прошивки не гарантировано. Обязательный защитный снимок полного ROM всё равно сохраняется и может содержать данные OEM."));
+            }
             ui.label(tr(
                 ru,
-                "For a first OEM installation, explicitly choose defaults. Project updates require the personal OEM reference; a prepared payload always requires it.",
-                "Для первой установки поверх OEM явно выберите настройки по умолчанию. Для обновления проекта нужна личная OEM-копия; для подготовленного файла она обязательна всегда.",
+                "An old OEM copy is optional for an exactly verified update. Without a verified compatible copy, stock recovery is unavailable. A current full-ROM safety snapshot is still required.",
+                "Старая OEM-копия необязательна для точно проверенного обновления. Без проверенной совместимой копии восстановление заводской прошивки недоступно. Текущий защитный снимок полного ROM всё равно обязателен.",
             ));
             ui.horizontal(|ui| {
                 ui.label(tr(
                     ru,
-                    "Personal OEM recovery ROM (optional for first OEM install)",
-                    "Личная OEM-копия ROM (необязательна при первой установке поверх OEM)",
+                    "Personal OEM recovery ROM (optional when the current image is verified)",
+                    "Личная OEM-копия ROM (необязательна при проверенном текущем образе)",
                 ));
                 if crate::ui_style::action_button(ui,
                             runtime
@@ -1311,8 +1405,8 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     .map(|x| x.2.as_str())
                     .unwrap_or(tr(
                         ru,
-                        "Choose verified snapshot folder…",
-                        "Выбрать проверенную папку снимка…",
+                        "Choose snapshot manifest.json…",
+                        "Выбрать manifest.json снимка…",
                     ));
                 if crate::ui_style::action_button(ui, label, !busy).clicked() {
                     pick(runtime, Pick::OemRecovery);
@@ -1337,7 +1431,8 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 if crate::ui_style::action_button(
                     ui,
                     tr(ru, "Prepare preview", "Подготовить план"),
-                    matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none(),
+                    matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none()
+                        && (runtime.mode != Mode::Firmware || runtime.beta4_1 || beta3_admission_error(runtime.profile).is_none()),
                 )
                 .clicked()
                 {
@@ -1398,13 +1493,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 ui.label(format!(
                     "{}: {}",
                     tr(ru, "Settings", "Настройки"),
-                    if preview.plan.summary().action.starts_with("oem-") {
-                        tr(ru, "OEM settings", "Настройки OEM")
-                    } else if preview.capture.is_some() && !runtime.start_with_defaults {
-                        tr(ru, "preserved/migrated", "сохранены/перенесены")
-                    } else {
-                        tr(ru, "target defaults", "по умолчанию")
-                    }
+                    settings_outcome_text(preview.plan.settings_outcome(), ru)
                 ));
                 ui.label(if summary.physical_hold {
                     tr(
@@ -1415,21 +1504,21 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 } else {
                     tr(
                         ru,
-                        "No project-image hold is required for this source.",
-                        "Для этого образа удержание подтверждения не требуется.",
+                        "The OEM source cannot provide a physical hold. Start flashing is your explicit confirmation.",
+                        "Исходная OEM-прошивка не поддерживает физическое удержание. Нажатие «Начать прошивку» служит явным подтверждением.",
                     )
                 });
                 ui.colored_label(ui.visuals().warn_fg_color, tr(ru, "Keep the keyboard connected and on external power. An error stops the one attempt; no retry, reset, or automatic restore follows.", "Не отключайте клавиатуру и используйте внешнее питание. Ошибка останавливает единственную попытку; автоматических повтора, сброса и восстановления не будет."));
                 if summary.source_is_oem
-                    && preview.plan.recovery_provenance().is_none()
-                    && preview.plan.summary().action.starts_with("firmware:")
+                    && preview.provenance.is_none()
+                    && summary.action.starts_with("firmware:")
                 {
                     ui.colored_label(
                         ui.visuals().warn_fg_color,
                         tr(
                             ru,
-                            "This device has no unique serial binding. A full safety snapshot will be saved, but this app cannot offer a verified OEM rollback for it.",
-                            "У устройства нет уникального серийного номера. Полный защитный снимок будет сохранён, но приложение не сможет предложить проверенный откат к OEM для этого устройства.",
+                            "A full safety snapshot will be saved, but no verified OEM recovery archive will be created for this installation.",
+                            "Полный защитный снимок будет сохранён, но проверенный архив восстановления OEM для этой установки создан не будет.",
                         ),
                     );
                 }
@@ -1510,6 +1599,12 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
         }
     }
+    if app.ak820_install_runtime.dialog.as_ref().is_some_and(|dialog| {
+        dialog.mode != app.ak820_install_runtime.mode || dialog.source != app.ak820_install_runtime.source
+    }) {
+        app.ak820_install_runtime.dialog = None;
+        app.ak820_install_runtime.picker_generation = app.ak820_install_runtime.picker_generation.wrapping_add(1);
+    }
     if close_result {
         app.ak820_install_runtime.owner = Owner::Idle;
     }
@@ -1543,40 +1638,116 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
     }
 }
 
-pub(crate) fn show(app: &mut EntropyApp, ctx: &egui::Context) {
-    if !ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false)) {
-        return;
-    }
-    app.poll_ak820_install(ctx);
+pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    app.poll_ak820_install(&ctx);
     let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let active = app.ak820_install_runtime.owns_hid();
-    let mut open = true;
-    crate::ui_style::utility_window(
-        ctx,
-        tr(
-            ru,
-            "AK820 firmware installation",
-            "Установка прошивки AK820",
-        ),
-        egui::Id::new("ak820_install_window"),
-        &mut open,
-        egui::vec2(720.0, 430.0),
-    )
-    .vscroll(true)
-    .show(ctx, |ui| {
-        if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
-            super::ak820_help_ui::open_section(ctx, "firmware-install-recovery");
-        }
-        draw(app, ui)
+    egui::ScrollArea::vertical().id_salt("ak820_install_page").show(ui, |ui| {
+        ui.heading(tr(ru, "AK820 firmware installation", "Установка прошивки AK820"));
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui_style::action_button(ui, tr(ru, "Back", "Назад"), !active && !app.ak820_install_runtime.has_path_entry()).clicked() {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
+            }
+            if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
+                super::ak820_help_ui::open_section(&ctx, "firmware-install-recovery");
+            }
+        });
+        draw(app, ui);
     });
-    if !open && !active {
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_settings_text_uses_prepared_outcome() {
+        use crate::ak820_install_executor::InstallSettingsOutcome::*;
+        assert_eq!(settings_outcome_text(&DefaultsRequested, false), "defaults requested");
+        assert_eq!(settings_outcome_text(&DefaultsRequested, true), "запрошены настройки по умолчанию");
+        assert_ne!(settings_outcome_text(&DefaultsRequested, false), settings_outcome_text(&PreparedImageSettingsVerified, false));
+    }
+
+    #[test]
+    fn beta3_selection_reports_catalog_denial_for_every_profile() {
+        for row in crate::app::ak820_beta1_profiles::profiles() {
+            assert_eq!(beta3_admission_error(row.profile).as_deref(), Some("Beta.3 release catalog does not authorize flashing"));
+        }
+    }
+
+    #[test]
+    fn installer_picker_modes_and_manifest_parent_are_strict() {
+        use super::super::file_browser::BrowserMode;
+        assert_eq!(Pick::BackupRoot.browser_mode(), BrowserMode::Directory);
+        for pick in [Pick::Payload, Pick::Recovery, Pick::OemRecovery] {
+            assert_eq!(pick.browser_mode(), BrowserMode::File);
+        }
+        assert_eq!(recovery_directory(std::path::Path::new("archive/manifest.json")), Some(std::path::Path::new("archive")));
+        assert!(recovery_directory(std::path::Path::new("archive/other.json")).is_none());
+        assert!(recovery_directory(std::path::Path::new("archive")).is_none());
+        assert_eq!(recovery_directory(std::path::Path::new("manifest.json")), Some(std::path::Path::new(".")));
+    }
+
+    #[test]
+    fn cancelling_path_selection_preserves_installer_inputs() {
+        let mut runtime = Runtime::default();
+        runtime.backup_root = Some(PathBuf::from("original"));
+        pick(&mut runtime, Pick::OemRecovery);
+        assert!(runtime.has_path_entry());
+        assert_eq!(runtime.dialog.as_ref().unwrap().pick, Pick::OemRecovery);
+        pick(&mut runtime, Pick::Payload);
+        assert_eq!(runtime.dialog.as_ref().unwrap().pick, Pick::OemRecovery);
+        runtime.dialog = None;
+        assert!(!runtime.has_path_entry());
+        assert_eq!(runtime.backup_root, Some(PathBuf::from("original")));
+    }
+
+    #[test]
+    fn stale_or_cancelled_picker_results_cannot_replace_later_choices() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.ak820_install_runtime.source = Source::PreparedFile;
+        pick(&mut app.ak820_install_runtime, Pick::Payload);
+        let (tx, rx) = mpsc::channel();
+        app.ak820_install_runtime.dialog.as_mut().unwrap().pending = Some(rx);
+        assert!(app.ak820_install_runtime.blocks_exit());
+        app.ak820_install_runtime.source = Source::Bundled;
+        tx.send(Ok(PickedInput::File(SelectedFile { name: "late".into(), bytes: vec![1] }))).unwrap();
+        app.poll_ak820_install(&ctx);
+        assert!(app.ak820_install_runtime.dialog.is_none());
+        assert_eq!(app.ak820_install_runtime.source, Source::Bundled);
+        assert!(app.ak820_install_runtime.external_payload.is_none());
+
+        pick(&mut app.ak820_install_runtime, Pick::OemRecovery);
+        let (tx, rx) = mpsc::channel();
+        app.ak820_install_runtime.dialog.as_mut().unwrap().pending = Some(rx);
+        app.ak820_install_runtime.dialog = None;
+        pick(&mut app.ak820_install_runtime, Pick::Recovery);
+        assert!(tx.send(Err("late".into())).is_err());
+        app.poll_ak820_install(&ctx);
+        assert_eq!(app.ak820_install_runtime.dialog.as_ref().unwrap().pick, Pick::Recovery);
+        assert!(app.ak820_install_runtime.rollback_recovery.is_none());
+    }
+
+    #[test]
+    fn picker_renders_on_narrow_viewport_in_both_languages() {
+        for language in [crate::i18n::Language::English, crate::i18n::Language::Russian] {
+            let ctx = egui::Context::default();
+            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            pick(&mut app.ak820_install_runtime, Pick::OemRecovery);
+            let _ = ctx.run(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 500.0))),
+                ..Default::default()
+            }, |ctx| { egui::CentralPanel::default().show(ctx, |ui| show(&mut app, ui)); });
+            assert!(app.ak820_install_runtime.has_path_entry());
+            assert!(app.hid_device.is_none());
+        }
+    }
+
     #[test]
     fn terminal_reports_localize_verified_outcomes_and_keep_private_paths_local() {
         let safety = SafetyPaths {
@@ -1702,13 +1873,9 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| show(&mut app, ctx),
+                    |ctx| { egui::CentralPanel::default().show(ctx, |ui| show(&mut app, ui)); },
                 );
             }
-            let rect = ctx
-                .memory(|m| m.area_rect(egui::Id::new("ak820_install_window")))
-                .unwrap();
-            assert!(rect.width() <= 800.0 && rect.height() <= 500.0);
             assert!(app.hid_device.is_none());
             assert!(!app.ak820_install_runtime.owns_hid());
         }

@@ -12,6 +12,7 @@ mod ak820_install_plan;
 mod ak820_installer;
 mod ak820_loader;
 mod ak820_offline_project;
+mod ak820_vial;
 #[cfg(not(target_arch = "wasm32"))]
 mod ak820_openrgb_bridge;
 mod ak820_os_indicator;

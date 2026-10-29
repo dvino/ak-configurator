@@ -867,12 +867,13 @@ impl EntropyApp {
         // The picker runs on a worker thread; the actual write happens in
         // write_entlayout_export once a path comes back. Snapshotting again then
         // keeps the export current even if the dialog was open for a while.
-        self.spawn_file_dialog(
+        self.spawn_file_dialog_with_default(
             crate::app::file_dialog::FileDialogAction::ExportEntlayout,
             rfd::FileDialog::new()
                 .add_filter("Entropy layout", &["entlayout"])
                 .set_file_name(&file_name),
             true,
+            Some(&file_name),
         );
     }
 

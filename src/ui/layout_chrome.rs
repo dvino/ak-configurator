@@ -22,7 +22,7 @@ impl EntropyApp {
             }
             self.handle_typing_trainer_input(ctx);
             if self.typing_trainer.ui_hidden {
-                self.close_top_dropdowns(ctx);
+                self.close_hover_top_dropdowns(ctx);
             }
         }
         let chrome_opacity = self.typing_trainer_chrome_opacity(ctx);
@@ -49,7 +49,7 @@ impl EntropyApp {
             .inner;
 
             if self.unlock_open || self.vial_unlock_polling {
-                self.close_top_dropdowns(ctx);
+                self.close_hover_top_dropdowns(ctx);
             } else if chrome_opacity > 0.01 {
                 crate::ui_style::allocate_ui_at_rect(ui, chrome_rect, |ui| {
                     ui.set_opacity(chrome_opacity);

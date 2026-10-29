@@ -46,25 +46,32 @@ fn capture_rejects_unloaded_or_historical_session_without_packets() {
 }
 #[test]
 fn capture_zero_rom_stops_at_production_trust_gate_using_getters_only() {
-    let (hid, log) = capture_device();
-    let progress = AtomicU32::new(0);
-    let error = hid
-        .ak820_capture_backup(&AtomicBool::new(false), &progress)
-        .unwrap_err();
-    assert!(error.to_string().contains("exact archive validation"));
-    let requests = log.requests();
-    assert_eq!(
-        requests.iter().filter(|p| p[..2] == [0xfd, 0]).count(),
-        65536usize.div_ceil(27)
-    );
-    assert!(
-        requests.iter().all(|p| p[0] == 1
-            || p[..2] == [0xfe, 0]
-            || p[..2] == [0xfd, 0]
-            || p[..2] == [0xfd, 1])
-    );
-    assert!(progress.load(Ordering::Acquire) < 100);
-    assert!(!hid.ak820_editing_ready());
+    for image in [
+        ImageContract::Beta2(ProfileId::Main),
+        ImageContract::Beta3(ProfileId::Main),
+        ImageContract::Beta4(ProfileId::Main),
+    ] {
+        let (hid, log) = capture_device();
+        hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(image);
+        let progress = AtomicU32::new(0);
+        let error = hid
+            .ak820_capture_backup(&AtomicBool::new(false), &progress)
+            .unwrap_err();
+        assert!(error.to_string().contains("exact archive validation"));
+        let requests = log.requests();
+        assert_eq!(
+            requests.iter().filter(|p| p[..2] == [0xfd, 0]).count(),
+            65536usize.div_ceil(27)
+        );
+        assert!(
+            requests.iter().all(|p| p[0] == 1
+                || p[..2] == [0xfe, 0]
+                || p[..2] == [0xfd, 0]
+                || p[..2] == [0xfd, 1])
+        );
+        assert!(progress.load(Ordering::Acquire) < 100);
+        assert!(!hid.ak820_editing_ready());
+    }
 }
 #[test]
 fn capture_bad_storage_stops_once_without_rom_reads() {
@@ -170,8 +177,12 @@ fn reconciliation_fixture() -> (Vec<u8>, serde_json::Value) {
 }
 
 fn modeled_getter(p: &[u8], nvm: &[u8]) -> [u8; 32] {
-    let contract = crate::app::ak820_beta1_profiles::matrix_profile(ProfileId::Shortcuts);
-    let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(nvm).unwrap();
+    modeled_getter_for_image(p, nvm, ImageContract::Beta2(ProfileId::Shortcuts))
+}
+
+fn modeled_getter_for_image(p: &[u8], nvm: &[u8], image: ImageContract) -> [u8; 32] {
+    let contract = image.matrix_profile().unwrap();
+    let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm).unwrap();
     let mut r = [0; 32];
     match (p[0], p.get(1).copied().unwrap_or(0)) {
         (4, _) => {
@@ -218,11 +229,23 @@ fn modeled_getter(p: &[u8], nvm: &[u8]) -> [u8; 32] {
             r[4..4 + p[3] as usize].copy_from_slice(&nvm[at..at + p[3] as usize]);
         }
         (0xfe, 10) => {
-            let value = extensions
-                .settings
-                .get(u16::from_le_bytes([p[2], p[3]]))
-                .unwrap();
+            let id = u16::from_le_bytes([p[2], p[3]]);
+            let value = if matches!(image, ImageContract::Beta4(_)) {
+                use crate::ak820_qs_versioned_offline::{ImageVersion, SettingsRecord};
+                SettingsRecord::decode_for_image(
+                    &nvm[0x6a8..0x6c0], ImageVersion::V2, ImageVersion::V2,
+                )
+                .unwrap()
+                .get(id)
+                .unwrap()
+            } else {
+                crate::ak820_typed_storage::Extensions::decode_nvm(nvm)
+                    .unwrap().settings.get(id).unwrap()
+            };
             r[1..3].copy_from_slice(&value.to_le_bytes());
+            if matches!(id, 1 | 3 | 22) {
+                r[2] = 0xa5;
+            }
         }
         (0xfe, 13) if p[2] == 1 || p[2] == 5 => {
             let raw = if p[2] == 1 {
@@ -240,7 +263,7 @@ fn modeled_getter(p: &[u8], nvm: &[u8]) -> [u8; 32] {
                 &crate::ak820_settings_backup::rgb_wire_for_profile(
                     &nvm[24..32],
                     false,
-                    ProfileId::Shortcuts,
+                    image.profile().unwrap(),
                 )
                 .unwrap(),
             );
@@ -285,6 +308,48 @@ fn capture_reconciles_all_modeled_durable_getters_and_allows_volatile_rgb_differ
         )
         .unwrap()
     );
+}
+
+#[test]
+fn beta4_capture_reconciles_v1_and_v2_qs_and_rejects_bad_getters() {
+    use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
+    let image = ImageContract::Beta4(ProfileId::Main);
+    for version in [RecordVersion::V1, RecordVersion::V2] {
+        let (mut nvm, _) = reconciliation_fixture();
+        let mut qs = SettingsRecord::defaults(version);
+        if version == RecordVersion::V2 {
+            qs.set(3, 29).unwrap();
+            qs.set(22, 1).unwrap();
+        }
+        nvm[0x6a8..0x6c0].copy_from_slice(&qs.encode());
+        let rgb = crate::ak820_settings_backup::rgb_wire_for_profile(
+            &nvm[24..32], false, ProfileId::Main,
+        ).unwrap();
+        let settings = crate::ak820_settings_model::settings_from_nvm_for_image_with_capabilities_offline(
+            &nvm, &rgb, true, ImageVersion::V2, ImageVersion::V2,
+            crate::ak820_settings_model::OfflineSettingsCapabilities { combo_media: true },
+        ).unwrap();
+        let mut saw_22 = false;
+        assert!(capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
+            if p == [0xfe, 10, 22, 0] {
+                saw_22 = true;
+            }
+            Ok(modeled_getter_for_image(p, &nvm, image))
+        }).unwrap());
+        assert!(saw_22);
+        for id in [3, 22] {
+            let mut hit = false;
+            let result = capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
+                let mut reply = modeled_getter_for_image(p, &nvm, image);
+                if p == [0xfe, 10, id, 0] {
+                    reply[1] ^= 1;
+                    hit = true;
+                }
+                Ok(reply)
+            });
+            assert!(hit && result.is_err(), "QSID {id} mismatch must fail");
+        }
+    }
 }
 
 #[test]

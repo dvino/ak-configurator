@@ -161,7 +161,15 @@ impl EntropyApp {
             }
             if resp.clicked() {
                 if let Some(target) = top_tab_direct_navigation_target(*tab) {
-                    self.main_menu_tab = target;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let can_navigate = !self.service_navigation_busy(ctx);
+                    #[cfg(target_arch = "wasm32")]
+                    let can_navigate = true;
+                    if can_navigate {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        super::ak820_status::leave_service_pages(ctx);
+                        self.main_menu_tab = target;
+                    }
                 }
             }
 

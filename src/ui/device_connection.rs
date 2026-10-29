@@ -402,8 +402,9 @@ impl EntropyApp {
                     }
                 });
                 ui.add_space(10.0);
-                let profile_ctx = ui.ctx().clone();
-                super::ak820_beta1_profiles_ui::button(ui, &profile_ctx, lang);
+                if ui.button(if lang == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
+                    self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                }
             });
         });
     }

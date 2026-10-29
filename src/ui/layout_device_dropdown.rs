@@ -106,7 +106,6 @@ impl EntropyApp {
             device_menu_labels.push(crate::i18n::tr_catalog(lang, "layer_actions.menu").to_owned());
             device_menu_labels
                 .push(crate::i18n::tr_catalog(lang, "main_menu.show_hide_keys").to_owned());
-            device_menu_labels.push(super::ak820_beta1_profiles_ui::navigation_label(lang));
             #[cfg(not(target_arch = "wasm32"))]
             {
                 device_menu_labels.push(entlayout_import_label(lang).to_owned());
@@ -289,22 +288,6 @@ impl EntropyApp {
                     {
                         self.close_top_dropdowns(ctx);
                         self.start_layout_visibility_edit();
-                        ctx.request_repaint();
-                        device_clicked = true;
-                    }
-
-                    if top_dropdown_icon_item(
-                        ui,
-                        dropdown_size.x - 16.0,
-                        TopMenuIcon::Modules,
-                        &super::ak820_beta1_profiles_ui::navigation_label(lang),
-                        self.layout.is_some() && self.keycode_picker.ak820_profile,
-                        false,
-                    )
-                    .clicked()
-                    {
-                        self.close_top_dropdowns(ctx);
-                        super::ak820_beta1_profiles_ui::open(ctx);
                         ctx.request_repaint();
                         device_clicked = true;
                     }

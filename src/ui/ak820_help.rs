@@ -292,6 +292,9 @@ fn render_article(
             ui.add(egui::Label::new(paragraph).wrap());
             ui.add_space(8.0);
         }
+        if topic.id == "firmware-install-recovery" {
+            super::ak820_beta1_profiles_ui::profile_help(ui, if ru { Language::Russian } else { Language::English });
+        }
     });
 }
 

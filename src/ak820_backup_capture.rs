@@ -24,12 +24,16 @@ pub(crate) fn check_stability(
 #[derive(Clone, Debug)]
 pub(crate) struct CapturedBackup {
     profile: ProfileId,
+    image: crate::ak820::ImageContract,
     identity: ImageIdentity,
     files: BTreeMap<String, Vec<u8>>,
 }
 impl CapturedBackup {
     pub(crate) fn profile(&self) -> ProfileId {
         self.profile
+    }
+    pub(crate) fn image(&self) -> crate::ak820::ImageContract {
+        self.image
     }
     pub(crate) fn identity(&self) -> &ImageIdentity {
         &self.identity
@@ -73,7 +77,7 @@ impl CapturedBackup {
         }
         let nvm = rom[0xc700..0xef00].to_vec();
         let settings =
-            crate::ak820_settings_model::decode_trusted_rom(&rom, &nvm, &identity, profile)?;
+            crate::ak820_settings_model::decode_trusted_rom_for_image(&rom, &nvm, &identity, image)?;
         let mut files = BTreeMap::new();
         files.insert("settings.json".into(), canonical(&settings)?);
         files.insert("before-full-rom.bin".into(), rom);
@@ -86,6 +90,7 @@ impl CapturedBackup {
         files.insert("read-log.jsonl".into(), log);
         Ok(Self {
             profile,
+            image,
             identity,
             files,
         })

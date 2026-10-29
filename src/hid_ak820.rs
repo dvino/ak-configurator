@@ -349,8 +349,25 @@ fn capture_check_cancel(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
+fn capture_decode_rom(image: ImageContract, rom: &[u8], nvm: &[u8]) -> Result<serde_json::Value> {
+    let exact = image
+        .matrix_profile()
+        .context("Missing exact image profile")?
+        .settings_identity
+        .as_ref()
+        .context("Image lacks qualified settings identity")?;
+    let identity = crate::ak820_settings_backup::ImageIdentity {
+        ihx_sha256: exact.ihx_sha256.clone(),
+        code_sha256: exact.code_sha256.clone(),
+        definition_sha256: exact.definition_sha256.clone(),
+        schema: exact.nvm_schema,
+    };
+    crate::ak820_settings_model::decode_trusted_rom_for_image(rom, nvm, &identity, image)
+        .map_err(anyhow::Error::msg)
+}
+
 // Private reconciliation seam: tests model getters without manufacturing a
-// trusted full ROM. Production always calls decode_trusted_rom first.
+// trusted full ROM. Production always validates the exact ROM first.
 fn capture_reconcile_getters(
     profile: crate::app::ak820_beta1_profiles::ProfileId,
     image: ImageContract,
@@ -431,17 +448,43 @@ fn capture_reconcile_getters(
             "Captured macro getter differs"
         );
     }
-    let extensions =
-        crate::ak820_typed_storage::Extensions::decode_nvm(nvm).map_err(anyhow::Error::msg)?;
+    let (qs_values, tap_dance, key_overrides) = if matches!(image, ImageContract::Beta4(_)) {
+        use crate::ak820_qs_versioned_offline::{ImageVersion, SettingsRecord};
+        let qs = SettingsRecord::decode_for_image(
+            &nvm[0x6a8..0x6c0],
+            ImageVersion::V2,
+            ImageVersion::V2,
+        )
+        .map_err(anyhow::Error::msg)?;
+        let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm)
+            .map_err(anyhow::Error::msg)?;
+        let values = image
+            .qsid_ids()
+            .iter()
+            .map(|&id| qs.get(id).map(|value| (id, value)))
+            .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
+            .map_err(anyhow::Error::msg)?;
+        (values, extensions.tap_dance, extensions.key_overrides)
+    } else {
+        let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(nvm)
+            .map_err(anyhow::Error::msg)?;
+        let values = image
+            .qsid_ids()
+            .iter()
+            .map(|&id| extensions.settings.get(id).map(|value| (id, value)))
+            .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
+            .map_err(anyhow::Error::msg)?;
+        (values, extensions.tap_dance, extensions.key_overrides)
+    };
     for &id in &contract.capabilities.runtime_qmk_settings_ids {
         let reply = send(&[0xfe, 10, id as u8, (id >> 8) as u8])?;
-        let actual = if id == 1 {
+        let actual = if matches!(id, 1 | 3 | 22) {
             reply[1] as u16
         } else {
             u16::from_le_bytes([reply[1], reply[2]])
         };
         ensure!(
-            reply[0] == 0 && actual == extensions.settings.get(id).map_err(anyhow::Error::msg)?,
+            reply[0] == 0 && qs_values.get(&id) == Some(&actual),
             "Captured QMK getter differs"
         );
     }
@@ -452,9 +495,9 @@ fn capture_reconcile_getters(
         for index in 0..count {
             let reply = send(&[0xfe, 13, op, index as u8])?;
             let expected = if op == 1 {
-                extensions.tap_dance[index as usize].encode()
+                tap_dance[index as usize].encode()
             } else {
-                extensions.key_overrides[index as usize].encode()
+                key_overrides[index as usize].encode()
             }
             .map_err(anyhow::Error::msg)?;
             ensure!(
@@ -582,24 +625,10 @@ impl HidDevice {
             }
             let rom = read(&mut send, 0, 65536)?;
             let nvm = &rom[0xc700..0xef00];
-            let contract = image
-                .matrix_profile()
-                .context("Missing exact image profile")?;
-            let exact = contract
-                .settings_identity
-                .as_ref()
-                .context("Image lacks qualified settings identity")?;
-            let identity = crate::ak820_settings_backup::ImageIdentity {
-                ihx_sha256: exact.ihx_sha256.clone(),
-                code_sha256: exact.code_sha256.clone(),
-                definition_sha256: exact.definition_sha256.clone(),
-                schema: exact.nvm_schema,
-            };
             // Production decoder is mandatory before interpreting offsets or
             // accepting any live getter reconciliation.
-            let settings =
-                crate::ak820_settings_model::decode_trusted_rom(&rom, nvm, &identity, profile)
-                    .map_err(|_| anyhow::anyhow!("Captured ROM failed exact archive validation"))?;
+            let settings = capture_decode_rom(image, &rom, nvm)
+                .map_err(|_| anyhow::anyhow!("Captured ROM failed exact archive validation"))?;
             let rgb_matches_saved =
                 capture_reconcile_getters(profile, image, nvm, &settings, &mut send)?;
             let repeated_nvm = read(&mut send, 0xc700, 0x2800)?;
@@ -1542,6 +1571,24 @@ mod tests {
         let mut r = [0; 32];
         r[..4].copy_from_slice(&[0xFD, 1, 1, 0xA8]);
         r
+    }
+
+    #[test]
+    fn capture_decoder_uses_exact_release_and_rejects_untrusted_rom() {
+        let rom = vec![0; 65536];
+        let nvm = &rom[0xc700..0xef00];
+        for row in crate::app::ak820_beta1_profiles::profiles() {
+            for image in [
+                ImageContract::Beta2(row.profile),
+                ImageContract::Beta3(row.profile),
+                ImageContract::Beta4(row.profile),
+            ] {
+                let error = capture_decode_rom(image, &rom, nvm).unwrap_err().to_string();
+                assert!(error.contains("protected"), "{image:?}: {error}");
+                assert!(capture_decode_rom(image, &rom[..100], nvm).is_err());
+            }
+        }
+        assert!(capture_decode_rom(ImageContract::Alpha3, &rom, nvm).is_err());
     }
 
     #[test]

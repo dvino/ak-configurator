@@ -69,7 +69,7 @@ The optimized Linux x86_64 binary passed the offline ten-profile `--self-check`.
 
 Once a settings capture is attempted, any failure stops preparation, including when defaults or rollback were selected. The failed owner remains blocked from prepare/execute until a fresh reread. A fresh install-only/OEM owner without loaded project settings may skip unsupported settings capture, but still requires exact full-ROM and safety checks. The OEM no-serial warning is limited to the first OEM source path.
 
-The ten beta.3 release profile sources and verified assets are available for offline preparation and explicit prerelease installation. Package scripts now include localized Desktop, Changelog, Status and Review guides alongside the existing install/RGB guides, licenses, and offline beta.3 assets. Six native platform candidates are configured and unsigned. All six unsigned candidates passed final packaged build/runtime/install CI; signing and publication remain open. No physical flash, retention, OEM rollback, or LED behavior is claimed.
+The ten beta.3 release profile sources and verified assets are available for offline preparation; installation is currently blocked by the bundled beta.3 catalog (`flashing_authorized=false`, with no authorized image bindings). Package scripts now include localized Desktop, Changelog, Status and Review guides alongside the existing install/RGB guides, licenses, and offline beta.3 assets. Six native platform candidates are configured and unsigned. All six unsigned candidates passed final packaged build/runtime/install CI; signing and publication remain open. No physical flash, retention, OEM rollback, or LED behavior is claimed.
 
 ## Verification boundary and remaining work
 

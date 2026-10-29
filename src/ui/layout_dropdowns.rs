@@ -15,6 +15,11 @@ impl EntropyApp {
         settings_tab_rect: Option<egui::Rect>,
         settings_tab_hovered: bool,
     ) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.service_navigation_busy(ctx) {
+            self.close_hover_top_dropdowns(ctx);
+            return;
+        }
         self.draw_layout_device_dropdown(
             ui,
             ctx,

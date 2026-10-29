@@ -433,6 +433,10 @@ impl EntropyApp {
     }
 
     pub(super) fn close_top_dropdowns(&self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if !self.service_navigation_busy(ctx) {
+            super::ak820_status::leave_service_pages(ctx);
+        }
         self.close_hover_top_dropdowns(ctx);
         egui::Popup::close_id(ctx, egui::Id::new(APP_MENU_ID));
         egui::Popup::close_id(ctx, egui::Id::new(LANGUAGE_MENU_ID));

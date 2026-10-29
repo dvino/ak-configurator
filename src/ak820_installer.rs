@@ -5,13 +5,13 @@
 use crate::ak820_image_pack::{validate_native_revision, APP_END, APP_START};
 use crate::ak820_loader::{checksum, PayloadReports};
 use crate::ak820_settings_backup::{sha256, BackupResult, ImageIdentity};
-use crate::ak820_settings_model::decode_trusted_rom;
+use crate::ak820_settings_model::decode_trusted_rom_for_image;
 use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SnapshotKind {
     Oem,
-    Project(ProfileId),
+    Project(crate::ak820::ImageContract),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LocalPlanSummary {
@@ -58,27 +58,38 @@ impl CheckedLocalPackage {
         recovery: &[u8],
         image: crate::ak820::ImageContract,
     ) -> BackupResult<Self> {
+        Self::prepare_with_optional_recovery(target, payload, snapshot, Some(recovery), image)
+    }
+    pub(crate) fn prepare_with_optional_recovery(
+        target: ProfileId,
+        payload: &[u8],
+        snapshot: &[u8],
+        recovery: Option<&[u8]>,
+        image: crate::ak820::ImageContract,
+    ) -> BackupResult<Self> {
         // Validate complete sizes before taking any slices. A full-ROM payload
         // is forbidden even when it happens to contain the approved CODE.
         if image.profile() != Some(target) {
             return Err("Selected image/profile binding differs".into());
         }
         crate::ak820_image_pack::validate_catalog_payload_for_image(payload, image)?;
-        if snapshot.len() != 65536 || recovery.len() != 65536 {
-            return Err("A complete 65536-byte snapshot and OEM recovery ROM are required".into());
-        }
-        validate_native_revision(recovery)?;
-        if snapshot[..APP_START] != recovery[..APP_START]
-            || snapshot[APP_END..] != recovery[APP_END..]
-        {
-            return Err("Snapshot and recovery protected regions differ".into());
-        }
         let snapshot_kind = classify_snapshot(snapshot)?;
+        if let Some(recovery) = recovery {
+            if recovery.len() != 65536 {
+                return Err("A complete 65536-byte OEM recovery ROM is required".into());
+            }
+            validate_native_revision(recovery)?;
+            if snapshot[..APP_START] != recovery[..APP_START]
+                || snapshot[APP_END..] != recovery[APP_END..]
+            {
+                return Err("Snapshot and recovery protected regions differ".into());
+            }
+        }
         let mut expected = snapshot.to_vec();
         expected[APP_START..APP_END].copy_from_slice(payload);
         let payload_sha256 = sha256(payload);
         let snapshot_sha256 = sha256(snapshot);
-        let recovery_sha256 = sha256(recovery);
+        let recovery_sha256 = recovery.map(sha256).unwrap_or_else(|| "none".into());
         let expected_rom_sha256 = sha256(&expected);
         let binding_sha256 = sha256(format!("ak820-local-inputs-1|{}|{snapshot_kind:?}|{payload_sha256}|{snapshot_sha256}|{recovery_sha256}|{expected_rom_sha256}", target.as_str()).as_bytes());
         let summary = LocalPlanSummary {
@@ -97,7 +108,7 @@ impl CheckedLocalPackage {
             summary,
             payload: payload.to_vec(),
             snapshot: snapshot.to_vec(),
-            recovery: recovery.to_vec(),
+            recovery: recovery.unwrap_or_default().to_vec(),
             expected,
         })
     }
@@ -157,8 +168,9 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
             definition_sha256: exact.definition_sha256.clone(),
             schema: exact.nvm_schema,
         };
-        if decode_trusted_rom(rom, &rom[0xc700..0xef00], &identity, profile).is_ok() {
-            return Ok(SnapshotKind::Project(profile));
+        let image = crate::ak820::ImageContract::Beta3(profile);
+        if decode_trusted_rom_for_image(rom, &rom[0xc700..0xef00], &identity, image).is_ok() {
+            return Ok(SnapshotKind::Project(image));
         }
     }
     for row in &crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles {
@@ -169,8 +181,9 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
             definition_sha256: exact.definition_sha256.clone(),
             schema: exact.nvm_schema,
         };
-        if decode_trusted_rom(rom, &rom[0xc700..0xef00], &identity, row.profile).is_ok() {
-            return Ok(SnapshotKind::Project(row.profile));
+        let image = crate::ak820::ImageContract::Beta4(row.profile);
+        if decode_trusted_rom_for_image(rom, &rom[0xc700..0xef00], &identity, image).is_ok() {
+            return Ok(SnapshotKind::Project(image));
         }
     }
     Err("Snapshot is neither a supported OEM revision nor an exact supported project image".into())

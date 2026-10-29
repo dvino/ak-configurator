@@ -262,6 +262,10 @@ impl EntropyApp {
     /// Explicit Quit from the menu/shortcut respects pending work, but never
     /// turns into a tray hide or a new background-helper handoff.
     pub(super) fn request_explicit_quit(&mut self, ctx: &egui::Context) {
+        if super::ak820_offline_files::is_busy(ctx) {
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian { "Дождитесь завершения работы с файлом перед выходом" } else { "Wait for the file operation to finish before quitting" }.into();
+            return;
+        }
         if should_keep_vial_unlock_visible(self.unlock_open, self.vial_unlock_polling) {
             self.keep_vial_unlock_visible(ctx);
             return;
@@ -291,6 +295,11 @@ impl EntropyApp {
 
     pub(super) fn handle_close_to_tray(&mut self, ctx: &egui::Context) {
         if !ctx.input(|i| i.viewport().close_requested()) {
+            return;
+        }
+        if super::ak820_offline_files::is_busy(ctx) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian { "Дождитесь завершения работы с файлом перед выходом" } else { "Wait for the file operation to finish before quitting" }.into();
             return;
         }
 

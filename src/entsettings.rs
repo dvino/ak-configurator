@@ -55,12 +55,13 @@ struct EntSettingsWrite {
 impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn export_entsettings_dialog(&mut self) {
-        self.spawn_file_dialog(
+        self.spawn_file_dialog_with_default(
             crate::app::file_dialog::FileDialogAction::ExportEntsettings,
             rfd::FileDialog::new()
                 .add_filter("Entropy app settings", &["entsettings"])
                 .set_file_name("entropy-app-settings.entsettings"),
             true,
+            Some("entropy-app-settings.entsettings"),
         );
     }
 

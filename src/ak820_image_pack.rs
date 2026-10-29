@@ -405,6 +405,38 @@ pub(crate) fn pack_candidate_for_image(
 ) -> BackupResult<OfflineCandidate> {
     image.profile().ok_or("Image has no profile")?;
     let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
+        .settings_identity.as_ref().ok_or("Profile lacks qualified packed identity")?;
+    need(sha256(ihx.as_bytes()) == exact.ihx_sha256, "Linked input differs from catalog")?;
+    validate_native_revision(stock)?;
+    pack_with_routine(ihx, symbols, stock, &stock[0xe650..0xe6a7], nvm, mode, image)
+}
+
+/// A classified project capture supplies its embedded routine, not an OEM ROM.
+pub(crate) fn pack_candidate_from_project_for_image(
+    ihx: &str,
+    symbols: &Symbols,
+    source: &[u8],
+    nvm: &[u8],
+    mode: EntryMode,
+    image: crate::ak820::ImageContract,
+) -> BackupResult<OfflineCandidate> {
+    if !matches!(crate::ak820_installer::classify_snapshot(source)?, crate::ak820_installer::SnapshotKind::Project(_)) {
+        return Err("A classified project source is required".into());
+    }
+    pack_with_routine(ihx, symbols, source, &source[0x2830..0x2887], nvm, mode, image)
+}
+
+fn pack_with_routine(
+    ihx: &str,
+    symbols: &Symbols,
+    source: &[u8],
+    routine: &[u8],
+    nvm: &[u8],
+    mode: EntryMode,
+    image: crate::ak820::ImageContract,
+) -> BackupResult<OfflineCandidate> {
+    image.profile().ok_or("Image has no profile")?;
+    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;
@@ -412,10 +444,9 @@ pub(crate) fn pack_candidate_for_image(
         sha256(ihx.as_bytes()) == exact.ihx_sha256,
         "Linked input differs from catalog",
     )?;
-    validate_native_revision(stock)?;
     validate_nvm(nvm, exact.nvm_schema)?;
     let data = read_ihex(ihx)?;
-    let payload = pack_core(&data, symbols, stock, nvm, mode, exact.nvm_schema)?;
+    let payload = pack_core(&data, symbols, source, routine, nvm, mode, exact.nvm_schema)?;
     validate_catalog_payload_for_image(&payload, image)?;
     Ok(OfflineCandidate { payload, mode })
 }
@@ -488,12 +519,13 @@ fn pack_core(
     data: &Code,
     s: &Symbols,
     stock: &[u8],
+    routine: &[u8],
     nvm: &[u8],
     mode: EntryMode,
     schema: u32,
 ) -> BackupResult<Vec<u8>> {
     need(
-        stock.len() == 65536 && nvm.len() == NVM_END - CODE_END,
+        stock.len() == 65536 && routine.len() == 0x57 && nvm.len() == NVM_END - CODE_END,
         "Incorrect settings/reference size",
     )?;
     for name in [
@@ -533,7 +565,7 @@ fn pack_core(
     validate_startup(data, s)?;
     let mut full = stock.to_vec();
     full[APP_START..APP_END].fill(0);
-    full[0x2830..0x2887].copy_from_slice(&stock[0xe650..0xe6a7]);
+    full[0x2830..0x2887].copy_from_slice(routine);
     let mut entry = unhex("75a80075e80075d00075812053a2fa75a15575a1aa53b1fde4f5a1")?;
     match mode {
         EntryMode::Trial => {
@@ -670,7 +702,7 @@ mod tests {
                 "c2a3cebf0006ca8bb6ff81e8a0eb0889ca9e010ba9b2493ce87a94a625b8a088",
             ),
         ] {
-            let payload = pack_core(&data, &s, &stock, &nvm, mode, 0x082002).unwrap();
+            let payload = pack_core(&data, &s, &stock, &stock[0xe650..0xe6a7], &nvm, mode, 0x082002).unwrap();
             assert_eq!(sha256(&payload), digest);
             assert_eq!(verify_payload(&payload, 0x082002).unwrap(), mode);
             assert!(validate_catalog_payload(&payload, ProfileId::Main).is_err());
@@ -678,6 +710,17 @@ mod tests {
                 &payload[0x2830 - APP_START..0x2887 - APP_START],
                 &stock[0xe650..0xe6a7]
             );
+        }
+    }
+    #[test]
+    fn project_path_rejects_unclassified_sources_and_core_uses_explicit_routine() {
+        let (data, symbols, stock, nvm) = fixture();
+        let routine = [0x5a; 0x57];
+        let payload = pack_core(&data, &symbols, &stock, &routine, &nvm, EntryMode::Permanent, 0x082002).unwrap();
+        assert_eq!(&payload[0x30..0x87], &routine);
+        assert!(pack_core(&data, &symbols, &stock, &routine[..86], &nvm, EntryMode::Permanent, 0x082002).is_err());
+        for source in [&stock[..], &stock[..100]] {
+            assert!(pack_candidate_from_project_for_image("", &symbols, source, &nvm, EntryMode::Permanent, crate::ak820::ImageContract::Beta3(ProfileId::Main)).is_err());
         }
     }
     #[test]
@@ -757,12 +800,12 @@ mod tests {
     fn faults_stop_before_output() {
         let (mut d, mut s, stock, nvm) = fixture();
         s.insert("l_PSEG".into(), 1);
-        assert!(pack_core(&d, &s, &stock, &nvm, EntryMode::Permanent, 0x082002).is_err());
+        assert!(pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).is_err());
         s.insert("l_PSEG".into(), 0);
         d.insert(0x3100, 0);
-        assert!(pack_core(&d, &s, &stock, &nvm, EntryMode::Permanent, 0x082002).is_err());
+        assert!(pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).is_err());
         let (d, s, stock, nvm) = fixture();
-        let good = pack_core(&d, &s, &stock, &nvm, EntryMode::Permanent, 0x082002).unwrap();
+        let good = pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).unwrap();
         for offset in [
             0,
             0x9f00,

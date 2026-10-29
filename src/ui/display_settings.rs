@@ -2821,7 +2821,7 @@ impl EntropyApp {
                 )
                 .clicked()
                 {
-                    self.spawn_file_dialog(
+                    self.spawn_file_dialog_with_default(
                         if export {
                             crate::app::file_dialog::FileDialogAction::ExportPictograms
                         } else {
@@ -2831,6 +2831,7 @@ impl EntropyApp {
                             .add_filter("Entropy pictograms", &["json"])
                             .set_file_name("entropy-pictograms.json"),
                         export,
+                        export.then_some("entropy-pictograms.json"),
                     );
                 }
             }
