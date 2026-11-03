@@ -157,7 +157,20 @@ fn inactive_tap_dance_and_key_override_are_rejected_before_transport() {
         crate::app::ak820_beta1_profiles::ProfileId::Onehand,
         true,
     );
-    assert!(hid.set_key_override(0, 4, 5, 1, 0, 0, 0, 1).is_err());
+    assert!(hid
+        .set_key_override(
+            0,
+            crate::hid::KeyOverrideRecord {
+                trigger: 4,
+                replacement: 5,
+                layers: 1,
+                trigger_mods: 0,
+                negative_mod_mask: 0,
+                suppressed_mods: 0,
+                options: 1,
+            },
+        )
+        .is_err());
     assert!(log.requests().is_empty());
 }
 
@@ -215,7 +228,19 @@ fn active_typed_dynamic_rows_preserve_neighbor_nvm_and_verify_readback() {
         Some(Ok(r))
     });
     hid.set_tap_dance(0, 4, 5, 6, 7, 200).unwrap();
-    hid.set_key_override(0, 4, 5, 1, 0, 0, 0, 1).unwrap();
+    hid.set_key_override(
+        0,
+        crate::hid::KeyOverrideRecord {
+            trigger: 4,
+            replacement: 5,
+            layers: 1,
+            trigger_mods: 0,
+            negative_mod_mask: 0,
+            suppressed_mods: 0,
+            options: 1,
+        },
+    )
+    .unwrap();
     assert_eq!(*preserved.lock().unwrap(), Some(0xA5));
     let writes = log
         .requests()

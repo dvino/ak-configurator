@@ -82,11 +82,13 @@ impl EntropyApp {
             ui.ctx(),
             layout,
             viewport,
-            clamp_ui_scale(self.app_settings.ui_scale),
-            layout_top_reserved_h,
-            LAYOUT_BOTTOM_RESERVED_H,
-            LAYOUT_FIT_MARGIN,
-            None,
+            LayoutFit {
+                ui_scale: clamp_ui_scale(self.app_settings.ui_scale),
+                top_reserved: layout_top_reserved_h,
+                bottom_reserved: LAYOUT_BOTTOM_RESERVED_H,
+                fit_margin: LAYOUT_FIT_MARGIN,
+                max_scale_override: None,
+            },
             |key| {
                 Self::layout_key_visible(
                     &self.module_settings,
@@ -118,7 +120,6 @@ impl EntropyApp {
         let offset_y = geometry.offset_y;
         let unit = geometry.unit;
         let padding = geometry.padding;
-        let layout_h = geometry.layout_h;
         let main_tabs_h = 32.0_f32;
         let layer_bar_h = 68.0_f32;
         let top_reserved_h = LAYOUT_TOP_RESERVED_H + application_layout_settings_reserve_h;
@@ -129,23 +130,27 @@ impl EntropyApp {
             ui,
             layout,
             ctx,
-            top_base_y,
-            main_tabs_h,
-            layer_bar_h,
-            top_reserved_h,
-            viewport,
+            layout_chrome::LayoutChromeGeometry {
+                top_base_y,
+                main_tabs_h,
+                layer_bar_h,
+                top_reserved_h,
+                viewport,
+            },
         ) {
             return;
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        let editable = self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_failure).is_none();
+        let editable = self
+            .hid_device
+            .as_ref()
+            .and_then(crate::hid::HidDevice::ak820_failure)
+            .is_none();
         #[cfg(target_arch = "wasm32")]
         let editable = true;
         ui.add_enabled_ui(editable, |ui| {
-            self.draw_layout_keyboard_canvas(
-                ui, layout, ctx, avail, offset_x, offset_y, unit, padding, layout_h,
-            );
+            self.draw_layout_keyboard_canvas(ui, layout, ctx, avail, geometry);
         });
     }
 

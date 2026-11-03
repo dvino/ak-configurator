@@ -28,6 +28,9 @@ use super::typing_trainer_symbols::{
 };
 use super::*;
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+type TestDeviceScanRequest = (bool, mpsc::Sender<Result<Vec<Device>, String>>);
+
 /// Legacy files did not record authorship. Never infer it from display RGB.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -176,7 +179,9 @@ pub(crate) enum CloseToTrayBehavior {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub(crate) enum StickyLayoutVisibilityMode {
+    #[default]
     LayoutAndPresses,
     PressedOnly,
 }
@@ -188,12 +193,6 @@ pub(crate) enum StandbyBackgroundScale {
     #[default]
     Fill,
     Stretch,
-}
-
-impl Default for StickyLayoutVisibilityMode {
-    fn default() -> Self {
-        Self::LayoutAndPresses
-    }
 }
 
 pub(crate) fn default_show_shifted_number_symbols() -> bool {
@@ -1264,7 +1263,7 @@ pub(crate) enum ConnectState {
     Reconnecting(BluetoothReconnectState),
     Loading {
         /// Physical endpoint snapshot, independent of the mutable selected index.
-        device: Device,
+        device: Box<Device>,
         rx: mpsc::Receiver<ConnectTaskMessage>,
         started_at: std::time::Instant,
         last_progress_at: std::time::Instant,
@@ -1850,7 +1849,7 @@ pub(crate) enum ModuleSettingsGroupKind {
 }
 
 impl ModuleSettingsGroupKind {
-    pub(crate) fn field_base_title<'a>(self, title: &'a str) -> &'a str {
+    pub(crate) fn field_base_title(self, title: &str) -> &str {
         if matches!(self, Self::Left | Self::Right) {
             title
                 .get(..5)
@@ -2240,6 +2239,7 @@ pub(crate) struct GraveEscapeSettingsState {
     pub(crate) supported: bool,
 }
 
+#[cfg(test)]
 impl GraveEscapeSettingsState {
     pub(crate) fn bit(self, bit: u8) -> bool {
         self.bits & (1 << bit) != 0
@@ -2776,10 +2776,12 @@ pub(crate) fn load_display_settings(
     supported_qmk_settings: &[u16],
 ) -> anyhow::Result<DisplaySettingsState> {
     if (230..=239).all(|qsid| supported_qmk_settings.contains(&qsid)) {
-        let mut state = DisplaySettingsState::default();
-        state.sm62_supported = true;
-        state.supported = true;
-        state.display_timeout_supported = supported_qmk_settings.contains(&DISPLAY_TIMEOUT_QSID);
+        let mut state = DisplaySettingsState {
+            sm62_supported: true,
+            supported: true,
+            display_timeout_supported: supported_qmk_settings.contains(&DISPLAY_TIMEOUT_QSID),
+            ..Default::default()
+        };
         if state.display_timeout_supported {
             let timeout = read_display_setting_u8(dev_conn, DISPLAY_TIMEOUT_QSID)?;
             anyhow::ensure!(
@@ -3569,9 +3571,11 @@ pub(crate) enum TextExpanderRuleField {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsTab {
     AppSettings,
+    #[cfg(test)]
     OsIndicator,
     ApplicationLayouts,
     MatrixTester,
+    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
     TextExpanderSetup,
     TextExpander,
     TypingTrainer,
@@ -3584,6 +3588,7 @@ pub(crate) enum SettingsTab {
     Encoders,
     Magic,
     TapHold,
+    #[cfg(test)]
     GraveEscape,
     LayoutOptions,
     Modules,
@@ -3607,16 +3612,12 @@ pub(crate) use super::typing_trainer_words::{TypingTrainerLanguage, TYPING_TRAIN
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub(crate) enum TypingTrainerMode {
+    #[default]
     Time,
     Words,
     Symbols,
-}
-
-impl Default for TypingTrainerMode {
-    fn default() -> Self {
-        Self::Time
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -4356,7 +4357,11 @@ fn typing_trainer_number_token(seed: usize, idx: usize) -> String {
 }
 
 fn typing_trainer_should_append_punctuation(seed: usize, idx: usize, word_count: usize) -> bool {
-    idx + 1 < word_count && seed.wrapping_add(idx * 17).wrapping_add(idx / 4) % 5 == 0
+    idx + 1 < word_count
+        && seed
+            .wrapping_add(idx * 17)
+            .wrapping_add(idx / 4)
+            .is_multiple_of(5)
 }
 
 fn typing_trainer_punctuation_mark(seed: usize, idx: usize) -> char {
@@ -5473,8 +5478,7 @@ pub struct EntropyApp {
     pub(crate) retiring_connects: Vec<RetiringConnect>,
     /// Deterministic worker-launch seam: tests supply completions without HID I/O.
     #[cfg(all(test, not(target_arch = "wasm32")))]
-    pub(crate) test_device_scan_requests:
-        Option<mpsc::Sender<(bool, mpsc::Sender<Result<Vec<Device>, String>>)>>,
+    pub(crate) test_device_scan_requests: Option<mpsc::Sender<TestDeviceScanRequest>>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     pub(crate) test_connect_requests:
         Option<mpsc::Sender<(Device, mpsc::Sender<ConnectTaskMessage>)>>,
@@ -5881,8 +5885,10 @@ mod layout_image_export_persist_tests {
 
     #[test]
     fn pdf_persists_backward_compatibly() {
-        let mut state = LayoutImageExportState::default();
-        state.format = LayoutImageExportFormat::Pdf;
+        let state = LayoutImageExportState {
+            format: LayoutImageExportFormat::Pdf,
+            ..Default::default()
+        };
         let json = serde_json::to_value(&state).unwrap();
         // A pre-PDF build only understands png/svg for `format`; PDF is stored
         // in the ignored `export_pdf` sidecar so it can't break their parsing.
@@ -5896,8 +5902,10 @@ mod layout_image_export_persist_tests {
             (LayoutImageExportFormat::Png, "png"),
             (LayoutImageExportFormat::Svg, "svg"),
         ] {
-            let mut state = LayoutImageExportState::default();
-            state.format = fmt;
+            let state = LayoutImageExportState {
+                format: fmt,
+                ..Default::default()
+            };
             let json = serde_json::to_value(&state).unwrap();
             assert_eq!(json["format"], expected);
             assert_eq!(json["export_pdf"], false);
@@ -5911,8 +5919,10 @@ mod layout_image_export_persist_tests {
             LayoutImageExportFormat::Svg,
             LayoutImageExportFormat::Pdf,
         ] {
-            let mut state = LayoutImageExportState::default();
-            state.format = fmt;
+            let state = LayoutImageExportState {
+                format: fmt,
+                ..Default::default()
+            };
             let json = serde_json::to_string(&state).unwrap();
             let back: LayoutImageExportState = serde_json::from_str(&json).unwrap();
             assert_eq!(back.format, fmt);

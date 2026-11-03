@@ -189,8 +189,7 @@ impl EntropyApp {
                         (self.touchpad_settings.dpi as usize).min(variants.len().saturating_sub(1));
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         label,
                         true,
                         if suppress_tooltips {
@@ -220,8 +219,7 @@ impl EntropyApp {
                                     ui,
                                     edit_id,
                                     &mut text,
-                                    field_width,
-                                    metrics.settings_control_height(),
+                                    egui::vec2(field_width, metrics.settings_control_height()),
                                     "",
                                     5,
                                     egui::Align::Center,
@@ -320,8 +318,7 @@ impl EntropyApp {
                     let mut value = current as f32;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         label,
                         true,
                         if suppress_tooltips {
@@ -405,8 +402,7 @@ impl EntropyApp {
                     };
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         label,
                         true,
                         if suppress_tooltips {
@@ -439,8 +435,7 @@ impl EntropyApp {
                     );
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         label,
                         true,
                         if suppress_tooltips {
@@ -476,8 +471,7 @@ impl EntropyApp {
                         .min(variants.len().saturating_sub(1));
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         label,
                         true,
                         if suppress_tooltips {

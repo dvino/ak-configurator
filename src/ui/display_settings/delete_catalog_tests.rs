@@ -314,7 +314,7 @@ fn catalog_append_keeps_every_existing_stock_index_and_pixel_unchanged() {
         &BUILTIN_PICTOGRAM_KEYS[..keys.len()],
         keys.iter().map(String::as_str).collect::<Vec<_>>()
     );
-    for (index, expected) in bits.chunks_exact(PICTOGRAM_BYTES).enumerate() {
+    for (index, expected) in bits.as_chunks::<PICTOGRAM_BYTES>().0.iter().enumerate() {
         assert_eq!(
             builtin_pictogram_bitmap(index).as_slice(),
             expected,

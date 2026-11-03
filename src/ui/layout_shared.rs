@@ -20,18 +20,29 @@ pub(crate) fn responsive_layout_max_scale(ctx: &egui::Context, viewport: egui::R
     1.0 + 0.35 * t
 }
 
+pub(crate) struct LayoutFit {
+    pub(crate) ui_scale: f32,
+    pub(crate) top_reserved: f32,
+    pub(crate) bottom_reserved: f32,
+    pub(crate) fit_margin: f32,
+    pub(crate) max_scale_override: Option<f32>,
+}
+
 pub(crate) fn layout_geometry_with_reserved_and_filter(
     ctx: &egui::Context,
     layout: &KeyboardLayout,
     viewport: egui::Rect,
-    ui_scale: f32,
-    top_reserved: f32,
-    bottom_reserved: f32,
-    fit_margin: f32,
-    max_scale_override: Option<f32>,
+    fit: LayoutFit,
     include_key: impl Fn(&PhysicalKey) -> bool,
     include_encoder: impl Fn(&PhysicalEncoder) -> bool,
 ) -> LayoutGeometry {
+    let LayoutFit {
+        ui_scale,
+        top_reserved,
+        bottom_reserved,
+        fit_margin,
+        max_scale_override,
+    } = fit;
     let mut min_x: f32 = f32::MAX;
     let mut min_y: f32 = f32::MAX;
     let mut max_x: f32 = f32::MIN;
@@ -103,16 +114,21 @@ pub(crate) fn layout_geometry_with_reserved_and_filter(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn layout_keycap_rect(
-    offset_x: f32,
-    offset_y: f32,
-    unit: f32,
-    padding: f32,
+    geometry: LayoutGeometry,
     x: f32,
     y: f32,
     w: f32,
     h: f32,
 ) -> egui::Rect {
+    let LayoutGeometry {
+        offset_x,
+        offset_y,
+        unit,
+        padding,
+        ..
+    } = geometry;
     egui::Rect::from_min_size(
         egui::pos2(offset_x + x * unit + padding, offset_y + y * unit + padding),
         Vec2::new(w * unit - padding * 2.0, h * unit - padding * 2.0),
@@ -705,6 +721,28 @@ pub(crate) fn draw_key_label(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_keycap_rect_preserves_unrotated_offsets_and_unclamped_sizes() {
+        let geometry = LayoutGeometry {
+            offset_x: 100.0,
+            offset_y: -20.0,
+            unit: 10.0,
+            padding: 1.0,
+            layout_h: 999.0,
+        };
+        let rect = layout_keycap_rect(geometry, 2.0, 3.0, 4.0, 2.0);
+        assert_eq!(rect.min, egui::pos2(121.0, 11.0));
+        assert_eq!(rect.max, egui::pos2(159.0, 29.0));
+        let alternate = LayoutGeometry {
+            layout_h: -999.0,
+            ..geometry
+        };
+        assert_eq!(layout_keycap_rect(alternate, 2.0, 3.0, 4.0, 2.0), rect);
+        let tiny = layout_keycap_rect(geometry, -0.5, -1.0, 0.1, 0.1);
+        assert_eq!(tiny.min, egui::pos2(96.0, -29.0));
+        assert_eq!(tiny.max, egui::pos2(95.0, -30.0));
+    }
 
     fn physical_key(layout_condition: Option<LayoutCondition>) -> PhysicalKey {
         PhysicalKey {

@@ -57,6 +57,7 @@ impl EntropyApp {
     }
 
     /// Offline preview: no discovery, HID handle, typing hook or update worker.
+    #[cfg(test)]
     pub(crate) fn new_ak820_demo(cc: &eframe::CreationContext<'_>) -> Self {
         Self::new_ak820_demo_for_context(&cc.egui_ctx)
     }
@@ -371,6 +372,7 @@ impl EntropyApp {
         self.ak820_demo_profile = Some(profile);
     }
 
+    #[cfg(test)]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Self::new_for_context(&cc.egui_ctx)
     }
@@ -767,33 +769,6 @@ impl EntropyApp {
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn is_vial_locked(&self) -> bool {
         false
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn reopen_vial_hid(&mut self) {
-        let Some(dev) = self
-            .selected_device
-            .and_then(|idx| self.device_manager.devices().get(idx))
-        else {
-            self.hid_device = None;
-            self.shared_hid_output = None;
-            return;
-        };
-        match crate::hid::HidDevice::open_fresh_for(dev) {
-            Ok(hid) => {
-                self.shared_hid_output = hid.shared_output();
-                self.hid_device = Some(hid);
-            }
-            Err(e) => {
-                self.hid_device = None;
-                self.shared_hid_output = None;
-                self.status_msg = crate::i18n::tr_catalog_format(
-                    self.app_settings.language,
-                    "status_messages.hid_reopen_failed",
-                    &[("error", &e.to_string())],
-                );
-            }
-        }
     }
 }
 

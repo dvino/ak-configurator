@@ -17,6 +17,9 @@ pub(crate) const SOURCE_MODULE_DESCRIPTIONS_SHA256: &str =
     "2947032a7f53c43d906c3ab909a7fb0beb31d83bae4e44368db422ef18afffc6";
 pub(crate) const BETA4_RELEASE: &str = "v0.6.0-beta.4";
 pub(crate) const BETA4_1_RELEASE: &str = "v0.6.0-beta.4.1";
+// Historical archive pin is exercised by catalog regression tests; release
+// selection uses each catalog's own archive identity.
+#[cfg(test)]
 pub(crate) const BETA4_ARCHIVE_SHA256: &str =
     "14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097";
 const BETA4_MATRIX_SHA256: &str =
@@ -119,6 +122,9 @@ pub(crate) struct FirmwareMatrix {
     pub(crate) feature_pairs: Vec<FeaturePair>,
     pub(crate) format: String,
     pub(crate) default_profile: String,
+    // Historical explanatory metadata is checked by offline tests. Runtime
+    // loaders must keep their exact-byte pin check before deserialization.
+    #[cfg(test)]
     pub(crate) base_features: Vec<String>,
     pub(crate) modules: Vec<MatrixModule>,
     pub(crate) profiles: Vec<MatrixProfile>,
@@ -127,7 +133,9 @@ pub(crate) struct FirmwareMatrix {
 #[derive(Debug, Deserialize)]
 pub(crate) struct MatrixModule {
     pub(crate) feature: String,
+    #[cfg(test)]
     pub(crate) make_switch: String,
+    #[cfg(test)]
     pub(crate) profiles: Vec<String>,
 }
 
@@ -140,9 +148,13 @@ pub(crate) struct MatrixProfile {
     pub(crate) release_approved: bool,
     pub(crate) optional_features: Vec<String>,
     pub(crate) capabilities: MatrixCapabilities,
+    #[cfg(test)]
     pub(crate) measurement_status: String,
+    #[cfg(test)]
     pub(crate) offline_tests_status: String,
+    #[cfg(test)]
     pub(crate) runtime_status: String,
+    #[cfg(test)]
     pub(crate) settings_status: Option<String>,
     pub(crate) settings_identity: Option<SettingsIdentity>,
 }
@@ -314,6 +326,7 @@ fn keycode_supported(code: u16, enabled: impl Fn(&str) -> bool) -> bool {
 }
 
 /// Explicit transitions use exact IHX pairs; a shared schema grants nothing.
+#[cfg(test)]
 pub(crate) fn settings_transition_allowed(source: &str, target: &str) -> bool {
     let matrix = firmware_matrix();
     let known = |hash: &str| {
@@ -353,9 +366,11 @@ pub(crate) struct ModuleDescriptionCatalog {
 #[derive(Debug, Deserialize)]
 pub(crate) struct FeatureDescription {
     pub(crate) id: String,
+    #[cfg(test)]
     pub(crate) kind: String,
     pub(crate) title: LocalizedText,
     pub(crate) summary: LocalizedText,
+    #[cfg(test)]
     pub(crate) guide: LocalizedText,
     pub(crate) limits: LocalizedText,
 }
@@ -363,10 +378,12 @@ pub(crate) struct FeatureDescription {
 #[derive(Debug, Deserialize)]
 pub(crate) struct ProfileDescription {
     pub(crate) id: String,
+    #[cfg(test)]
     pub(crate) default: bool,
     pub(crate) title: LocalizedText,
     pub(crate) summary: LocalizedText,
     pub(crate) purpose: LocalizedText,
+    #[cfg(test)]
     pub(crate) optional_features: Vec<String>,
 }
 
@@ -378,7 +395,11 @@ pub(crate) struct LocalizedText {
 
 impl LocalizedText {
     pub(crate) fn for_language(&self, russian: bool) -> &str {
-        if russian { &self.ru } else { &self.en }
+        if russian {
+            &self.ru
+        } else {
+            &self.en
+        }
     }
 }
 
@@ -442,24 +463,34 @@ pub(crate) fn beta4_firmware_matrix() -> &'static FirmwareMatrix {
     BETA4_FIRMWARE_MATRIX.get_or_init(|| {
         let source = include_str!("../assets/ak820/beta4-firmware-matrix.json");
         assert_sha256(source, BETA4_MATRIX_SHA256, "beta.4 firmware matrix");
-        let matrix: FirmwareMatrix = serde_json::from_str(source)
-            .expect("bundled beta.4 firmware matrix must be valid");
+        let matrix: FirmwareMatrix =
+            serde_json::from_str(source).expect("bundled beta.4 firmware matrix must be valid");
         let catalog = beta4_capability_catalog();
         assert_eq!(matrix.format, "ak820-firmware-matrix-1");
         assert_eq!(matrix.profiles.len(), 10);
         assert_eq!(matrix.historical_profiles.len(), 10);
         for row in &matrix.profiles {
-            let image = catalog.images.iter().find(|image| image.profile == row.profile)
+            let image = catalog
+                .images
+                .iter()
+                .find(|image| image.profile == row.profile)
                 .expect("beta.4 matrix profile must have an exact capability row");
-            let identity = row.settings_identity.as_ref().expect("beta.4 settings identity");
+            let identity = row
+                .settings_identity
+                .as_ref()
+                .expect("beta.4 settings identity");
             assert!(row.installable && row.release_approved && image.release_approved);
-            assert!(!image.hardware_validated && !image.flashing_authorized && !image.settings_writes_authorized);
+            assert!(
+                !image.hardware_validated
+                    && !image.flashing_authorized
+                    && !image.settings_writes_authorized
+            );
             assert_eq!(row.identity.ihx_sha256, image.build_identity.ihx_sha256);
             assert_eq!(identity.ihx_sha256, row.identity.ihx_sha256);
             assert_eq!(identity.nvm_schema, 0x082003);
             assert_eq!(identity.settings_record_version, Some(2));
             assert_eq!(identity.compact_controls_version, Some(2));
-            assert_eq!(identity.combo_media, true);
+            assert!(identity.combo_media);
         }
         matrix
     })
@@ -469,8 +500,8 @@ fn beta4_capability_catalog() -> &'static CapabilityCatalog {
     BETA4_CAPABILITY_CATALOG.get_or_init(|| {
         let source = include_str!("../assets/ak820/beta4-capability-catalog.json");
         assert_sha256(source, BETA4_CAPABILITY_SHA256, "beta.4 capability catalog");
-        let catalog: CapabilityCatalog = serde_json::from_str(source)
-            .expect("bundled beta.4 capability catalog must be valid");
+        let catalog: CapabilityCatalog =
+            serde_json::from_str(source).expect("bundled beta.4 capability catalog must be valid");
         assert_eq!(catalog.format, "ak820-development-capability-catalog-1");
         assert!(!catalog.hardware_validated && !catalog.flashing_authorized);
         assert!(!catalog.settings_writes_authorized);
@@ -488,16 +519,21 @@ pub(crate) fn beta4_settings_writes_authorized(id: ProfileId) -> bool {
     let beta4_1 = beta4_1_capability_catalog();
     beta4.settings_writes_authorized
         && beta4_1.settings_writes_authorized
-        && beta4.images.iter().any(|image| {
-            image.profile == id && image.settings_writes_authorized
-        })
-        && beta4_1.images.iter().any(|image| {
-            image.profile == id && image.settings_writes_authorized
-        })
+        && beta4
+            .images
+            .iter()
+            .any(|image| image.profile == id && image.settings_writes_authorized)
+        && beta4_1
+            .images
+            .iter()
+            .any(|image| image.profile == id && image.settings_writes_authorized)
 }
 
 pub(crate) fn beta4_matrix_profile(id: ProfileId) -> &'static MatrixProfile {
-    beta4_firmware_matrix().profiles.iter().find(|row| row.profile == id)
+    beta4_firmware_matrix()
+        .profiles
+        .iter()
+        .find(|row| row.profile == id)
         .expect("every beta.4 profile has an exact matrix row")
 }
 
@@ -505,19 +541,36 @@ pub(crate) fn beta4_1_firmware_matrix() -> &'static FirmwareMatrix {
     BETA4_1_FIRMWARE_MATRIX.get_or_init(|| {
         let source = include_str!("../assets/ak820/beta4.1-firmware-matrix.json");
         assert_sha256(source, BETA4_1_MATRIX_SHA256, "beta.4.1 firmware matrix");
-        let matrix: FirmwareMatrix = serde_json::from_str(source)
-            .expect("bundled beta.4.1 firmware matrix must be valid");
+        let matrix: FirmwareMatrix =
+            serde_json::from_str(source).expect("bundled beta.4.1 firmware matrix must be valid");
         let catalog = beta4_1_capability_catalog();
         assert_eq!(matrix.format, "ak820-firmware-matrix-1");
         assert_eq!(matrix.profiles.len(), 10);
         assert_eq!(matrix.historical_profiles.len(), 10);
-        assert_eq!(catalog.images.iter().map(|image| image.profile.as_str()).collect::<std::collections::BTreeSet<_>>().len(), 10);
+        assert_eq!(
+            catalog
+                .images
+                .iter()
+                .map(|image| image.profile.as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            10
+        );
         for row in &matrix.profiles {
-            let image = catalog.images.iter().find(|image| image.profile == row.profile)
+            let image = catalog
+                .images
+                .iter()
+                .find(|image| image.profile == row.profile)
                 .expect("beta.4.1 matrix profile must have a capability row");
-            let exact = row.settings_identity.as_ref().expect("beta.4.1 settings identity");
+            let exact = row
+                .settings_identity
+                .as_ref()
+                .expect("beta.4.1 settings identity");
             let beta4 = beta4_matrix_profile(row.profile);
-            let beta4_exact = beta4.settings_identity.as_ref().expect("beta.4 settings identity");
+            let beta4_exact = beta4
+                .settings_identity
+                .as_ref()
+                .expect("beta.4 settings identity");
             assert!(row.installable && row.release_approved && image.release_approved);
             assert!(!image.hardware_validated && image.flashing_authorized);
             assert!(!image.settings_writes_authorized);
@@ -530,7 +583,9 @@ pub(crate) fn beta4_1_firmware_matrix() -> &'static FirmwareMatrix {
             assert_eq!(exact.nvm_schema, image.settings_schema);
             assert_eq!(exact.settings_record_version, Some(2));
             let mut matrix_qsid = row.capabilities.runtime_qmk_settings_ids.clone();
-            let mut capability_qsid: Vec<_> = image.runtime_qmk_settings.iter()
+            let mut capability_qsid: Vec<_> = image
+                .runtime_qmk_settings
+                .iter()
                 .map(|value| value.as_u64().expect("beta.4.1 QSID must be an integer") as u16)
                 .collect();
             matrix_qsid.sort_unstable();
@@ -544,27 +599,36 @@ pub(crate) fn beta4_1_firmware_matrix() -> &'static FirmwareMatrix {
 pub(crate) fn beta4_1_capability_catalog() -> &'static CapabilityCatalog {
     BETA4_1_CAPABILITY_CATALOG.get_or_init(|| {
         let source = include_str!("../assets/ak820/beta4.1-capability-catalog.json");
-        assert_sha256(source, BETA4_1_CAPABILITY_SHA256, "beta.4.1 capability catalog");
+        assert_sha256(
+            source,
+            BETA4_1_CAPABILITY_SHA256,
+            "beta.4.1 capability catalog",
+        );
         let catalog: CapabilityCatalog = serde_json::from_str(source)
             .expect("bundled beta.4.1 capability catalog must be valid");
         let raw: serde_json::Value = serde_json::from_str(source).unwrap();
         assert_eq!(catalog.format, "ak820-development-capability-catalog-1");
         assert_eq!(raw["release_approved"], true);
-        assert_eq!(catalog.hardware_validated, false);
-        assert_eq!(catalog.flashing_authorized, true);
-        assert_eq!(catalog.settings_writes_authorized, false);
+        assert!(!catalog.hardware_validated);
+        assert!(catalog.flashing_authorized);
+        assert!(!catalog.settings_writes_authorized);
         assert_eq!(catalog.images.len(), 10);
         catalog
     })
 }
 
 pub(crate) fn beta4_1_matrix_profile(id: ProfileId) -> &'static MatrixProfile {
-    beta4_1_firmware_matrix().profiles.iter().find(|row| row.profile == id)
+    beta4_1_firmware_matrix()
+        .profiles
+        .iter()
+        .find(|row| row.profile == id)
         .expect("every beta.4.1 profile has an exact matrix row")
 }
 
 /// The bundled bytes are the trust root. This parser rejects every byte change,
 /// including duplicate/unknown fields, before deserialization can discard data.
+/// The derived metadata types are not standalone validators for untrusted JSON;
+/// their normal-build shape intentionally omits test-only descriptive fields.
 pub(crate) fn parse_trusted_matrix(source: &str) -> Result<FirmwareMatrix, String> {
     if format!("{:x}", Sha256::digest(source.as_bytes())) != SOURCE_MATRIX_SHA256 {
         return Err("matrix differs from the pinned beta.3 source".into());
@@ -861,6 +925,7 @@ pub(crate) fn profile_description(id: ProfileId) -> &'static ProfileDescription 
         .expect("every curated profile must have a bilingual description")
 }
 
+#[cfg(test)]
 pub(crate) fn display_name(id: ProfileId) -> &'static str {
     match id {
         ProfileId::Main => "Main",
@@ -916,8 +981,8 @@ pub(crate) fn historical_settings_identities() -> &'static [HistoricalSettingsId
                 profile: None,
             },
             HistoricalSettingsIdentity {
-                ihx_sha256: "d505d4f420f745dbd5e98a0e3638c8f3ae6d7719c8729dad274595b71b641f18",
-                code_sha256: "01f0f7a979d8cfa8217b3bba333758ae3509cf7f3f8e35fbffb1ed034b808e5d",
+                ihx_sha256: crate::ak820::IHX_SHA256,
+                code_sha256: crate::ak820::CODE_SHA256,
                 nvm_schema: 0x082002,
                 combos: true,
                 profile: None,
@@ -946,6 +1011,27 @@ pub(crate) fn historical_settings_identity(
         .find(|id| id.ihx_sha256 == ihx && id.code_sha256 == code && id.nvm_schema == schema)
 }
 
+/// Previous release identities remain exact and never inherit beta.3 features.
+pub(crate) fn previous_firmware_matrix() -> &'static FirmwareMatrix {
+    static PREVIOUS: OnceLock<FirmwareMatrix> = OnceLock::new();
+    PREVIOUS.get_or_init(|| {
+        let source = include_str!("../assets/ak820/beta2-firmware-matrix.json");
+        assert_sha256(
+            source,
+            "e646cb3cb58c50c55a184538b77674db92e0d54750b1a9734d1b092a6c20a08e",
+            "beta.2 source registry",
+        );
+        serde_json::from_str(source).expect("pinned beta.2 matrix")
+    })
+}
+pub(crate) fn previous_matrix_profile(id: ProfileId) -> &'static MatrixProfile {
+    previous_firmware_matrix()
+        .profiles
+        .iter()
+        .find(|r| r.profile == id)
+        .expect("previous exact profile")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -961,6 +1047,24 @@ mod tests {
         ProfileId::Shortcuts,
         ProfileId::Multios,
     ];
+    #[test]
+    fn reference_display_names_preserve_all_ten_historical_labels() {
+        let expected = [
+            "Main",
+            "Game",
+            "MMO",
+            "Typing",
+            "Code",
+            "Pointer",
+            "Onehand",
+            "Creative",
+            "Shortcuts",
+            "MultiOS",
+        ];
+        for (profile, name) in IDS.into_iter().zip(expected) {
+            assert_eq!(display_name(profile), name);
+        }
+    }
     #[test]
     fn all_ten_exact_identities_and_descriptions_agree() {
         assert_eq!(profiles().len(), 10);
@@ -1004,6 +1108,43 @@ mod tests {
             "settings",
         ] {
             assert!(serde_json::from_str::<ProfileId>(&format!("\"{old}\"")).is_err());
+        }
+    }
+    #[test]
+    fn historical_matrix_modules_match_profiles_and_build_switches() {
+        let matrix = firmware_matrix();
+        for feature in &matrix.base_features {
+            let description = feature_description(feature).expect("base feature description");
+            assert_eq!(description.kind, "base", "{feature}");
+            assert!(!description.guide.en.is_empty(), "{feature}");
+            assert!(!description.guide.ru.is_empty(), "{feature}");
+        }
+        for module in &matrix.modules {
+            for row in &matrix.profiles {
+                let listed = module.profiles.iter().any(|id| id == row.profile.as_str());
+                assert_eq!(
+                    listed,
+                    row.optional_features.contains(&module.feature),
+                    "{} / {}",
+                    module.feature,
+                    row.profile.as_str()
+                );
+                assert_eq!(
+                    row.configuration["make_options"][&module.make_switch].as_str(),
+                    Some(if listed { "yes" } else { "no" }),
+                    "{} / {}",
+                    module.make_switch,
+                    row.profile.as_str()
+                );
+            }
+        }
+        for row in &matrix.profiles {
+            // Historical catalog strings are checked as data, not evidence of
+            // support or permission for a connected device.
+            assert_eq!(row.measurement_status, "linked-memory-pass");
+            assert_eq!(row.offline_tests_status, "exact-image-pass");
+            assert_eq!(row.runtime_status, "exact-image-pass");
+            assert_eq!(row.settings_status.as_deref(), Some("exact-image-contract"));
         }
     }
     #[test]
@@ -1053,22 +1194,18 @@ mod tests {
     fn historical_registry_and_explicit_transition_direction_are_exact() {
         assert_eq!(historical_settings_identities().len(), 13);
         for source in historical_settings_identities() {
-            assert!(
-                historical_settings_identity(
-                    source.ihx_sha256,
-                    source.code_sha256,
-                    source.nvm_schema
-                )
-                .is_some()
-            );
-            assert!(
-                historical_settings_identity(
-                    source.ihx_sha256,
-                    source.code_sha256,
-                    source.nvm_schema ^ 1
-                )
-                .is_none()
-            );
+            assert!(historical_settings_identity(
+                source.ihx_sha256,
+                source.code_sha256,
+                source.nvm_schema
+            )
+            .is_some());
+            assert!(historical_settings_identity(
+                source.ihx_sha256,
+                source.code_sha256,
+                source.nvm_schema ^ 1
+            )
+            .is_none());
             for id in IDS {
                 let target = &matrix_profile(id).identity.ihx_sha256;
                 assert!(settings_transition_allowed(source.ihx_sha256, target));
@@ -1120,6 +1257,21 @@ mod tests {
         ] {
             assert!(parse_trusted_matrix(&changed).is_err());
         }
+        // Descriptive fields may be absent from normal-build metadata types,
+        // but changed bytes must still fail at the pin boundary, not Serde.
+        for field in ["base_features", "modules", "profiles"] {
+            let mut changed: serde_json::Value = serde_json::from_str(source).unwrap();
+            changed.as_object_mut().unwrap().remove(field);
+            assert_eq!(
+                parse_trusted_matrix(&serde_json::to_string(&changed).unwrap()).unwrap_err(),
+                "matrix differs from the pinned beta.3 source"
+            );
+            changed[field] = serde_json::json!({"unexpected": true});
+            assert_eq!(
+                parse_trusted_matrix(&serde_json::to_string(&changed).unwrap()).unwrap_err(),
+                "matrix differs from the pinned beta.3 source"
+            );
+        }
         let changes: [fn(&mut FirmwareMatrix); 6] = [
             |m| m.profiles[0].capabilities.dynamic_entries.combos = 7,
             |m| m.profiles[0].capabilities.runtime_qmk_settings_ids.push(4),
@@ -1141,25 +1293,4 @@ mod tests {
             assert!(validate_contracts(&matrix).is_err());
         }
     }
-}
-
-/// Previous release identities remain exact and never inherit beta.3 features.
-pub(crate) fn previous_firmware_matrix() -> &'static FirmwareMatrix {
-    static PREVIOUS: OnceLock<FirmwareMatrix> = OnceLock::new();
-    PREVIOUS.get_or_init(|| {
-        let source = include_str!("../assets/ak820/beta2-firmware-matrix.json");
-        assert_sha256(
-            source,
-            "e646cb3cb58c50c55a184538b77674db92e0d54750b1a9734d1b092a6c20a08e",
-            "beta.2 source registry",
-        );
-        serde_json::from_str(source).expect("pinned beta.2 matrix")
-    })
-}
-pub(crate) fn previous_matrix_profile(id: ProfileId) -> &'static MatrixProfile {
-    previous_firmware_matrix()
-        .profiles
-        .iter()
-        .find(|r| r.profile == id)
-        .expect("previous exact profile")
 }

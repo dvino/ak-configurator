@@ -190,7 +190,7 @@ mod tests {
         picker.search.results().to_vec()
     }
 
-    fn hit<'a>(results: &'a [PickerRow], action: PickerAction) -> Option<&'a PickerRow> {
+    fn hit(results: &[PickerRow], action: PickerAction) -> Option<&PickerRow> {
         results.iter().find(|row| row.action == action)
     }
 
@@ -245,8 +245,10 @@ mod tests {
 
     #[test]
     fn single_section_heading_is_searchable() {
-        let mut picker = KeycodePicker::default();
-        picker.language = crate::i18n::Language::English;
+        let mut picker = KeycodePicker {
+            language: crate::i18n::Language::English,
+            ..Default::default()
+        };
         let basic_heading = picker.tab_heading(KeycodeTab::Basic).unwrap();
         let results = search(&mut picker, "standard keyboard layout");
         assert!(!results.is_empty());
@@ -295,8 +297,10 @@ mod tests {
 
     #[test]
     fn finds_rows_the_static_keycode_table_does_not_know() {
-        let mut picker = KeycodePicker::default();
-        picker.language = crate::i18n::Language::English;
+        let mut picker = KeycodePicker {
+            language: crate::i18n::Language::English,
+            ..Default::default()
+        };
 
         // RGB tab rows are hardcoded keycodes.
         let results = search(&mut picker, "backlight");
@@ -473,10 +477,10 @@ mod tests {
         picker.search.query = "signature".into();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1_400.0, 1_000.0))
-            .build_state(
-                |ctx, picker: &mut KeycodePicker| {
+            .build_ui_state(
+                |ui, picker: &mut KeycodePicker| {
                     picker.show(
-                        ctx,
+                        ui.ctx(),
                         DeferredPickerDataState::Ready,
                         DeferredPickerDataState::Ready,
                     );

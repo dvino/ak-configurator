@@ -230,7 +230,8 @@ fn apply_message(state: &mut State, msg: Message) -> bool {
 fn snapshot_kind_text(kind: SnapshotKind, ru: bool) -> String {
     match kind {
         SnapshotKind::Oem => tr(ru, "Supported OEM", "Поддерживаемая OEM").to_owned(),
-        SnapshotKind::Project(image) => image.profile()
+        SnapshotKind::Project(image) => image
+            .profile()
             .map(|profile| beta::profile_description(profile).title.for_language(ru))
             .unwrap_or_else(|| tr(ru, "Unknown project profile", "Неизвестный профиль проекта"))
             .to_owned(),
@@ -238,7 +239,10 @@ fn snapshot_kind_text(kind: SnapshotKind, ru: bool) -> String {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn browser_result(state: &mut State, result: super::file_browser::BrowserResult) -> Option<(Slot, PathBuf)> {
+fn browser_result(
+    state: &mut State,
+    result: super::file_browser::BrowserResult,
+) -> Option<(Slot, PathBuf)> {
     use super::file_browser::BrowserResult;
     match result {
         BrowserResult::Selected(path) if state.pending.is_none() => {
@@ -255,7 +259,11 @@ fn browser_result(state: &mut State, result: super::file_browser::BrowserResult)
     }
 }
 
-fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<(Slot, PathBuf)>, bool) {
+fn draw_contents(
+    ui: &mut egui::Ui,
+    ru: bool,
+    state: &mut State,
+) -> (Option<(Slot, PathBuf)>, bool) {
     let mut pick = None;
     let mut check = false;
     ui.label(tr(
@@ -321,9 +329,14 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<(Slo
                 state.path_entry = Some((slot, String::new()));
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    state.browser = Some((slot, Arc::new(Mutex::new(super::file_browser::FileBrowser::new(
-                        PathBuf::from("."), super::file_browser::BrowserMode::File, ui.ctx(),
-                    )))));
+                    state.browser = Some((
+                        slot,
+                        Arc::new(Mutex::new(super::file_browser::FileBrowser::new(
+                            PathBuf::from("."),
+                            super::file_browser::BrowserMode::File,
+                            ui.ctx(),
+                        ))),
+                    ));
                 }
             }
             let input = match slot {
@@ -367,12 +380,17 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<(Slo
         if cancel || pick.is_some() {
             state.path_entry = None;
             #[cfg(not(target_arch = "wasm32"))]
-            { state.browser = None; }
+            {
+                state.browser = None;
+            }
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some((_, browser)) = &state.browser {
-        let result = browser.lock().unwrap_or_else(|e| e.into_inner()).show(ui, ru);
+        let result = browser
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .show(ui, ru);
         if let Some(result) = result {
             pick = browser_result(state, result);
         }
@@ -491,7 +509,10 @@ fn draw_contents(ui: &mut egui::Ui, ru: bool, state: &mut State) -> (Option<(Slo
 }
 
 pub(crate) fn page_busy(ctx: &egui::Context) -> bool {
-    ctx.data(|d| d.get_temp::<State>(egui::Id::new(STATE_ID)).is_some_and(|s| s.pending.is_some()))
+    ctx.data(|d| {
+        d.get_temp::<State>(egui::Id::new(STATE_ID))
+            .is_some_and(|s| s.pending.is_some())
+    })
 }
 
 pub(crate) fn reset(ctx: &egui::Context) {
@@ -524,7 +545,9 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) -> bool {
     }
     let mut back = false;
     ui.horizontal_wrapped(|ui| {
-        if crate::ui_style::action_button(ui, tr(ru, "Back", "Назад"), s.pending.is_none()).clicked() {
+        if crate::ui_style::action_button(ui, tr(ru, "Back", "Назад"), s.pending.is_none())
+            .clicked()
+        {
             back = true;
         }
         ui.heading(tr(
@@ -691,16 +714,38 @@ mod tests {
         use crate::app::file_browser::{BrowserMode, BrowserResult, FileBrowser};
         let ctx = egui::Context::default();
         for slot in [Slot::Payload, Slot::Snapshot, Slot::Recovery] {
-            let browser = Arc::new(Mutex::new(FileBrowser::new(PathBuf::from("."), BrowserMode::File, &ctx)));
-            let mut state = State { browser: Some((slot, browser)), path_entry: Some((slot, String::new())), ..State::default() };
-            assert!(browser_result(&mut state, BrowserResult::Directory(PathBuf::from("."))).is_none());
+            let browser = Arc::new(Mutex::new(FileBrowser::new(
+                PathBuf::from("."),
+                BrowserMode::File,
+                &ctx,
+            )));
+            let mut state = State {
+                browser: Some((slot, browser)),
+                path_entry: Some((slot, String::new())),
+                ..State::default()
+            };
+            assert!(
+                browser_result(&mut state, BrowserResult::Directory(PathBuf::from("."))).is_none()
+            );
             let (_tx, rx) = mpsc::channel();
-            state.pending = Some(Pending { token: 1, rx: Arc::new(Mutex::new(rx)) });
-            assert!(browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file"))).is_none());
+            state.pending = Some(Pending {
+                token: 1,
+                rx: Arc::new(Mutex::new(rx)),
+            });
+            assert!(
+                browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file")))
+                    .is_none()
+            );
             state.pending = None;
-            assert_eq!(browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file"))), Some((slot, PathBuf::from("file"))));
+            assert_eq!(
+                browser_result(&mut state, BrowserResult::Selected(PathBuf::from("file"))),
+                Some((slot, PathBuf::from("file")))
+            );
             assert!(state.browser.is_none() && state.path_entry.is_none());
-            assert_eq!(slot_expected(slot), if slot == Slot::Payload { 51136 } else { 65536 });
+            assert_eq!(
+                slot_expected(slot),
+                if slot == Slot::Payload { 51136 } else { 65536 }
+            );
         }
     }
 
@@ -710,8 +755,18 @@ mod tests {
         use crate::app::file_browser::{BrowserMode, BrowserResult, FileBrowser};
         let ctx = egui::Context::default();
         let mut state = State {
-            payload: Some(Input { name: "kept".into(), bytes: vec![1] }),
-            browser: Some((Slot::Payload, Arc::new(Mutex::new(FileBrowser::new(PathBuf::from("."), BrowserMode::File, &ctx))))),
+            payload: Some(Input {
+                name: "kept".into(),
+                bytes: vec![1],
+            }),
+            browser: Some((
+                Slot::Payload,
+                Arc::new(Mutex::new(FileBrowser::new(
+                    PathBuf::from("."),
+                    BrowserMode::File,
+                    &ctx,
+                ))),
+            )),
             path_entry: Some((Slot::Payload, String::new())),
             ..State::default()
         };
@@ -740,7 +795,7 @@ mod tests {
                 );
             });
             for _ in 0..4 {
-                let _ = ctx.run(
+                let _ = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
                             egui::Pos2::ZERO,
@@ -748,8 +803,8 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
                             assert!(!show(&mut app, ui));
                         });
                     },

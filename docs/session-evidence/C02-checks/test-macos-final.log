@@ -1,0 +1,30 @@
+   Compiling ak-configurator v0.1.0-alpha.1 (LOCAL_WORK/ak-configurator-beta5-review)
+    Finished `test` profile [unoptimized] target(s) in 42.20s
+     Running unittests src/main.rs (LOCAL_WORK/ak-c02-mw04n68x-target/debug/deps/ak_configurator-9203bdbe3f59af53)
+
+running 13 tests
+test mcp::artifacts::platform::tests::mcp_artifacts_crash_child ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_permissions_and_manifest_bound ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_hardlink_rejected_and_unknown_file_preserved ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_fifo_is_rejected_without_waiting_for_a_writer ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_revalidates_private_ancestors ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_faults_remove_only_new_incomplete_artifact ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_rejects_non_utc_plan_expiry ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_round_trip_truncation_and_eviction ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_limits_collision_and_no_auto_eviction ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_traversal_and_symlinks_fail_closed ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_bounded_inventory_allows_explicit_overflow_recovery ... ok
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test mcp::artifacts::platform::tests::mcp_artifacts_crash_inventory_allows_explicit_recovery ... ok
+test mcp::artifacts::platform::tests::mcp_artifacts_exact_payload_limits_and_plan_metadata ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 2062 filtered out; finished in 1.27s

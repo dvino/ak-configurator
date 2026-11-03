@@ -1,12 +1,11 @@
 //! Public synthetic FD01 vectors. Strict scripts never fall back to a canned reply.
 use std::collections::VecDeque;
+type Exchange = (Vec<u8>, Result<Vec<u8>, &'static str>);
 pub(crate) struct Script {
-    exchanges: VecDeque<(Vec<u8>, Result<Vec<u8>, &'static str>)>,
+    exchanges: VecDeque<Exchange>,
 }
 impl Script {
-    pub(crate) fn new(
-        exchanges: impl IntoIterator<Item = (Vec<u8>, Result<Vec<u8>, &'static str>)>,
-    ) -> Self {
+    pub(crate) fn new(exchanges: impl IntoIterator<Item = Exchange>) -> Self {
         Self {
             exchanges: exchanges.into_iter().collect(),
         }

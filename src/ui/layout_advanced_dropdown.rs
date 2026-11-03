@@ -60,7 +60,7 @@ impl EntropyApp {
                 advanced_menu_labels.push(crate::i18n::tr(lang, TrKey::AutoShiftTitle));
             }
             if key_override_supported {
-                advanced_menu_labels.push(crate::i18n::tr(lang, TrKey::KeyOverridesTitle));
+                advanced_menu_labels.push(crate::i18n::tr(lang, TrKey::OverridesTitle));
             }
             let advanced_dropdown_width =
                 adaptive_top_icon_dropdown_width(ui, advanced_menu_labels, 152.0);
@@ -194,7 +194,7 @@ impl EntropyApp {
                                 ui,
                                 item_width,
                                 TopMenuIcon::KeyOverrides,
-                                crate::i18n::tr(lang, TrKey::KeyOverridesTitle),
+                                crate::i18n::tr(lang, TrKey::OverridesTitle),
                                 true,
                                 self.main_menu_tab == MainMenuTab::Advanced
                                     && self.settings_tab == SettingsTab::KeyOverrides,

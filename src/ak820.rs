@@ -68,6 +68,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, ManifestError> {
 
 /// Exact image recognition requires independently extracted CODE bytes to
 /// match both the manifest and the reviewed alpha.3 image pin.
+#[cfg(test)]
 pub fn recognize_image(manifest: &[u8], computed_code_hash: &[u8; 32]) -> bool {
     identify_image(manifest, computed_code_hash).is_some()
 }
@@ -246,16 +247,30 @@ pub(crate) fn contract_for_hash(schema: u32, code_hash: &str) -> Option<ImageCon
         return Some(ImageContract::Beta2(row.profile));
     }
     if let Some(row) = crate::app::ak820_beta1_profiles::firmware_matrix()
-        .profiles.iter().find_map(|row| row.settings_identity.as_ref()
-            .filter(|identity| identity.nvm_schema == schema && identity.code_sha256 == code_hash)
-            .map(|_| ImageContract::Beta3(row.profile)))
+        .profiles
+        .iter()
+        .find_map(|row| {
+            row.settings_identity
+                .as_ref()
+                .filter(|identity| {
+                    identity.nvm_schema == schema && identity.code_sha256 == code_hash
+                })
+                .map(|_| ImageContract::Beta3(row.profile))
+        })
     {
         return Some(row);
     }
     crate::app::ak820_beta1_profiles::beta4_firmware_matrix()
-        .profiles.iter().find_map(|row| row.settings_identity.as_ref()
-            .filter(|identity| identity.nvm_schema == schema && identity.code_sha256 == code_hash)
-            .map(|_| ImageContract::Beta4(row.profile)))
+        .profiles
+        .iter()
+        .find_map(|row| {
+            row.settings_identity
+                .as_ref()
+                .filter(|identity| {
+                    identity.nvm_schema == schema && identity.code_sha256 == code_hash
+                })
+                .map(|_| ImageContract::Beta4(row.profile))
+        })
 }
 
 pub(crate) fn identify_image(
@@ -276,6 +291,7 @@ fn hex(bytes: &[u8]) -> String {
 pub fn is_candidate(vid: u16, pid: u16) -> bool {
     vid == VID && pid == PID
 }
+#[cfg(test)]
 pub fn is_raw_hid_usage(page: u16, usage: u16) -> bool {
     page == RAW_HID_USAGE_PAGE && usage == RAW_HID_USAGE
 }
@@ -334,7 +350,7 @@ pub fn supports_keycode(code: u16) -> bool {
     if code < 256 {
         return basic(code);
     }
-    if matches!(code, 0x7011 | 0x7012 | 0x7013) {
+    if matches!(code, 0x7011..=0x7013) {
         return true;
     }
     if code < 0x4000 {
@@ -386,6 +402,7 @@ pub fn valid_combo(keys: [u16; 4], output: u16) -> bool {
 }
 
 /// FE0D04 + one index byte + four little-endian inputs + output keycode.
+#[cfg(test)]
 pub fn valid_combo_record(record: &[u8]) -> bool {
     if record.len() != 14 || record[..3] != [0xFE, 0x0D, 0x04] || record[3] >= 8 {
         return false;
@@ -455,7 +472,7 @@ mod tests {
     #[test]
     fn beta4_exact_profiles_are_recognized_with_new_settings_contract() {
         use crate::app::ak820_beta1_profiles::{
-            beta4_firmware_matrix, BETA4_ARCHIVE_SHA256, BETA4_RELEASE, ProfileId,
+            beta4_firmware_matrix, ProfileId, BETA4_ARCHIVE_SHA256, BETA4_RELEASE,
         };
         let matrix = beta4_firmware_matrix();
         let archive = include_bytes!("../assets/ak820/beta4-catalog.zip");
@@ -464,7 +481,10 @@ mod tests {
             BETA4_ARCHIVE_SHA256
         );
         let sidecar = include_str!("../assets/ak820/beta4-catalog.zip.sha256");
-        assert_eq!(sidecar.split_whitespace().next(), Some(BETA4_ARCHIVE_SHA256));
+        assert_eq!(
+            sidecar.split_whitespace().next(),
+            Some(BETA4_ARCHIVE_SHA256)
+        );
         assert_eq!(matrix.profiles.len(), 10);
         for row in &matrix.profiles {
             let identity = row.settings_identity.as_ref().unwrap();
@@ -472,8 +492,14 @@ mod tests {
             let mut m = manifest();
             m[12..16].copy_from_slice(&identity.nvm_schema.to_le_bytes());
             m[16..48].copy_from_slice(&hash);
-            assert_eq!(identify_image(&m, &hash), Some(ImageContract::Beta4(row.profile)));
-            assert_eq!(ImageContract::Beta4(row.profile).qsid_ids(), &row.capabilities.runtime_qmk_settings_ids);
+            assert_eq!(
+                identify_image(&m, &hash),
+                Some(ImageContract::Beta4(row.profile))
+            );
+            assert_eq!(
+                ImageContract::Beta4(row.profile).qsid_ids(),
+                &row.capabilities.runtime_qmk_settings_ids
+            );
             assert!(ImageContract::Beta4(row.profile).qsid_ids().contains(&22));
             assert_eq!(contract_for_hash(0x082002, &identity.code_sha256), None);
         }

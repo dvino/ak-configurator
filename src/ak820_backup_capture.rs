@@ -1,5 +1,5 @@
 //! Immutable complete capture bytes. Construction never grants restore permission.
-use crate::ak820_settings_backup::{BackupResult, ImageIdentity, canonical};
+use crate::ak820_settings_backup::{canonical, BackupResult, ImageIdentity};
 use crate::app::ak820_beta1_profiles::ProfileId;
 use std::collections::BTreeMap;
 
@@ -76,8 +76,9 @@ impl CapturedBackup {
             return Err("Incomplete capture ROM".into());
         }
         let nvm = rom[0xc700..0xef00].to_vec();
-        let settings =
-            crate::ak820_settings_model::decode_trusted_rom_for_image(&rom, &nvm, &identity, image)?;
+        let settings = crate::ak820_settings_model::decode_trusted_rom_for_image(
+            &rom, &nvm, &identity, image,
+        )?;
         let mut files = BTreeMap::new();
         files.insert("settings.json".into(), canonical(&settings)?);
         files.insert("before-full-rom.bin".into(), rom);

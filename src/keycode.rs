@@ -204,7 +204,6 @@ pub enum KeycodeCategory {
     Numpad,
     Media,
     Mouse,
-    Layer,
     Special,
 }
 

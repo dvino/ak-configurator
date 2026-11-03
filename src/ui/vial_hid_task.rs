@@ -38,11 +38,18 @@ pub(super) fn layer_name_write_error(language: crate::i18n::Language, error: &st
 
 #[cfg(not(target_arch = "wasm32"))]
 fn report_stale_restore(ctx: &egui::Context, generation: u64, operation: &VialHidOperation) {
-    if let VialHidOperation::Ak820Restore { request_id, request } = operation {
+    if let VialHidOperation::Ak820Restore {
+        request_id,
+        request,
+    } = operation
+    {
         // Only the saved local safety reference survives a generation change.
         // Neither the old device handle nor its result is adopted.
         super::ak820_backup_inspection::restore_failed(
-            ctx, *request_id, generation, request.safety_location(),
+            ctx,
+            *request_id,
+            generation,
+            request.safety_location(),
         );
     }
 }
@@ -275,6 +282,7 @@ pub(super) enum VialHidOperation {
         scale: crate::app::StandbyBackgroundScale,
     },
     BackgroundClear,
+    #[cfg(test)]
     BackgroundSpeed {
         old_percent: u16,
         percent: u16,
@@ -287,6 +295,7 @@ pub(super) enum VialHidOperation {
     PictogramLoad {
         preserve_editor: bool,
     },
+    #[cfg(test)]
     PictogramUpload {
         library: crate::app::PictogramLibrary,
     },
@@ -300,12 +309,22 @@ pub(super) enum VialHidOperation {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl VialHidOperation {
+    fn is_pictogram_upload(&self) -> bool {
+        match self {
+            Self::PictogramSlotUpload { .. } => true,
+            #[cfg(test)]
+            Self::PictogramUpload { .. } => true,
+            _ => false,
+        }
+    }
+
     fn display_diagnostic_label(&self) -> Option<&'static str> {
         match self {
             Self::UnlockStart => Some("unlock-start"),
             Self::UnlockPoll => Some("unlock-poll"),
             Self::Lock => Some("lock"),
             Self::PictogramLoad { .. } => Some("pictogram-load"),
+            #[cfg(test)]
             Self::PictogramUpload { .. } => Some("pictogram-upload"),
             Self::PictogramSlotUpload { .. } => Some("pictogram-slot-upload"),
             _ => None,
@@ -338,6 +357,7 @@ enum VialHidOutcome {
     BackgroundCancelled {
         cleared: bool,
     },
+    #[cfg(test)]
     BackgroundSpeedSet,
     StartupImageUploaded(crate::app::standby_background::StartupImageUploadResult),
     StartupImageCleared,
@@ -463,6 +483,7 @@ fn run_vial_hid_operation_with_progress(
             hid.clear_standby_background()?;
             Ok(VialHidOutcome::BackgroundCleared)
         }
+        #[cfg(test)]
         VialHidOperation::BackgroundSpeed { percent, .. } => {
             hid.set_standby_background_speed(percent)?;
             Ok(VialHidOutcome::BackgroundSpeedSet)
@@ -477,6 +498,7 @@ fn run_vial_hid_operation_with_progress(
         VialHidOperation::PictogramLoad { .. } => hid
             .load_pictograms(progress)
             .map(VialHidOutcome::PictogramsLoaded),
+        #[cfg(test)]
         VialHidOperation::PictogramUpload { library } => hid
             .upload_pictograms(library, progress)
             .map(VialHidOutcome::PictogramsUploaded),
@@ -1211,6 +1233,7 @@ impl EntropyApp {
                 )
                 .into();
             }
+            #[cfg(test)]
             Ok(VialHidOutcome::BackgroundSpeedSet) => {
                 let VialHidOperation::BackgroundSpeed { percent, .. } = result.operation else {
                     unreachable!("background speed outcome must come from a speed operation");
@@ -1504,8 +1527,7 @@ impl EntropyApp {
                     self.display_settings.pictograms.supported = Some(false);
                 }
             }
-            VialHidOperation::PictogramUpload { .. }
-            | VialHidOperation::PictogramSlotUpload { .. } => {
+            operation if operation.is_pictogram_upload() => {
                 let pictograms = &mut self.display_settings.pictograms;
                 // Flash/transport errors can leave even the old library uncertain.
                 // Invalidate the device snapshot, not the user's editor; the next
@@ -1553,14 +1575,13 @@ impl EntropyApp {
             // Connection cleanup owns device state, but an uncertain write must
             // not erase the user's independent editor. Carry the invalidated
             // snapshot through cleanup; never restore a confirmed device library.
-            let draft = matches!(
-                operation,
-                VialHidOperation::PictogramUpload { .. }
-                    | VialHidOperation::PictogramSlotUpload { .. }
-                    | VialHidOperation::PictogramLoad {
+            let draft = (operation.is_pictogram_upload()
+                || matches!(
+                    operation,
+                    VialHidOperation::PictogramLoad {
                         preserve_editor: true
                     }
-            )
+                ))
             .then(|| {
                 let mut draft = std::mem::take(&mut self.display_settings.pictograms);
                 draft.supported = None;
@@ -1614,6 +1635,7 @@ impl EntropyApp {
                     &[("error", &error)],
                 );
             }
+            #[cfg(test)]
             VialHidOperation::BackgroundSpeed { old_percent, .. } => {
                 self.display_settings.clock_background_speed_percent = old_percent;
                 self.status_msg = crate::i18n::tr_catalog_format(
@@ -1638,8 +1660,17 @@ impl EntropyApp {
                     )
                 );
             }
-            VialHidOperation::PictogramUpload { .. }
-            | VialHidOperation::PictogramSlotUpload { .. } => {
+            VialHidOperation::PictogramSlotUpload { .. } => {
+                self.status_msg = format!(
+                    "{}: {error}",
+                    crate::i18n::tr_catalog(
+                        self.app_settings.language,
+                        "display_settings.pictograms_status",
+                    )
+                );
+            }
+            #[cfg(test)]
+            VialHidOperation::PictogramUpload { .. } => {
                 self.status_msg = format!(
                     "{}: {error}",
                     crate::i18n::tr_catalog(
@@ -2363,7 +2394,7 @@ mod tests {
         assert_eq!(requests.len(), 5);
         assert!(requests
             .iter()
-            .all(|request| &request[..3] == [0x08, 0xE8, 0x01]));
+            .all(|request| request[..3] == [0x08, 0xE8, 0x01]));
     }
 
     #[test]
@@ -2715,9 +2746,11 @@ mod tests {
         assert!(app.qmk_setting_transport_available());
 
         app.queue_module_setting_write(
-            "Left Modules".to_owned(),
-            "Mode".to_owned(),
-            "Mode".to_owned(),
+            super::super::settings_write_queue::ModuleSettingMetadata {
+                group_title: "Left Modules".to_owned(),
+                field_title: "Mode".to_owned(),
+                display_label: "Mode".to_owned(),
+            },
             134,
             1,
             0,

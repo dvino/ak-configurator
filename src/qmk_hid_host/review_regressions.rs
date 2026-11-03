@@ -1,11 +1,13 @@
 use super::*;
 use std::cell::RefCell;
 
+type OutputScript = Box<dyn FnMut(&[u8]) -> anyhow::Result<()>>;
+
 // Per-worker OS/HID boundary scripts; no global clock changes or copied
 // recovery logic. Unscripted tests and production use the native boundaries.
 thread_local! {
     static FAILURE_TIME: RefCell<Option<Box<dyn Fn() -> Instant>>> = RefCell::new(None);
-    static OUTPUT_SCRIPT: RefCell<Option<Box<dyn FnMut(&[u8]) -> anyhow::Result<()>>>> = RefCell::new(None);
+    static OUTPUT_SCRIPT: RefCell<Option<OutputScript>> = RefCell::new(None);
 }
 
 pub(super) fn failure_now(native: Instant) -> Instant {
@@ -271,15 +273,62 @@ fn real_worker_reconnects_on_persistent_failure_and_resets_replacement_grace() {
 }
 
 #[test]
+fn windows_timeline_sample_age_honors_epoch_quantization_and_bounds() {
+    // Independent FILETIME fixture: 1970-01-01 02:00:00 UTC, in 100 ns ticks.
+    const NOW_TICKS: i64 = 116_444_808_000_000_000;
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(7_200);
+    assert_eq!(
+        windows_timeline_sample_age(NOW_TICKS, now),
+        Some(Duration::ZERO)
+    );
+    assert_eq!(
+        windows_timeline_sample_age(NOW_TICKS - 1, now),
+        Some(Duration::from_nanos(100)),
+    );
+    assert_eq!(
+        windows_timeline_sample_age(NOW_TICKS - 36_000_000_000, now),
+        Some(Duration::from_secs(3_600)),
+    );
+    for invalid in [
+        i64::MIN,
+        -1,
+        0,
+        i64::MAX,
+        NOW_TICKS + 1,
+        NOW_TICKS - 36_000_000_001,
+    ] {
+        assert_eq!(
+            windows_timeline_sample_age(invalid, now),
+            None,
+            "ticks={invalid}"
+        );
+    }
+    assert_eq!(
+        windows_timeline_sample_age(NOW_TICKS, now + Duration::from_nanos(99)),
+        Some(Duration::ZERO),
+    );
+    assert_eq!(
+        windows_timeline_sample_age(NOW_TICKS, now + Duration::from_nanos(100)),
+        Some(Duration::from_nanos(100)),
+    );
+    let before_epoch = SystemTime::UNIX_EPOCH
+        .checked_sub(Duration::from_nanos(1))
+        .unwrap();
+    assert_eq!(windows_timeline_sample_age(NOW_TICKS, before_epoch), None);
+}
+
+#[test]
 fn fresh_timeline_seek_to_same_raw_position_reanchors_real_clock() {
     let t = Instant::now();
     let mut clock = MediaProgressClock::default();
     let mut update = |ticks, age, seconds| {
         clock.update(
             "track A",
-            Some(Duration::ZERO),
-            ticks,
-            age,
+            MediaTimelineSample {
+                raw_position: Some(Duration::ZERO),
+                last_updated_ticks: ticks,
+                sample_age: age,
+            },
             true,
             Some(90),
             t + Duration::from_secs(seconds),
@@ -307,9 +356,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "A",
-            zero,
-            Some(100),
-            Some(Duration::from_secs(5)),
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: Some(100),
+                sample_age: Some(Duration::from_secs(5)),
+            },
             true,
             Some(90),
             t
@@ -319,9 +370,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "A",
-            zero,
-            Some(100),
-            Some(Duration::from_secs(15)),
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: Some(100),
+                sample_age: Some(Duration::from_secs(15)),
+            },
             true,
             Some(90),
             t + Duration::from_secs(10)
@@ -338,9 +391,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
         assert_eq!(
             c.update(
                 "A",
-                zero,
-                ticks,
-                age,
+                MediaTimelineSample {
+                    raw_position: zero,
+                    last_updated_ticks: ticks,
+                    sample_age: age,
+                },
                 true,
                 Some(90),
                 t + Duration::from_secs(second)
@@ -351,9 +406,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "A",
-            zero,
-            Some(100),
-            Some(Duration::from_secs(20)),
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: Some(100),
+                sample_age: Some(Duration::from_secs(20)),
+            },
             false,
             Some(90),
             t + Duration::from_secs(15)
@@ -363,9 +420,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "A",
-            zero,
-            Some(100),
-            Some(Duration::from_secs(25)),
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: Some(100),
+                sample_age: Some(Duration::from_secs(25)),
+            },
             true,
             Some(90),
             t + Duration::from_secs(20)
@@ -375,9 +434,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "A",
-            Some(Duration::from_secs(30)),
-            Some(100),
-            None,
+            MediaTimelineSample {
+                raw_position: Some(Duration::from_secs(30)),
+                last_updated_ticks: Some(100),
+                sample_age: None,
+            },
             true,
             Some(90),
             t + Duration::from_secs(21)
@@ -387,9 +448,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "B",
-            zero,
-            None,
-            None,
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: None,
+                sample_age: None,
+            },
             true,
             None,
             t + Duration::from_secs(22)
@@ -399,9 +462,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "B",
-            zero,
-            None,
-            None,
+            MediaTimelineSample {
+                raw_position: zero,
+                last_updated_ticks: None,
+                sample_age: None,
+            },
             true,
             None,
             t + Duration::from_secs(24)
@@ -411,9 +476,11 @@ fn timeline_clock_preserves_stale_invalid_pause_and_unknown_controls() {
     assert_eq!(
         c.update(
             "unknown",
-            None,
-            None,
-            None,
+            MediaTimelineSample {
+                raw_position: None,
+                last_updated_ticks: None,
+                sample_age: None,
+            },
             true,
             None,
             t + Duration::from_secs(25)

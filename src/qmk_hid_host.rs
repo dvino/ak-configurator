@@ -66,13 +66,22 @@ struct MediaProgressClock {
 }
 
 #[cfg(any(target_os = "windows", test))]
+struct MediaTimelineSample {
+    raw_position: Option<Duration>,
+    last_updated_ticks: Option<i64>,
+    sample_age: Option<Duration>,
+}
+
+#[cfg(any(target_os = "windows", test))]
 impl MediaProgressClock {
     fn update(
         &mut self,
         identity: &str,
-        raw_position: Option<Duration>,
-        last_updated_ticks: Option<i64>,
-        sample_age: Option<Duration>,
+        MediaTimelineSample {
+            raw_position,
+            last_updated_ticks,
+            sample_age,
+        }: MediaTimelineSample,
         playing: bool,
         duration: Option<u32>,
         now: Instant,
@@ -81,7 +90,10 @@ impl MediaProgressClock {
         // position. Missing/stale/regressing timeline identity is not a seek.
         let fresh_timeline = sample_age.is_some()
             && last_updated_ticks.is_some_and(|ticks| {
-                ticks > 0 && self.last_updated_ticks.is_none_or(|previous| ticks > previous)
+                ticks > 0
+                    && self
+                        .last_updated_ticks
+                        .is_none_or(|previous| ticks > previous)
             });
         if self.anchor.is_none()
             || fresh_timeline
@@ -334,7 +346,11 @@ impl Drop for DesktopSubscription {
 }
 
 fn run_desktop_service(shared: Arc<DesktopShared>, mut source: impl DesktopSource, index: usize) {
-    let interval = [VOLUME_POLL_INTERVAL, Duration::from_millis(100), MEDIA_POLL_INTERVAL][index];
+    let interval = [
+        VOLUME_POLL_INTERVAL,
+        Duration::from_millis(100),
+        MEDIA_POLL_INTERVAL,
+    ][index];
     let mut last_poll = Instant::now() - Duration::from_secs(60);
     let mut last_epoch = 0;
     loop {
@@ -342,7 +358,9 @@ fn run_desktop_service(shared: Arc<DesktopShared>, mut source: impl DesktopSourc
         while !state.stopped && state.demand[index] == 0 {
             state = shared.wake.wait(state).unwrap_or_else(|e| e.into_inner());
         }
-        if state.stopped { return; }
+        if state.stopped {
+            return;
+        }
         let epoch = state.epoch[index];
         let due = last_epoch != epoch || last_poll.elapsed() >= interval;
         drop(state);
@@ -361,7 +379,9 @@ fn run_desktop_service(shared: Arc<DesktopShared>, mut source: impl DesktopSourc
                 }
             }
             let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
-            if state.stopped { return; }
+            if state.stopped {
+                return;
+            }
             // Old in-flight queries cannot populate a re-enabled session.
             if state.demand[index] > 0 && state.epoch[index] == epoch {
                 match index {
@@ -376,7 +396,9 @@ fn run_desktop_service(shared: Arc<DesktopShared>, mut source: impl DesktopSourc
             }
         }
         let state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.stopped { return; }
+        if state.stopped {
+            return;
+        }
         let _ = shared.wake.wait_timeout(state, Duration::from_millis(20));
     }
 }
@@ -845,10 +867,14 @@ impl HostOutputOwner {
     /// setting SET and its verified GET are in flight. The bridge already
     /// serializes output through this lock; settings use the proxy directly.
     pub(crate) fn with_settings_write_paused<T>(&self, operation: impl FnOnce() -> T) -> T {
-        let _output = self.active.lock().unwrap_or_else(|error| error.into_inner());
+        let _output = self
+            .active
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         operation()
     }
 
+    #[cfg(test)]
     pub(crate) fn claim(self: &Arc<Self>, mode: HostDataMode, extended: bool) -> HostOutputLease {
         self.claim_sm62(mode, extended, false)
     }
@@ -960,9 +986,15 @@ struct ApplicationLayoutOwnerState {
 
 impl Default for ApplicationLayoutOwnerState {
     fn default() -> Self {
-        Self { output_order: Arc::new(Mutex::new(())), generation: 0, selected: false, discovered_key: None, verified_key: None,
+        Self {
+            output_order: Arc::new(Mutex::new(())),
+            generation: 0,
+            selected: false,
+            discovered_key: None,
+            verified_key: None,
             snapshot_generation: 0,
-            snapshot: crate::application_layouts::ApplicationLayoutSnapshot::inactive() }
+            snapshot: crate::application_layouts::ApplicationLayoutSnapshot::inactive(),
+        }
     }
 }
 
@@ -984,7 +1016,10 @@ mod wake_identity;
 struct ApplicationLayoutTransmission;
 
 impl ApplicationLayoutTransmission {
-    fn packets(&mut self, snapshot: &crate::application_layouts::ApplicationLayoutSnapshot) -> Vec<[u8; 32]> {
+    fn packets(
+        &mut self,
+        snapshot: &crate::application_layouts::ApplicationLayoutSnapshot,
+    ) -> Vec<[u8; 32]> {
         let mut packets = snapshot.packets();
         if let Some(id) = &snapshot.profile_id {
             let commit = packets.last_mut().expect("snapshot has a commit");
@@ -1004,11 +1039,17 @@ fn write_application_layout_payload(
     packet: &[u8],
     send: impl FnOnce(&[u8]) -> anyhow::Result<()>,
 ) -> anyhow::Result<bool> {
-    let order = owner.lock().unwrap_or_else(|e| e.into_inner()).output_order.clone();
+    let order = owner
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .output_order
+        .clone();
     let _output = order.lock().unwrap_or_else(|e| e.into_inner());
     let state = owner.lock().unwrap_or_else(|e| e.into_inner());
-    if state.generation != generation || state.snapshot_generation != generation
-        || &state.snapshot != snapshot {
+    if state.generation != generation
+        || state.snapshot_generation != generation
+        || &state.snapshot != snapshot
+    {
         return Ok(false);
     }
     // Admission is linearized against revoke/publication under the state lock.
@@ -1154,9 +1195,8 @@ impl QmkHidHostBridge {
         let worker_output = shared_output.clone();
         let layout_snapshot = Arc::new(AtomicU8::new(u8::MAX));
         let worker_layout = layout_snapshot.clone();
-        let application_layout_snapshot = Arc::new(Mutex::new(
-            ApplicationLayoutOwnerState::default(),
-        ));
+        let application_layout_snapshot =
+            Arc::new(Mutex::new(ApplicationLayoutOwnerState::default()));
         let worker_application_layout = application_layout_snapshot.clone();
         let application_layout_resend_generation = Arc::new(AtomicU64::new(0));
         let worker_application_layout_resend = application_layout_resend_generation.clone();
@@ -1166,17 +1206,19 @@ impl QmkHidHostBridge {
         let worker_shutdown = send_shutdown_on_drop.clone();
         let thread = thread::spawn(move || {
             run_bridge(
-                worker_device,
-                mode,
-                worker_output,
-                worker_control,
-                worker_layout,
-                worker_application_layout,
-                worker_application_layout_resend,
-                worker_application_layouts_enabled,
-                protocol,
-                worker_shutdown,
-                desktop,
+                BridgeWorkerContext {
+                    target: worker_device,
+                    mode,
+                    shared_output: worker_output,
+                    control: worker_control,
+                    layout_snapshot: worker_layout,
+                    application_layout_snapshot: worker_application_layout,
+                    application_layout_resend_generation: worker_application_layout_resend,
+                    application_layouts_enabled: worker_application_layouts_enabled,
+                    protocol,
+                    send_shutdown: worker_shutdown,
+                    desktop,
+                },
                 open_hid,
             )
         });
@@ -1197,13 +1239,21 @@ impl QmkHidHostBridge {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn discovered_application_layout_key(&self) -> Option<String> {
-        self.discovered_application_layout_identity().map(|(key, _)| key)
+        self.discovered_application_layout_identity()
+            .map(|(key, _)| key)
     }
 
     pub(crate) fn discovered_application_layout_identity(&self) -> Option<(String, u64)> {
-        let state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
-        state.discovered_key.clone().map(|key| (key, state.generation))
+        let state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        state
+            .discovered_key
+            .clone()
+            .map(|key| (key, state.generation))
     }
 
     pub(crate) fn application_layout_device_key(&self) -> Option<&str> {
@@ -1213,7 +1263,10 @@ impl QmkHidHostBridge {
     pub(crate) fn clear_application_layout_binding(&mut self) {
         self.application_layout_device_key = None;
         self.application_layout_binding_generation = None;
-        let mut state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if state.verified_key.is_some() {
             // Regranting this same discovered owner must not revive validation
             // tokens captured before a registry/identity revocation.
@@ -1227,8 +1280,13 @@ impl QmkHidHostBridge {
 
     /// Ephemeral evidence from the selected, identified owner, never settings.
     pub(crate) fn bind_selected_application_layout_device(&mut self, key: String) {
-        if !self.device.is_ergohaven_display_macropad() { return; }
-        let mut state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
+        if !self.device.is_ergohaven_display_macropad() {
+            return;
+        }
+        let mut state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         state.discovered_key = Some(key.clone());
         state.verified_key = Some(key.clone());
         state.selected = true;
@@ -1237,15 +1295,24 @@ impl QmkHidHostBridge {
     }
 
     pub(crate) fn has_selected_application_layout_binding(&self) -> bool {
-        let state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
-        state.selected && self.application_layout_binding_generation == Some(state.generation)
+        let state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        state.selected
+            && self.application_layout_binding_generation == Some(state.generation)
             && self.application_layout_device_key.as_ref() == state.verified_key.as_ref()
     }
 
     pub(crate) fn bind_application_layout_device(&mut self, key: String) {
-        if !self.device.is_ergohaven_display_macropad() { return; }
+        if !self.device.is_ergohaven_display_macropad() {
+            return;
+        }
         if self.application_layout_device_key.as_ref() == Some(&key)
-            && self.application_layout_publication_generation().is_some() { return; }
+            && self.application_layout_publication_generation().is_some()
+        {
+            return;
+        }
         // Registry refresh may carry an old UI routing label, but cannot grant
         // a cold owner merely because its model UID matches. Runtime must check
         // serial/scan identity and bind the captured discovery generation.
@@ -1254,36 +1321,56 @@ impl QmkHidHostBridge {
     }
 
     pub(crate) fn bind_verified_application_layout_device(&mut self, key: String, generation: u64) {
-        if !self.device.is_ergohaven_display_macropad() { return; }
-        let mut state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
-        if state.generation != generation || state.discovered_key.as_ref() != Some(&key) { return; }
+        if !self.device.is_ergohaven_display_macropad() {
+            return;
+        }
+        let mut state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if state.generation != generation || state.discovered_key.as_ref() != Some(&key) {
+            return;
+        }
         state.verified_key = Some(key.clone());
         self.application_layout_binding_generation = Some(generation);
         self.application_layout_device_key = Some(key);
     }
 
     pub(crate) fn application_layout_publication_generation(&self) -> Option<u64> {
-        let state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
+        let state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         (self.application_layout_binding_generation == Some(state.generation)
             && state.verified_key.is_some()
             && state.verified_key.as_ref() == self.application_layout_device_key.as_ref())
-            .then_some(state.generation)
+        .then_some(state.generation)
     }
 
     pub(crate) fn publish_application_layout_snapshot_for_generation(
-        &self, snapshot: crate::application_layouts::ApplicationLayoutSnapshot, generation: u64,
+        &self,
+        snapshot: crate::application_layouts::ApplicationLayoutSnapshot,
+        generation: u64,
     ) -> bool {
-        let mut state = self.application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
-        if state.generation != generation || state.verified_key.is_none()
+        let mut state = self
+            .application_layout_snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if state.generation != generation
+            || state.verified_key.is_none()
             || state.verified_key.as_ref() != self.application_layout_device_key.as_ref()
-            || self.application_layout_binding_generation != Some(generation) { return false; }
+            || self.application_layout_binding_generation != Some(generation)
+        {
+            return false;
+        }
         state.snapshot_generation = generation;
         state.snapshot = snapshot;
         true
     }
 
     pub(crate) fn set_application_layout_snapshot(
-        &self, snapshot: crate::application_layouts::ApplicationLayoutSnapshot,
+        &self,
+        snapshot: crate::application_layouts::ApplicationLayoutSnapshot,
     ) {
         if let Some(generation) = self.application_layout_publication_generation() {
             self.publish_application_layout_snapshot_for_generation(snapshot, generation);
@@ -1291,8 +1378,14 @@ impl QmkHidHostBridge {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_application_layout_snapshot(&self) -> crate::application_layouts::ApplicationLayoutSnapshot {
-        self.application_layout_snapshot.lock().unwrap().snapshot.clone()
+    pub(crate) fn test_application_layout_snapshot(
+        &self,
+    ) -> crate::application_layouts::ApplicationLayoutSnapshot {
+        self.application_layout_snapshot
+            .lock()
+            .unwrap()
+            .snapshot
+            .clone()
     }
 
     pub(crate) fn supports_application_layouts(&self) -> bool {
@@ -1388,18 +1481,34 @@ impl Drop for QmkHidHostBridge {
     }
 }
 
-fn run_bridge(
+struct BridgeWorkerContext {
     target: crate::device::Device,
     mode: HostDataMode,
-    mut shared_output: Option<crate::hid::SharedHidOutput>,
+    shared_output: Option<crate::hid::SharedHidOutput>,
     control: Arc<BridgeTransportControl>,
     layout_snapshot: Arc<AtomicU8>,
     application_layout_snapshot: Arc<Mutex<ApplicationLayoutOwnerState>>,
     application_layout_resend_generation: Arc<AtomicU64>,
     application_layouts_enabled: Arc<AtomicBool>,
-    mut protocol: HostProtocol,
+    protocol: HostProtocol,
     send_shutdown: Arc<AtomicBool>,
     desktop: HostDataService,
+}
+
+fn run_bridge(
+    BridgeWorkerContext {
+        target,
+        mode,
+        mut shared_output,
+        control,
+        layout_snapshot,
+        application_layout_snapshot,
+        application_layout_resend_generation,
+        application_layouts_enabled,
+        mut protocol,
+        send_shutdown,
+        desktop,
+    }: BridgeWorkerContext,
     mut open_hid: impl FnMut(
         &crate::device::Device,
         Option<&crate::hid::SharedHidOutput>,
@@ -1423,7 +1532,7 @@ fn run_bridge(
     let mut last_application_layout = None;
     let mut last_application_layout_resend_generation =
         application_layout_resend_generation.load(Ordering::SeqCst);
-    let mut application_layout_transmission = ApplicationLayoutTransmission::default();
+    let mut application_layout_transmission = ApplicationLayoutTransmission;
     let mut last_application_layout_send = Instant::now() - Duration::from_secs(60);
     let mut desktop_subscription = None;
     let mut consecutive_write_failures = 0u8;
@@ -1474,7 +1583,10 @@ fn run_bridge(
             last_open_attempt = Instant::now();
             // Revoke before opening/discovering any replacement physical owner.
             if shared_output.is_none() {
-                application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner()).revoke();
+                application_layout_snapshot
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .revoke();
             }
             device = open_hid(&target, shared_output.as_ref())
                 .and_then(|device| {
@@ -1498,7 +1610,10 @@ fn run_bridge(
                 if let HostDataHid::Dedicated(hid) = dev {
                     // Also discard any UI grant made while endpoint acquisition
                     // was in flight; it cannot identify this newly opened owner.
-                    application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner()).revoke();
+                    application_layout_snapshot
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .revoke();
                     // Query through this worker's exclusive owner, never the UI's selected handle.
                     let key = target
                         .is_ergohaven_display_macropad()
@@ -1515,7 +1630,10 @@ fn run_bridge(
                             })
                         })
                         .flatten();
-                    application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner()).discovered_key = key;
+                    application_layout_snapshot
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .discovered_key = key;
                     application_layouts_enabled.store(
                         target.is_ergohaven_display_macropad()
                             && hid.supports_application_layout_protocol(),
@@ -1556,7 +1674,10 @@ fn run_bridge(
             last_time = None;
             reset_layout_sync_state(&mut last_layout, &mut last_layout_full_send);
             last_application_layout = None;
-            application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner()).revoke();
+            application_layout_snapshot
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .revoke();
             application_layouts_enabled.store(false, Ordering::Release);
             thread::sleep(Duration::from_millis(250));
             continue;
@@ -1573,18 +1694,34 @@ fn run_bridge(
                 last_application_layout_resend_generation = resend_generation;
             }
             let (application_layout, generation) = {
-                let state = application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner());
+                let state = application_layout_snapshot
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 (state.snapshot.clone(), state.snapshot_generation)
             };
             let snapshot_changed = last_application_layout.as_ref() != Some(&application_layout);
             if snapshot_changed {
                 let mut sent = true;
                 for packet in application_layout_transmission.packets(&application_layout) {
-                    match write_application_layout_payload(&application_layout_snapshot,
-                        &application_layout, generation, &packet, |p| write_payload_with_retry(dev, p, sm62)) {
-                        Ok(true) => { write_attempted = true; },
-                        Ok(false) => { sent = false; break; },
-                        Err(_) => { sent = false; write_failed = true; break; },
+                    match write_application_layout_payload(
+                        &application_layout_snapshot,
+                        &application_layout,
+                        generation,
+                        &packet,
+                        |p| write_payload_with_retry(dev, p, sm62),
+                    ) {
+                        Ok(true) => {
+                            write_attempted = true;
+                        }
+                        Ok(false) => {
+                            sent = false;
+                            break;
+                        }
+                        Err(_) => {
+                            sent = false;
+                            write_failed = true;
+                            break;
+                        }
                     }
                     thread::sleep(Duration::from_millis(1));
                 }
@@ -1593,10 +1730,17 @@ fn run_bridge(
                     last_application_layout_send = Instant::now();
                 }
             } else if last_application_layout_send.elapsed() >= Duration::from_secs(1) {
-                match write_application_layout_payload(&application_layout_snapshot,
-                    &application_layout, generation, &application_layout.keepalive_packet(),
-                    |p| write_payload_with_retry(dev, p, sm62)) {
-                    Ok(true) => { write_attempted = true; last_application_layout_send = Instant::now(); },
+                match write_application_layout_payload(
+                    &application_layout_snapshot,
+                    &application_layout,
+                    generation,
+                    &application_layout.keepalive_packet(),
+                    |p| write_payload_with_retry(dev, p, sm62),
+                ) {
+                    Ok(true) => {
+                        write_attempted = true;
+                        last_application_layout_send = Instant::now();
+                    }
                     Ok(false) => continue,
                     Err(_) => write_failed = true,
                 }
@@ -1620,7 +1764,8 @@ fn run_bridge(
             if last_time != Some(now) {
                 write_attempted = true;
                 last_time = Some(now);
-                write_failed |= write_payload_with_retry(dev, &[DATA_TIME, now.0, now.1], sm62).is_err();
+                write_failed |=
+                    write_payload_with_retry(dev, &[DATA_TIME, now.0, now.1], sm62).is_err();
                 pause_between_packets();
                 if extended_protocol || target.is_ergohaven_sm62() {
                     use chrono::Datelike;
@@ -1657,7 +1802,8 @@ fn run_bridge(
                 if last_volume != Some(volume) {
                     write_attempted = true;
                     last_volume = Some(volume);
-                    write_failed |= write_payload_with_retry(dev, &[DATA_VOLUME, volume], sm62).is_err();
+                    write_failed |=
+                        write_payload_with_retry(dev, &[DATA_VOLUME, volume], sm62).is_err();
                     pause_between_packets();
                 }
             }
@@ -1714,7 +1860,8 @@ fn run_bridge(
             }
             if supports_sm62_media_progress(&target) {
                 write_attempted = true;
-                write_failed |= write_payload_with_retry(dev, &media.progress_payload(), sm62).is_err();
+                write_failed |=
+                    write_payload_with_retry(dev, &media.progress_payload(), sm62).is_err();
                 pause_between_packets();
             }
             if full_resend {
@@ -1759,7 +1906,10 @@ fn run_bridge(
             last_volume = None;
             reset_layout_sync_state(&mut last_layout, &mut last_layout_full_send);
             last_application_layout = None;
-            application_layout_snapshot.lock().unwrap_or_else(|e| e.into_inner()).revoke();
+            application_layout_snapshot
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .revoke();
             application_layouts_enabled.store(false, Ordering::Release);
             last_artist.clear();
             last_title.clear();
@@ -1815,7 +1965,12 @@ fn layout_snapshot_label(snapshot: &AtomicU8) -> Option<&'static str> {
     }
 }
 
-fn write_layout_snapshot(dev: &HostDataHid, layout: u8, snapshot: &AtomicU8, sm62: bool) -> anyhow::Result<()> {
+fn write_layout_snapshot(
+    dev: &HostDataHid,
+    layout: u8,
+    snapshot: &AtomicU8,
+    sm62: bool,
+) -> anyhow::Result<()> {
     let result = write_payload_with_retry(dev, &[DATA_LAYOUT, layout], sm62);
     snapshot.store(
         if result.is_ok() { layout } else { u8::MAX },
@@ -1859,6 +2014,7 @@ fn send_shutdown_payloads(
     }
 }
 
+#[cfg(test)]
 fn shutdown_payloads(mode: HostDataMode, extended_protocol: bool) -> Vec<Vec<u8>> {
     shutdown_payloads_for_device(mode, extended_protocol, false)
 }
@@ -1932,7 +2088,11 @@ fn write_payload(device: &HostDataHid, payload: &[u8]) -> anyhow::Result<()> {
     device.write_output_report(payload)
 }
 
-fn write_payload_with_retry(device: &HostDataHid, payload: &[u8], sm62: bool) -> anyhow::Result<()> {
+fn write_payload_with_retry(
+    device: &HostDataHid,
+    payload: &[u8],
+    sm62: bool,
+) -> anyhow::Result<()> {
     match write_payload(device, payload) {
         Err(error) if sm62 && !crate::hid::is_transport_disconnect_error(&error) => {
             log::warn!("SM62 host data transient HID write failure; retrying once: {error:#}");
@@ -1956,14 +2116,23 @@ fn sm62_title_payloads(value: &str) -> Vec<Vec<u8>> {
         payload.extend_from_slice(bytes);
         return vec![payload];
     }
-    bytes.chunks(29).enumerate().map(|(index, chunk)| {
-        let mut payload = vec![0xBB, (index * 29) as u8, bytes.len() as u8];
-        payload.extend_from_slice(chunk);
-        payload
-    }).collect()
+    bytes
+        .chunks(29)
+        .enumerate()
+        .map(|(index, chunk)| {
+            let mut payload = vec![0xBB, (index * 29) as u8, bytes.len() as u8];
+            payload.extend_from_slice(chunk);
+            payload
+        })
+        .collect()
 }
 
-fn write_text_payload(device: &HostDataHid, data_type: u8, value: &str, sm62: bool) -> anyhow::Result<()> {
+fn write_text_payload(
+    device: &HostDataHid,
+    data_type: u8,
+    value: &str,
+    sm62: bool,
+) -> anyhow::Result<()> {
     if sm62 && data_type == DATA_MEDIA_TITLE {
         let payloads = sm62_title_payloads(value);
         for (index, payload) in payloads.iter().enumerate() {
@@ -2002,10 +2171,16 @@ fn layout_code_index(raw: &str) -> Option<u8> {
 pub(crate) struct Ak820LayoutDetector(Option<LayoutTracker>);
 
 impl Ak820LayoutDetector {
-    pub(crate) fn new() -> Self { Self(LayoutTracker::new()) }
+    pub(crate) fn new() -> Self {
+        Self(LayoutTracker::new())
+    }
     pub(crate) fn current(&mut self) -> Option<&'static str> {
-        if self.0.is_none() { self.0 = LayoutTracker::new(); }
-        self.0.as_mut().and_then(LayoutTracker::current_layout_index)
+        if self.0.is_none() {
+            self.0 = LayoutTracker::new();
+        }
+        self.0
+            .as_mut()
+            .and_then(LayoutTracker::current_layout_index)
             .and_then(|index| DEFAULT_LAYOUT_CODES.get(index as usize).copied())
     }
 }
@@ -2340,39 +2515,77 @@ mod tests {
                         s.profile_id = Some(id.into());
                         s
                     };
-                    let mut old = ApplicationLayoutTransmission::default();
-                    let mut new = ApplicationLayoutTransmission::default();
+                    let mut old = ApplicationLayoutTransmission;
+                    let mut new = ApplicationLayoutTransmission;
                     let mut trace = String::new();
-                    let mut emit = |packets: Vec<[u8;32]>| {
+                    let mut emit = |packets: Vec<[u8; 32]>| {
                         for packet in packets {
                             trace.push('P');
-                            for byte in packet {trace.push_str(&format!(" {byte:02x}"));}
+                            for byte in packet {
+                                trace.push_str(&format!(" {byte:02x}"));
+                            }
                             trace.push('\n');
                         }
                     };
-                    if !prior.is_empty() {emit(old.packets(&snapshot(prior)));}
+                    if !prior.is_empty() {
+                        emit(old.packets(&snapshot(prior)));
+                    }
                     emit(old.packets(&snapshot("A")));
                     drop(emit);
                     trace.push_str("S\n");
                     if disconnect == "unknown" {
                         for packet in new.packets(&ApplicationLayoutSnapshot::inactive()) {
-                            trace.push('P');for byte in packet {trace.push_str(&format!(" {byte:02x}"));}trace.push('\n');
+                            trace.push('P');
+                            for byte in packet {
+                                trace.push_str(&format!(" {byte:02x}"));
+                            }
+                            trace.push('\n');
                         }
                         trace.push_str("N\n");
-                    } else {trace.push_str(disconnect);}
+                    } else {
+                        trace.push_str(disconnect);
+                    }
                     for packet in new.packets(&snapshot(next)) {
-                        trace.push('P');for byte in packet {trace.push_str(&format!(" {byte:02x}"));}trace.push('\n');
+                        trace.push('P');
+                        for byte in packet {
+                            trace.push_str(&format!(" {byte:02x}"));
+                        }
+                        trace.push('\n');
                     }
-                    trace.push_str(if next == "A" {"N\n"} else {"W\n"});
+                    trace.push_str(if next == "A" { "N\n" } else { "W\n" });
                     if let Ok(dir) = std::env::var("MACROPAD_WAKE_CASES") {
-                        let path = std::path::Path::new(&dir).join(format!("worker-{}-{}-{next}.trace",if prior.is_empty(){"initial"}else{prior},match disconnect {""=>"reconnect","U\n"=>"deactivate","X\n"=>"expiry",_=>"unknown"}));
-                        std::fs::write(path,&trace).unwrap();
+                        let path = std::path::Path::new(&dir).join(format!(
+                            "worker-{}-{}-{next}.trace",
+                            if prior.is_empty() { "initial" } else { prior },
+                            match disconnect {
+                                "" => "reconnect",
+                                "U\n" => "deactivate",
+                                "X\n" => "expiry",
+                                _ => "unknown",
+                            }
+                        ));
+                        std::fs::write(path, &trace).unwrap();
                     }
-                    let mut child = std::process::Command::new(std::env::var("MACROPAD_WAKE_EXE").unwrap())
-                        .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
-                    child.stdin.take().unwrap().write_all(trace.as_bytes()).unwrap();
+                    let mut child =
+                        std::process::Command::new(std::env::var("MACROPAD_WAKE_EXE").unwrap())
+                            .stdin(std::process::Stdio::piped())
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .spawn()
+                            .unwrap();
+                    child
+                        .stdin
+                        .take()
+                        .unwrap()
+                        .write_all(trace.as_bytes())
+                        .unwrap();
                     let out = child.wait_with_output().unwrap();
-                    assert!(out.status.success(), "prior={prior:?} disconnect={disconnect:?} next={next}: {}{}",String::from_utf8_lossy(&out.stdout),String::from_utf8_lossy(&out.stderr));
+                    assert!(
+                        out.status.success(),
+                        "prior={prior:?} disconnect={disconnect:?} next={next}: {}{}",
+                        String::from_utf8_lossy(&out.stdout),
+                        String::from_utf8_lossy(&out.stderr)
+                    );
                 }
             }
         }
@@ -2381,14 +2594,14 @@ mod tests {
     #[test]
     fn application_profile_wake_epoch_tracks_identity_not_snapshot_content() {
         use crate::application_layouts::ApplicationLayoutSnapshot;
-        let mut wire = ApplicationLayoutTransmission::default();
+        let mut wire = ApplicationLayoutTransmission;
         let mut a = ApplicationLayoutSnapshot::inactive();
         a.active = true;
         a.profile_id = Some("profile-a".into());
         let epoch = |packets: Vec<[u8; 32]>| {
             let commit = packets.last().unwrap();
             assert_eq!(&commit[9..11], &[0x57, 2]);
-            <[u8;20]>::try_from(&commit[11..31]).unwrap()
+            <[u8; 20]>::try_from(&commit[11..31]).unwrap()
         };
         let first = epoch(wire.packets(&a));
         assert_eq!(epoch(wire.packets(&a)), first, "forced resend");
@@ -2396,7 +2609,11 @@ mod tests {
         a.name = "renamed".into();
         a.layers[0][0] = 0x0010;
         a.visuals[0][0] = 1;
-        assert_eq!(epoch(wire.packets(&a)), first, "edits and visuals are not identity");
+        assert_eq!(
+            epoch(wire.packets(&a)),
+            first,
+            "edits and visuals are not identity"
+        );
         let mut b = a.clone();
         b.profile_id = Some("profile-b".into());
         assert_eq!(a.packets(), b.packets(), "identical legacy wire content");
@@ -2404,7 +2621,7 @@ mod tests {
         assert_ne!(second, first, "different profiles with identical content");
         assert_ne!(epoch(wire.packets(&a)), second, "return to earlier profile");
         let unknown = wire.packets(&ApplicationLayoutSnapshot::inactive());
-        assert!(unknown.last().unwrap()[9..].iter().all(|b|*b==0));
+        assert!(unknown.last().unwrap()[9..].iter().all(|b| *b == 0));
     }
 
     #[test]
@@ -2547,8 +2764,16 @@ mod tests {
 
     #[test]
     fn sm62_shutdown_clears_layout_without_affecting_other_devices() {
-        let mode = HostDataMode { time: false, volume: false, layout: true, media: false };
-        assert_eq!(shutdown_payloads_for_device(mode, false, true), vec![vec![DATA_LAYOUT, 255]]);
+        let mode = HostDataMode {
+            time: false,
+            volume: false,
+            layout: true,
+            media: false,
+        };
+        assert_eq!(
+            shutdown_payloads_for_device(mode, false, true),
+            vec![vec![DATA_LAYOUT, 255]]
+        );
         assert!(shutdown_payloads_for_device(mode, false, false).is_empty());
     }
 
@@ -2754,7 +2979,7 @@ mod tests {
 enum NativeLayoutTracker {
     Kde(KdeLayoutTracker),
     Ibus,
-    X11(X11LayoutTracker),
+    X11(Box<X11LayoutTracker>),
 }
 
 #[cfg(target_os = "linux")]
@@ -2784,7 +3009,7 @@ impl LayoutTracker {
         } else if std::env::var_os("WAYLAND_DISPLAY").is_some() {
             None
         } else {
-            X11LayoutTracker::new().map(NativeLayoutTracker::X11)
+            X11LayoutTracker::new().map(|tracker| NativeLayoutTracker::X11(Box::new(tracker)))
         };
 
         (ibus.is_some() || native.is_some()).then_some(Self { ibus, native })
@@ -3353,9 +3578,11 @@ mod windows_platform {
         media.position_seconds = MEDIA_CLOCK.with(|clock| {
             clock.borrow_mut().update(
                 &identity,
-                raw_position,
-                last_updated_ticks,
-                sample_age,
+                super::MediaTimelineSample {
+                    raw_position,
+                    last_updated_ticks,
+                    sample_age,
+                },
                 playing,
                 media.duration_seconds,
                 std::time::Instant::now(),
@@ -3610,24 +3837,28 @@ mod host_protocol_tests {
             let worker_control = control.clone();
             let worker = thread::spawn(move || {
                 run_bridge(
-                    target,
-                    HostDataMode {
-                        time: true,
-                        ..Default::default()
+                    BridgeWorkerContext {
+                        target,
+                        mode: HostDataMode {
+                            time: true,
+                            ..Default::default()
+                        },
+                        shared_output: output,
+                        control: worker_control,
+                        layout_snapshot: Arc::new(AtomicU8::new(u8::MAX)),
+                        application_layout_snapshot: Arc::new(Mutex::new(
+                            ApplicationLayoutOwnerState::default(),
+                        )),
+                        application_layout_resend_generation: Arc::new(AtomicU64::new(0)),
+                        application_layouts_enabled: Arc::new(AtomicBool::new(false)),
+                        protocol: HostProtocol::Selected(extended),
+                        send_shutdown: Arc::new(AtomicBool::new(true)),
+                        desktop: HostDataService::start(|| {
+                            TestMediaSource(|| {
+                                panic!("time-only bridge must not query desktop media")
+                            })
+                        }),
                     },
-                    output,
-                    worker_control,
-                    Arc::new(AtomicU8::new(u8::MAX)),
-                    Arc::new(Mutex::new(
-                        ApplicationLayoutOwnerState::default(),
-                    )),
-                    Arc::new(AtomicU64::new(0)),
-                    Arc::new(AtomicBool::new(false)),
-                    HostProtocol::Selected(extended),
-                    Arc::new(AtomicBool::new(true)),
-                    HostDataService::start(|| {
-                        TestMediaSource(|| panic!("time-only bridge must not query desktop media"))
-                    }),
                     open_host_data_hid,
                 )
             });
@@ -3918,7 +4149,14 @@ mod qa_followup_shared_output {
     #[test]
     fn sm62_setting_write_excludes_shared_host_packets_until_readback() {
         let owner = Arc::new(HostOutputOwner::default());
-        let lease = owner.claim_sm62(HostDataMode { media: true, ..Default::default() }, false, true);
+        let lease = owner.claim_sm62(
+            HostDataMode {
+                media: true,
+                ..Default::default()
+            },
+            false,
+            true,
+        );
         let (entered_tx, entered_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
         let settings_owner = owner.clone();
@@ -3932,10 +4170,12 @@ mod qa_followup_shared_output {
 
         let (write_tx, write_rx) = std::sync::mpsc::channel();
         let host = thread::spawn(move || {
-            lease.write(&[DATA_MEDIA_ARTIST, 0], |_| {
-                write_tx.send(()).unwrap();
-                Ok(())
-            }).unwrap();
+            lease
+                .write(&[DATA_MEDIA_ARTIST, 0], |_| {
+                    write_tx.send(()).unwrap();
+                    Ok(())
+                })
+                .unwrap();
         });
         assert!(write_rx.recv_timeout(Duration::from_millis(50)).is_err());
         release_tx.send(()).unwrap();
@@ -4106,18 +4346,32 @@ pub(crate) fn test_start_profile_handoff_bridge(
 ) -> QmkHidHostBridge {
     struct EmptyDesktop;
     impl DesktopSource for EmptyDesktop {
-        fn volume(&mut self) -> Option<u8> { None }
-        fn layout(&mut self) -> Option<u8> { None }
-        fn media(&mut self) -> Option<MediaInfo> { None }
+        fn volume(&mut self) -> Option<u8> {
+            None
+        }
+        fn layout(&mut self) -> Option<u8> {
+            None
+        }
+        fn media(&mut self) -> Option<MediaInfo> {
+            None
+        }
     }
     QmkHidHostBridge::start_with_desktop_service(
         target,
-        HostDataMode { time: true, volume: true, media: true, ..Default::default() },
+        HostDataMode {
+            time: true,
+            volume: true,
+            media: true,
+            ..Default::default()
+        },
         shared,
         HostProtocol::Selected(true),
         HostDataService::start(|| EmptyDesktop),
         |target, shared| {
-            anyhow::ensure!(shared.is_some(), "handoff fixture must not open real hardware");
+            anyhow::ensure!(
+                shared.is_some(),
+                "handoff fixture must not open real hardware"
+            );
             open_host_data_hid(target, shared)
         },
     )
@@ -4179,7 +4433,10 @@ fn fresh_dedicated_owner_never_receives_previous_profile_snapshot() {
         thread::sleep(Duration::from_millis(10));
     }
     thread::sleep(Duration::from_millis(100));
-    assert!(!bridge.has_selected_application_layout_binding(), "fresh open retained selected-owner trust");
+    assert!(
+        !bridge.has_selected_application_layout_binding(),
+        "fresh open retained selected-owner trust"
+    );
     assert_eq!(
         bridge.test_application_layout_snapshot(),
         crate::application_layouts::ApplicationLayoutSnapshot::inactive(),
@@ -4206,15 +4463,20 @@ fn fresh_dedicated_owner_never_receives_previous_profile_snapshot() {
 #[test]
 fn cleared_application_binding_never_revives_old_publication_token() {
     let target = crate::device::test_usb_device("3-3", 5, 0x42);
-    let mut bridge = QmkHidHostBridge::test_inert(target, Default::default(), None, HostProtocol::Discover);
+    let mut bridge =
+        QmkHidHostBridge::test_inert(target, Default::default(), None, HostProtocol::Discover);
     let key = "vial-0000000000000042";
     bridge.bind_selected_application_layout_device(key.into());
     let old_generation = bridge.application_layout_publication_generation().unwrap();
     bridge.clear_application_layout_binding();
     bridge.bind_selected_application_layout_device(key.into());
-    assert!(!bridge.publish_application_layout_snapshot_for_generation(
-        crate::application_layouts::ApplicationLayoutSnapshot::inactive(), old_generation),
-        "regrant resurrected a revoked publication token");
+    assert!(
+        !bridge.publish_application_layout_snapshot_for_generation(
+            crate::application_layouts::ApplicationLayoutSnapshot::inactive(),
+            old_generation
+        ),
+        "regrant resurrected a revoked publication token"
+    );
 }
 
 #[cfg(test)]
@@ -4227,36 +4489,59 @@ fn application_output_revalidates_queued_packets_and_keepalives_after_owner_revo
         let snapshot = ApplicationLayoutSnapshot::from_layout(settings.active_layout().unwrap());
         let owner = Arc::new(Mutex::new(ApplicationLayoutOwnerState::default()));
         owner.lock().unwrap().snapshot = snapshot.clone();
-        let packet = if keepalive { snapshot.keepalive_packet() } else { snapshot.packets()[0] };
+        let packet = if keepalive {
+            snapshot.keepalive_packet()
+        } else {
+            snapshot.packets()[0]
+        };
         let (entered_tx, entered_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
         let sending_owner = owner.clone();
         let sending_snapshot = snapshot.clone();
-        let admitted = thread::spawn(move || write_application_layout_payload(
-            &sending_owner, &sending_snapshot, 0, &packet, |_| {
+        let admitted = thread::spawn(move || {
+            write_application_layout_payload(&sending_owner, &sending_snapshot, 0, &packet, |_| {
                 entered_tx.send(()).unwrap();
                 release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
                 Ok(())
-            }));
+            })
+        });
         entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         // Revocation itself is short and never waits on the admitted transport.
         owner.lock().unwrap().revoke();
         let stale_owner = owner.clone();
-        let stale = thread::spawn(move || write_application_layout_payload(
-            &stale_owner, &snapshot, 0, &packet, |_| panic!("queued stale send reached HID")));
+        let stale = thread::spawn(move || {
+            write_application_layout_payload(&stale_owner, &snapshot, 0, &packet, |_| {
+                panic!("queued stale send reached HID")
+            })
+        });
         let successor_owner = owner.clone();
         let (successor_tx, successor_rx) = std::sync::mpsc::channel();
         let successor = thread::spawn(move || {
             let inactive = ApplicationLayoutSnapshot::inactive();
-            write_application_layout_payload(&successor_owner, &inactive, 1,
-                &inactive.keepalive_packet(), |_| { successor_tx.send(()).unwrap(); Ok(()) })
+            write_application_layout_payload(
+                &successor_owner,
+                &inactive,
+                1,
+                &inactive.keepalive_packet(),
+                |_| {
+                    successor_tx.send(()).unwrap();
+                    Ok(())
+                },
+            )
         });
-        assert!(successor_rx.recv_timeout(Duration::from_millis(50)).is_err(),
-            "successor overtook an admitted write");
+        assert!(
+            successor_rx
+                .recv_timeout(Duration::from_millis(50))
+                .is_err(),
+            "successor overtook an admitted write"
+        );
         release_tx.send(()).unwrap();
         assert!(admitted.join().unwrap().unwrap());
         assert!(!stale.join().unwrap().unwrap());
-        assert!(successor.join().unwrap().unwrap(), "idle/revoked inactive control was rejected");
+        assert!(
+            successor.join().unwrap().unwrap(),
+            "idle/revoked inactive control was rejected"
+        );
         successor_rx.recv_timeout(Duration::from_secs(1)).unwrap();
     }
 }
@@ -4270,9 +4555,17 @@ fn assert_gated_application_output_ui_progress(keepalive: bool) {
     let (hid, packets) = crate::hid::HidDevice::test_device();
     let mut settings = DeviceApplicationLayouts::default();
     settings.active_layout_id = settings.create_for_application(&Default::default());
-    settings.layouts.get_mut(&settings.active_layout_id).unwrap().set_keycode(0, 0, 5);
+    settings
+        .layouts
+        .get_mut(&settings.active_layout_id)
+        .unwrap()
+        .set_keycode(0, 0, 5);
     let snapshot = ApplicationLayoutSnapshot::from_layout(settings.active_layout().unwrap());
-    let gated_packet = if keepalive { snapshot.keepalive_packet() } else { snapshot.packets()[0] };
+    let gated_packet = if keepalive {
+        snapshot.keepalive_packet()
+    } else {
+        snapshot.packets()[0]
+    };
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let mut gated = false;
@@ -4283,8 +4576,14 @@ fn assert_gated_application_output_ui_progress(keepalive: bool) {
             release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         }
     });
-    let mut bridge = test_start_bridge(target, Default::default(), hid.shared_output(), None,
-        HostProtocol::Selected(false), || None);
+    let mut bridge = test_start_bridge(
+        target,
+        Default::default(),
+        hid.shared_output(),
+        None,
+        HostProtocol::Selected(false),
+        || None,
+    );
     bridge.bind_selected_application_layout_device("vial-0000000000000042".into());
     bridge.set_selected_application_layout_support(true);
     let generation = bridge.application_layout_publication_generation().unwrap();
@@ -4292,10 +4591,14 @@ fn assert_gated_application_output_ui_progress(keepalive: bool) {
     entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
     let ui = thread::spawn(move || {
-        assert_eq!(bridge.application_layout_publication_generation(), Some(generation));
+        assert_eq!(
+            bridge.application_layout_publication_generation(),
+            Some(generation)
+        );
         assert!(bridge.discovered_application_layout_identity().is_some());
         bridge.clear_application_layout_binding();
-        let rejected = !bridge.publish_application_layout_snapshot_for_generation(snapshot, generation);
+        let rejected =
+            !bridge.publish_application_layout_snapshot_for_generation(snapshot, generation);
         progress_tx.send(rejected).unwrap();
         bridge
     });
@@ -4307,19 +4610,34 @@ fn assert_gated_application_output_ui_progress(keepalive: bool) {
     thread::sleep(Duration::from_millis(100));
     bridge.stop();
     worker.join().unwrap();
-    assert_eq!(progress.ok(), Some(true), "UI identity/generation readers stalled behind HID output");
+    assert_eq!(
+        progress.ok(),
+        Some(true),
+        "UI identity/generation readers stalled behind HID output"
+    );
     let requests = packets.requests();
     let admitted = requests.iter().position(|p| p == &gated_packet).unwrap();
     let mut inactive = ApplicationLayoutSnapshot::inactive().packets();
     inactive.push(ApplicationLayoutSnapshot::inactive().keepalive_packet());
     inactive.push(ApplicationLayoutSnapshot::deactivate_packet()); // worker shutdown
-    assert!(requests[admitted + 1..].iter().all(|p| inactive.iter().any(|expected| {
-        // Wake-extension bytes do not change the revocation/active flag, CRC
-        // or revision contract checked by this ownership regression.
-        if p[0] == 0xe3 { p[..9] == expected[..9] } else { p == expected }
-    })),
-        "revoked snapshot sent another packet/keepalive after the admitted write");
-    assert_eq!(bridge.test_application_layout_snapshot(), ApplicationLayoutSnapshot::inactive());
+    assert!(
+        requests[admitted + 1..]
+            .iter()
+            .all(|p| inactive.iter().any(|expected| {
+                // Wake-extension bytes do not change the revocation/active flag, CRC
+                // or revision contract checked by this ownership regression.
+                if p[0] == 0xe3 {
+                    p[..9] == expected[..9]
+                } else {
+                    p == expected
+                }
+            })),
+        "revoked snapshot sent another packet/keepalive after the admitted write"
+    );
+    assert_eq!(
+        bridge.test_application_layout_snapshot(),
+        ApplicationLayoutSnapshot::inactive()
+    );
 }
 
 #[cfg(test)]
@@ -4357,24 +4675,38 @@ fn late_profile_publication_after_worker_reopen_is_refused() {
             discovery_ready.store(true, Ordering::Release);
             let mut response = [0; 32];
             response[..3].copy_from_slice(&[
-                0xe6, crate::application_layouts::APPLICATION_LAYOUT_PROTOCOL_VERSION, 0x5a,
+                0xe6,
+                crate::application_layouts::APPLICATION_LAYOUT_PROTOCOL_VERSION,
+                0x5a,
             ]);
             Some(Ok(response))
-        } else { None }
+        } else {
+            None
+        }
     });
     let (open_tx, open_rx) = std::sync::mpsc::channel();
     let mut hid = Some(hid);
     let (selected_hid, selected_packets) = crate::hid::HidDevice::test_device();
     let selected_output = selected_hid.shared_output().unwrap();
     let mut bridge = QmkHidHostBridge::start_with_sources(
-        target, HostDataMode { time: true, media: true, ..Default::default() }, Some(selected_output),
+        target,
+        HostDataMode {
+            time: true,
+            media: true,
+            ..Default::default()
+        },
+        Some(selected_output),
         HostProtocol::Selected(false),
         move || {
-            if fresh_ready.load(Ordering::Acquire) { let _ = tick_tx.send(()); }
+            if fresh_ready.load(Ordering::Acquire) {
+                let _ = tick_tx.send(());
+            }
             None
         },
         move |target, shared| {
-            if shared.is_some() { return open_host_data_hid(target, shared); }
+            if shared.is_some() {
+                return open_host_data_hid(target, shared);
+            }
             open_rx.recv_timeout(Duration::from_secs(5)).unwrap();
             Ok(HostDataHid::Dedicated(hid.take().unwrap()))
         },
@@ -4393,37 +4725,54 @@ fn late_profile_publication_after_worker_reopen_is_refused() {
     open_tx.send(()).unwrap();
     opened_rx.recv_timeout(Duration::from_secs(5)).unwrap();
     // Discovery is paused AFTER real worker revocation, BEFORE its first profile write.
-    let late_publication = bridge.publish_application_layout_snapshot_for_generation(
-        previous.clone(), validated_generation,
-    );
+    let late_publication = bridge
+        .publish_application_layout_snapshot_for_generation(previous.clone(), validated_generation);
     bridge.set_application_layout_snapshot(previous.clone());
     discover_tx.send(()).unwrap();
     tick_rx.recv_timeout(Duration::from_secs(5)).unwrap();
     let worker = bridge.thread.take().unwrap();
     bridge.stop();
     worker.join().unwrap();
-    assert!(!late_publication, "publication accepted a revoked validation token");
-    assert_eq!(bridge.test_application_layout_snapshot(),
+    assert!(
+        !late_publication,
+        "publication accepted a revoked validation token"
+    );
+    assert_eq!(
+        bridge.test_application_layout_snapshot(),
         crate::application_layouts::ApplicationLayoutSnapshot::inactive(),
-        "late runtime publication revived the revoked owner snapshot");
+        "late runtime publication revived the revoked owner snapshot"
+    );
     let inactive = crate::application_layouts::ApplicationLayoutSnapshot::inactive().packets();
-    assert!(!previous.packets().iter().filter(|p| !inactive.contains(p))
-        .any(|p| packets.requests().iter().any(|r| r.starts_with(p))),
-        "fresh transport received old active profile packets");
+    assert!(
+        !previous
+            .packets()
+            .iter()
+            .filter(|p| !inactive.contains(p))
+            .any(|p| packets.requests().iter().any(|r| r.starts_with(p))),
+        "fresh transport received old active profile packets"
+    );
     // A late cold-discovery validation cannot bind the new owner with an old
     // token either. Only its actually queried UID and current generation grant.
     let (key, current_generation) = bridge.discovered_application_layout_identity().unwrap();
     assert_eq!(key, "vial-0000000000000099");
     assert_ne!(current_generation, validated_generation);
     bridge.bind_application_layout_device(key.clone());
-    assert!(bridge.application_layout_publication_generation().is_none(),
-        "a registry routing label granted a cold discovered owner");
+    assert!(
+        bridge.application_layout_publication_generation().is_none(),
+        "a registry routing label granted a cold discovered owner"
+    );
     bridge.bind_verified_application_layout_device(key.clone(), validated_generation);
     assert!(bridge.application_layout_publication_generation().is_none());
-    bridge.bind_verified_application_layout_device("vial-0000000000000042".into(), current_generation);
+    bridge.bind_verified_application_layout_device(
+        "vial-0000000000000042".into(),
+        current_generation,
+    );
     assert!(bridge.application_layout_publication_generation().is_none());
     bridge.bind_verified_application_layout_device(key, current_generation);
-    assert_eq!(bridge.application_layout_publication_generation(), Some(current_generation));
+    assert_eq!(
+        bridge.application_layout_publication_generation(),
+        Some(current_generation)
+    );
     assert!(!bridge.has_selected_application_layout_binding());
     assert!(bridge.publish_application_layout_snapshot_for_generation(previous, current_generation));
 }
@@ -4473,9 +4822,11 @@ mod sm62_timeline_tests {
         assert_eq!(
             clock.update(
                 "track A",
-                Some(Duration::from_secs(12)),
-                Some(1),
-                None,
+                MediaTimelineSample {
+                    raw_position: Some(Duration::from_secs(12)),
+                    last_updated_ticks: Some(1),
+                    sample_age: None,
+                },
                 true,
                 Some(90),
                 start
@@ -4485,9 +4836,11 @@ mod sm62_timeline_tests {
         assert_eq!(
             clock.update(
                 "track A",
-                Some(Duration::from_secs(12)),
-                Some(1),
-                None,
+                MediaTimelineSample {
+                    raw_position: Some(Duration::from_secs(12)),
+                    last_updated_ticks: Some(1),
+                    sample_age: None,
+                },
                 true,
                 Some(90),
                 start + Duration::from_secs(2)
@@ -4497,9 +4850,11 @@ mod sm62_timeline_tests {
         assert_eq!(
             clock.update(
                 "track A",
-                Some(Duration::from_secs(40)),
-                Some(2),
-                None,
+                MediaTimelineSample {
+                    raw_position: Some(Duration::from_secs(40)),
+                    last_updated_ticks: Some(2),
+                    sample_age: None,
+                },
                 true,
                 Some(90),
                 start + Duration::from_secs(3)
@@ -4509,9 +4864,11 @@ mod sm62_timeline_tests {
         assert_eq!(
             clock.update(
                 "track A",
-                Some(Duration::from_secs(40)),
-                Some(2),
-                None,
+                MediaTimelineSample {
+                    raw_position: Some(Duration::from_secs(40)),
+                    last_updated_ticks: Some(2),
+                    sample_age: None,
+                },
                 false,
                 Some(90),
                 start + Duration::from_secs(5)
@@ -4521,9 +4878,11 @@ mod sm62_timeline_tests {
         assert_eq!(
             clock.update(
                 "track B",
-                Some(Duration::ZERO),
-                Some(3),
-                None,
+                MediaTimelineSample {
+                    raw_position: Some(Duration::ZERO),
+                    last_updated_ticks: Some(3),
+                    sample_age: None,
+                },
                 true,
                 Some(60),
                 start + Duration::from_secs(6)

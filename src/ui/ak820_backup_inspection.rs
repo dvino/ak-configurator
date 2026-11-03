@@ -5,8 +5,8 @@ use crate::ak820_backup_files::{self as files, BackupHistory, LoadedBackup};
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use crate::app::EntropyApp;
 use std::path::PathBuf;
-use std::sync::{mpsc, Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 
 pub(crate) const OPEN_ID: &str = "ak820_backup_inspection_open";
 const STATE_ID: &str = "ak820_backup_inspection_state";
@@ -233,7 +233,9 @@ impl WindowState {
         self.delete_confirm = false;
         self.choosing_path = None;
         #[cfg(not(target_arch = "wasm32"))]
-        { self.browser = None; }
+        {
+            self.browser = None;
+        }
         self.path_entry.clear();
         self.id();
         self.pending = None;
@@ -357,7 +359,11 @@ fn backup_directory_from_manifest(path: &std::path::Path) -> Result<PathBuf, Pro
         return Err(Problem::File);
     }
     let parent = path.parent().ok_or(Problem::File)?;
-    Ok(if parent.as_os_str().is_empty() { PathBuf::from(".") } else { parent.to_path_buf() })
+    Ok(if parent.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        parent.to_path_buf()
+    })
 }
 
 enum FileAction {
@@ -418,11 +424,9 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
                         .map(|source| Some(FilePayload::Source { path, source }))
                         .map_err(|_| Problem::File)
                 }
-                FileAction::Open(path, pin) => {
-                    files::read_backup_auto(&path, pin.as_deref())
-                        .map(|source| Some(FilePayload::Source { path, source }))
-                        .map_err(|_| Problem::File)
-                }
+                FileAction::Open(path, pin) => files::read_backup_auto(&path, pin.as_deref())
+                    .map(|source| Some(FilePayload::Source { path, source }))
+                    .map_err(|_| Problem::File),
                 FileAction::History(root) => {
                     let history = files::scan_backup_history(&root).map_err(|_| Problem::File)?;
                     Ok(Some(FilePayload::History { root, history }))
@@ -457,19 +461,29 @@ fn start_file_worker(
     id: u64,
     work: impl FnOnce() -> Result<Option<FilePayload>, Problem> + Send + 'static,
 ) {
-    if state.file_in_flight.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+    if state
+        .file_in_flight
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
         return;
     }
     let permit = FilePermit(state.file_in_flight.clone());
     let (tx, rx) = mpsc::channel();
-    state.pending = Some(PendingFile { id, receiver: Arc::new(Mutex::new(rx)) });
+    state.pending = Some(PendingFile {
+        id,
+        receiver: Arc::new(Mutex::new(rx)),
+    });
     let repaint = ctx.clone();
-    if std::thread::Builder::new().spawn(move || {
-        let _permit = permit;
-        let result = work();
-        let _ = tx.send(FileMessage { id, result });
-        repaint.request_repaint();
-    }).is_err() {
+    if std::thread::Builder::new()
+        .spawn(move || {
+            let _permit = permit;
+            let result = work();
+            let _ = tx.send(FileMessage { id, result });
+            repaint.request_repaint();
+        })
+        .is_err()
+    {
         state.pending = None;
         state.error = Some(Problem::File);
     }
@@ -506,7 +520,53 @@ fn draw_source(ui: &mut egui::Ui, source: &LoadedBackup, ru: bool) {
             ));
         },
     );
+    draw_raw_manifest(ui, source.manifest_raw(), &archive.manifest_sha256, ru);
 }
+
+fn draw_raw_manifest(
+    ui: &mut egui::Ui,
+    raw: &[u8],
+    manifest_sha256: &str,
+    ru: bool,
+) -> egui::collapsing_header::CollapsingResponse<()> {
+    egui::CollapsingHeader::new(tr(
+        ru,
+        "Original validated manifest",
+        "Исходный проверенный манифест",
+    ))
+    .id_salt(("ak820_original_manifest", manifest_sha256))
+    .show(ui, |ui| {
+        ui.label(tr(
+            ru,
+            "Local read-only view; may contain private metadata. Nothing is exported or logged.",
+            "Локальный просмотр без изменений; возможны личные метаданные. Экспорт и запись в журнал не выполняются.",
+        ));
+        match std::str::from_utf8(raw) {
+            Ok(text) => {
+                egui::ScrollArea::vertical()
+                    .id_salt(("ak820_original_manifest_scroll", manifest_sha256))
+                    .max_height(240.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(text).monospace())
+                                .selectable(false)
+                                .wrap(),
+                        );
+                    });
+            }
+            Err(_) => {
+                // Validation normally rejects non-UTF-8 JSON. Never display a
+                // lossy substitute as the original bytes, even defensively.
+                ui.label(tr(
+                    ru,
+                    "Original manifest is not valid UTF-8; exact text preview is unavailable.",
+                    "Исходный манифест не является UTF-8; точный текстовый просмотр недоступен.",
+                ));
+            }
+        }
+    })
+}
+
 fn draw_preview(ui: &mut egui::Ui, value: &Preview, ru: bool) {
     ui.label(format!(
         "{} → {}",
@@ -566,7 +626,23 @@ pub(super) fn close_page(ctx: &egui::Context) {
 
 pub(super) fn page_busy(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
-        .is_some_and(|state| state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some())
+        .is_some_and(|state| {
+            state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some()
+        })
+}
+
+fn draw_history_warning(ui: &mut egui::Ui, invalid_skipped: usize, ru: bool) {
+    if invalid_skipped > 0 {
+        ui.label(format!(
+            "{}: {}",
+            tr(
+                ru,
+                "Folders skipped because validation failed",
+                "Папок не прошли проверку",
+            ),
+            invalid_skipped
+        ));
+    }
 }
 
 pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
@@ -600,9 +676,8 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
         }
     }
-    let busy = state.file_busy()
-        || state.capture_pending.is_some()
-        || state.restore_pending.is_some();
+    let busy =
+        state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some();
     if state.file_in_flight.load(Ordering::Acquire) {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
@@ -671,9 +746,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                         }
                     }
                 });
-                if history.invalid_skipped > 0 {
-                    ui.label(format!("{}: {}", tr(ru, "Folders skipped because validation failed", "Папок не прошли проверку"), history.invalid_skipped));
-                }
+                draw_history_warning(ui, history.invalid_skipped, ru);
             }
             ui.separator();
             ui.strong(tr(ru, "Current keyboard", "Текущая клавиатура"));
@@ -915,6 +988,134 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_warning_uses_only_the_canonical_count_in_both_languages() {
+        for (ru, prefix) in [
+            (false, "Folders skipped because validation failed"),
+            (true, "Папок не прошли проверку"),
+        ] {
+            for count in [0, 1, 2, 128] {
+                let ctx = egui::Context::default();
+                let output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(900.0, 700.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |root| {
+                        egui::CentralPanel::default().show_inside(root, |ui| {
+                            draw_history_warning(ui, count, ru);
+                        });
+                    },
+                );
+                assert!(output.platform_output.commands.is_empty());
+                let labels: Vec<_> = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                if count == 0 {
+                    assert!(labels.is_empty());
+                } else {
+                    assert_eq!(labels, vec![format!("{prefix}: {count}")]);
+                }
+            }
+        }
+    }
+
+    // Presentation-only bytes, not an admitted backup/image fixture.
+    fn raw_manifest_labels(raw: &[u8], expanded: bool, ru: bool) -> Vec<String> {
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let mut output = None;
+        for _ in 0..2 {
+            output = Some(ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 700.0),
+                    )),
+                    ..Default::default()
+                },
+                |root| {
+                    egui::CentralPanel::default().show_inside(root, |ui| {
+                        let response = draw_raw_manifest(ui, raw, "presentation-only", ru);
+                        if expanded {
+                            let mut state =
+                                egui::collapsing_header::CollapsingState::load_with_default_open(
+                                    ui.ctx(),
+                                    response.header_response.id,
+                                    false,
+                                );
+                            state.set_open(true);
+                            state.store(ui.ctx());
+                        }
+                    });
+                },
+            ));
+            assert!(output.as_ref().unwrap().platform_output.commands.is_empty());
+        }
+        output
+            .unwrap()
+            .shapes
+            .into_iter()
+            .filter_map(|shape| match shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn raw_manifest_is_collapsed_by_default_without_exposing_private_text() {
+        let raw = br#"{ "private_metadata": "presentation-only" }"#;
+        for ru in [false, true] {
+            let labels = raw_manifest_labels(raw, false, ru);
+            assert!(labels.iter().any(|label| label
+                == tr(
+                    ru,
+                    "Original validated manifest",
+                    "Исходный проверенный манифест",
+                )));
+            assert!(!labels
+                .iter()
+                .any(|label| label.contains("private_metadata")));
+        }
+    }
+
+    #[test]
+    fn expanded_raw_manifest_preserves_original_whitespace_and_unicode() {
+        let raw = "  {\r\n  \"note\": \"Пример\", \"value\": 1  }\n".as_bytes();
+        let before = raw.to_vec();
+        for ru in [false, true] {
+            let labels = raw_manifest_labels(raw, true, ru);
+            assert!(labels.iter().any(|label| label.as_bytes() == raw));
+            assert_eq!(raw, before);
+        }
+    }
+
+    #[test]
+    fn raw_manifest_preview_never_substitutes_lossy_utf8() {
+        for ru in [false, true] {
+            let labels = raw_manifest_labels(b"\xffprivate_metadata", true, ru);
+            assert!(labels.iter().any(|label| label
+                == tr(
+                    ru,
+                    "Original manifest is not valid UTF-8; exact text preview is unavailable.",
+                    "Исходный манифест не является UTF-8; точный текстовый просмотр недоступен.",
+                )));
+            assert!(!labels
+                .iter()
+                .any(|label| label.contains("private_metadata") || label.contains('\u{fffd}')));
+        }
+    }
+
     fn pending(state: &mut WindowState) -> mpsc::Sender<FileMessage> {
         let id = state.id();
         let (tx, rx) = mpsc::channel();
@@ -926,8 +1127,14 @@ mod tests {
     }
     #[test]
     fn only_manifest_selection_maps_to_an_archive_directory() {
-        assert_eq!(backup_directory_from_manifest(std::path::Path::new("backup/manifest.json")), Ok(PathBuf::from("backup")));
-        assert_eq!(backup_directory_from_manifest(std::path::Path::new("manifest.json")), Ok(PathBuf::from(".")));
+        assert_eq!(
+            backup_directory_from_manifest(std::path::Path::new("backup/manifest.json")),
+            Ok(PathBuf::from("backup"))
+        );
+        assert_eq!(
+            backup_directory_from_manifest(std::path::Path::new("manifest.json")),
+            Ok(PathBuf::from("."))
+        );
         for path in ["backup", "backup/saved-nvm.bin", "backup/MANIFEST.JSON", ""] {
             assert!(backup_directory_from_manifest(std::path::Path::new(path)).is_err());
         }
@@ -940,9 +1147,20 @@ mod tests {
         std::fs::write(temp.path().join("manifest.json"), b"{}").unwrap();
         let ctx = egui::Context::default();
         let mut state = WindowState::default();
-        start_file(&ctx, &mut state, FileAction::OpenManifest(temp.path().join("manifest.json")));
-        let message = state.pending.as_ref().unwrap().receiver.lock().unwrap()
-            .recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        start_file(
+            &ctx,
+            &mut state,
+            FileAction::OpenManifest(temp.path().join("manifest.json")),
+        );
+        let message = state
+            .pending
+            .as_ref()
+            .unwrap()
+            .receiver
+            .lock()
+            .unwrap()
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
         assert!(state.accept(message));
         assert_eq!(state.error, Some(Problem::File));
         assert!(state.source.is_none());
@@ -956,9 +1174,18 @@ mod tests {
         let mut state = WindowState::default();
         let tx = pending(&mut state);
         let id = state.pending.as_ref().unwrap().id;
-        start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
+        start_file(
+            &ctx,
+            &mut state,
+            FileAction::History(PathBuf::from("unused")),
+        );
         assert_eq!(state.pending.as_ref().unwrap().id, id);
-        assert!(tx.send(FileMessage { id, result: Ok(None) }).is_ok());
+        assert!(tx
+            .send(FileMessage {
+                id,
+                result: Ok(None)
+            })
+            .is_ok());
     }
 
     #[test]
@@ -974,35 +1201,57 @@ mod tests {
             held.recv().unwrap();
             Ok(None)
         });
-        entered.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        entered
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
         state.close();
         assert!(state.pending.is_none());
         for _ in 0..3 {
-            start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
+            start_file(
+                &ctx,
+                &mut state,
+                FileAction::History(PathBuf::from("unused")),
+            );
             assert!(state.pending.is_none());
             assert!(state.file_busy());
             state.close();
         }
-        assert!(!state.accept(FileMessage { id, result: Err(Problem::File) }));
+        assert!(!state.accept(FileMessage {
+            id,
+            result: Err(Problem::File)
+        }));
         release.send(()).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while state.file_busy() && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         assert!(!state.file_busy());
-        start_file(&ctx, &mut state, FileAction::History(PathBuf::from("unused")));
-        let message = state.pending.as_ref().unwrap().receiver.lock().unwrap()
-            .recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        start_file(
+            &ctx,
+            &mut state,
+            FileAction::History(PathBuf::from("unused")),
+        );
+        let message = state
+            .pending
+            .as_ref()
+            .unwrap()
+            .receiver
+            .lock()
+            .unwrap()
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
         assert!(state.accept(message));
     }
 
     #[test]
     fn leaving_page_clears_destructive_confirmation_and_path_entry() {
         let ctx = egui::Context::default();
-        let mut state = WindowState::default();
-        state.delete_confirm = true;
-        state.choosing_path = Some(false);
-        state.path_entry = "private path".into();
+        let state = WindowState {
+            delete_confirm: true,
+            choosing_path: Some(false),
+            path_entry: "private path".into(),
+            ..Default::default()
+        };
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
         close_page(&ctx);
         let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)).unwrap());
@@ -1119,12 +1368,20 @@ mod tests {
     #[test]
     fn closed_page_keeps_restore_token_for_safety_result() {
         let ctx = egui::Context::default();
-        let mut state = WindowState { restore_pending: Some((12, 4)), ..Default::default() };
+        let mut state = WindowState {
+            restore_pending: Some((12, 4)),
+            ..Default::default()
+        };
         state.close();
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
-        let safety = BackupLocation { path: PathBuf::from("private-test-folder/safety"), manifest_sha256: "c".repeat(64) };
+        let safety = BackupLocation {
+            path: PathBuf::from("private-test-folder/safety"),
+            manifest_sha256: "c".repeat(64),
+        };
         restore_failed(&ctx, 12, 4, Some(safety));
-        let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        let state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
         assert!(state.restore_pending.is_none());
         assert!(state.undo_backup.is_some());
         assert_eq!(state.error, Some(Problem::Restore));
@@ -1133,20 +1390,30 @@ mod tests {
     #[test]
     fn stale_restore_result_retains_safety_after_reconnect_without_overriding_new_token() {
         let ctx = egui::Context::default();
-        let mut state = WindowState { restore_pending: Some((12, 4)), ..Default::default() };
+        let mut state = WindowState {
+            restore_pending: Some((12, 4)),
+            ..Default::default()
+        };
         state.close();
         state.invalidate_target(5);
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
-        let safety = BackupLocation { path: PathBuf::from("private-test-folder/safety"), manifest_sha256: "d".repeat(64) };
+        let safety = BackupLocation {
+            path: PathBuf::from("private-test-folder/safety"),
+            manifest_sha256: "d".repeat(64),
+        };
         restore_failed(&ctx, 12, 4, Some(safety.clone()));
-        let mut state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        let mut state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
         assert!(state.undo_backup.is_some());
         assert!(state.restore_pending.is_none());
         assert!(!state.restore_verified);
         state.restore_pending = Some((13, 5));
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
         restore_failed(&ctx, 12, 4, Some(safety));
-        let state = ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID))).unwrap();
+        let state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
         assert_eq!(state.restore_pending, Some((13, 5)));
         assert!(!state.restore_verified);
     }
@@ -1207,23 +1474,32 @@ mod tests {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
         app.app_settings.language = crate::i18n::Language::English;
-        let mut harness = Harness::builder().with_size(egui::vec2(800.0, 700.0))
-            .build_ui_state(|ui, state: &mut (EntropyApp, bool, Option<PathBuf>)| {
-                if !state.1 {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
-                    state.1 = true;
-                }
-                show(&mut state.0, ui);
-                state.2 = ui.ctx().data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
-                    .and_then(|s| s.root);
-            }, (app, false, None));
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 700.0))
+            .build_ui_state(
+                |ui, state: &mut (EntropyApp, bool, Option<PathBuf>)| {
+                    if !state.1 {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
+                        state.1 = true;
+                    }
+                    show(&mut state.0, ui);
+                    state.2 = ui
+                        .ctx()
+                        .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+                        .and_then(|s| s.root);
+                },
+                (app, false, None),
+            );
         harness.run();
         harness.get_by_label("Choose backup folder…").click();
         harness.run();
         harness.get_by_label("Browse…").click();
         harness.run();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while harness.query_by_label("Select this directory").is_none() && std::time::Instant::now() < deadline {
+        while harness.query_by_label("Select this directory").is_none()
+            && std::time::Instant::now() < deadline
+        {
             std::thread::sleep(std::time::Duration::from_millis(10));
             harness.run();
         }
@@ -1234,7 +1510,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             harness.step();
         }
-        assert_eq!(harness.state().2.as_deref(), Some(std::fs::canonicalize(".").unwrap().as_path()));
+        assert_eq!(
+            harness.state().2.as_deref(),
+            Some(std::fs::canonicalize(".").unwrap().as_path())
+        );
         assert!(harness.state().0.hid_device.is_none());
     }
 
@@ -1242,29 +1521,53 @@ mod tests {
     fn backup_page_controls_fit_small_viewport_in_both_languages() {
         use egui_kittest::{kittest::Queryable, Harness};
         for (language, heading, help, close) in [
-            (crate::i18n::Language::Russian, "Резервные копии AK820", "Справка", "Закрыть"),
-            (crate::i18n::Language::English, "AK820 backups", "Help", "Close"),
+            (
+                crate::i18n::Language::Russian,
+                "Резервные копии AK820",
+                "Справка",
+                "Закрыть",
+            ),
+            (
+                crate::i18n::Language::English,
+                "AK820 backups",
+                "Help",
+                "Close",
+            ),
         ] {
             let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
-            let mut harness = Harness::builder().with_size(egui::vec2(800.0, 500.0))
-                .build_ui_state(|ui, state: &mut (EntropyApp, bool)| {
-                    if !state.1 {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
-                        state.1 = true;
-                    }
-                    show(&mut state.0, ui);
-                }, (app, false));
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(800.0, 500.0))
+                .build_ui_state(
+                    |ui, state: &mut (EntropyApp, bool)| {
+                        if !state.1 {
+                            ui.ctx()
+                                .data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
+                            state.1 = true;
+                        }
+                        show(&mut state.0, ui);
+                    },
+                    (app, false),
+                );
             harness.run();
             for label in [heading, help] {
                 let rect = harness.get_by_label(label).rect();
-                assert!(rect.min.x >= 0.0 && rect.min.y >= 0.0 && rect.max.x <= 800.0 && rect.max.y <= 500.0, "{label}: {rect:?}");
+                assert!(
+                    rect.min.x >= 0.0
+                        && rect.min.y >= 0.0
+                        && rect.max.x <= 800.0
+                        && rect.max.y <= 500.0,
+                    "{label}: {rect:?}"
+                );
             }
             harness.get_by_label(close).scroll_to_me();
             harness.run();
             let rect = harness.get_by_label(close).rect();
-            assert!(rect.min.y >= 0.0 && rect.max.y <= 500.0, "{close}: {rect:?}");
+            assert!(
+                rect.min.y >= 0.0 && rect.max.y <= 500.0,
+                "{close}: {rect:?}"
+            );
             harness.get_by_label(close).click();
             harness.run();
             assert!(harness.query_by_label(heading).is_none());

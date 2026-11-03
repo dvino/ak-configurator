@@ -95,7 +95,16 @@ mod player_bitmap_tests {
             let screen = egui::Rect::from_min_size(egui::pos2(11.0,13.0),egui::vec2(240.0,280.0)*scale);
             let output = ctx.run_ui(egui::RawInput::default(), |ui| {
                 egui::CentralPanel::default().show_inside(ui, |ui| {
-                    paint_sm62_screen(ui,screen,&[1,0,20,1,1],0,false,0,Some("EN"),false,false,false);
+                    paint_sm62_screen(ui, screen, Sm62PreviewState {
+                        settings: &[1,0,20,1,1],
+                        scene: 0,
+                        date_enabled: false,
+                        side: 0,
+                        language: Some("EN"),
+                        stars_enabled: false,
+                        screens_off: false,
+                        clock_live: false,
+                    });
                 });
             });
             let meshes: Vec<_> = output.shapes.iter().filter_map(|s| match &s.shape {
@@ -144,7 +153,16 @@ mod player_bitmap_tests {
                 }
                 egui::CentralPanel::default().frame(egui::Frame::NONE).show_inside(ui, |ui| {
                     paint_sm62_screen(ui,egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(240.0,280.0)),
-                        &[1,0,20,1,1],0,false,0,Some("EN"),false,false,false);
+                        Sm62PreviewState {
+                            settings: &[1,0,20,1,1],
+                            scene: 0,
+                            date_enabled: false,
+                            side: 0,
+                            language: Some("EN"),
+                            stars_enabled: false,
+                            screens_off: false,
+                            clock_live: false,
+                        });
                 });
                 self.frames += 1;
                 if self.frames == 5 { ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default())); }

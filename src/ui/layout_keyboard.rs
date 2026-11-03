@@ -148,11 +148,7 @@ impl EntropyApp {
         layout: &KeyboardLayout,
         ctx: &egui::Context,
         avail: Vec2,
-        offset_x: f32,
-        offset_y: f32,
-        unit: f32,
-        padding: f32,
-        layout_h: f32,
+        geometry: LayoutGeometry,
     ) {
         // Pass 1: allocate
         let mut key_rects: Vec<(usize, egui::Rect)> = layout
@@ -168,13 +164,6 @@ impl EntropyApp {
                 ) {
                     return None;
                 }
-                let geometry = LayoutGeometry {
-                    offset_x,
-                    offset_y,
-                    unit,
-                    padding,
-                    layout_h,
-                };
                 let rect = layout_physical_key_rect(key, geometry);
                 Some((ki, rect))
             })
@@ -199,13 +188,6 @@ impl EntropyApp {
                 ) {
                     return None;
                 }
-                let geometry = LayoutGeometry {
-                    offset_x,
-                    offset_y,
-                    unit,
-                    padding,
-                    layout_h,
-                };
                 let rect = layout_physical_encoder_rect(encoder, geometry);
                 Some((ei, rect))
             })
@@ -280,7 +262,7 @@ impl EntropyApp {
             ui.painter().rect_stroke(
                 rect,
                 egui::CornerRadius::same(10),
-                egui::Stroke::new(1.5, crate::ui_style::accent()),
+                egui::Stroke::new(1.5_f32, crate::ui_style::accent()),
                 egui::StrokeKind::Inside,
             );
         }
@@ -1049,6 +1031,7 @@ impl EntropyApp {
         self.prev_hovered_encoder = hovered_encoder;
         self.prev_hovered_encoder_keycode = hovered_encoder_keycode;
 
+        let layout_h = geometry.layout_h;
         if layout_h > avail.y {
             ui.allocate_space(Vec2::new(0.0, (layout_h - avail.y).max(0.0)));
         }

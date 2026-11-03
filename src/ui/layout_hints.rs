@@ -117,8 +117,7 @@ impl LayoutBottomHintKind {
 
 fn paint_layout_hint_lines(
     ui: &egui::Ui,
-    center_x: f32,
-    hint_y: f32,
+    position: egui::Pos2,
     keys: &[&'static str],
     font: &FontId,
     color: Color32,
@@ -129,14 +128,14 @@ fn paint_layout_hint_lines(
         return;
     };
     let last_y = if last_line == 0 {
-        hint_y
+        position.y
     } else {
-        hint_y + 12.0
+        position.y + 12.0
     };
     let first_y = last_y - last_line as f32 * LAYOUT_HINT_LINE_HEIGHT;
     for (index, key) in keys.iter().enumerate() {
         ui.painter().text(
-            egui::pos2(center_x, first_y + index as f32 * LAYOUT_HINT_LINE_HEIGHT),
+            egui::pos2(position.x, first_y + index as f32 * LAYOUT_HINT_LINE_HEIGHT),
             egui::Align2::CENTER_CENTER,
             crate::i18n::tr_catalog(
                 language,
@@ -171,8 +170,7 @@ impl EntropyApp {
         if self.editing_layout_visibility {
             paint_layout_hint_lines(
                 ui,
-                center_x,
-                hint_y,
+                egui::pos2(center_x, hint_y),
                 &[
                     "key_hints.show_hide_keys_mode",
                     "key_hints.show_hide_keys_click",
@@ -401,8 +399,7 @@ impl EntropyApp {
             };
             paint_layout_hint_lines(
                 ui,
-                center_x,
-                hint_y,
+                egui::pos2(center_x, hint_y),
                 hint_kind.keys(self.app_settings.middle_click_assigns_transparent),
                 &hint_font,
                 hint_color,

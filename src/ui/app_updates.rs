@@ -54,6 +54,7 @@ impl Runtime {
                     if let Some(relation) = relation(&offer.version) {
                         *summary = UpdateCheckState::Ready(UpdateCheckResult {
                             latest_version: offer.tag.clone(),
+                            #[cfg(test)]
                             release_url: offer.release_url.clone(),
                             platform_label: super::current_platform_label(),
                             asset: UpdateAssetState::Available(UpdateAsset {
@@ -166,9 +167,7 @@ impl Runtime {
                         if ui.button(label(lang, "Скопировать путь", "Copy path")).clicked() {
                             ctx.copy_text(path);
                         }
-                        ui.label(label(lang,
-                            "Полностью завершите AK Configurator, включая помощник, через «Выход». Распакуйте архив и выполните инструкцию INSTALL.ru.md: установщик для текущего пользователя обновит приложение и сохранит его настройки.",
-                            "Quit AK Configurator completely, including the helper, using Quit. Extract the archive and follow INSTALL.en.md: the per-user installer updates the application and preserves its settings."));
+                        ui.label(download.installer_instructions(lang));
                     }
                     if self.cancelled {
                         ui.label(label(lang, "Операция отменена.", "Operation cancelled."));
@@ -223,7 +222,7 @@ mod tests {
                 ..Default::default()
             };
             for _ in 0..3 {
-                let _ = ctx.run(
+                let _ = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
                             egui::Pos2::ZERO,
@@ -231,7 +230,7 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| state.draw(ctx, lang),
+                    |ui| state.draw(ui.ctx(), lang),
                 );
             }
             let rect = ctx

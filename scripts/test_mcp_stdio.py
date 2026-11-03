@@ -19,8 +19,9 @@ TOOLS = {"ak820_devices", "ak820_session", "ak820_read", "ak820_tests", "ak820_t
 
 class Client:
     def __init__(self, binary, version, backend="mock"):
+        flags = ["--mcp-stdio"] if backend is None else ["--mcp-stdio", "--mcp-access=read-only", f"--mcp-backend={backend}"]
         self.process = subprocess.Popen(
-            [str(binary), "--mcp-stdio", "--mcp-access=read-only", f"--mcp-backend={backend}"],
+            [str(binary), *flags],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, bufsize=1)
         self.lines = queue.Queue()
@@ -113,6 +114,29 @@ class Client:
             if time.monotonic() >= deadline:
                 raise AssertionError(f"Timed out waiting for {method} amid unrelated messages")
 
+    def request_error(self, method, params):
+        self.next_id += 1
+        ident = self.next_id
+        if self.modern:
+            params = dict(params, _meta={
+                "io.modelcontextprotocol/protocolVersion": self.version,
+                "io.modelcontextprotocol/clientInfo": {"name": "ak820-stdio-contract", "version": "1"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            })
+        self.raw(json.dumps({"jsonrpc": "2.0", "id": ident, "method": method, "params": params}) + "\n")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                line = self.lines.get(timeout=max(0.001, deadline - time.monotonic()))
+            except queue.Empty as exc:
+                raise AssertionError(f"Timed out waiting for error from {method}") from exc
+            assert line is not None, f"Server closed awaiting {method}"
+            message = self.decode(line)
+            if message.get("id") == ident:
+                assert "error" in message, message
+                return message["error"]
+        raise AssertionError(f"Timed out waiting for error from {method}")
+
     def tool(self, name, arguments, error=None):
         result = self.request("tools/call", {"name": name, "arguments": arguments})
         value = result.get("structuredContent")
@@ -179,6 +203,11 @@ def exercise(binary, version):
         assert len(client.request("tools/list", {})["tools"]) == 6
         client.raw("x" * 65537 + "\n")
         assert len(client.request("tools/list", {})["tools"]) == 6
+        assert client.request_error("unknown/method", {})["code"] == -32601
+        client.notify("notifications/cancelled", {"requestId": 999999, "reason": "contract test"})
+        assert len(client.request("tools/list", {})["tools"]) == 6
+        client.tool("ak820_nonexistent", {}, "INVALID_ARGUMENT")
+        client.tool("ak820_devices", {"refresh": "yes"}, "INVALID_ARGUMENT")
         client.tool("ak820_devices", {"refresh": False, "raw_path": "/forbidden"}, "INVALID_ARGUMENT")
         inventory = client.tool("ak820_devices", {"refresh": True})
         assert [d["device_id"] for d in inventory["data"]["devices"]] == ["mock-1"]
@@ -226,9 +255,9 @@ def exercise(binary, version):
         client.close()
 
 
-def exercise_hid_metadata(binary, version):
+def exercise_hid_metadata(binary, version, default=False):
     """Launch the real backend without requesting discovery or any device access."""
-    client = Client(binary, version, backend="hid")
+    client = Client(binary, version, backend=None if default else "hid")
     try:
         assert {tool["name"] for tool in client.request("tools/list", {})["tools"]} == TOOLS
         resources = client.request("resources/list", {})["resources"]
@@ -256,8 +285,11 @@ def main():
     for version in VERSIONS:
         exercise(binary, version)
         exercise_hid_metadata(binary, version)
+        exercise_hid_metadata(binary, version, default=True)
     for flags in [("--mcp-stdio", "--mcp-backend=mock", "--mcp-backend=hid"),
                   ("--mcp-stdio", "--mcp-access=write"),
+                  ("--mcp-stdio", "--mcp-access=read-only", "--mcp-access=read-only"),
+                  ("--mcp-stdio", "--mcp-backend=mock", "--mcp-backend=mock"),
                   ("--mcp-backend=mock",),
                   ("--mcp-stdio", "--mcp-stdio"),
                   ("--mcp-stdio", "--mcp-arbitrary=1")]:

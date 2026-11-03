@@ -14,26 +14,44 @@ mod preview_edge_tests {
                 let ctx=egui::Context::default();fonts(&ctx);
                 let mut settings=[0u8;8];settings[0]=mode;
                 let mut geometry=None;
-                let output=ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx,|ui| {
+                let output=ctx.run_ui(egui::RawInput::default(), |root_ui| {
+                    egui::CentralPanel::default().show_inside(root_ui,|ui| {
                         ui.set_width(240.0*scale+14.0);
                         let start=ui.cursor().min;
                         let size=fitted_display_size((ui.available_width()-14.0).min(240.0),280.0*scale);
                         let outer=egui::Rect::from_min_size(start,size+egui::vec2(14.0,14.0));
                         let screen=egui::Rect::from_center_size(outer.center(),size);
-                        draw_sm62_preview(ui,&settings,0,true,280.0*scale+14.0,side,Some("RU"),true,off,false);
+                        draw_sm62_preview(ui, Sm62PreviewState {
+                            settings: &settings,
+                            scene: 0,
+                            date_enabled: true,
+                            side,
+                            language: Some("RU"),
+                            stars_enabled: true,
+                            screens_off: off,
+                            clock_live: false,
+                        }, 280.0*scale+14.0);
                         geometry=Some((outer,screen));
                     });
                 });
                 let (outer,screen)=geometry.unwrap();
                 let frame=output.shapes.iter().find_map(|s| match &s.shape {egui::Shape::Rect(r) if r.rect==outer=>Some(r),_=>None}).expect("real outer frame");
                 assert_eq!(frame.fill,if off {Color32::BLACK} else {Color32::from_rgb(7,7,5)},"dark fill must reach inside outer outline: mode={mode} side={side} off={off} scale={scale}");
-                assert_eq!(frame.stroke,Stroke::new(1.0,Color32::from_gray(75)));
+                assert_eq!(frame.stroke,Stroke::new(1.0_f32,Color32::from_gray(75)));
                 assert_eq!(frame.stroke_kind,egui::StrokeKind::Inside);
                 assert_eq!(frame.corner_radius,egui::CornerRadius::from(display_corner_radius(size_from(screen))+7.0));
                 assert!(!output.shapes.iter().any(|s| matches!(&s.shape,egui::Shape::Rect(r) if r.rect==screen && r.stroke.width>0.0)),"no inset seam");
-                let reference=ctx.run(egui::RawInput::default(),|ctx| {
-                    egui::CentralPanel::default().show(ctx,|ui|paint_sm62_screen(ui,screen,&settings,0,true,side,Some("RU"),true,off,false));
+                let reference=ctx.run_ui(egui::RawInput::default(),|root_ui| {
+                    egui::CentralPanel::default().show_inside(root_ui,|ui|paint_sm62_screen(ui, screen, Sm62PreviewState {
+                        settings: &settings,
+                        scene: 0,
+                        date_enabled: true,
+                        side,
+                        language: Some("RU"),
+                        stars_enabled: true,
+                        screens_off: off,
+                        clock_live: false,
+                    }));
                 });
                 // Exact production content shapes (including meshes/UV/positions) stay unchanged.
                 let actual:Vec<_>=output.shapes.iter().filter(|s| !matches!(&s.shape,egui::Shape::Rect(r) if r.rect==outer)).collect();
@@ -64,7 +82,16 @@ mod preview_edge_tests {
                 egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::from_gray(40))).show_inside(ui,|ui| {
                     ui.horizontal(|ui| {for mode in [0,1,2,3] {ui.vertical(|ui| {ui.set_width(254.0);for off in [false,true] {
                         let mut settings=[0u8;8];settings[0]=mode;
-                        draw_sm62_preview(ui,&settings,0,true,294.0,0,Some("RU"),false,off,false);
+                        draw_sm62_preview(ui, Sm62PreviewState {
+                            settings: &settings,
+                            scene: 0,
+                            date_enabled: true,
+                            side: 0,
+                            language: Some("RU"),
+                            stars_enabled: false,
+                            screens_off: off,
+                            clock_live: false,
+                        }, 294.0);
                     }});}});
                 });
                 self.frames+=1;if self.frames==5 {ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));}

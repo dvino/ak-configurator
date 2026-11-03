@@ -468,8 +468,7 @@ impl EntropyApp {
                     .unwrap_or_else(|| self.tap_hold_bool_value(qsid));
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     label,
                     true,
                     if suppress_tooltips {
@@ -498,8 +497,7 @@ impl EntropyApp {
                 let current = self.pending_settings_write_value(qsid).unwrap_or(current);
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     label,
                     true,
                     if suppress_tooltips {
@@ -533,8 +531,7 @@ impl EntropyApp {
                             ui,
                             edit_id,
                             &mut text,
-                            field_width,
-                            control_height,
+                            egui::vec2(field_width, control_height),
                             "",
                             5,
                             egui::Align::RIGHT,

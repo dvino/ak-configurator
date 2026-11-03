@@ -402,8 +402,17 @@ impl EntropyApp {
                     }
                 });
                 ui.add_space(10.0);
-                if ui.button(if lang == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
-                    self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                if ui
+                    .button(if lang == crate::i18n::Language::Russian {
+                        "Открыть офлайн-демо AK820"
+                    } else {
+                        "Open AK820 offline demo"
+                    })
+                    .clicked()
+                {
+                    self.configure_ak820_offline_profile(
+                        super::ak820_beta1_profiles::ProfileId::Main,
+                    );
                 }
             });
         });
@@ -556,7 +565,7 @@ mod indicator_display_tests {
     use super::*;
 
     fn draw_magic(app: &mut EntropyApp, ctx: &egui::Context) -> egui::FullOutput {
-        ctx.run(
+        ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -565,8 +574,8 @@ mod indicator_display_tests {
                 time: Some(10.0),
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let rect = ui.max_rect();
                     app.draw_magic_settings_page(ui, rect);
                 });

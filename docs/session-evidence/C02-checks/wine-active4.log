@@ -1,0 +1,55 @@
+
+running 6 tests
+test artifacts::platform::tests::mcp_artifacts_windows_crash_child ... ok
+test artifacts::platform::tests::mcp_artifacts_windows_crash_inventory_and_recovery ...
+running 1 test
+test artifacts::platform::tests::mcp_artifacts_windows_crash_child ... FAILED
+
+failures:
+
+---- artifacts::platform::tests::mcp_artifacts_windows_crash_child stdout ----
+
+thread 'artifacts::platform::tests::mcp_artifacts_windows_crash_child' (80) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:2042:58:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "verify private component ak-configurator: invalid private artifact storage object" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    artifacts::platform::tests::mcp_artifacts_windows_crash_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+
+thread 'artifacts::platform::tests::mcp_artifacts_windows_crash_inventory_and_recovery' (68) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:2064:17:
+assertion `left == right` failed
+  left: Some(101)
+ right: Some(88)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test artifacts::platform::tests::mcp_artifacts_windows_eviction_prevalidates_and_reports_partial_failure ...
+thread 'artifacts::platform::tests::mcp_artifacts_windows_eviction_prevalidates_and_reports_partial_failure' (84) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:1990:53:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "verify private component ak-configurator: invalid private artifact storage object" }
+FAILED
+test artifacts::platform::tests::mcp_artifacts_windows_hardlink_and_truncation ...
+thread 'artifacts::platform::tests::mcp_artifacts_windows_hardlink_and_truncation' (88) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:1990:53:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "verify private component ak-configurator: invalid private artifact storage object" }
+FAILED
+test artifacts::platform::tests::mcp_artifacts_windows_lock_and_bounds ...
+thread 'artifacts::platform::tests::mcp_artifacts_windows_lock_and_bounds' (92) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:1990:53:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "verify private component ak-configurator: invalid private artifact storage object" }
+FAILED
+test artifacts::platform::tests::mcp_artifacts_windows_roundtrip_collision_and_faults ...
+thread 'artifacts::platform::tests::mcp_artifacts_windows_roundtrip_collision_and_faults' (96) panicked at LOCAL_WORK/ak-configurator-beta5-review/src/mcp/artifacts.rs:1990:53:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "verify private component ak-configurator: invalid private artifact storage object" }
+FAILED
+
+failures:
+
+failures:
+    artifacts::platform::tests::mcp_artifacts_windows_crash_inventory_and_recovery
+    artifacts::platform::tests::mcp_artifacts_windows_eviction_prevalidates_and_reports_partial_failure
+    artifacts::platform::tests::mcp_artifacts_windows_hardlink_and_truncation
+    artifacts::platform::tests::mcp_artifacts_windows_lock_and_bounds
+    artifacts::platform::tests::mcp_artifacts_windows_roundtrip_collision_and_faults
+
+test result: FAILED. 1 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s

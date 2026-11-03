@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn actual_alpha3_definition_matches_physical_contract() {
         let text = include_str!("../../assets/ak820/layout.json");
-        let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let json: serde_json::Value = serde_json::from_str(text).unwrap();
         let layout = KeyboardLayout::from_vial_json(&json).unwrap();
         validate_ak820_layout(&layout).unwrap();
     }
@@ -615,7 +615,7 @@ mod tests {
     #[test]
     fn layout_contract_rejects_duplicate_coordinates() {
         let text = include_str!("../../assets/ak820/layout.json");
-        let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let json: serde_json::Value = serde_json::from_str(text).unwrap();
         let mut layout = KeyboardLayout::from_vial_json(&json).unwrap();
         layout.keys[1].row = layout.keys[0].row;
         layout.keys[1].col = layout.keys[0].col;

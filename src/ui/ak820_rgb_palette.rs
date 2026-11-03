@@ -1,6 +1,6 @@
 use super::*;
-use crate::ak820_rgb::{LED_COUNT, Palette, Rgb, SLOT_MAP};
-use crate::ak820_rgb_compositor::{Axis, Effect, Layer, MAX_SCENE_BYTES, QuietHours, Scene};
+use crate::ak820_rgb::{Palette, Rgb, LED_COUNT, SLOT_MAP};
+use crate::ak820_rgb_compositor::{Axis, Effect, Layer, QuietHours, Scene, MAX_SCENE_BYTES};
 use chrono::Timelike;
 use std::io::Read;
 
@@ -96,6 +96,7 @@ impl Editor {
         true
     }
 
+    #[cfg(test)]
     fn set_active_mask_from_selection(&mut self) {
         let Some(layer) = self.scene.layers.get_mut(self.active_layer) else {
             return;
@@ -202,7 +203,7 @@ fn base_key_groups() -> [Vec<(u8, u8)>; 6] {
 impl EntropyApp {
     /// Render the real AK820 physical key geometry with colors indexed only by
     /// the pinned matrix-to-LED map. This edits a local preview, not readback.
-    pub(crate) fn draw_ak820_rgb_palette(&mut self, ui: &mut egui::Ui, section: RgbSection) {
+    pub(super) fn draw_ak820_rgb_palette(&mut self, ui: &mut egui::Ui, section: RgbSection) {
         let profile = self
             .ak820_demo_profile
             .map(|p| p.as_str())
@@ -330,7 +331,7 @@ impl EntropyApp {
                     if slot.is_some_and(|i| e.selected.contains(&i)) {
                         2.0
                     } else {
-                        1.0
+                        1.0_f32
                     },
                     if slot.is_some_and(|i| e.selected.contains(&i)) {
                         crate::ui_style::accent()
@@ -396,7 +397,7 @@ impl EntropyApp {
         }
         ui.horizontal_wrapped(|ui| {
             for (label, g) in [
-                (if ru { "WASD" } else { "WASD" }, 0),
+                ("WASD", 0),
                 (if ru { "Стрелки" } else { "Arrows" }, 1),
                 (if ru { "F-клавиши" } else { "Function" }, 2),
                 (if ru { "Цифры" } else { "Numbers" }, 3),
@@ -517,11 +518,10 @@ impl EntropyApp {
                     !e.undo.is_empty(),
                 )
                 .clicked()
+                    && e.undo_scene()
                 {
-                    if e.undo_scene() {
-                        changed = true;
-                        history_move = true;
-                    }
+                    changed = true;
+                    history_move = true;
                 }
                 if crate::ui_style::action_button(
                     ui,
@@ -529,11 +529,10 @@ impl EntropyApp {
                     !e.redo.is_empty(),
                 )
                 .clicked()
+                    && e.redo_scene()
                 {
-                    if e.redo_scene() {
-                        changed = true;
-                        history_move = true;
-                    }
+                    changed = true;
+                    history_move = true;
                 }
                 if crate::ui_style::action_button(
                     ui,
@@ -1345,6 +1344,38 @@ mod tests {
         e.set_active_mask_from_selection();
         assert!(e.scene.layers[0].mask.is_empty());
         assert!(Scene::decode_preset("{bad json").is_err());
+        e.scene.layers.push(Layer {
+            mask: vec![2, 3],
+            ..Layer::default()
+        });
+        e.selected = vec![LED_COUNT - 1, usize::MAX, 0, LED_COUNT - 1];
+        e.set_active_mask_from_selection();
+        assert_eq!(e.scene.layers[0].mask, vec![0, LED_COUNT - 1]);
+        assert_eq!(e.scene.layers[1].mask, vec![2, 3]);
+        let masks: Vec<_> = e
+            .scene
+            .layers
+            .iter()
+            .map(|layer| layer.mask.clone())
+            .collect();
+        e.active_layer = usize::MAX;
+        e.set_active_mask_from_selection();
+        assert_eq!(
+            e.scene
+                .layers
+                .iter()
+                .map(|layer| layer.mask.clone())
+                .collect::<Vec<_>>(),
+            masks
+        );
+        assert_eq!(e.active_layer, usize::MAX);
+        e.scene.layers.clear();
+        e.set_active_mask_from_selection();
+        assert!(e.scene.layers.is_empty());
+        assert_eq!(
+            e.selected,
+            vec![LED_COUNT - 1, usize::MAX, 0, LED_COUNT - 1]
+        );
     }
 
     #[test]

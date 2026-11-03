@@ -370,7 +370,7 @@ mod tests {
     fn every_transport_failure_stops_before_a_second_setter_without_replay() {
         let packets = [[5, 0, 0, 0, 0, 4], [5, 0, 0, 1, 0, 5]];
         // status, storage, setter, post-storage, all full NVM read packets.
-        let boundary_count = 4 + (0x2800usize + 26) / 27;
+        let boundary_count = 4 + 0x2800usize.div_ceil(27);
         for fail_at in 0..boundary_count {
             let requests = RefCell::new(Vec::<Vec<u8>>::new());
             let send = |r: &[u8]| -> Result<[u8; MSG_LEN]> {
@@ -500,21 +500,19 @@ mod tests {
                 |_| Ok(()),
             )
         };
-        assert!(
-            run()
-                .unwrap_err()
-                .to_string()
-                .contains("Published macro getter differs")
-        );
+        assert!(run()
+            .unwrap_err()
+            .to_string()
+            .contains("Published macro getter differs"));
         assert_eq!(writes.get(), 1);
         assert_eq!(macro_reads.get(), 1);
     }
     #[test]
     fn planner_to_wire_keeps_both_encoder_directions_distinct() {
         use crate::ak820_settings_backup::{
-            ImageIdentity, ValidatedArchive, rgb_wire_for_profile, sha256,
+            rgb_wire_for_profile, sha256, ImageIdentity, ValidatedArchive,
         };
-        use crate::app::ak820_beta1_profiles::{ProfileId, matrix_profile};
+        use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
         let profile = ProfileId::Main;
         let id = matrix_profile(profile).settings_identity.as_ref().unwrap();
         let identity = ImageIdentity {

@@ -24,10 +24,9 @@ fn capture_device() -> (HidDevice, super::super::TestHidRecorder) {
 #[test]
 fn capture_cancelled_before_first_packet_sends_nothing() {
     let (hid, log) = capture_device();
-    assert!(
-        hid.ak820_capture_backup(&AtomicBool::new(true), &AtomicU32::new(0))
-            .is_err()
-    );
+    assert!(hid
+        .ak820_capture_backup(&AtomicBool::new(true), &AtomicU32::new(0))
+        .is_err());
     assert!(log.requests().is_empty());
     assert!(hid.ak820_editing_ready());
 }
@@ -37,10 +36,9 @@ fn capture_rejects_unloaded_or_historical_session_without_packets() {
         HidDevice::test_beta2_ak820_device(ProfileId::Main, false),
         HidDevice::test_ak820_device(true),
     ] {
-        assert!(
-            hid.ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
-                .is_err()
-        );
+        assert!(hid
+            .ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
+            .is_err());
         assert!(log.requests().is_empty());
     }
 }
@@ -63,12 +61,10 @@ fn capture_zero_rom_stops_at_production_trust_gate_using_getters_only() {
             requests.iter().filter(|p| p[..2] == [0xfd, 0]).count(),
             65536usize.div_ceil(27)
         );
-        assert!(
-            requests.iter().all(|p| p[0] == 1
-                || p[..2] == [0xfe, 0]
-                || p[..2] == [0xfd, 0]
-                || p[..2] == [0xfd, 1])
-        );
+        assert!(requests.iter().all(|p| p[0] == 1
+            || p[..2] == [0xfe, 0]
+            || p[..2] == [0xfd, 0]
+            || p[..2] == [0xfd, 1]));
         assert!(progress.load(Ordering::Acquire) < 100);
         assert!(!hid.ak820_editing_ready());
     }
@@ -77,10 +73,9 @@ fn capture_zero_rom_stops_at_production_trust_gate_using_getters_only() {
 fn capture_bad_storage_stops_once_without_rom_reads() {
     let (hid, log) = capture_device();
     log.respond_by(|_| Some(Ok([0; 32])));
-    assert!(
-        hid.ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
-            .is_err()
-    );
+    assert!(hid
+        .ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
+        .is_err());
     assert_eq!(log.requests().len(), 1);
 }
 #[test]
@@ -100,10 +95,9 @@ fn capture_rom_address_mismatch_stops_without_retry() {
         }
         Some(Ok(r))
     });
-    assert!(
-        hid.ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
-            .is_err()
-    );
+    assert!(hid
+        .ak820_capture_backup(&AtomicBool::new(false), &AtomicU32::new(0))
+        .is_err());
     assert_eq!(log.requests().len(), 4);
 }
 
@@ -233,14 +227,19 @@ fn modeled_getter_for_image(p: &[u8], nvm: &[u8], image: ImageContract) -> [u8; 
             let value = if matches!(image, ImageContract::Beta4(_)) {
                 use crate::ak820_qs_versioned_offline::{ImageVersion, SettingsRecord};
                 SettingsRecord::decode_for_image(
-                    &nvm[0x6a8..0x6c0], ImageVersion::V2, ImageVersion::V2,
+                    &nvm[0x6a8..0x6c0],
+                    ImageVersion::V2,
+                    ImageVersion::V2,
                 )
                 .unwrap()
                 .get(id)
                 .unwrap()
             } else {
                 crate::ak820_typed_storage::Extensions::decode_nvm(nvm)
-                    .unwrap().settings.get(id).unwrap()
+                    .unwrap()
+                    .settings
+                    .get(id)
+                    .unwrap()
             };
             r[1..3].copy_from_slice(&value.to_le_bytes());
             if matches!(id, 1 | 3 | 22) {
@@ -277,37 +276,33 @@ fn modeled_getter_for_image(p: &[u8], nvm: &[u8], image: ImageContract) -> [u8; 
 fn capture_reconciles_all_modeled_durable_getters_and_allows_volatile_rgb_difference() {
     let (nvm, settings) = reconciliation_fixture();
     let mut requests = Vec::new();
-    assert!(
-        capture_reconcile_getters(
-            ProfileId::Shortcuts,
-            ImageContract::Beta2(ProfileId::Shortcuts),
-            &nvm,
-            &settings,
-            &mut |p| {
-                requests.push(p.to_vec());
-                Ok(modeled_getter(p, &nvm))
-            }
-        )
-        .unwrap()
-    );
+    assert!(capture_reconcile_getters(
+        ProfileId::Shortcuts,
+        ImageContract::Beta2(ProfileId::Shortcuts),
+        &nvm,
+        &settings,
+        &mut |p| {
+            requests.push(p.to_vec());
+            Ok(modeled_getter(p, &nvm))
+        }
+    )
+    .unwrap());
     assert_eq!(requests.iter().filter(|p| p[0] == 4).count(), 498);
     assert_eq!(requests.iter().filter(|p| p[0] == 0x0e).count(), 2);
-    assert!(
-        !capture_reconcile_getters(
-            ProfileId::Shortcuts,
-            ImageContract::Beta2(ProfileId::Shortcuts),
-            &nvm,
-            &settings,
-            &mut |p| {
-                let mut r = modeled_getter(p, &nvm);
-                if p == [8, 0x41] {
-                    r[7] = 81;
-                }
-                Ok(r)
+    assert!(!capture_reconcile_getters(
+        ProfileId::Shortcuts,
+        ImageContract::Beta2(ProfileId::Shortcuts),
+        &nvm,
+        &settings,
+        &mut |p| {
+            let mut r = modeled_getter(p, &nvm);
+            if p == [8, 0x41] {
+                r[7] = 81;
             }
-        )
-        .unwrap()
-    );
+            Ok(r)
+        }
+    )
+    .unwrap());
 }
 
 #[test]
@@ -323,30 +318,43 @@ fn beta4_capture_reconciles_v1_and_v2_qs_and_rejects_bad_getters() {
         }
         nvm[0x6a8..0x6c0].copy_from_slice(&qs.encode());
         let rgb = crate::ak820_settings_backup::rgb_wire_for_profile(
-            &nvm[24..32], false, ProfileId::Main,
-        ).unwrap();
-        let settings = crate::ak820_settings_model::settings_from_nvm_for_image_with_capabilities_offline(
-            &nvm, &rgb, true, ImageVersion::V2, ImageVersion::V2,
-            crate::ak820_settings_model::OfflineSettingsCapabilities { combo_media: true },
-        ).unwrap();
+            &nvm[24..32],
+            false,
+            ProfileId::Main,
+        )
+        .unwrap();
+        let settings =
+            crate::ak820_settings_model::settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &rgb,
+                true,
+                ImageVersion::V2,
+                ImageVersion::V2,
+                crate::ak820_settings_model::OfflineSettingsCapabilities { combo_media: true },
+            )
+            .unwrap();
         let mut saw_22 = false;
-        assert!(capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
-            if p == [0xfe, 10, 22, 0] {
-                saw_22 = true;
-            }
-            Ok(modeled_getter_for_image(p, &nvm, image))
-        }).unwrap());
+        assert!(
+            capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
+                if p == [0xfe, 10, 22, 0] {
+                    saw_22 = true;
+                }
+                Ok(modeled_getter_for_image(p, &nvm, image))
+            })
+            .unwrap()
+        );
         assert!(saw_22);
         for id in [3, 22] {
             let mut hit = false;
-            let result = capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
-                let mut reply = modeled_getter_for_image(p, &nvm, image);
-                if p == [0xfe, 10, id, 0] {
-                    reply[1] ^= 1;
-                    hit = true;
-                }
-                Ok(reply)
-            });
+            let result =
+                capture_reconcile_getters(ProfileId::Main, image, &nvm, &settings, &mut |p| {
+                    let mut reply = modeled_getter_for_image(p, &nvm, image);
+                    if p == [0xfe, 10, id, 0] {
+                        reply[1] ^= 1;
+                        hit = true;
+                    }
+                    Ok(reply)
+                });
             assert!(hit && result.is_err(), "QSID {id} mismatch must fail");
         }
     }

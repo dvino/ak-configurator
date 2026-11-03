@@ -229,10 +229,10 @@ pub(crate) fn show(
         .filter(|(id, _, _, _, _)| matrix.capabilities.runtime_qmk_settings_ids.contains(id))
         {
             let mut value = state.draft.settings.get(id).expect("known QSID");
-            if number(ui, text(language, en, ru), &mut value, low..=high, id == 1) {
-                if state.draft.settings.set(id, value).is_ok() {
-                    edited = true;
-                }
+            if number(ui, text(language, en, ru), &mut value, low..=high, id == 1)
+                && state.draft.settings.set(id, value).is_ok()
+            {
+                edited = true;
             }
         }
     }

@@ -134,7 +134,8 @@ impl EntropyApp {
             );
             let show_lock_item = lock_menu_state.visible;
             let default_lock_label = crate::i18n::tr_catalog(lang, "ui.unlock_keyboard_action");
-            let settings_item_count = 1 + cfg!(target_arch = "wasm32") as usize
+            let settings_item_count = 1
+                + cfg!(target_arch = "wasm32") as usize
                 + show_matrix_item as usize
                 + show_rgb_item as usize
                 + show_display_item as usize
@@ -422,11 +423,17 @@ impl EntropyApp {
                         if dividers[3] {
                             top_dropdown_divider(ui, item_width);
                         }
-                        let app_resp = cfg!(target_arch = "wasm32").then(|| top_dropdown_icon_item(
-                            ui, item_width, TopMenuIcon::AppSettings,
-                            crate::i18n::tr(lang, TrKey::AppSettingsTitle), true,
-                            self.main_menu_tab == MainMenuTab::Settings && self.settings_tab == SettingsTab::AppSettings,
-                        ));
+                        let app_resp = cfg!(target_arch = "wasm32").then(|| {
+                            top_dropdown_icon_item(
+                                ui,
+                                item_width,
+                                TopMenuIcon::AppSettings,
+                                crate::i18n::tr(lang, TrKey::AppSettingsTitle),
+                                true,
+                                self.main_menu_tab == MainMenuTab::Settings
+                                    && self.settings_tab == SettingsTab::AppSettings,
+                            )
+                        });
                         if app_resp.as_ref().is_some_and(|response| response.clicked()) {
                             self.close_top_dropdowns(ui.ctx());
                             self.open_app_settings_page();

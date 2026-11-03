@@ -14,7 +14,11 @@ pub(super) fn leave_service_pages(ctx: &egui::Context) {
     ctx.data_mut(|d| {
         #[cfg(not(target_arch = "wasm32"))]
         d.insert_temp(egui::Id::new(super::ak820_install::OPEN_ID), false);
-        for id in [super::ak820_backup_inspection::OPEN_ID, super::ak820_install_files::OPEN_ID, "ak820_offline_extensions_open"] {
+        for id in [
+            super::ak820_backup_inspection::OPEN_ID,
+            super::ak820_install_files::OPEN_ID,
+            "ak820_offline_extensions_open",
+        ] {
             d.insert_temp(egui::Id::new(id), false);
         }
     });
@@ -29,51 +33,70 @@ impl EntropyApp {
         let language = self.app_settings.language;
         let russian = language == crate::i18n::Language::Russian;
         let enabled = !utility_window_open(&ctx) && !self.service_navigation_busy(&ctx);
-        egui::ScrollArea::horizontal().id_salt("ak820_service_navigation").auto_shrink([false, true]).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                for (action, label) in [
-                    ("editor", if russian { "Редактор" } else { "Editor" }),
-                    ("install", text(language, "ak820_ui.install")),
-                    ("backups", text(language, "ak820_ui.backups")),
-                    ("files", text(language, "ak820_ui.check_files")),
-                    ("settings", text(language, "ak820_ui.app_settings")),
-                    ("help", text(language, "ak820_ui.help")),
-                ] {
-                    #[cfg(target_arch = "wasm32")]
-                    if action == "install" { continue; }
-                    if ui.add_enabled(enabled || action == "help", egui::Button::new(label)).clicked() {
-                        if action == "help" {
-                            super::ak820_help_ui::open(&ctx);
+        egui::ScrollArea::horizontal()
+            .id_salt("ak820_service_navigation")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for (action, label) in [
+                        (
+                            "editor",
+                            if russian {
+                                "Редактор"
+                            } else {
+                                "Editor"
+                            },
+                        ),
+                        ("install", text(language, "ak820_ui.install")),
+                        ("backups", text(language, "ak820_ui.backups")),
+                        ("files", text(language, "ak820_ui.check_files")),
+                        ("settings", text(language, "ak820_ui.app_settings")),
+                        ("help", text(language, "ak820_ui.help")),
+                    ] {
+                        #[cfg(target_arch = "wasm32")]
+                        if action == "install" {
                             continue;
                         }
-                        self.close_hover_top_dropdowns(&ctx);
-                        leave_service_pages(&ctx);
-                        match action {
-                            "editor" => self.main_menu_tab = MainMenuTab::Keyboard,
-                            "settings" => self.open_app_settings_page(),
-                            _ => {
-                                let id = match action {
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    "install" => super::ak820_install::OPEN_ID,
-                                    "backups" => super::ak820_backup_inspection::OPEN_ID,
-                                    _ => super::ak820_install_files::OPEN_ID,
-                                };
-                                ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), true));
+                        if ui
+                            .add_enabled(enabled || action == "help", egui::Button::new(label))
+                            .clicked()
+                        {
+                            if action == "help" {
+                                super::ak820_help_ui::open(&ctx);
+                                continue;
+                            }
+                            self.close_hover_top_dropdowns(&ctx);
+                            leave_service_pages(&ctx);
+                            match action {
+                                "editor" => self.main_menu_tab = MainMenuTab::Keyboard,
+                                "settings" => self.open_app_settings_page(),
+                                _ => {
+                                    let id = match action {
+                                        #[cfg(not(target_arch = "wasm32"))]
+                                        "install" => super::ak820_install::OPEN_ID,
+                                        "backups" => super::ak820_backup_inspection::OPEN_ID,
+                                        _ => super::ak820_install_files::OPEN_ID,
+                                    };
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), true));
+                                }
                             }
                         }
                     }
-                }
+                });
             });
-        });
     }
 
     pub(super) fn service_navigation_busy(&self, ctx: &egui::Context) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        let native_busy = self.ak820_install_runtime.owns_hid() || self.ak820_install_runtime.has_path_entry()
-            || self.hid_write_lifecycle_busy() || self.pending_file_dialog.is_some();
+        let native_busy = self.ak820_install_runtime.owns_hid()
+            || self.ak820_install_runtime.has_path_entry()
+            || self.hid_write_lifecycle_busy()
+            || self.pending_file_dialog.is_some();
         #[cfg(target_arch = "wasm32")]
         let native_busy = false;
-        native_busy || self.unlock_open || self.vial_unlock_polling
+        native_busy
+            || self.unlock_open
+            || self.vial_unlock_polling
             || !matches!(self.connect_state, ConnectState::Idle)
             || super::ak820_backup_inspection::page_busy(ctx)
             || super::ak820_install_files::page_busy(ctx)
@@ -160,15 +183,14 @@ impl EntropyApp {
                                 }
                             }
                             top_dropdown_divider(ui, item_width);
-                            for (action, label, icon, selected) in [
-                                (
+                            {
+                                let (action, label, icon, selected) = (
                                     "about",
                                     "ak820_ui.about",
                                     TopMenuIcon::AboutEntropy,
                                     self.main_menu_tab == MainMenuTab::Settings
                                         && self.settings_tab == SettingsTab::AboutEntropy,
-                                ),
-                            ] {
+                                );
                                 if top_dropdown_icon_item(
                                     ui,
                                     item_width,
@@ -387,6 +409,7 @@ impl EntropyApp {
         );
         match self.settings_tab {
             SettingsTab::AppSettings => self.draw_app_settings_page(ui, content),
+            #[cfg(test)]
             SettingsTab::OsIndicator => self.draw_ak820_os_indicator_page(ui, content),
             SettingsTab::AboutEntropy => self.draw_about_entropy_page(ui, content),
             SettingsTab::ApplicationLayouts if self.offline_application_layouts_available() => {

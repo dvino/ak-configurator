@@ -107,6 +107,7 @@ struct Preset {
 
 /// Build deterministic VialRGB Direct fast-set chunks: each payload carries at most 9 HSV triplets.
 /// HSV conversion uses integer arithmetic and brightness has already been capped by `Palette`.
+#[cfg(test)]
 pub(crate) fn direct_packets(palette: &Palette) -> Result<Vec<Vec<u8>>, &'static str> {
     palette.validate()?;
     let rgb = palette.rgb_frame()?;

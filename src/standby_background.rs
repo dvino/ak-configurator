@@ -14,6 +14,7 @@ const CMD_COMMIT: u8 = 0xB3;
 const CMD_CLEAR: u8 = 0xB4;
 const CMD_DATA_STREAM: u8 = 0xB5;
 const CMD_SESSION: u8 = 0xB6;
+#[cfg(test)]
 const CMD_SPEED: u8 = 0xB7;
 const STARTUP_CMD_QUERY: u8 = 0xD0;
 const STARTUP_CMD_BEGIN: u8 = 0xD1;
@@ -168,6 +169,7 @@ impl crate::hid::HidDevice {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn set_standby_background_speed(&self, speed_percent: u16) -> Result<()> {
         let speed_percent = speed_percent.clamp(MIN_SPEED_PERCENT, MAX_SPEED_PERCENT);
         let mut request = [0u8; 3];
@@ -665,7 +667,7 @@ fn transmit_background_sized(
     if cancel.load(Ordering::Relaxed) {
         return Ok(false);
     }
-    let crc = crc32(&package);
+    let crc = crc32(package);
     let mut begin = vec![0u8; packet_size];
     begin[0] = CMD_BEGIN;
     begin[1..5].copy_from_slice(&(package.len() as u32).to_le_bytes());
@@ -822,11 +824,9 @@ fn decode_gif(
         .iter()
         .map(|frame| {
             let (numerator, denominator) = frame.delay().numer_denom_ms();
-            if denominator == 0 {
-                100
-            } else {
-                (numerator / denominator).max(20)
-            }
+            numerator
+                .checked_div(denominator)
+                .map_or(100, |delay| delay.max(20))
         })
         .collect();
     let output_count = frames.len().min(max_frames);
@@ -915,6 +915,7 @@ fn prepare_frame(
     Ok(frame)
 }
 
+#[cfg(test)]
 fn preview_over_background(image: &RgbaImage, background: [u8; 3]) -> RgbaImage {
     let mut preview = RgbaImage::from_pixel(
         WIDTH,
@@ -1033,7 +1034,7 @@ fn adaptive_palette(image: &RgbaImage, visible_colors: usize) -> Vec<[u8; 3]> {
             if pixel[3] < 16 {
                 return None;
             }
-            let take = seen % stride == 0;
+            let take = seen.is_multiple_of(stride);
             seen += 1;
             take.then_some([pixel[0], pixel[1], pixel[2]])
         })
@@ -1237,6 +1238,29 @@ mod tests {
     use crate::app::StandbyBackgroundScale;
 
     #[test]
+    fn reference_background_preview_matches_literal_alpha_vectors_and_canvas_bounds() {
+        let source = RgbaImage::from_fn(3, 1, |x, _| {
+            image::Rgba(match x {
+                0 => [240, 10, 20, 0],
+                1 => [220, 140, 60, 255],
+                _ => [220, 140, 60, 128],
+            })
+        });
+        let preview = preview_over_background(&source, [20, 40, 60]);
+        assert_eq!(preview.dimensions(), (240, 280));
+        assert_eq!(preview.get_pixel(0, 0).0, [20, 40, 60, 255]);
+        assert_eq!(preview.get_pixel(1, 0).0, [220, 140, 60, 255]);
+        // image 0.25.10's f32 source-over calculation truncates this alpha to 254.
+        assert_eq!(preview.get_pixel(2, 0).0, [120, 90, 60, 254]);
+        assert_eq!(preview.get_pixel(3, 0).0, [20, 40, 60, 255]);
+        assert_eq!(preview.get_pixel(239, 279).0, [20, 40, 60, 255]);
+        let oversized = RgbaImage::from_pixel(241, 281, image::Rgba([1, 2, 3, 255]));
+        let clipped = preview_over_background(&oversized, [20, 40, 60]);
+        assert_eq!(clipped.dimensions(), (240, 280));
+        assert_eq!(clipped.get_pixel(239, 279).0, [1, 2, 3, 255]);
+    }
+
+    #[test]
     fn both_report_sizes_transfer_identical_full_animation_and_sequence_wrap() {
         use std::cell::{Cell, RefCell};
         let package: Vec<u8> = (0..HEADER_SIZE + MAX_FRAMES * ANIMATION_FRAME_SIZE)
@@ -1282,6 +1306,150 @@ mod tests {
         assert_eq!(counts[0], package.len().div_ceil(29));
         assert_eq!(counts[1], package.len().div_ceil(61));
         assert!(counts[1] * 2 < counts[0]);
+    }
+
+    #[test]
+    fn reference_background_wrapper_preserves_literal_32_byte_wire_vectors() {
+        use std::cell::RefCell;
+        let package: Vec<u8> = (0..33).collect();
+        let progress = AtomicU32::new(7);
+        let commands = RefCell::new(Vec::new());
+        assert!(transmit_background(
+            &package,
+            &progress,
+            &AtomicBool::new(false),
+            |packet| {
+                commands.borrow_mut().push(("send", packet.to_vec()));
+                let mut reply = [0; 32];
+                reply[0] = packet[0];
+                if packet[0] == 0xB2 {
+                    reply[2] = 2;
+                }
+                Ok(reply)
+            },
+            |packet| {
+                commands.borrow_mut().push(("write", packet.to_vec()));
+                Ok(())
+            },
+        )
+        .unwrap());
+        // CRC32 e4908305 was calculated independently with Python stdlib zlib.
+        let mut begin = [0; 32];
+        begin[..9].copy_from_slice(&[0xB1, 33, 0, 0, 0, 0x05, 0x83, 0x90, 0xE4]);
+        let stream = [
+            0xB5, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+            21, 22, 23, 24, 25, 26, 27, 28,
+        ];
+        let mut last = [0; 32];
+        last[..7].copy_from_slice(&[0xB2, 1, 0, 29, 30, 31, 32]);
+        assert_eq!(
+            commands.into_inner(),
+            vec![
+                ("send", begin.to_vec()),
+                ("write", stream.to_vec()),
+                ("send", last.to_vec()),
+                ("send", vec![0xB3]),
+            ]
+        );
+        assert_eq!(progress.load(Ordering::Relaxed), 990);
+    }
+
+    #[test]
+    fn reference_background_wrapper_preserves_preflight_and_stream_cancellation() {
+        use std::cell::RefCell;
+        let progress = AtomicU32::new(7);
+        assert!(!transmit_background(
+            &[42; 33],
+            &progress,
+            &AtomicBool::new(true),
+            |_| panic!("pre-cancelled reference transfer must not send"),
+            |_| panic!("pre-cancelled reference transfer must not write"),
+        )
+        .unwrap());
+        assert_eq!(progress.load(Ordering::Relaxed), 7);
+
+        let cancel = AtomicBool::new(false);
+        let commands = RefCell::new(Vec::new());
+        assert!(!transmit_background(
+            &[42; 33],
+            &progress,
+            &cancel,
+            |packet| {
+                commands.borrow_mut().push(packet.to_vec());
+                let mut reply = [0; 32];
+                reply[0] = packet[0];
+                Ok(reply)
+            },
+            |packet| {
+                commands.borrow_mut().push(packet.to_vec());
+                cancel.store(true, Ordering::Relaxed);
+                Ok(())
+            },
+        )
+        .unwrap());
+        let commands = commands.into_inner();
+        assert_eq!(
+            commands.iter().map(|p| p[0]).collect::<Vec<_>>(),
+            vec![0xB1, 0xB5, 0xB4]
+        );
+        assert_eq!(
+            commands.iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![32, 32, 1]
+        );
+        assert_eq!(commands[2], vec![0xB4]);
+        assert_eq!(progress.load(Ordering::Relaxed), 570);
+    }
+
+    #[test]
+    fn reference_background_wrapper_stops_at_first_error_without_retry_or_clear() {
+        use std::cell::RefCell;
+        for (failure, expected_commands, expected_progress, expected_error) in [
+            (0, vec![0xB1], 7, "reference scripted send fault"),
+            (1, vec![0xB1, 0xB5], 150, "reference scripted stream fault"),
+            (
+                2,
+                vec![0xB1, 0xB5, 0xB2],
+                570,
+                "background packet 1 was acknowledged as 1",
+            ),
+            (
+                3,
+                vec![0xB1, 0xB5, 0xB2, 0xB3],
+                990,
+                "reference scripted send fault",
+            ),
+        ] {
+            let commands = RefCell::new(Vec::new());
+            let progress = AtomicU32::new(7);
+            let error = transmit_background(
+                &[42; 33],
+                &progress,
+                &AtomicBool::new(false),
+                |packet| {
+                    commands.borrow_mut().push(packet[0]);
+                    if (failure == 0 && packet[0] == 0xB1) || (failure == 3 && packet[0] == 0xB3) {
+                        anyhow::bail!("reference scripted send fault");
+                    }
+                    let mut reply = [0; 32];
+                    reply[0] = packet[0];
+                    if packet[0] == 0xB2 {
+                        reply[2] = if failure == 2 { 1 } else { 2 };
+                    }
+                    Ok(reply)
+                },
+                |packet| {
+                    commands.borrow_mut().push(packet[0]);
+                    if failure == 1 {
+                        anyhow::bail!("reference scripted stream fault");
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error.to_string(), expected_error);
+            assert_eq!(commands.into_inner(), expected_commands);
+            assert_eq!(progress.load(Ordering::Relaxed), expected_progress);
+        }
     }
 
     #[test]
@@ -1714,7 +1882,9 @@ mod legacy_preview_tests {
                 assert_eq!(restored.preview_delays_ms, prepared.preview_delays_ms);
                 assert!(restored
                     .preview_rgba
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .any(|pixel| pixel[3] == 0));
                 let mut damaged = prepared.package.clone();
                 damaged[HEADER_SIZE + 7] ^= 1;

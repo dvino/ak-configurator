@@ -92,8 +92,7 @@ impl EntropyApp {
                             let mut enabled = values.get(row_idx).copied().unwrap_or(0) != 0;
                             crate::ui_style::settings_list_row_with_tooltip(
                                 ui,
-                                row_content_width,
-                                row_height,
+                                egui::vec2(row_content_width, row_height),
                                 translated_option_label.as_str(),
                                 true,
                                 Some(crate::i18n::tr_catalog(
@@ -140,8 +139,7 @@ impl EntropyApp {
                             };
                             crate::ui_style::settings_list_row_with_tooltip(
                                 ui,
-                                row_content_width,
-                                row_height,
+                                egui::vec2(row_content_width, row_height),
                                 translated_label,
                                 true,
                                 Some(&tooltip),

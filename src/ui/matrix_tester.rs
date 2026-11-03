@@ -328,11 +328,13 @@ impl EntropyApp {
             ui.ctx(),
             layout,
             board_rect,
-            clamp_ui_scale(self.app_settings.ui_scale),
-            0.0,
-            0.0,
-            LAYOUT_FIT_MARGIN,
-            None,
+            LayoutFit {
+                ui_scale: clamp_ui_scale(self.app_settings.ui_scale),
+                top_reserved: 0.0,
+                bottom_reserved: 0.0,
+                fit_margin: LAYOUT_FIT_MARGIN,
+                max_scale_override: None,
+            },
             key_visible,
             |_| false,
         );

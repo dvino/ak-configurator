@@ -6,33 +6,59 @@ use crate::hid::hid_protocol::{
     CMD_VIAL_GET_ENCODER, CMD_VIAL_QMK_SETTINGS_GET, CMD_VIA_VIAL_PREFIX,
 };
 use anyhow::{bail, Context, Result};
+#[cfg(not(test))]
 use futures_lite::{future, StreamExt};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{mpsc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+#[cfg(not(test))]
+use std::sync::atomic::AtomicBool;
+#[cfg(not(test))]
+use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(not(test))]
+use std::sync::OnceLock;
+#[cfg(not(test))]
+use std::sync::{mpsc, Mutex};
+use std::time::Duration;
+#[cfg(not(test))]
+use std::time::Instant;
+#[cfg(not(test))]
 use zbus::blocking::connection::Builder as ConnectionBuilder;
+#[cfg(not(test))]
 use zbus::blocking::fdo::ObjectManagerProxy;
+#[cfg(not(test))]
 use zbus::blocking::{Connection, Proxy};
+#[cfg(not(test))]
 use zbus::fdo::ManagedObjects;
-use zbus::zvariant::{ObjectPath, OwnedValue, Value};
+#[cfg(not(test))]
+use zbus::zvariant::Value;
+#[cfg(not(test))]
+use zbus::zvariant::{ObjectPath, OwnedValue};
 
+#[cfg(not(test))]
 const BLUEZ_DESTINATION: &str = "org.bluez";
 const BLUEZ_GATT_PREFIX: &str = "bluez-gatt:";
+#[cfg(not(test))]
 const DEVICE_INTERFACE: &str = "org.bluez.Device1";
+#[cfg(not(test))]
 const SERVICE_INTERFACE: &str = "org.bluez.GattService1";
+#[cfg(not(test))]
 const CHARACTERISTIC_INTERFACE: &str = "org.bluez.GattCharacteristic1";
+#[cfg(not(test))]
 const DESCRIPTOR_INTERFACE: &str = "org.bluez.GattDescriptor1";
+#[cfg(not(test))]
 const HID_SERVICE_UUID: &str = "1812";
 const REPORT_MAP_CHARACTERISTIC_UUID: &str = "2a4b";
 const REPORT_CHARACTERISTIC_UUID: &str = "2a4d";
 const REPORT_REFERENCE_DESCRIPTOR_UUID: &str = "2908";
 // UUIDv5(DNS) values shared with RMK's vendor Vial transport.
+#[cfg(not(test))]
 const VIAL_GATT_SERVICE_UUID: &str = "8cfa65ff-3b6d-55f3-8b67-49693930420d";
 const VIAL_GATT_INPUT_UUID: &str = "7a115e75-ae8e-51b4-9f46-dbd15af07dc3";
 const VIAL_GATT_OUTPUT_UUID: &str = "70ca58d5-fdbf-5497-a33f-d1e8e1698678";
+#[cfg(not(test))]
 const BLUEZ_METHOD_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(not(test))]
 const BLUEZ_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(not(test))]
 const BLUEZ_REPLY_TIMEOUT: Duration = Duration::from_millis(2_500);
 // RMK requests a 7.5 ms connection interval after pairing. BlueZ does not
 // reliably forward the input notification to every desktop stack, so the
@@ -40,6 +66,7 @@ const BLUEZ_REPLY_TIMEOUT: Duration = Duration::from_millis(2_500);
 // every fallback read multiplied a single BLE round trip across every startup
 // and keymap request. One connection interval is enough; a response that is
 // not ready yet is rejected by `response_matches` and retried safely.
+#[cfg(not(test))]
 const BLUEZ_REPLY_POLL_INTERVAL: Duration = Duration::from_millis(8);
 // GET_ENCODER and QMK_SETTINGS_GET do not echo an identifier in successful
 // replies. BlueZ may therefore surface the previous characteristic value or a
@@ -94,6 +121,7 @@ enum GattWriteType {
 }
 
 impl GattWriteType {
+    #[cfg(not(test))]
     fn bluez_name(self) -> &'static str {
         match self {
             Self::Request => "request",
@@ -102,6 +130,7 @@ impl GattWriteType {
     }
 }
 
+#[cfg(not(test))]
 #[derive(Clone, Debug)]
 struct BluezDeviceSummary {
     name: String,
@@ -119,6 +148,7 @@ fn bluez_service_path(path: &str) -> Option<&str> {
         .filter(|path| path.starts_with('/'))
 }
 
+#[cfg(not(test))]
 fn bluez_connection() -> Result<Connection> {
     ConnectionBuilder::system()
         .context("Failed to create BlueZ D-Bus connection builder")?
@@ -127,6 +157,7 @@ fn bluez_connection() -> Result<Connection> {
         .context("Failed to connect to the BlueZ system bus")
 }
 
+#[cfg(not(test))]
 fn managed_objects(connection: &Connection) -> Result<ManagedObjects> {
     let proxy = ObjectManagerProxy::builder(connection)
         .destination(BLUEZ_DESTINATION)
@@ -140,6 +171,7 @@ fn managed_objects(connection: &Connection) -> Result<ManagedObjects> {
         .context("Failed to enumerate BlueZ GATT objects")
 }
 
+#[cfg(not(test))]
 fn property_string(properties: &HashMap<String, OwnedValue>, name: &str) -> Option<String> {
     properties
         .get(name)
@@ -147,12 +179,14 @@ fn property_string(properties: &HashMap<String, OwnedValue>, name: &str) -> Opti
         .map(str::to_owned)
 }
 
+#[cfg(not(test))]
 fn property_bool(properties: &HashMap<String, OwnedValue>, name: &str) -> Option<bool> {
     properties
         .get(name)
         .and_then(|value| bool::try_from(value).ok())
 }
 
+#[cfg(not(test))]
 fn property_path(properties: &HashMap<String, OwnedValue>, name: &str) -> Option<String> {
     properties
         .get(name)
@@ -160,6 +194,7 @@ fn property_path(properties: &HashMap<String, OwnedValue>, name: &str) -> Option
         .map(ToString::to_string)
 }
 
+#[cfg(not(test))]
 fn property_strings(properties: &HashMap<String, OwnedValue>, name: &str) -> Vec<String> {
     properties
         .get(name)
@@ -168,6 +203,7 @@ fn property_strings(properties: &HashMap<String, OwnedValue>, name: &str) -> Vec
         .unwrap_or_default()
 }
 
+#[cfg(not(test))]
 fn property_bytes(properties: &HashMap<String, OwnedValue>, name: &str) -> Vec<u8> {
     properties
         .get(name)
@@ -176,6 +212,7 @@ fn property_bytes(properties: &HashMap<String, OwnedValue>, name: &str) -> Vec<u
         .unwrap_or_default()
 }
 
+#[cfg(not(test))]
 fn interface_properties<'a>(
     interfaces: &'a HashMap<zbus::names::OwnedInterfaceName, HashMap<String, OwnedValue>>,
     interface: &str,
@@ -191,15 +228,17 @@ fn uuid_matches(value: &str, short: &str) -> bool {
         || value.eq_ignore_ascii_case(&format!("0000{short}-0000-1000-8000-00805f9b34fb"))
 }
 
-fn collect_bluez_summaries(
-    objects: &ManagedObjects,
-) -> (
+#[cfg(not(test))]
+type BluezSummaries = (
     HashMap<String, BluezDeviceSummary>,
     HashMap<String, String>,
     HashMap<String, String>,
     Vec<CharacteristicSummary>,
     Vec<DescriptorSummary>,
-) {
+);
+
+#[cfg(not(test))]
+fn collect_bluez_summaries(objects: &ManagedObjects) -> BluezSummaries {
     let mut devices = HashMap::new();
     let mut hid_services = HashMap::new();
     let mut vendor_services = HashMap::new();
@@ -291,17 +330,12 @@ fn retain_service_summaries(
     });
 }
 
+#[cfg(not(test))]
 fn resolved_bluez_summaries(
     connection: &Connection,
     objects: &ManagedObjects,
     only_service: Option<&str>,
-) -> (
-    HashMap<String, BluezDeviceSummary>,
-    HashMap<String, String>,
-    HashMap<String, String>,
-    Vec<CharacteristicSummary>,
-    Vec<DescriptorSummary>,
-) {
+) -> BluezSummaries {
     let (devices, mut hid_services, mut vendor_services, mut characteristics, mut descriptors) =
         collect_bluez_summaries(objects);
     if let Some(service) = only_service {
@@ -551,6 +585,7 @@ fn parse_bluez_modalias(modalias: &str) -> (u16, u16) {
     (vendor, product)
 }
 
+#[cfg(not(test))]
 fn devices_from_objects(connection: &Connection, objects: &ManagedObjects) -> Vec<Device> {
     let (devices, hid_services, vendor_services, characteristics, descriptors) =
         resolved_bluez_summaries(connection, objects, None);
@@ -583,6 +618,7 @@ fn devices_from_objects(connection: &Connection, objects: &ManagedObjects) -> Ve
     .collect()
 }
 
+#[cfg(not(test))]
 pub(crate) fn scan_devices() -> Vec<Device> {
     let result = (|| -> Result<Vec<Device>> {
         static SCAN_CONNECTION: OnceLock<Mutex<Option<Connection>>> = OnceLock::new();
@@ -616,6 +652,7 @@ pub(crate) fn scan_devices() -> Vec<Device> {
 
 /// Return the last completed BlueZ scan and refresh it on a dedicated worker.
 /// USB discovery must never wait for a stalled D-Bus call.
+#[cfg(not(test))]
 pub(crate) fn scan_devices_cached_nonblocking() -> Vec<Device> {
     static SCAN_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
     static SCAN_CACHE: OnceLock<Mutex<Vec<Device>>> = OnceLock::new();
@@ -643,6 +680,7 @@ pub(crate) fn scan_devices_cached_nonblocking() -> Vec<Device> {
     cached
 }
 
+#[cfg(not(test))]
 fn service_device_path(objects: &ManagedObjects, service: &str) -> Option<String> {
     let service_path = objects.keys().find(|path| path.as_str() == service)?;
     let properties = interface_properties(objects.get(service_path)?, SERVICE_INTERFACE)?;
@@ -651,6 +689,7 @@ fn service_device_path(objects: &ManagedObjects, service: &str) -> Option<String
 
 /// Validate BOTH the service's Device property and that Device1's address.
 /// A cached service path is not permission to connect a different BlueZ owner.
+#[cfg(not(test))]
 fn validated_service_owner(
     objects: &ManagedObjects,
     service: &str,
@@ -701,6 +740,7 @@ fn validate_service_identity(
     Ok(())
 }
 
+#[cfg(not(test))]
 fn ensure_device_connected(connection: &Connection, device_path: &str) -> Result<()> {
     let proxy = Proxy::new(connection, BLUEZ_DESTINATION, device_path, DEVICE_INTERFACE)
         .context("Failed to create the BlueZ device proxy")?;
@@ -727,6 +767,7 @@ fn ensure_device_connected(connection: &Connection, device_path: &str) -> Result
     }
 }
 
+#[cfg(not(test))]
 fn endpoints_for_service(
     connection: &Connection,
     objects: &ManagedObjects,
@@ -744,6 +785,7 @@ fn endpoints_for_service(
         .find(|endpoints| endpoints.service == service)
 }
 
+#[cfg(not(test))]
 fn characteristic_proxy<'a>(connection: &'a Connection, path: &'a str) -> Result<Proxy<'a>> {
     Proxy::new(
         connection,
@@ -754,16 +796,19 @@ fn characteristic_proxy<'a>(connection: &'a Connection, path: &'a str) -> Result
     .context("Failed to create a BlueZ GATT characteristic proxy")
 }
 
+#[cfg(not(test))]
 fn descriptor_proxy<'a>(connection: &'a Connection, path: &'a str) -> Result<Proxy<'a>> {
     Proxy::new(connection, BLUEZ_DESTINATION, path, DESCRIPTOR_INTERFACE)
         .context("Failed to create a BlueZ GATT descriptor proxy")
 }
 
+#[cfg(not(test))]
 fn value_bytes(value: &Value<'_>) -> Option<Vec<u8>> {
     let array: &zbus::zvariant::Array<'_> = value.downcast_ref().ok()?;
     array.iter().map(|item| u8::try_from(item).ok()).collect()
 }
 
+#[cfg(not(test))]
 struct NotificationListener {
     connection: Connection,
     input_path: String,
@@ -771,6 +816,7 @@ struct NotificationListener {
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
+#[cfg(not(test))]
 impl NotificationListener {
     fn shutdown(&mut self) {
         let _ = self.stop_tx.try_send(());
@@ -785,12 +831,14 @@ impl NotificationListener {
     }
 }
 
+#[cfg(not(test))]
 impl Drop for NotificationListener {
     fn drop(&mut self) {
         self.shutdown();
     }
 }
 
+#[cfg(not(test))]
 fn spawn_notification_listener(
     input_path: String,
     notification_tx: mpsc::Sender<Vec<u8>>,
@@ -887,6 +935,7 @@ fn normalize_notification(bytes: &[u8]) -> Option<[u8; 32]> {
     Some(response)
 }
 
+#[cfg(not(test))]
 pub(crate) struct LinuxBleDevice {
     connection: Connection,
     input_path: String,
@@ -902,7 +951,9 @@ pub(crate) struct LinuxBleDevice {
     command_lock: Mutex<()>,
 }
 
+#[cfg(not(test))]
 impl LinuxBleDevice {
+    #[cfg(not(test))]
     pub(crate) fn open(device: &Device) -> Result<Self> {
         let service = bluez_service_path(&device.path)
             .context("Invalid BlueZ Vial device path")?
@@ -1151,6 +1202,7 @@ impl LinuxBleDevice {
     }
 }
 
+#[cfg(not(test))]
 impl Drop for LinuxBleDevice {
     fn drop(&mut self) {
         if let Ok(mut control) = self.listener_control.lock() {

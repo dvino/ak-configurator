@@ -23,8 +23,8 @@ pub(crate) const CMD_VIA_VIAL_PREFIX: u8 = 0xFE;
 pub(super) const VIA_LAYOUT_OPTIONS: u8 = 0x02;
 pub(super) const VIA_SWITCH_MATRIX_STATE: u8 = 0x03;
 pub(super) const VIA_FIRMWARE_VERSION: u8 = 0x04;
-pub(super) const QMK_BACKLIGHT_BRIGHTNESS: u8 = 0x09;
-pub(super) const QMK_BACKLIGHT_EFFECT: u8 = 0x0A;
+// Legacy QMK backlight selectors (not implemented by this transport):
+// brightness = 0x09, effect = 0x0A. RGB-light selectors below are distinct.
 pub(super) const QMK_RGBLIGHT_BRIGHTNESS: u8 = 0x80;
 pub(super) const QMK_RGBLIGHT_EFFECT: u8 = 0x81;
 pub(super) const QMK_RGBLIGHT_EFFECT_SPEED: u8 = 0x82;
@@ -82,7 +82,10 @@ pub(crate) fn is_read_request(command: &[u8]) -> bool {
         [0xFD, 0, hi, lo, count, rest @ ..]
             if (1..=27).contains(count)
                 && usize::from(u16::from_be_bytes([*hi, *lo])) + usize::from(*count) <= 65536
-                && rest.iter().all(|byte| *byte == 0) => true,
+                && rest.iter().all(|byte| *byte == 0) =>
+        {
+            true
+        }
         [0xFD, 1, rest @ ..] if rest.iter().all(|byte| *byte == 0) => true,
         [CMD_VIA_GET_PROTOCOL_VERSION
         | CMD_VIA_GET_KEYBOARD_VALUE

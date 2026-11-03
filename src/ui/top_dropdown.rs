@@ -620,9 +620,9 @@ mod tests {
     fn popup_resets_tint_between_frames() {
         let ctx = egui::Context::default();
         for first in [TopMenuIcon::Rgb, TopMenuIcon::TextExpander] {
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
                 show_top_dropdown(
-                    ctx,
+                    ui.ctx(),
                     egui::Id::new("tint_popup"),
                     egui::pos2(8.0, 8.0),
                     |ui| {

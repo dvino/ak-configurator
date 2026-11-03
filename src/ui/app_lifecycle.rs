@@ -745,7 +745,7 @@ mod tests {
             firmware: FirmwareProtocol::Vial,
         };
         let loading = ConnectState::Loading {
-            device: device.clone(),
+            device: Box::new(device.clone()),
             rx: receiver,
             started_at: now,
             last_progress_at: now,
@@ -756,7 +756,7 @@ mod tests {
         assert!(connection_replaces_layout_canvas(&loading, true));
 
         let reconnecting_loading = ConnectState::Loading {
-            device,
+            device: Box::new(device),
             rx: std::sync::mpsc::channel().1,
             started_at: now,
             last_progress_at: now,
@@ -1423,11 +1423,15 @@ mod tests {
             let mut app = EntropyApp::new_inert_for_test();
             app.dark_mode = dark_mode;
             let ctx = egui::Context::default();
-            ctx.set_visuals(if dark_mode { egui::Visuals::light() } else { egui::Visuals::dark() });
+            ctx.set_visuals(if dark_mode {
+                egui::Visuals::light()
+            } else {
+                egui::Visuals::dark()
+            });
             app.apply_initial_ui_theme(&ctx);
             let mut checked = false;
-            let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     assert_eq!(ui.visuals().dark_mode, dark_mode);
                     assert_eq!(ui.visuals().panel_fill, app_panel_fill(dark_mode));
                     checked = true;
@@ -1794,6 +1798,7 @@ impl eframe::App for EntropyApp {
             #[cfg(target_os = "macos")]
             self.handle_macos_dock_reopen(ctx);
 
+            #[cfg(test)]
             crate::app::poll_update_check(&mut self.update_check);
             crate::app::poll_firmware_update_check(&mut self.firmware_update_check);
             let main_window_hidden_to_tray = self.main_window_hidden_to_tray();
@@ -1812,10 +1817,11 @@ impl eframe::App for EntropyApp {
                 main_window_uses_wayland,
             );
             let connect_pending = matches!(self.connect_state, ConnectState::Loading { .. });
-            let update_check_pending =
-                matches!(self.update_check, UpdateCheckState::Checking { .. })
-                    || self.app_update_runtime.busy()
-                    || crate::app::firmware_update_check_pending(&self.firmware_update_check);
+            let update_check_pending = self.app_update_runtime.busy()
+                || crate::app::firmware_update_check_pending(&self.firmware_update_check);
+            #[cfg(test)]
+            let update_check_pending = update_check_pending
+                || matches!(self.update_check, UpdateCheckState::Checking { .. });
             let layout_indicator_interval = self
                 .app_settings
                 .sticky_layout_window
@@ -1842,6 +1848,7 @@ impl eframe::App for EntropyApp {
 
         #[cfg(target_arch = "wasm32")]
         {
+            #[cfg(test)]
             crate::app::poll_update_check(&mut self.update_check);
             crate::app::poll_firmware_update_check(&mut self.firmware_update_check);
             let now = ctx.input(|i| i.time);
@@ -1954,7 +1961,7 @@ impl eframe::App for EntropyApp {
         super::ak820_backup_inspection::invalidate_closed(ctx, self.connection_generation);
 
         // Persistent navigation stays available while service pages replace the editor canvas.
-        egui::TopBottomPanel::top("ak820_service_navigation_panel").show_inside(root_ui, |ui| {
+        egui::Panel::top("ak820_service_navigation_panel").show_inside(root_ui, |ui| {
             self.draw_service_navigation(ui);
         });
 
@@ -1969,14 +1976,22 @@ impl eframe::App for EntropyApp {
                 super::ak820_offline_files::show(self, ui);
                 return;
             }
-            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new(super::ak820_install_files::OPEN_ID)).unwrap_or(false)) {
+            if ctx.data(|d| {
+                d.get_temp::<bool>(egui::Id::new(super::ak820_install_files::OPEN_ID))
+                    .unwrap_or(false)
+            }) {
                 if super::ak820_install_files::show(self, ui) {
-                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(super::ak820_install_files::OPEN_ID), false));
+                    ctx.data_mut(|d| {
+                        d.insert_temp(egui::Id::new(super::ak820_install_files::OPEN_ID), false)
+                    });
                 }
                 return;
             }
             #[cfg(not(target_arch = "wasm32"))]
-            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new(super::ak820_install::OPEN_ID)).unwrap_or(false)) {
+            if ctx.data(|d| {
+                d.get_temp::<bool>(egui::Id::new(super::ak820_install::OPEN_ID))
+                    .unwrap_or(false)
+            }) {
                 super::ak820_install::show(self, ui);
                 return;
             }
@@ -1987,7 +2002,10 @@ impl eframe::App for EntropyApp {
                 super::ak820_backup_inspection::show(self, ui);
                 return;
             }
-            if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ak820_offline_extensions_open")).unwrap_or(false)) {
+            if ctx.data(|d| {
+                d.get_temp::<bool>(egui::Id::new("ak820_offline_extensions_open"))
+                    .unwrap_or(false)
+            }) {
                 self.draw_ak820_offline_modules_page(ui);
                 return;
             }
@@ -2068,8 +2086,20 @@ impl eframe::App for EntropyApp {
                                 self.start_device_scan();
                             }
                             ui.add_space(8.0);
-                            if ui.button(if self.app_settings.language == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
-                                self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                            if ui
+                                .button(
+                                    if self.app_settings.language == crate::i18n::Language::Russian
+                                    {
+                                        "Открыть офлайн-демо AK820"
+                                    } else {
+                                        "Open AK820 offline demo"
+                                    },
+                                )
+                                .clicked()
+                            {
+                                self.configure_ak820_offline_profile(
+                                    super::ak820_beta1_profiles::ProfileId::Main,
+                                );
                             }
                         });
                     });
@@ -2130,8 +2160,19 @@ impl eframe::App for EntropyApp {
                             }
                         }
                         ui.add_space(8.0);
-                        if ui.button(if self.app_settings.language == crate::i18n::Language::Russian { "Открыть офлайн-демо AK820" } else { "Open AK820 offline demo" }).clicked() {
-                            self.configure_ak820_offline_profile(super::ak820_beta1_profiles::ProfileId::Main);
+                        if ui
+                            .button(
+                                if self.app_settings.language == crate::i18n::Language::Russian {
+                                    "Открыть офлайн-демо AK820"
+                                } else {
+                                    "Open AK820 offline demo"
+                                },
+                            )
+                            .clicked()
+                        {
+                            self.configure_ak820_offline_profile(
+                                super::ak820_beta1_profiles::ProfileId::Main,
+                            );
                         }
                     });
                 });
@@ -2649,10 +2690,14 @@ mod ak820_navigation_tests {
         let _config = ScopedTempConfig::new();
         let mut app = EntropyApp::new_inert_for_test();
         app.app_settings.language = crate::i18n::Language::English;
-        let mut harness = Harness::builder().with_size(egui::vec2(800.0, 500.0))
-            .build_ui_state(|ui, app: &mut EntropyApp| {
-                eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
-            }, app);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(800.0, 500.0))
+            .build_ui_state(
+                |ui, app: &mut EntropyApp| {
+                    eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+                },
+                app,
+            );
         harness.run();
         harness.get_by_label("Menu").click();
         harness.run();
@@ -2668,7 +2713,10 @@ mod ak820_navigation_tests {
         });
         harness.run();
         let close_rect = harness.get_by_label("Close").rect();
-        assert!(close_rect.min.y >= 0.0 && close_rect.max.y <= 500.0, "{close_rect:?}");
+        assert!(
+            close_rect.min.y >= 0.0 && close_rect.max.y <= 500.0,
+            "{close_rect:?}"
+        );
         harness.get_by_label("Close").click();
         harness.run();
         assert!(harness.query_by_label("AK820 backups").is_none());
@@ -2723,9 +2771,12 @@ mod ak820_navigation_tests {
         app.app_settings.close_to_tray_behavior = CloseToTrayBehavior::Tray;
         let mut harness = Harness::builder()
             .with_size(egui::vec2(800.0, 500.0))
-            .build_ui_state(|ui, app: &mut EntropyApp| {
-                eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
-            }, app);
+            .build_ui_state(
+                |ui, app: &mut EntropyApp| {
+                    eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+                },
+                app,
+            );
         harness.run();
         harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Q);
         harness.run();

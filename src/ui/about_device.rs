@@ -427,9 +427,27 @@ fn device_about_rows(
 
     if let Some(ruleset) = info.caps_word_ruleset {
         let language = match ruleset {
-            0 => if lang == crate::i18n::Language::Russian { "Английский" } else { "English" },
-            1 => if lang == crate::i18n::Language::Russian { "Русский" } else { "Russian" },
-            _ => if lang == crate::i18n::Language::Russian { "Неизвестно" } else { "Unknown" },
+            0 => {
+                if lang == crate::i18n::Language::Russian {
+                    "Английский"
+                } else {
+                    "English"
+                }
+            }
+            1 => {
+                if lang == crate::i18n::Language::Russian {
+                    "Русский"
+                } else {
+                    "Russian"
+                }
+            }
+            _ => {
+                if lang == crate::i18n::Language::Russian {
+                    "Неизвестно"
+                } else {
+                    "Unknown"
+                }
+            }
         };
         rows.push(localized_row(
             lang,
@@ -545,6 +563,7 @@ fn update_platform_text(update_check: &UpdateCheckState) -> String {
 fn latest_release_text(lang: crate::i18n::Language, update_check: &UpdateCheckState) -> String {
     match update_check {
         UpdateCheckState::Ready(result) => result.latest_version.clone(),
+        #[cfg(test)]
         UpdateCheckState::Checking { .. } => match lang {
             crate::i18n::Language::Russian => "проверяется".to_owned(),
             crate::i18n::Language::English => "checking".to_owned(),
@@ -559,6 +578,7 @@ fn update_status_text(lang: crate::i18n::Language, update_check: &UpdateCheckSta
             crate::i18n::Language::Russian => "не проверялось".to_owned(),
             crate::i18n::Language::English => "not checked".to_owned(),
         },
+        #[cfg(test)]
         UpdateCheckState::Checking { .. } => match lang {
             crate::i18n::Language::Russian => "проверяем GitHub Releases".to_owned(),
             crate::i18n::Language::English => "checking GitHub Releases".to_owned(),
@@ -588,10 +608,12 @@ fn update_asset_text(lang: crate::i18n::Language, update_check: &UpdateCheckStat
     match update_check {
         UpdateCheckState::Ready(result) => match &result.asset {
             UpdateAssetState::Available(asset) => asset.name.clone(),
+            #[cfg(test)]
             UpdateAssetState::MetadataUnavailable => match lang {
                 crate::i18n::Language::Russian => "данные о файле недоступны".to_owned(),
                 crate::i18n::Language::English => "file metadata unavailable".to_owned(),
             },
+            #[cfg(test)]
             UpdateAssetState::MissingForPlatform => match lang {
                 crate::i18n::Language::Russian => "нет файла для этой ОС".to_owned(),
                 crate::i18n::Language::English => "no file for this OS".to_owned(),
@@ -657,8 +679,7 @@ fn draw_about_rows(
         for row in &rows[list.first_visible_row..list.last_visible_row] {
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                list.row_content_width,
-                list.row_height,
+                egui::vec2(list.row_content_width, list.row_height),
                 row.label,
                 true,
                 tooltip_enabled.then_some(row.tooltip),
@@ -908,11 +929,7 @@ mod tests {
                 "Caps Word language",
                 "Russian",
             ),
-            (
-                crate::i18n::Language::Russian,
-                "Язык Caps Word",
-                "Русский",
-            ),
+            (crate::i18n::Language::Russian, "Язык Caps Word", "Русский"),
         ] {
             let info = DeviceAboutInfo {
                 caps_word_ruleset: Some(1),
@@ -954,7 +971,7 @@ mod tests {
                 let mut app = EntropyApp::new(&cc);
                 app.app_settings.language = lang;
                 app.device_about_info = Some(info.clone());
-                let output = ctx.run(
+                let output = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
                             egui::Pos2::ZERO,
@@ -962,8 +979,8 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
                             app.draw_about_device_page(ui, ui.max_rect());
                         });
                     },

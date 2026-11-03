@@ -320,6 +320,7 @@ impl ApplicationLayout {
         true
     }
 
+    #[cfg(test)]
     pub(crate) fn set_encoder_stack(
         &mut self,
         layer: usize,
@@ -711,6 +712,7 @@ impl DeviceApplicationLayouts {
             .or_else(|| self.layouts.get(DEFAULT_APPLICATION_LAYOUT_ID))
     }
 
+    #[cfg(test)]
     pub(crate) fn create_for_application(&mut self, application: &DetectedApplication) -> String {
         self.create_for_application_named(application, None, "")
     }
@@ -1144,8 +1146,8 @@ impl DeviceApplicationLayouts {
                             ),
                         )
                     };
-                    rank(&left)
-                        .cmp(&rank(&right))
+                    rank(left)
+                        .cmp(&rank(right))
                         // Stable fallback for legacy configurations that already contain
                         // ambiguous duplicate rules. Lower ids win deterministically.
                         .then_with(|| right.id.cmp(&left.id))
@@ -1310,7 +1312,10 @@ impl ApplicationLayoutSnapshot {
     // Known semantic Default without permission to replay any cached map.
     // Unlike inactive(), this is a foreground routing result, not revocation.
     pub(crate) fn firmware_default() -> Self {
-        Self { profile_id: Some(DEFAULT_APPLICATION_LAYOUT_ID.into()), ..Self::inactive() }
+        Self {
+            profile_id: Some(DEFAULT_APPLICATION_LAYOUT_ID.into()),
+            ..Self::inactive()
+        }
     }
 
     pub(crate) fn inactive() -> Self {
@@ -1381,8 +1386,7 @@ impl ApplicationLayoutSnapshot {
                 packet[2] = layer as u8;
                 packet[3] = slot as u8;
                 packet[4] = count as u8;
-                if slot < count {
-                    let action = &actions[slot];
+                if let Some(action) = actions.get(slot).filter(|_| slot < count) {
                     let name = application_layout_stack_name_bytes(&action.name);
                     packet[5] = name.len() as u8;
                     packet[6..8].copy_from_slice(&action.counter_clockwise.to_le_bytes());
@@ -3677,22 +3681,22 @@ mod tests {
         assert_eq!(
             packets.iter().map(|packet| packet[0]).collect::<Vec<_>>(),
             std::iter::once(HID_APPLICATION_LAYOUT_BEGIN)
-                .chain(
-                    std::iter::repeat(HID_APPLICATION_LAYOUT_KEYCODES)
-                        .take(APPLICATION_LAYOUT_LAYER_COUNT * 2),
-                )
-                .chain(
-                    std::iter::repeat(HID_APPLICATION_LAYOUT_VISUALS)
-                        .take(APPLICATION_LAYOUT_LAYER_COUNT)
-                )
-                .chain(
-                    std::iter::repeat(HID_APPLICATION_LAYOUT_ENCODER_STACK)
-                        .take(APPLICATION_LAYOUT_LAYER_COUNT * APPLICATION_LAYOUT_STACK_SLOTS)
-                )
-                .chain(
-                    std::iter::repeat(HID_APPLICATION_LAYOUT_LAYER_NAME)
-                        .take(APPLICATION_LAYOUT_LAYER_COUNT),
-                )
+                .chain(std::iter::repeat_n(
+                    HID_APPLICATION_LAYOUT_KEYCODES,
+                    APPLICATION_LAYOUT_LAYER_COUNT * 2
+                ),)
+                .chain(std::iter::repeat_n(
+                    HID_APPLICATION_LAYOUT_VISUALS,
+                    APPLICATION_LAYOUT_LAYER_COUNT
+                ))
+                .chain(std::iter::repeat_n(
+                    HID_APPLICATION_LAYOUT_ENCODER_STACK,
+                    APPLICATION_LAYOUT_LAYER_COUNT * APPLICATION_LAYOUT_STACK_SLOTS
+                ))
+                .chain(std::iter::repeat_n(
+                    HID_APPLICATION_LAYOUT_LAYER_NAME,
+                    APPLICATION_LAYOUT_LAYER_COUNT
+                ),)
                 .chain(std::iter::once(HID_APPLICATION_LAYOUT_COMMIT))
                 .collect::<Vec<_>>()
         );

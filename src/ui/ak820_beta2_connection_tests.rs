@@ -206,16 +206,14 @@ fn complete_beta2_live_read_contract_succeeds_for_all_ten_synthetic_profiles() {
             crate::ak820::ImageContract::Beta2(profile).qsid_ids()
         );
         assert!(result.hid_device.as_ref().unwrap().ak820_editing_ready());
-        assert!(
-            log.requests()
-                .iter()
-                .all(|p| !matches!(p[0], 0x05 | 0x07 | 0x0F))
-        );
-        assert!(
-            log.requests()
-                .iter()
-                .all(|p| !(p[0] == 0xFE && matches!(p[1], 6 | 7 | 8)))
-        );
+        assert!(log
+            .requests()
+            .iter()
+            .all(|p| !matches!(p[0], 0x05 | 0x07 | 0x0F)));
+        assert!(log
+            .requests()
+            .iter()
+            .all(|p| !(p[0] == 0xFE && matches!(p[1], 6..=8))));
     }
 }
 
@@ -228,16 +226,14 @@ fn beta2_connection_rejects_definition_keymap_typed_count_and_stability_mismatch
             load_verified_ak820(&test_device(), hid, |_| Ok(())).is_err(),
             "{fault}"
         );
-        assert!(
-            log.requests()
-                .iter()
-                .all(|p| !matches!(p[0], 0x05 | 0x07 | 0x0F))
-        );
-        assert!(
-            log.requests()
-                .iter()
-                .all(|p| !(p[0] == 0xFE && matches!(p[1], 6 | 7 | 8)))
-        );
+        assert!(log
+            .requests()
+            .iter()
+            .all(|p| !matches!(p[0], 0x05 | 0x07 | 0x0F)));
+        assert!(log
+            .requests()
+            .iter()
+            .all(|p| !(p[0] == 0xFE && matches!(p[1], 6..=8))));
     }
 }
 

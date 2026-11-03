@@ -10,7 +10,7 @@ pub(super) fn frame_events(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
 ) -> egui::FullOutput {
-    ctx.run(
+    ctx.run_ui(
         egui::RawInput {
             events,
             screen_rect: Some(egui::Rect::from_min_size(
@@ -19,8 +19,8 @@ pub(super) fn frame_events(
             )),
             ..Default::default()
         },
-        |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| {
                 app.draw_sm62_display_settings_page(ui, ui.max_rect());
             });
         },
@@ -298,7 +298,7 @@ fn shared_sm62_disabled_page_does_not_enqueue_unconfirmed_values() {
         let before = app.display_settings.clone();
         if read_only {
             for _ in 0..3 {
-                let _ = ctx.run(
+                let _ = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
                             egui::Pos2::ZERO,
@@ -306,8 +306,8 @@ fn shared_sm62_disabled_page_does_not_enqueue_unconfirmed_values() {
                         )),
                         ..Default::default()
                     },
-                    |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
                             ui.add_enabled_ui(false, |ui| {
                                 app.draw_sm62_display_settings_page(ui, ui.max_rect())
                             });

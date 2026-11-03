@@ -3,7 +3,9 @@ use super::*;
 /// Which follow-up action to run once the inline path entry returns a path.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FileDialogAction {
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     ImportApplicationLayout(String),
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     ExportApplicationLayout(String),
     ImportEntlayout,
     ExportEntlayout,
@@ -21,11 +23,12 @@ impl FileDialogAction {
     /// Whether the follow-up reads or writes the currently connected device.
     /// These must be rejected if the active device changed while the picker was
     /// open. App-settings import/export are device-independent.
-    fn is_device_scoped(self) -> bool {
+    fn is_device_scoped(&self) -> bool {
         match self {
+            #[cfg(all(test, not(target_arch = "wasm32")))]
             FileDialogAction::ImportApplicationLayout(_)
-            | FileDialogAction::ExportApplicationLayout(_)
-            | FileDialogAction::ImportEntlayout
+            | FileDialogAction::ExportApplicationLayout(_) => true,
+            FileDialogAction::ImportEntlayout
             | FileDialogAction::ExportEntlayout
             | FileDialogAction::ExportLayoutImage
             | FileDialogAction::StartupImage
@@ -172,21 +175,33 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn image_confirmation_uses_the_actual_normalized_destination() {
-        assert_eq!(destination("report.txt", Some("png")), PathBuf::from("report.png"));
-        assert_eq!(destination("report.PNG", Some("png")), PathBuf::from("report.PNG"));
+        assert_eq!(
+            destination("report.txt", Some("png")),
+            PathBuf::from("report.png")
+        );
+        assert_eq!(
+            destination("report.PNG", Some("png")),
+            PathBuf::from("report.PNG")
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn every_export_uses_its_expected_extension() {
         for (action, extension) in [
-            (FileDialogAction::ExportApplicationLayout("profile".into()), "entlayout"),
+            (
+                FileDialogAction::ExportApplicationLayout("profile".into()),
+                "entlayout",
+            ),
             (FileDialogAction::ExportEntlayout, "entlayout"),
             (FileDialogAction::ExportEntsettings, "entsettings"),
             (FileDialogAction::ExportPictograms, "json"),
             (FileDialogAction::ExportLayoutImage, "svg"),
         ] {
-            assert_eq!(destination("backup", export_extension(&action, "svg")), PathBuf::from(format!("backup.{extension}")));
+            assert_eq!(
+                destination("backup", export_extension(&action, "svg")),
+                PathBuf::from(format!("backup.{extension}"))
+            );
         }
     }
 
@@ -205,20 +220,32 @@ mod tests {
         use super::super::file_browser::BrowserResult;
         let (sender, _receiver) = std::sync::mpsc::channel();
         let mut dialog = InlineFileDialog {
-            sender, path: "original".into(), save: true, confirmed: true,
-            extension: None, action: FileDialogAction::ExportEntlayout,
-            browser: None, browser_error: false,
+            sender,
+            path: "original".into(),
+            save: true,
+            confirmed: true,
+            extension: None,
+            action: FileDialogAction::ExportEntlayout,
+            browser: None,
+            browser_error: false,
         };
         dialog.finish_browsing(BrowserResult::Cancelled);
         assert_eq!(dialog.path, "original");
         assert!(dialog.confirmed);
         dialog.finish_browsing(BrowserResult::Selected(PathBuf::from("chosen.entlayout")));
         assert_eq!(dialog.path, "chosen.entlayout");
-        assert!(!path_can_submit(&dialog.path, dialog.save, dialog.confirmed));
+        assert!(!path_can_submit(
+            &dialog.path,
+            dialog.save,
+            dialog.confirmed
+        ));
         assert!(_receiver.try_recv().is_err());
         dialog.confirmed = true;
         dialog.finish_browsing(BrowserResult::Directory(PathBuf::from("folder")));
-        assert_eq!(PathBuf::from(&dialog.path).join("new.entlayout"), PathBuf::from("folder").join("new.entlayout"));
+        assert_eq!(
+            PathBuf::from(&dialog.path).join("new.entlayout"),
+            PathBuf::from("folder").join("new.entlayout")
+        );
         assert!(dialog.path.ends_with(std::path::MAIN_SEPARATOR));
         assert!(!dialog.confirmed);
     }
@@ -226,15 +253,22 @@ mod tests {
     #[cfg(all(unix, not(target_arch = "wasm32")))]
     #[test]
     fn non_utf8_browser_selection_does_not_replace_path() {
-        use std::os::unix::ffi::OsStringExt;
         use super::super::file_browser::BrowserResult;
+        use std::os::unix::ffi::OsStringExt;
         let (sender, _receiver) = std::sync::mpsc::channel();
         let mut dialog = InlineFileDialog {
-            sender, path: "original".into(), save: false, confirmed: false,
-            extension: None, action: FileDialogAction::ImportEntlayout,
-            browser: None, browser_error: false,
+            sender,
+            path: "original".into(),
+            save: false,
+            confirmed: false,
+            extension: None,
+            action: FileDialogAction::ImportEntlayout,
+            browser: None,
+            browser_error: false,
         };
-        dialog.finish_browsing(BrowserResult::Selected(PathBuf::from(std::ffi::OsString::from_vec(vec![0xff]))));
+        dialog.finish_browsing(BrowserResult::Selected(PathBuf::from(
+            std::ffi::OsString::from_vec(vec![0xff]),
+        )));
         assert_eq!(dialog.path, "original");
         assert!(dialog.browser_error);
     }
@@ -406,9 +440,14 @@ fn path_can_submit(path: &str, save: bool, confirmed: bool) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn export_extension(action: &FileDialogAction, image_extension: &'static str) -> Option<&'static str> {
+fn export_extension(
+    action: &FileDialogAction,
+    image_extension: &'static str,
+) -> Option<&'static str> {
     match action {
-        FileDialogAction::ExportApplicationLayout(_) | FileDialogAction::ExportEntlayout => Some("entlayout"),
+        #[cfg(test)]
+        FileDialogAction::ExportApplicationLayout(_) => Some("entlayout"),
+        FileDialogAction::ExportEntlayout => Some("entlayout"),
         FileDialogAction::ExportEntsettings => Some("entsettings"),
         FileDialogAction::ExportPictograms => Some("json"),
         FileDialogAction::ExportLayoutImage => Some(image_extension),
@@ -420,7 +459,11 @@ fn export_extension(action: &FileDialogAction, image_extension: &'static str) ->
 fn destination(path: &str, extension: Option<&str>) -> std::path::PathBuf {
     let mut path = std::path::PathBuf::from(path);
     if let Some(extension) = extension {
-        if !path.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case(extension)) {
+        if !path
+            .extension()
+            .and_then(|v| v.to_str())
+            .is_some_and(|v| v.eq_ignore_ascii_case(extension))
+        {
             path.set_extension(extension);
         }
     }
@@ -489,7 +532,13 @@ impl EntropyApp {
         }
         let _ = dialog;
         let extension = if save {
-            export_extension(&action, super::layout_image_export::layout_image_export_descriptor(self.app_settings.layout_image_export.format).0)
+            export_extension(
+                &action,
+                super::layout_image_export::layout_image_export_descriptor(
+                    self.app_settings.layout_image_export.format,
+                )
+                .0,
+            )
         } else {
             None
         };
@@ -521,24 +570,88 @@ impl EntropyApp {
             let Some(dialog) = slot.as_mut() else { return };
             let mut result = None;
             ui.group(|ui| {
-                ui.heading(if russian { "Путь к файлу" } else { "File path" });
-                ui.label(match &dialog.action {
-                    FileDialogAction::ImportApplicationLayout(name) | FileDialogAction::ExportApplicationLayout(name) => name.as_str(),
-                    FileDialogAction::ImportEntlayout | FileDialogAction::ExportEntlayout => if russian { "Раскладка (.entlayout)" } else { "Layout (.entlayout)" },
-                    FileDialogAction::ImportEntsettings | FileDialogAction::ExportEntsettings => if russian { "Настройки (.entsettings)" } else { "Settings (.entsettings)" },
-                    FileDialogAction::ExportLayoutImage => if russian { "Изображение раскладки" } else { "Layout image" },
-                    FileDialogAction::StartupImage => if russian { "Изображение запуска" } else { "Startup image" },
-                    FileDialogAction::StandbyBackground => if russian { "Фон ожидания" } else { "Standby background" },
-                    FileDialogAction::Pictogram => if russian { "Пиктограмма" } else { "Pictogram" },
-                    FileDialogAction::ImportPictograms | FileDialogAction::ExportPictograms => if russian { "Пиктограммы" } else { "Pictograms" },
+                ui.heading(if russian {
+                    "Путь к файлу"
+                } else {
+                    "File path"
                 });
-                ui.label(if russian { "Путь к файлу (можно ввести вручную):" } else { "File path (or enter it manually):" });
+                ui.label(match &dialog.action {
+                    #[cfg(test)]
+                    FileDialogAction::ImportApplicationLayout(name)
+                    | FileDialogAction::ExportApplicationLayout(name) => name.as_str(),
+                    FileDialogAction::ImportEntlayout | FileDialogAction::ExportEntlayout => {
+                        if russian {
+                            "Раскладка (.entlayout)"
+                        } else {
+                            "Layout (.entlayout)"
+                        }
+                    }
+                    FileDialogAction::ImportEntsettings | FileDialogAction::ExportEntsettings => {
+                        if russian {
+                            "Настройки (.entsettings)"
+                        } else {
+                            "Settings (.entsettings)"
+                        }
+                    }
+                    FileDialogAction::ExportLayoutImage => {
+                        if russian {
+                            "Изображение раскладки"
+                        } else {
+                            "Layout image"
+                        }
+                    }
+                    FileDialogAction::StartupImage => {
+                        if russian {
+                            "Изображение запуска"
+                        } else {
+                            "Startup image"
+                        }
+                    }
+                    FileDialogAction::StandbyBackground => {
+                        if russian {
+                            "Фон ожидания"
+                        } else {
+                            "Standby background"
+                        }
+                    }
+                    FileDialogAction::Pictogram => {
+                        if russian {
+                            "Пиктограмма"
+                        } else {
+                            "Pictogram"
+                        }
+                    }
+                    FileDialogAction::ImportPictograms | FileDialogAction::ExportPictograms => {
+                        if russian {
+                            "Пиктограммы"
+                        } else {
+                            "Pictograms"
+                        }
+                    }
+                });
+                ui.label(if russian {
+                    "Путь к файлу (можно ввести вручную):"
+                } else {
+                    "File path (or enter it manually):"
+                });
                 if ui.text_edit_singleline(&mut dialog.path).changed() {
                     dialog.confirmed = false;
                 }
-                if dialog.browser.is_none() && ui.button(if russian { "Обзор" } else { "Browse" }).clicked() {
-                    let mode = if dialog.save { super::file_browser::BrowserMode::FileAndDirectory } else { super::file_browser::BrowserMode::File };
-                    dialog.browser = Some(super::file_browser::FileBrowser::new(std::path::PathBuf::from("."), mode, ui.ctx()));
+                if dialog.browser.is_none()
+                    && ui
+                        .button(if russian { "Обзор" } else { "Browse" })
+                        .clicked()
+                {
+                    let mode = if dialog.save {
+                        super::file_browser::BrowserMode::FileAndDirectory
+                    } else {
+                        super::file_browser::BrowserMode::File
+                    };
+                    dialog.browser = Some(super::file_browser::FileBrowser::new(
+                        std::path::PathBuf::from("."),
+                        mode,
+                        ui.ctx(),
+                    ));
                     dialog.browser_error = false;
                 }
                 if let Some(browser) = &mut dialog.browser {
@@ -547,23 +660,50 @@ impl EntropyApp {
                     }
                 }
                 if dialog.browser_error {
-                    ui.label(if russian { "Этот путь нельзя представить как текст; выберите другой файл." } else { "This path cannot be represented as text; select another file." });
+                    ui.label(if russian {
+                        "Этот путь нельзя представить как текст; выберите другой файл."
+                    } else {
+                        "This path cannot be represented as text; select another file."
+                    });
                 }
                 let destination = destination(&dialog.path, dialog.extension);
                 if dialog.save {
-                    ui.label(format!("{}: {}", if russian { "Путь сохранения" } else { "Save destination" }, destination.display()));
-                    ui.checkbox(&mut dialog.confirmed, if russian {
-                        "Подтверждаю перезапись файла, если он существует"
-                    } else {
-                        "I confirm overwriting the file if it exists"
-                    });
+                    ui.label(format!(
+                        "{}: {}",
+                        if russian {
+                            "Путь сохранения"
+                        } else {
+                            "Save destination"
+                        },
+                        destination.display()
+                    ));
+                    ui.checkbox(
+                        &mut dialog.confirmed,
+                        if russian {
+                            "Подтверждаю перезапись файла, если он существует"
+                        } else {
+                            "I confirm overwriting the file if it exists"
+                        },
+                    );
                 }
                 ui.horizontal(|ui| {
-                    if ui.button(if russian { "Отмена" } else { "Cancel" }).clicked() {
+                    if ui
+                        .button(if russian { "Отмена" } else { "Cancel" })
+                        .clicked()
+                    {
                         result = Some(None);
                     }
-                    if ui.add_enabled(path_can_submit(&dialog.path, dialog.save, dialog.confirmed),
-                        egui::Button::new(if russian { "Подтвердить" } else { "Confirm" })).clicked() {
+                    if ui
+                        .add_enabled(
+                            path_can_submit(&dialog.path, dialog.save, dialog.confirmed),
+                            egui::Button::new(if russian {
+                                "Подтвердить"
+                            } else {
+                                "Confirm"
+                            }),
+                        )
+                        .clicked()
+                    {
                         result = Some(Some(destination));
                     }
                 });
@@ -651,12 +791,14 @@ impl EntropyApp {
         path: std::path::PathBuf,
     ) {
         match action {
+            #[cfg(test)]
             FileDialogAction::ImportApplicationLayout(id) => {
                 self.status_msg = match self.import_application_layout_from_path(&path, &id) {
                     Ok(()) => format!("Imported application layout into {id}. Other profiles, app matching and shared resources were preserved."),
                     Err(error) => format!("Application import failed: {error:#}"),
                 };
             }
+            #[cfg(test)]
             FileDialogAction::ExportApplicationLayout(id) => {
                 self.status_msg = match self.write_application_layout_export(&path, &id) {
                     Ok(()) => format!("Exported application layout: {} (keys, layer names and encoder stacks only; shared resources are not included)", path.display()),

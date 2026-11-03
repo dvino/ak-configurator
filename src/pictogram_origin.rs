@@ -28,11 +28,11 @@ pub(super) fn is_known_migrated_stock_pictogram(icon: &SavedPictogram) -> bool {
         // artwork, not user drawings. Match pixels, never the name alone.
         let agent_layers = include_bytes!("../assets/legacy-layer-navigation-agent-confirmed.bin");
         let firmware_start = 38 + crate::action_icons::ACTION_ICON_COUNT;
-        for index in 0..BUILTIN_PICTOGRAM_KEYS.len() {
+        for (index, key) in BUILTIN_PICTOGRAM_KEYS.iter().enumerate() {
             for language in crate::i18n::Language::ALL {
                 #[cfg(test)]
                 LEGACY_NAME_LOOKUPS.with(|count| count.set(count.get() + 1));
-                let name = crate::i18n::tr_catalog(language, BUILTIN_PICTOGRAM_KEYS[index]);
+                let name = crate::i18n::tr_catalog(language, key);
                 let bitmaps = records.entry(name.to_owned()).or_default();
                 if index < 38 {
                     bitmaps.push(legacy_builtin_pictogram_bitmap(index));
@@ -76,17 +76,28 @@ pub(super) fn is_known_migrated_stock_pictogram(icon: &SavedPictogram) -> bool {
         // its pixels. Preserve exact historical name+mask recognition; explicit
         // user origin and pixel edits still bypass this stock-only migration.
         for language in crate::i18n::Language::ALL {
-            let old_name = crate::i18n::tr_catalog(language, "display_settings.pictogram_firmware_delete");
-            let new_name = crate::i18n::tr_catalog(language, "display_settings.pictogram_firmware_backspace");
+            let old_name =
+                crate::i18n::tr_catalog(language, "display_settings.pictogram_firmware_delete");
+            let new_name =
+                crate::i18n::tr_catalog(language, "display_settings.pictogram_firmware_backspace");
             if let Some(masks) = records.get(new_name).cloned() {
-                records.entry(old_name.to_owned()).or_default().extend(masks);
+                records
+                    .entry(old_name.to_owned())
+                    .or_default()
+                    .extend(masks);
             }
         }
         // Disambiguated native Page key captions must still recognize exact
         // Russian stock records from older libraries, never authored/edited art.
         for (old_name, key) in [
-            ("Страница вверх", "display_settings.pictogram_firmware_page_up"),
-            ("Страница вниз", "display_settings.pictogram_firmware_page_down"),
+            (
+                "Страница вверх",
+                "display_settings.pictogram_firmware_page_up",
+            ),
+            (
+                "Страница вниз",
+                "display_settings.pictogram_firmware_page_down",
+            ),
         ] {
             let name = crate::i18n::tr_catalog(crate::i18n::Language::Russian, key);
             if let Some(masks) = records.get(name).cloned() {

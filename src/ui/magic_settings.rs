@@ -206,8 +206,7 @@ impl EntropyApp {
             let mut value = self.magic_settings.bit(bit);
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                content_width,
-                row_height,
+                egui::vec2(content_width, row_height),
                 label.as_str(),
                 true,
                 if suppress_tooltips {

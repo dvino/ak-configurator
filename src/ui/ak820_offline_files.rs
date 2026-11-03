@@ -170,7 +170,9 @@ fn write_project(path: &Path, bytes: &[u8]) -> Result<(), String> {
     temporary.as_file().sync_all().map_err(|e| e.to_string())?;
     // Persist errors may contain the private destination path. Return only
     // the underlying OS error; local UI is the sole consumer of these errors.
-    temporary.persist_noclobber(path).map_err(|e| e.error.to_string())?;
+    temporary
+        .persist_noclobber(path)
+        .map_err(|e| e.error.to_string())?;
     Ok(())
 }
 
@@ -225,8 +227,14 @@ struct WorkerPermit(&'static std::sync::atomic::AtomicBool);
 #[cfg(not(target_arch = "wasm32"))]
 impl WorkerPermit {
     fn acquire(busy: &'static std::sync::atomic::AtomicBool) -> Option<Self> {
-        busy.compare_exchange(false, true, std::sync::atomic::Ordering::Acquire, std::sync::atomic::Ordering::Relaxed)
-            .ok().map(|_| Self(busy))
+        busy.compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::Acquire,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .ok()
+        .map(|_| Self(busy))
     }
 }
 
@@ -269,7 +277,9 @@ impl PathEntry {
             _ => None,
         };
         if let Some((mut path, directory)) = selected {
-            if directory { path.push(""); }
+            if directory {
+                path.push("");
+            }
             if let Some(path) = path.to_str() {
                 self.path = path.to_owned();
                 self.confirm = false;
@@ -297,7 +307,12 @@ struct VialPreview {
 fn bounded_vial_warnings(warnings: Vec<String>) -> Option<Vec<String>> {
     const MAX_WARNINGS: usize = 64;
     const MAX_WARNING_BYTES: usize = 16 * 1024;
-    if warnings.len() > MAX_WARNINGS || warnings.iter().try_fold(0usize, |total, warning| total.checked_add(warning.len())).is_none_or(|total| total > MAX_WARNING_BYTES) {
+    if warnings.len() > MAX_WARNINGS
+        || warnings
+            .iter()
+            .try_fold(0usize, |total, warning| total.checked_add(warning.len()))
+            .is_none_or(|total| total > MAX_WARNING_BYTES)
+    {
         None
     } else {
         Some(warnings)
@@ -305,12 +320,17 @@ fn bounded_vial_warnings(warnings: Vec<String>) -> Option<Vec<String>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+type PendingVialPreview = std::sync::Arc<
+    std::sync::Mutex<std::sync::mpsc::Receiver<Result<Option<VialPreview>, String>>>,
+>;
+
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct VialFlow {
     save: bool,
     path: String,
     browser: Option<std::sync::Arc<std::sync::Mutex<super::file_browser::FileBrowser>>>,
-    pending: Option<std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<Result<Option<VialPreview>, String>>>>>,
+    pending: Option<PendingVialPreview>,
     preview: Option<VialPreview>,
     writing: bool,
     message: Option<String>,
@@ -319,7 +339,15 @@ struct VialFlow {
 #[cfg(not(target_arch = "wasm32"))]
 impl VialFlow {
     fn new(save: bool) -> Self {
-        Self { save, path: String::new(), browser: None, pending: None, preview: None, writing: false, message: None }
+        Self {
+            save,
+            path: String::new(),
+            browser: None,
+            pending: None,
+            preview: None,
+            writing: false,
+            message: None,
+        }
     }
 }
 
@@ -333,7 +361,12 @@ fn accept_vial(app: &mut EntropyApp, preview: &VialPreview) -> Result<(), String
     if vial_source(app)? != preview.source {
         return Err("Project changed; select the Vial file again".into());
     }
-    app.import_ak820_project_bytes(preview.candidate.as_deref().ok_or("Import candidate unavailable")?)
+    app.import_ak820_project_bytes(
+        preview
+            .candidate
+            .as_deref()
+            .ok_or("Import candidate unavailable")?,
+    )
 }
 
 // The codec currently returns English strings, not stable warning codes. Unknown
@@ -363,12 +396,20 @@ fn vial_warning(warning: &str, ru: bool) -> Option<String> {
             return None;
         }
     };
-    Some(if ru { translated.to_owned() } else { warning.to_owned() })
+    Some(if ru {
+        translated.to_owned()
+    } else {
+        warning.to_owned()
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn vial_warnings_confirmable(warnings: &Option<Vec<String>>) -> bool {
-    warnings.as_ref().is_some_and(|warnings| warnings.iter().all(|warning| vial_warning(warning, false).is_some()))
+    warnings.as_ref().is_some_and(|warnings| {
+        warnings
+            .iter()
+            .all(|warning| vial_warning(warning, false).is_some())
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -427,16 +468,30 @@ fn known_vial_error(error: &str) -> Option<String> {
 fn vial_error(error: &str, ru: bool) -> String {
     const MAX_DETAILS: usize = 1024;
     let mut end = error.len().min(MAX_DETAILS);
-    while !error.is_char_boundary(end) { end -= 1; }
+    while !error.is_char_boundary(end) {
+        end -= 1;
+    }
     let truncated = end < error.len();
     let details = &error[..end];
     let mut message = if !ru {
-        if matches!(details, "Vial tap expression would truncate an extended keycode" | "Vial modifier expression contains an extended keycode") {
+        if matches!(
+            details,
+            "Vial tap expression would truncate an extended keycode"
+                | "Vial modifier expression contains an extended keycode"
+        ) {
             format!("{details}. Use a compatible assignment.")
-        } else if matches!(details, "Unsupported AK820 keycode encoding declaration" | "Conflicting Vial protocol and AK820 keycode encoding") {
+        } else if matches!(
+            details,
+            "Unsupported AK820 keycode encoding declaration"
+                | "Conflicting Vial protocol and AK820 keycode encoding"
+        ) {
             format!("{details}. Select a file with a supported, consistent encoding declaration.")
-        } else if details.starts_with("Vial source protocol ") && known_vial_error(details).is_some() {
-            format!("{details}. Check the source protocol and select a compatible file or assignment.")
+        } else if details.starts_with("Vial source protocol ")
+            && known_vial_error(details).is_some()
+        {
+            format!(
+                "{details}. Check the source protocol and select a compatible file or assignment."
+            )
         } else if truncated {
             format!("Could not process the file or project. Technical details: {details}")
         } else {
@@ -446,7 +501,11 @@ fn vial_error(error: &str, ru: bool) -> String {
         known_vial_error(details).unwrap_or_else(|| format!("Не удалось обработать файл или проект. Проверьте файл, путь и совместимость; проект не изменён. Техническая причина (на английском): {details}"))
     };
     if truncated {
-        message.push_str(if ru { " [Технические подробности сокращены.]" } else { " [Technical details truncated.]" });
+        message.push_str(if ru {
+            " [Технические подробности сокращены.]"
+        } else {
+            " [Technical details truncated.]"
+        });
     }
     message
 }
@@ -455,21 +514,28 @@ fn vial_error(error: &str, ru: bool) -> String {
 fn show_vial(app: &mut EntropyApp, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     let id = egui::Id::new("ak820_vial_flow");
-    let Some(mut flow) = ctx.data(|d| d.get_temp::<VialFlow>(id)) else { return; };
+    let Some(mut flow) = ctx.data(|d| d.get_temp::<VialFlow>(id)) else {
+        return;
+    };
     let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let tr = |en, ru_text| if ru { ru_text } else { en };
     if let Some(pending) = &flow.pending {
         let result = match pending.lock().unwrap().try_recv() {
             Ok(result) => Some(result),
             Err(std::sync::mpsc::TryRecvError::Empty) => None,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(Err("Vial worker disconnected".into())),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Some(Err("Vial worker disconnected".into()))
+            }
         };
         if let Some(result) = result {
             flow.pending = None;
             flow.writing = false;
             match result {
                 Ok(Some(preview)) => flow.preview = Some(preview),
-                Ok(None) => { flow.preview = None; flow.message = Some(tr("Vial file exported", "Файл Vial экспортирован").into()); },
+                Ok(None) => {
+                    flow.preview = None;
+                    flow.message = Some(tr("Vial file exported", "Файл Vial экспортирован").into());
+                }
                 Err(error) => flow.message = Some(vial_error(&error, ru)),
             }
         } else {
@@ -546,10 +612,19 @@ fn show_vial(app: &mut EntropyApp, ui: &mut egui::Ui) {
         if let Some(message) = &flow.message { ui.label(message); }
         if ui.add_enabled(!flow.writing, egui::Button::new(tr("Cancel / Back", "Отмена / Назад"))).clicked() { done = true; }
     });
-    if done { ctx.data_mut(|d| d.remove::<VialFlow>(id)); return; }
+    if done {
+        ctx.data_mut(|d| d.remove::<VialFlow>(id));
+        return;
+    }
     if start || write {
         let Some(permit) = WorkerPermit::acquire(&FILE_WORKER_BUSY) else {
-            flow.message = Some(tr("A project file operation is still running", "Операция с файлом проекта ещё выполняется").into());
+            flow.message = Some(
+                tr(
+                    "A project file operation is still running",
+                    "Операция с файлом проекта ещё выполняется",
+                )
+                .into(),
+            );
             ctx.data_mut(|d| d.insert_temp(id, flow));
             return;
         };
@@ -635,7 +710,10 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
         let pending_id = egui::Id::new("ak820_local_project_dialog");
         let message_id = egui::Id::new("ak820_local_project_message");
         let entry_id = egui::Id::new("ak820_local_project_path_entry");
-        if ctx.data(|d| d.get_temp::<VialFlow>(egui::Id::new("ak820_vial_flow")).is_some()) {
+        if ctx.data(|d| {
+            d.get_temp::<VialFlow>(egui::Id::new("ak820_vial_flow"))
+                .is_some()
+        }) {
             show_vial(app, ui);
             return;
         }
@@ -645,35 +723,51 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             let result = receive_file_result(pending.result.lock().unwrap().try_recv());
             if let Some(result) = result {
                 ctx.data_mut(|d| d.remove::<PendingDialog>(pending_id));
-                if !is_open(&ctx) || !app.ak820_demo || pending.generation != app.connection_generation || pending.profile != app.ak820_demo_profile {
-                    ctx.data_mut(|d| d.insert_temp(message_id, tr("Project changed; result discarded", "Проект изменился; результат отклонён").to_owned()));
-                } else { match result {
-                    Err(error) => {
-                        // This local-only message never enters status/report/log APIs.
-                        ctx.data_mut(|d| d.insert_temp(message_id, error));
-                    }
-                    Ok(FileOutcome::Loaded(raw)) => {
-                        if let Err(error) = app.import_ak820_project_bytes(&raw) {
+                if !is_open(&ctx)
+                    || !app.ak820_demo
+                    || pending.generation != app.connection_generation
+                    || pending.profile != app.ak820_demo_profile
+                {
+                    ctx.data_mut(|d| {
+                        d.insert_temp(
+                            message_id,
+                            tr(
+                                "Project changed; result discarded",
+                                "Проект изменился; результат отклонён",
+                            )
+                            .to_owned(),
+                        )
+                    });
+                } else {
+                    match result {
+                        Err(error) => {
+                            // This local-only message never enters status/report/log APIs.
                             ctx.data_mut(|d| d.insert_temp(message_id, error));
-                        } else {
+                        }
+                        Ok(FileOutcome::Loaded(raw)) => {
+                            if let Err(error) = app.import_ak820_project_bytes(&raw) {
+                                ctx.data_mut(|d| d.insert_temp(message_id, error));
+                            } else {
+                                ctx.data_mut(|d| {
+                                    d.insert_temp(
+                                        message_id,
+                                        tr("Local project ready", "Локальный проект готов")
+                                            .to_owned(),
+                                    )
+                                });
+                            }
+                        }
+                        Ok(FileOutcome::Saved) => {
                             ctx.data_mut(|d| {
                                 d.insert_temp(
                                     message_id,
                                     tr("Local project ready", "Локальный проект готов").to_owned(),
-                                )
+                                );
                             });
                         }
+                        Ok(FileOutcome::Cancelled) => {}
                     }
-                    Ok(FileOutcome::Saved) => {
-                        ctx.data_mut(|d| {
-                            d.insert_temp(
-                                message_id,
-                                tr("Local project ready", "Локальный проект готов").to_owned(),
-                            );
-                        });
-                    }
-                    Ok(FileOutcome::Cancelled) => {}
-                }}
+                }
                 ctx.input_mut(|i| i.pointer = egui::PointerState::default());
             } else {
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -894,15 +988,34 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             app.configure_ak820_offline_profile(profile);
         }
         if let Some(save) = action {
-            if entry.as_ref().is_none_or(|form| form.generation != app.connection_generation || form.profile != app.ak820_demo_profile) {
+            if entry.as_ref().is_none_or(|form| {
+                form.generation != app.connection_generation
+                    || form.profile != app.ak820_demo_profile
+            }) {
                 ctx.data_mut(|d| {
                     d.remove::<PathEntry>(entry_id);
-                    d.insert_temp(message_id, tr("Project changed; select the file again", "Проект изменился; выберите файл снова").to_owned());
+                    d.insert_temp(
+                        message_id,
+                        tr(
+                            "Project changed; select the file again",
+                            "Проект изменился; выберите файл снова",
+                        )
+                        .to_owned(),
+                    );
                 });
                 return;
             }
             let Some(permit) = WorkerPermit::acquire(&FILE_WORKER_BUSY) else {
-                ctx.data_mut(|d| d.insert_temp(message_id, tr("A project file operation is still running", "Операция с файлом проекта ещё выполняется").to_owned()));
+                ctx.data_mut(|d| {
+                    d.insert_temp(
+                        message_id,
+                        tr(
+                            "A project file operation is still running",
+                            "Операция с файлом проекта ещё выполняется",
+                        )
+                        .to_owned(),
+                    )
+                });
                 return;
             };
             let exported = if save {
@@ -932,14 +1045,24 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 )
             });
             let repaint = ctx.clone();
-            if std::thread::Builder::new().spawn(move || {
-                let _permit = permit;
-                let _ = tx.send(run_file_operation(save, path, exported));
-                repaint.request_repaint();
-            }).is_err() {
+            if std::thread::Builder::new()
+                .spawn(move || {
+                    let _permit = permit;
+                    let _ = tx.send(run_file_operation(save, path, exported));
+                    repaint.request_repaint();
+                })
+                .is_err()
+            {
                 ctx.data_mut(|d| {
                     d.remove::<PendingDialog>(pending_id);
-                    d.insert_temp(message_id, tr("Could not start project worker", "Не удалось запустить обработку проекта").to_owned());
+                    d.insert_temp(
+                        message_id,
+                        tr(
+                            "Could not start project worker",
+                            "Не удалось запустить обработку проекта",
+                        )
+                        .to_owned(),
+                    );
                 });
             }
         }
@@ -988,26 +1111,45 @@ mod tests {
             assert_eq!(vial_warning(warning, false).as_deref(), Some(warning));
             let russian = vial_warning(warning, true).unwrap();
             assert_ne!(russian, warning);
-            assert!(russian.chars().any(|c| ('а'..='я').contains(&c) || ('А'..='Я').contains(&c)));
+            assert!(russian
+                .chars()
+                .any(|c| ('а'..='я').contains(&c) || ('А'..='Я').contains(&c)));
         }
         let protocol_warning = "The exported vial_protocol 6 declares the assumed keycode encoding, not a verified source device protocol or firmware identity; VIA protocol is unknown and omitted.";
-        assert!(vial_warning(protocol_warning, true).unwrap().contains("предполагаемую кодировку"));
-        assert!(vial_warnings_confirmable(&Some(vec![protocol_warning.into()])));
+        assert!(vial_warning(protocol_warning, true)
+            .unwrap()
+            .contains("предполагаемую кодировку"));
+        assert!(vial_warnings_confirmable(&Some(vec![
+            protocol_warning.into()
+        ])));
         let encoding_warning = "The AK820 keycode encoding declaration describes this file, not a verified source device or firmware; Vial and VIA source protocols are unknown and omitted.";
-        assert!(vial_warning(encoding_warning, true).unwrap().contains("не проверенное"));
-        assert!(vial_warnings_confirmable(&Some(vec![encoding_warning.into()])));
-        for error in ["Unsupported AK820 keycode encoding declaration", "Conflicting Vial protocol and AK820 keycode encoding"] {
+        assert!(vial_warning(encoding_warning, true)
+            .unwrap()
+            .contains("не проверенное"));
+        assert!(vial_warnings_confirmable(&Some(vec![
+            encoding_warning.into()
+        ])));
+        for error in [
+            "Unsupported AK820 keycode encoding declaration",
+            "Conflicting Vial protocol and AK820 keycode encoding",
+        ] {
             assert!(known_vial_error(error).is_some());
             assert!(vial_error(error, true).contains("выберите"));
             assert!(vial_error(error, false).contains("encoding"));
         }
-        assert!(!vial_warnings_confirmable(&Some(vec!["Conflicting Vial protocol and AK820 keycode encoding".into()])));
+        assert!(!vial_warnings_confirmable(&Some(vec![
+            "Conflicting Vial protocol and AK820 keycode encoding".into()
+        ])));
         assert!(vial_warning("Future safety warning", true).is_none());
         assert!(vial_warning("Future safety warning", false).is_none());
         assert!(vial_warning("Combo unchanged: future safety reason", true).is_none());
         assert!(vial_warning("Combo unchanged: future safety reason", false).is_none());
-        assert!(!vial_warnings_confirmable(&Some(vec!["Combo unchanged: future safety reason".into()])));
-        assert!(vial_warnings_confirmable(&Some(vec!["Combo unchanged: Incorrect dimensions".into()])));
+        assert!(!vial_warnings_confirmable(&Some(vec![
+            "Combo unchanged: future safety reason".into()
+        ])));
+        assert!(vial_warnings_confirmable(&Some(vec![
+            "Combo unchanged: Incorrect dimensions".into()
+        ])));
         assert!(vial_error("Vial UID mismatch or invalid UID", true).contains("не соответствует"));
         assert!(vial_error("Unsupported Vial expression: LSFT(X)", true).contains("LSFT(X)"));
         for protocol in ["None", "Some(5)", "Some(18446744073709551615)"] {
@@ -1016,7 +1158,9 @@ mod tests {
             assert!(russian.contains("0x5cc5") && russian.contains("совместимый файл"));
             assert!(vial_error(&error, false).contains("select a compatible file or assignment"));
             let warning = format!("Combo unchanged: {error}");
-            assert!(vial_warning(&warning, true).unwrap().contains("Комбо не изменены"));
+            assert!(vial_warning(&warning, true)
+                .unwrap()
+                .contains("Комбо не изменены"));
             assert!(vial_warnings_confirmable(&Some(vec![warning])));
         }
         assert!(vial_warning("Combo unchanged: Vial source protocol bogus: keycode 0x5cc5 may differ from AK820 protocol 6; conversion unsupported", true).is_none());
@@ -1028,27 +1172,51 @@ mod tests {
     fn codec_combo_fallback_warnings_and_direct_errors_are_localized() {
         let app = app();
         let project = app.snapshot_current_ak820_project().unwrap();
-        let exported = crate::ak820_vial::export_project(&project, crate::ak820::VIAL_UID, -1).unwrap();
+        let exported =
+            crate::ak820_vial::export_project(&project, crate::ak820::VIAL_UID, -1).unwrap();
         let base: serde_json::Value = serde_json::from_slice(&exported.bytes).unwrap();
         for (expression, reason) in [
-            ("LT1(MO(1))", "Vial tap expression would truncate an extended keycode"),
-            ("LSFT(MO(1))", "Vial modifier expression contains an extended keycode"),
+            (
+                "LT1(MO(1))",
+                "Vial tap expression would truncate an extended keycode",
+            ),
+            (
+                "LSFT(MO(1))",
+                "Vial modifier expression contains an extended keycode",
+            ),
         ] {
             let mut doc = base.clone();
             doc["vial_protocol"] = serde_json::json!(6);
             doc["combo"] = serde_json::json!(vec![vec![0; 5]; 8]);
             doc["combo"][0][0] = serde_json::json!(expression);
-            let imported = crate::ak820_vial::import_project(&serde_json::to_vec(&doc).unwrap(), &project, crate::ak820::VIAL_UID, -1).unwrap();
+            let imported = crate::ak820_vial::import_project(
+                &serde_json::to_vec(&doc).unwrap(),
+                &project,
+                crate::ak820::VIAL_UID,
+                -1,
+            )
+            .unwrap();
             let warning = format!("Combo unchanged: {reason}");
             assert!(imported.warnings.contains(&warning));
             assert_eq!(imported.project.combo_entries, project.combo_entries);
-            assert!(vial_warnings_confirmable(&bounded_vial_warnings(imported.warnings)));
-            assert!(vial_warning(&warning, true).unwrap().contains("расширенный код"));
+            assert!(vial_warnings_confirmable(&bounded_vial_warnings(
+                imported.warnings
+            )));
+            assert!(vial_warning(&warning, true)
+                .unwrap()
+                .contains("расширенный код"));
             let mut doc = base.clone();
             doc["vial_protocol"] = serde_json::json!(6);
             let key = &project.layout.keys[0];
             doc["layout"][0][key.row as usize][key.col as usize] = serde_json::json!(expression);
-            let error = crate::ak820_vial::import_project(&serde_json::to_vec(&doc).unwrap(), &project, crate::ak820::VIAL_UID, -1).err().unwrap();
+            let error = crate::ak820_vial::import_project(
+                &serde_json::to_vec(&doc).unwrap(),
+                &project,
+                crate::ak820::VIAL_UID,
+                -1,
+            )
+            .err()
+            .unwrap();
             assert_eq!(error, reason);
             assert!(vial_error(&error, true).contains("расширенный код"));
             assert!(vial_error(&error, false).contains("Use a compatible assignment"));
@@ -1057,14 +1225,27 @@ mod tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn vial_errors_bound_large_expressions_and_disk_details() {
-        let expression = format!("Unsupported or unverified Vial symbol or compound expression: {}", "Ж".repeat(1024 * 1024));
+        let expression = format!(
+            "Unsupported or unverified Vial symbol or compound expression: {}",
+            "Ж".repeat(1024 * 1024)
+        );
         let disk_error = format!("disk error: {}", "🗂".repeat(1024 * 1024));
         for error in [&expression, &disk_error] {
             for ru in [false, true] {
                 let displayed = vial_error(error, ru);
                 assert!(displayed.len() < 1400);
-                assert!(displayed.contains(if ru { "сокращены" } else { "truncated" }));
-                assert!(displayed.contains(if ru { "Не удалось" } else { "Could not process" }) || displayed.contains("Неподдерживаемое"));
+                assert!(displayed.contains(if ru {
+                    "сокращены"
+                } else {
+                    "truncated"
+                }));
+                assert!(
+                    displayed.contains(if ru {
+                        "Не удалось"
+                    } else {
+                        "Could not process"
+                    }) || displayed.contains("Неподдерживаемое")
+                );
             }
         }
         assert_eq!(vial_error("disk error", false), "disk error");
@@ -1078,7 +1259,9 @@ mod tests {
         let too_large = bounded_vial_warnings(vec!["a".repeat(16 * 1024 + 1)]);
         assert!(too_large.is_none());
         assert!(!vial_warnings_confirmable(&too_large));
-        assert!(!vial_warnings_confirmable(&bounded_vial_warnings(vec!["a".into(); 65])));
+        assert!(!vial_warnings_confirmable(&bounded_vial_warnings(
+            vec!["a".into(); 65]
+        )));
     }
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
@@ -1090,7 +1273,9 @@ mod tests {
         let preview = VialPreview {
             source: source.clone(),
             candidate: Some(crate::ak820_offline_project::export_project(&candidate).unwrap()),
-            export: None, warnings: Some(vec![]), summary: String::new(),
+            export: None,
+            warnings: Some(vec![]),
+            summary: String::new(),
         };
         // Discarding a preview does not apply it.
         drop(preview.clone());
@@ -1122,7 +1307,6 @@ mod tests {
             original.rgb_settings.hue = 42;
             if let Some(extensions) = &original.ak820_offline_extensions {
                 use crate::ak820_typed_storage::{Extensions, KeyOverride, TapDance};
-                use crate::app::ak820_beta1_profiles::ProfileId;
                 let mut records = Extensions::decode_nvm(extensions.nvm()).unwrap();
                 let matrix = beta::matrix_profile(entry.profile);
                 if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) {
@@ -1206,7 +1390,17 @@ mod tests {
     fn closing_page_discards_export_confirmation() {
         let ctx = egui::Context::default();
         let id = egui::Id::new("ak820_local_project_path_entry");
-        ctx.data_mut(|d| d.insert_temp(id, PathEntry { save: true, path: "old.json".into(), confirm: true, ..Default::default() }));
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                id,
+                PathEntry {
+                    save: true,
+                    path: "old.json".into(),
+                    confirm: true,
+                    ..Default::default()
+                },
+            )
+        });
         close(&ctx);
         assert!(ctx.data(|d| d.get_temp::<PathEntry>(id)).is_none());
     }
@@ -1219,7 +1413,10 @@ mod tests {
         assert!(WorkerPermit::acquire(&BUSY).is_none());
         drop(permit);
         assert!(WorkerPermit::acquire(&BUSY).is_some());
-        let mut form = PathEntry { path: "previous".into(), ..Default::default() };
+        let mut form = PathEntry {
+            path: "previous".into(),
+            ..Default::default()
+        };
         form.select(BrowserResult::Cancelled);
         assert_eq!(form.path, "previous");
         form.select(BrowserResult::Selected("input.json".into()));
@@ -1227,7 +1424,10 @@ mod tests {
         form.save = true;
         form.confirm = true;
         form.select(BrowserResult::Directory("folder".into()));
-        assert_eq!(std::path::PathBuf::from(&form.path).join("new.json"), std::path::PathBuf::from("folder").join("new.json"));
+        assert_eq!(
+            std::path::PathBuf::from(&form.path).join("new.json"),
+            std::path::PathBuf::from("folder").join("new.json")
+        );
         assert!(!form.confirm);
     }
 
@@ -1242,16 +1442,21 @@ mod tests {
         let ctx = egui::Context::default();
         open(&ctx);
         let (tx, rx) = std::sync::mpsc::channel();
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ak820_local_project_dialog"), PendingDialog {
-            generation: target.connection_generation.wrapping_add(1),
-            profile: target.ak820_demo_profile,
-            result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
-        }));
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new("ak820_local_project_dialog"),
+                PendingDialog {
+                    generation: target.connection_generation.wrapping_add(1),
+                    profile: target.ak820_demo_profile,
+                    result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+                },
+            )
+        });
         close(&ctx);
         assert!(is_open(&ctx));
         assert!(tx.send(Ok(FileOutcome::Loaded(imported))).is_ok());
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         assert!(!is_busy(&ctx));
         assert_eq!(export(&target), before);
@@ -1266,14 +1471,19 @@ mod tests {
         let before = export(&target);
         let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ak820_local_project_dialog"), PendingDialog {
-            generation: target.connection_generation,
-            profile: target.ak820_demo_profile,
-            result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
-        }));
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new("ak820_local_project_dialog"),
+                PendingDialog {
+                    generation: target.connection_generation,
+                    profile: target.ak820_demo_profile,
+                    result: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+                },
+            )
+        });
         assert!(tx.send(Ok(FileOutcome::Loaded(before.clone()))).is_ok());
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         assert!(!is_busy(&ctx));
         assert_eq!(export(&target), before);
@@ -1284,7 +1494,10 @@ mod tests {
     #[test]
     fn non_utf8_selection_is_not_lossily_imported() {
         use std::os::unix::ffi::OsStringExt;
-        let mut form = PathEntry { path: "previous".into(), ..Default::default() };
+        let mut form = PathEntry {
+            path: "previous".into(),
+            ..Default::default()
+        };
         form.select(super::super::file_browser::BrowserResult::Selected(
             std::ffi::OsString::from_vec(vec![0xff]).into(),
         ));
@@ -1373,8 +1586,8 @@ mod tests {
         assert!(receive_file_result(rx.try_recv()).is_none());
         let frame_ran = std::cell::Cell::new(false);
         let ctx = egui::Context::default();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |_| frame_ran.set(true));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |_| frame_ran.set(true));
         });
         assert!(frame_ran.get());
         assert!(receive_file_result(rx.try_recv()).is_none());
@@ -1416,23 +1629,23 @@ mod tests {
 
         // A pending worker result leaves the dialog operation pending while the
         // production UI frame completes on the GUI thread.
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         assert!(ctx.data(|data| data.get_temp::<PendingDialog>(pending_id).is_some()));
         assert_eq!(export(&target), before);
 
         assert!(tx.send(Ok(FileOutcome::Loaded(loaded))).is_ok());
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         assert_eq!(target.layer_names[0], "Loaded");
         assert!(ctx.data(|data| data.get_temp::<PendingDialog>(pending_id).is_none()));
 
         // A further production frame has no pending result to reapply. If it
         // imported twice, the single-step undo would restore the imported state.
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         assert!(target.undo_ak820_project_import());
         assert_eq!(export(&target), before);
@@ -1455,8 +1668,8 @@ mod tests {
                 },
             );
         });
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| show(&mut target, ui));
+        let _ = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut target, ui));
         });
         let message =
             ctx.data(|data| data.get_temp::<String>(egui::Id::new("ak820_local_project_message")));
@@ -1656,11 +1869,11 @@ mod ak820_local_profile_ui_tests {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
         app.app_settings.language = crate::i18n::Language::English;
-        let mut harness = Harness::new_state(
-            |ctx, state: &mut (EntropyApp, bool, String)| {
+        let mut harness = Harness::new_ui_state(
+            |root_ui, state: &mut (EntropyApp, bool, String)| {
                 if !state.1 {
-                    open(ctx);
-                    ctx.data_mut(|data| {
+                    open(root_ui.ctx());
+                    root_ui.ctx().data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("ak820_local_project_path_entry"),
                             PathEntry {
@@ -1675,7 +1888,7 @@ mod ak820_local_profile_ui_tests {
                     });
                     state.1 = true;
                 }
-                egui::CentralPanel::default().show(ctx, |ui| show(&mut state.0, ui));
+                egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut state.0, ui));
             },
             (app, false, path.to_string_lossy().into_owned()),
         );
@@ -1693,10 +1906,10 @@ mod ak820_local_profile_ui_tests {
         let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
         let mut app = EntropyApp::new_ak820_demo(&cc);
         app.app_settings.language = crate::i18n::Language::Russian;
-        let mut harness = Harness::new_state(
-            |ctx, app| {
-                open(ctx);
-                egui::CentralPanel::default().show(ctx, |ui| show(app, ui));
+        let mut harness = Harness::new_ui_state(
+            |root_ui, app| {
+                open(root_ui.ctx());
+                egui::CentralPanel::default().show_inside(root_ui, |ui| show(app, ui));
             },
             app,
         );

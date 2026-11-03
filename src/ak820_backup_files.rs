@@ -4,11 +4,14 @@
 //! at firmware revision `bef20f89d3da01d770767919bc7c8fc3c3a1a808`. This module
 //! handles local bytes only: it does not capture a device or perform HID I/O.
 use crate::ak820_settings_backup::{
-    BackupResult, FILES, FORMAT, FORMAT_V2, ImageIdentity, ValidatedArchive, canonical, sha256,
+    canonical, sha256, BackupResult, ImageIdentity, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
 };
-use crate::ak820_settings_model::{profile_image_for_identity, validate_historical_archive, validate_image_archive, validate_profile_archive};
-use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity};
-use serde_json::{Value, json};
+use crate::ak820_settings_model::{
+    profile_image_for_identity, validate_historical_archive, validate_image_archive,
+    validate_profile_archive,
+};
+use crate::app::ak820_beta1_profiles::{historical_settings_identity, ProfileId};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::fs;
@@ -22,6 +25,8 @@ const MANIFEST_LIMIT: usize = 65_536;
 const ENTRY_COUNT: usize = FILES.len() + 1;
 const HISTORY_LIMIT: usize = 128;
 const HISTORY_ENTRY_LIMIT: usize = 1024;
+
+type BackupDirectoryContents = (Vec<u8>, BTreeMap<String, Vec<u8>>);
 
 /// A fully validated immutable backup. The underlying archive and file bytes
 /// are shared by clones and cannot be modified through this API.
@@ -56,14 +61,12 @@ pub(crate) struct BackupHistoryEntry {
     pub(crate) path: std::path::PathBuf,
     pub(crate) created_utc: String,
     pub(crate) source_profile: Option<ProfileId>,
-    pub(crate) schema: u32,
     pub(crate) manifest_sha256: String,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct BackupHistory {
     pub(crate) entries: Vec<BackupHistoryEntry>,
     pub(crate) invalid_skipped: usize,
-    pub(crate) warning: Option<String>,
 }
 
 fn invalid() -> String {
@@ -217,7 +220,7 @@ mod anchored {
         }
         Ok(bytes)
     }
-    pub(super) fn read(dir: &File) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+    pub(super) fn read(dir: &File) -> BackupResult<BackupDirectoryContents> {
         // A distinct open description resets the directory offset on each read.
         let scan = open_at(dir, OsStr::new("."), libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
         use std::os::fd::IntoRawFd;
@@ -482,21 +485,22 @@ mod anchored {
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn read_directory(path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+fn read_directory(path: &Path) -> BackupResult<BackupDirectoryContents> {
     anchored::read(&anchored::directory(path)?)
 }
 #[cfg(target_os = "windows")]
-fn read_directory(path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+fn read_directory(path: &Path) -> BackupResult<BackupDirectoryContents> {
     windows::read(&windows::directory(path)?)
 }
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-fn read_directory(_path: &Path) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+fn read_directory(_path: &Path) -> BackupResult<BackupDirectoryContents> {
     Err("Backup directory I/O is unsupported on this platform: anchored no-follow handles are unavailable".into())
 }
 
 /// Read and validate an exact firmware-compatible backup directory.
 /// All file names and lengths are bounded before allocation; errors omit paths
 /// and file contents because ROM and macro bytes are private.
+#[cfg(test)]
 pub fn read_validated_archive(path: &Path, profile: ProfileId) -> BackupResult<ValidatedArchive> {
     let (manifest, files) = read_directory(path)?;
     validate_profile_archive(&manifest, &files, profile, None)
@@ -550,7 +554,10 @@ fn validate_loaded_bytes(
         schema,
     };
     for profile in PROFILES {
-        if matches!(profile_image_for_identity(profile, &identity), Some(crate::ak820::ImageContract::Beta3(_) | crate::ak820::ImageContract::Beta4(_))) {
+        if matches!(
+            profile_image_for_identity(profile, &identity),
+            Some(crate::ak820::ImageContract::Beta3(_) | crate::ak820::ImageContract::Beta4(_))
+        ) {
             let archive = validate_profile_archive(&raw, &files, profile, expected_manifest)
                 .map_err(|_| "Backup validation failed".to_owned())?;
             found = Some((archive, Some(profile)));
@@ -601,7 +608,7 @@ fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory
             return Err("Backup history exceeds the 128 backup limit".into());
         }
         let path = root.join(&name);
-        let loaded = anchored::open_at(&root_dir, &name, libc::O_RDONLY | libc::O_DIRECTORY, 0)
+        let loaded = anchored::open_at(root_dir, &name, libc::O_RDONLY | libc::O_DIRECTORY, 0)
             .and_then(|child| anchored::read(&child))
             .and_then(|(raw, files)| validate_loaded_bytes(raw, files, None));
         match loaded {
@@ -616,7 +623,6 @@ fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory
                     path,
                     created_utc,
                     source_profile: loaded.source_profile(),
-                    schema: loaded.archive().source.schema,
                     manifest_sha256: loaded.archive().manifest_sha256.clone(),
                 });
             }
@@ -626,12 +632,6 @@ fn scan_open_history(root: &Path, root_dir: &File) -> BackupResult<BackupHistory
     Ok(BackupHistory {
         entries,
         invalid_skipped,
-        warning: (invalid_skipped > 0).then(|| {
-            format!(
-                "Skipped {invalid_skipped} invalid backup entr{}",
-                if invalid_skipped == 1 { "y" } else { "ies" }
-            )
-        }),
     })
 }
 #[cfg(target_os = "windows")]
@@ -700,6 +700,9 @@ pub(crate) fn validate_captured(
 /// This separate format is never misrepresented as a restorable settings archive.
 #[derive(Clone, Debug)]
 pub(crate) struct InstallSnapshotReceipt {
+    // The durable manifest always contains this digest. Only regression tests
+    // also need it returned separately from the manifest identity.
+    #[cfg(test)]
     pub(crate) rom_sha256: String,
     pub(crate) manifest_sha256: String,
 }
@@ -744,6 +747,7 @@ pub(crate) fn publish_install_snapshot(
         #[cfg(not(target_os = "windows"))]
         stage.parent.sync_all().map_err(|_| invalid())?;
         Ok(InstallSnapshotReceipt {
+            #[cfg(test)]
             rom_sha256: digest,
             manifest_sha256: sha256(&manifest),
         })
@@ -933,7 +937,7 @@ pub fn publish_validated_archive(
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::os::unix::fs::{symlink, PermissionsExt};
     #[test]
     fn installation_snapshots_are_private_verified_and_never_replace_or_mint_ownership() {
         let temp = tempfile::tempdir().unwrap();
@@ -971,6 +975,30 @@ mod tests {
         symlink(&path, &link).unwrap();
         assert!(delete_validated_archive(&link, &"0".repeat(64)).is_err());
         assert!(path.join(MANIFEST).is_file());
+    }
+    #[test]
+    fn reference_archive_reader_masks_validation_details_and_preserves_input() {
+        let temp = tempfile::tempdir().unwrap();
+        envelope(temp.path());
+        // Malformed public filesystem fixture, not an admitted firmware archive.
+        let manifest = br#"{"synthetic_private_marker":"not-oem"}"#;
+        fs::write(temp.path().join(MANIFEST), manifest).unwrap();
+        for profile in PROFILES {
+            let Err(error) = read_validated_archive(temp.path(), profile) else {
+                panic!("malformed archive must fail closed");
+            };
+            assert_eq!(error, "Backup validation failed");
+        }
+        assert_eq!(fs::read(temp.path().join(MANIFEST)).unwrap(), manifest);
+        for (name, _) in FILES {
+            assert_eq!(fs::read(temp.path().join(name)).unwrap(), b"x");
+        }
+        let missing = temp.path().join("synthetic-private-path-marker");
+        let Err(error) = read_validated_archive(&missing, ProfileId::Main) else {
+            panic!("missing directory must fail closed");
+        };
+        assert!(!error.contains("synthetic-private-path-marker"));
+        assert!(!missing.exists());
     }
     fn envelope(dir: &Path) {
         fs::write(dir.join(MANIFEST), b"{}").unwrap();
@@ -1013,19 +1041,20 @@ mod tests {
         let history = scan_backup_history(&root).unwrap();
         assert!(history.entries.is_empty());
         assert_eq!(history.invalid_skipped, 1);
-        assert_eq!(
-            history.warning.as_deref(),
-            Some("Skipped 1 invalid backup entry")
-        );
+        let other = root.join("other-invalid");
+        fs::create_dir(&other).unwrap();
+        envelope(&other);
+        let history = scan_backup_history(&root).unwrap();
+        assert!(history.entries.is_empty());
+        assert_eq!(history.invalid_skipped, 2);
+        fs::remove_dir_all(&other).unwrap();
         fs::remove_dir_all(&candidate).unwrap();
         for i in 0..=HISTORY_LIMIT {
             fs::create_dir(root.join(format!("d{i}"))).unwrap();
         }
-        assert!(
-            scan_backup_history(&root)
-                .unwrap_err()
-                .contains("128 backup limit")
-        );
+        assert!(scan_backup_history(&root)
+            .unwrap_err()
+            .contains("128 backup limit"));
     }
     #[test]
     fn history_scan_stays_anchored_after_root_rename_and_replacement() {

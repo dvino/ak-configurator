@@ -414,8 +414,9 @@ fn settings_tab_deferred_sections(tab: SettingsTab) -> &'static [DeferredLoadSec
         SettingsTab::AutoShift
         | SettingsTab::Magic
         | SettingsTab::TapHold
-        | SettingsTab::GraveEscape
         | SettingsTab::MouseKeys => &[DeferredLoadSection::BehaviorSettings],
+        #[cfg(test)]
+        SettingsTab::GraveEscape => &[DeferredLoadSection::BehaviorSettings],
         SettingsTab::KeyOverrides => &[DeferredLoadSection::KeyOverrides],
         SettingsTab::AltRepeat => &[DeferredLoadSection::AltRepeat],
         SettingsTab::Modules => &[DeferredLoadSection::Modules],
@@ -1136,10 +1137,16 @@ impl EntropyApp {
             for layer in 1..result.layer_count {
                 // A potentially mutating SET invalidates only this owner's
                 // name cache. Reconnect must reload rather than copy it as Loaded.
-                if self.uncertain_layer_names.iter().any(|request| request.layer == layer
-                    && self.selected_device.and_then(|i| self.device_manager.devices().get(i))
-                        .is_some_and(|device| device.permits_hid_target(&request.device))) {
-                    result.deferred_load.set_layer_status(layer, DeferredLoadStatus::NotLoaded);
+                if self.uncertain_layer_names.iter().any(|request| {
+                    request.layer == layer
+                        && self
+                            .selected_device
+                            .and_then(|i| self.device_manager.devices().get(i))
+                            .is_some_and(|device| device.permits_hid_target(&request.device))
+                }) {
+                    result
+                        .deferred_load
+                        .set_layer_status(layer, DeferredLoadStatus::NotLoaded);
                     continue;
                 }
                 if !matches!(
@@ -1418,7 +1425,7 @@ impl EntropyApp {
                         let status = self.deferred_device_load.section_status(section);
                         (!status.ready()).then_some(DeferredOverlayTarget::Section(section, status))
                     })
-                    .unwrap_or_else(|| {
+                    .unwrap_or({
                         DeferredOverlayTarget::Layer(
                             self.selected_layer,
                             DeferredLoadStatus::Loaded,

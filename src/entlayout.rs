@@ -1,8 +1,7 @@
 use super::portable_settings::{
     ent_portable_setting_contracts_match, ent_portable_setting_import_value,
-    ent_portable_setting_is_known, ent_portable_setting_is_valid, ent_portable_setting_spec,
-    write_entlayout_portable_setting, EntPortableSetting, EntPortableSettingWidth,
-    ENT_PORTABLE_QSIDS,
+    ent_portable_setting_is_known, ent_portable_setting_is_valid, write_entlayout_portable_setting,
+    EntPortableSetting,
 };
 use super::*;
 use anyhow::{bail, Context, Result};
@@ -33,39 +32,53 @@ struct ApplicationEntLayoutFile {
 }
 
 enum EntLayoutDocument {
-    Device(EntLayoutFile),
-    Application(crate::application_layouts::ApplicationLayout),
+    Device(Box<EntLayoutFile>),
+    // Production recognizes and validates this document, but only the historical
+    // test-only single-profile importer consumes its decoded payload.
+    Application(#[cfg(test)] Box<crate::application_layouts::ApplicationLayout>),
 }
 
 fn read_entlayout_document(data: &str) -> Result<EntLayoutDocument> {
     let value: serde_json::Value = serde_json::from_str(data)?;
     match (value["format"].as_str(), value.get("scope")) {
-        (Some(ENTLAYOUT_FORMAT), None) => {
-            Ok(EntLayoutDocument::Device(serde_json::from_str(data)?))
-        }
+        (Some(ENTLAYOUT_FORMAT), None) => Ok(EntLayoutDocument::Device(Box::new(
+            serde_json::from_str(data)?,
+        ))),
         (Some(ENTLAYOUT_FORMAT), Some(scope)) if scope == "application" => {
             let file: ApplicationEntLayoutFile = serde_json::from_str(data)?;
             if file.version != APPLICATION_ENTLAYOUT_VERSION {
                 bail!("Unsupported application layout format or version");
             }
-            Ok(EntLayoutDocument::Application(file.profile))
+            #[cfg(test)]
+            {
+                Ok(EntLayoutDocument::Application(Box::new(file.profile)))
+            }
+            #[cfg(not(test))]
+            {
+                // Keep full typed deserialization above: device import rejects
+                // this validated document kind rather than accepting its profile.
+                drop(file.profile);
+                Ok(EntLayoutDocument::Application())
+            }
         }
         _ => bail!("Unsupported layout format or scope"),
     }
 }
 
+#[cfg(test)]
 pub(super) fn read_application_entlayout(
     path: &Path,
 ) -> Result<crate::application_layouts::ApplicationLayout> {
     validate_application_entlayout_extension(path)?;
     match read_entlayout_document(&std::fs::read_to_string(path)?)? {
-        EntLayoutDocument::Application(profile) => Ok(profile),
+        EntLayoutDocument::Application(profile) => Ok(*profile),
         EntLayoutDocument::Device(_) => {
             bail!("Device layout cannot be imported into an application target")
         }
     }
 }
 
+#[cfg(test)]
 pub(super) fn write_application_entlayout(
     path: &Path,
     profile: crate::application_layouts::ApplicationLayout,
@@ -84,6 +97,7 @@ pub(super) fn write_application_entlayout(
     )
 }
 
+#[cfg(test)]
 fn validate_application_entlayout_extension(path: &Path) -> Result<()> {
     if !path
         .extension()
@@ -115,16 +129,18 @@ struct EntLayoutFile {
     application_categories: Vec<(String, String)>,
 }
 
+type StagedSidecar = (
+    PathBuf,
+    Option<Vec<u8>>,
+    Option<tempfile::NamedTempFile>,
+    bool,
+);
+
 // Complete Macropad imports own a small filesystem transaction. Legacy writers
 // intentionally retain their historical best-effort behavior.
 #[derive(Default)]
 struct EntLayoutSidecars {
-    files: Vec<(
-        PathBuf,
-        Option<Vec<u8>>,
-        Option<tempfile::NamedTempFile>,
-        bool,
-    )>,
+    files: Vec<StagedSidecar>,
     complete: bool,
 }
 
@@ -962,7 +978,7 @@ impl EntropyApp {
             crate::i18n::tr_catalog(lang, "entlayout.invalid_entlayout_json"),
         )? {
             EntLayoutDocument::Device(bundle) => bundle,
-            EntLayoutDocument::Application(_) => bail!(match lang {
+            EntLayoutDocument::Application(..) => bail!(match lang {
                 crate::i18n::Language::Russian => "Файл содержит только одну раскладку приложения, а не полную резервную копию Macropad. Создайте полную копию через «Экспорт раскладки» в исходном приложении; данные не изменены.",
                 crate::i18n::Language::English => "This file contains a single application layout, not a complete Macropad backup. Create a complete backup using Export layout in the source application; no data was changed.",
             }),
@@ -2772,13 +2788,15 @@ impl EntropyApp {
                 }
                 hid.set_key_override(
                     idx as u8,
-                    ko.trigger,
-                    ko.replacement,
-                    ko.layers,
-                    ko.trigger_mods,
-                    ko.negative_mod_mask,
-                    ko.suppressed_mods,
-                    ko.options,
+                    crate::hid::KeyOverrideRecord {
+                        trigger: ko.trigger,
+                        replacement: ko.replacement,
+                        layers: ko.layers,
+                        trigger_mods: ko.trigger_mods,
+                        negative_mod_mask: ko.negative_mod_mask,
+                        suppressed_mods: ko.suppressed_mods,
+                        options: ko.options,
+                    },
                 )?;
             }
             Ok(())
@@ -4085,6 +4103,73 @@ mod module_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::portable_settings::{
+        ent_portable_setting_spec, EntPortableSettingWidth, ENT_PORTABLE_QSIDS,
+    };
+
+    #[test]
+    fn application_document_dispatch_preserves_typed_schema_and_error_order() {
+        let valid = r#"{"format":"entropy.layout","version":8,"scope":"application","profile":{"id":"fixture","name":"Fixture"}}"#;
+        assert!(matches!(
+            read_entlayout_document(valid).unwrap(),
+            EntLayoutDocument::Application(..)
+        ));
+        let unknown = valid.replace(
+            "\"name\":\"Fixture\"",
+            "\"name\":\"Fixture\",\"future\":true",
+        );
+        assert!(read_entlayout_document(&unknown).is_ok());
+
+        let cases = [
+            (
+                valid.replace("\"version\":8", "\"version\":9"),
+                "Unsupported application layout format or version",
+            ),
+            (
+                valid.replace("\"scope\":\"application\"", "\"scope\":null"),
+                "Unsupported layout format or scope",
+            ),
+            (
+                valid.replace("\"id\":\"fixture\",", ""),
+                "missing field `id`",
+            ),
+            (
+                valid.replace("\"name\":\"Fixture\"", "\"name\":42"),
+                "invalid type",
+            ),
+            (
+                valid.replace(
+                    "\"name\":\"Fixture\"",
+                    "\"name\":\"Fixture\",\"layers\":[[1]]",
+                ),
+                "invalid length",
+            ),
+            (
+                valid.replace("\"version\":8", "\"version\":8,\"version\":8"),
+                "duplicate field `version`",
+            ),
+            (
+                valid.replace(
+                    "\"name\":\"Fixture\"",
+                    "\"name\":\"Fixture\",\"name\":\"Duplicate\"",
+                ),
+                "duplicate field `name`",
+            ),
+            (
+                valid
+                    .replace("\"version\":8", "\"version\":9")
+                    .replace("\"name\":\"Fixture\"", "\"name\":42"),
+                "invalid type",
+            ),
+        ];
+        for (document, expected) in cases {
+            let error = match read_entlayout_document(&document) {
+                Ok(_) => panic!("accepted malformed document: {document}"),
+                Err(error) => error.to_string(),
+            };
+            assert!(error.contains(expected), "{expected}: {error}");
+        }
+    }
 
     #[test]
     fn entlayout_module_snapshot_exports_loaded_k04_both_sides() {
@@ -4227,8 +4312,10 @@ mod tests {
             json["module"][0][key] = value;
             let malformed: EntPortableSetting = serde_json::from_value(json).unwrap();
             let malformed_settings = [malformed];
-            let plan =
-                plan_entlayout_portable_settings_import(&malformed_settings, &[setting.clone()]);
+            let plan = plan_entlayout_portable_settings_import(
+                &malformed_settings,
+                std::slice::from_ref(&setting),
+            );
             assert!(plan.compatible.is_empty());
             assert_eq!(plan.report.incompatible, 1);
         }

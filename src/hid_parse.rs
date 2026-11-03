@@ -39,7 +39,9 @@ pub(crate) fn encode_macro_buffer(macros: &[Vec<u8>], buf_size: u16) -> Vec<u8> 
 
 pub(crate) fn parse_keymap_u16_be(keymap: &[u8]) -> Vec<u16> {
     keymap
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
         .collect()
 }
@@ -133,7 +135,7 @@ pub(crate) fn parse_vialrgb_supported_effects_payload(
     current_max: u16,
 ) -> u16 {
     let mut batch_max = current_max;
-    for chunk in payload.chunks_exact(2) {
+    for chunk in payload.as_chunks::<2>().0 {
         let value = u16::from_le_bytes([chunk[0], chunk[1]]);
         if value != 0xFFFF && !effects.contains(&value) {
             effects.push(value);

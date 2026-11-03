@@ -33,10 +33,10 @@ pub(super) fn digest(id: &str) -> [u8; 20] {
         data.push(0);
     }
     data.extend_from_slice(&bits.to_be_bytes());
-    for block in data.chunks_exact(64) {
+    for block in data.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
-        for (i, bytes) in block.chunks_exact(4).enumerate() {
-            w[i] = u32::from_be_bytes(bytes.try_into().unwrap());
+        for (i, bytes) in block.as_chunks::<4>().0.iter().enumerate() {
+            w[i] = u32::from_be_bytes(*bytes);
         }
         for i in 16..64 {
             let x = w[i - 15];
@@ -73,7 +73,7 @@ pub(super) fn digest(id: &str) -> [u8; 20] {
         }
     }
     let mut out = [0u8; 20];
-    for (bytes, value) in out.chunks_exact_mut(4).zip(h) {
+    for (bytes, value) in out.as_chunks_mut::<4>().0.iter_mut().zip(h) {
         bytes.copy_from_slice(&value.to_be_bytes());
     }
     out

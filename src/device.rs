@@ -1,12 +1,12 @@
-#[cfg(not(target_arch = "wasm32"))]
-#[path = "usb_discovery.rs"]
-mod usb_discovery;
-#[cfg(any(target_os = "macos", test))]
-#[path = "macos_usb_metadata.rs"]
-pub(crate) mod macos_usb_metadata;
 #[cfg(any(target_os = "macos", test))]
 #[path = "macos_usb_discovery.rs"]
 mod macos_usb_discovery;
+#[cfg(any(target_os = "macos", test))]
+#[path = "macos_usb_metadata.rs"]
+pub(crate) mod macos_usb_metadata;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "usb_discovery.rs"]
+mod usb_discovery;
 use crate::firmware::FirmwareProtocol;
 
 const ERGOHAVEN_VENDOR_ID: u16 = 0xE126;
@@ -515,7 +515,11 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub(crate) fn empty() -> Self { Self { devices: Vec::new() } }
+    pub(crate) fn empty() -> Self {
+        Self {
+            devices: Vec::new(),
+        }
+    }
     #[cfg(test)]
     pub(crate) fn empty_for_test() -> Self {
         Self { devices: vec![] }
@@ -528,7 +532,7 @@ impl DeviceManager {
         // Unit tests must never enumerate the host's real HID devices.
         #[cfg(test)]
         {
-            return Self { devices: vec![] };
+            Self { devices: vec![] }
         }
 
         #[cfg(not(test))]
@@ -560,7 +564,7 @@ impl DeviceManager {
         }
         #[cfg(test)]
         {
-            return Err("USB discovery is disabled in unit tests; use explicit fixtures".to_owned());
+            Err("USB discovery is disabled in unit tests; use explicit fixtures".to_owned())
         }
 
         #[cfg(not(test))]
@@ -575,74 +579,77 @@ impl DeviceManager {
         }
         #[cfg(test)]
         {
-            return Err("HID discovery is disabled in unit tests; use explicit fixtures".to_owned());
+            Err("HID discovery is disabled in unit tests; use explicit fixtures".to_owned())
         }
 
         #[cfg(not(test))]
         {
-        let mut devices = Vec::new();
+            let mut devices = Vec::new();
 
-        #[cfg(target_os = "macos")]
-        if crate::hid::macos_hid_scan_disabled_for_rosetta() {
-            return Ok(devices);
-        }
+            #[cfg(target_os = "macos")]
+            if crate::hid::macos_hid_scan_disabled_for_rosetta() {
+                return Ok(devices);
+            }
 
-        #[cfg(target_os = "macos")]
-        let _hid_lock = crate::hid::macos_hid_operation_lock();
-        let api = hidapi::HidApi::new().map_err(|error| format!("HID scan failed: {error}"))?;
-        let mut sm62_interfaces = 0usize;
-        let mut sm62_vial_interfaces = 0usize;
-        for info in api.device_list() {
-            if info.vendor_id() == ERGOHAVEN_VENDOR_ID && info.product_id() == SM62_PRODUCT_ID {
-                sm62_interfaces += 1;
-                let vial_interface = info.usage_page() == 0xFF60 && info.usage() == 0x61;
-                if vial_interface {
-                    sm62_vial_interfaces += 1;
-                }
-                log::info!(
+            #[cfg(target_os = "macos")]
+            let _hid_lock = crate::hid::macos_hid_operation_lock();
+            let api = hidapi::HidApi::new().map_err(|error| format!("HID scan failed: {error}"))?;
+            let mut sm62_interfaces = 0usize;
+            let mut sm62_vial_interfaces = 0usize;
+            for info in api.device_list() {
+                if info.vendor_id() == ERGOHAVEN_VENDOR_ID && info.product_id() == SM62_PRODUCT_ID {
+                    sm62_interfaces += 1;
+                    let vial_interface = info.usage_page() == 0xFF60 && info.usage() == 0x61;
+                    if vial_interface {
+                        sm62_vial_interfaces += 1;
+                    }
+                    log::info!(
                     "SM62 HID scan: usage_page=0x{:04X} usage=0x{:04X} interface={} vial={} path={}",
                     info.usage_page(), info.usage(), info.interface_number(),
                     vial_interface, info.path().to_string_lossy()
                 );
+                }
+                // Filter: Vial usage page 0xFF60, usage 0x61
+                if info.usage_page() == 0xFF60 && info.usage() == 0x61 {
+                    let path = info.path().to_string_lossy().to_string();
+                    let mut device = Device {
+                        name: info
+                            .product_string()
+                            .unwrap_or("Unknown Keyboard")
+                            .to_string(),
+                        vendor_id: info.vendor_id(),
+                        product_id: info.product_id(),
+                        manufacturer: info.manufacturer_string().unwrap_or("").to_string(),
+                        serial_number: info.serial_number().unwrap_or("").to_string(),
+                        bus_type: format!("{:?}", info.bus_type()),
+                        instance_token: device_instance_token(&path),
+                        path,
+                        firmware: FirmwareProtocol::Vial,
+                    };
+                    device.normalize_discovered_identity();
+                    devices.push(device);
+                }
             }
-            // Filter: Vial usage page 0xFF60, usage 0x61
-            if info.usage_page() == 0xFF60 && info.usage() == 0x61 {
-                let path = info.path().to_string_lossy().to_string();
-                let mut device = Device {
-                    name: info
-                        .product_string()
-                        .unwrap_or("Unknown Keyboard")
-                        .to_string(),
-                    vendor_id: info.vendor_id(),
-                    product_id: info.product_id(),
-                    manufacturer: info.manufacturer_string().unwrap_or("").to_string(),
-                    serial_number: info.serial_number().unwrap_or("").to_string(),
-                    bus_type: format!("{:?}", info.bus_type()),
-                    instance_token: device_instance_token(&path),
-                    path,
-                    firmware: FirmwareProtocol::Vial,
-                };
-                device.normalize_discovered_identity();
-                devices.push(device);
+
+            if sm62_interfaces > 0 && sm62_vial_interfaces == 0 {
+                log::warn!(
+                    "SM62 USB interfaces are present, but none expose the Vial usage 0xFF60:0x0061"
+                );
             }
-        }
 
-        if sm62_interfaces > 0 && sm62_vial_interfaces == 0 {
-            log::warn!("SM62 USB interfaces are present, but none expose the Vial usage 0xFF60:0x0061");
-        }
+            #[cfg(target_os = "linux")]
+            {
+                deduplicate_kernel_bluetooth_devices(&mut devices);
+                let bluez_devices = crate::linux_ble::scan_devices_cached_nonblocking();
+                merge_bluez_vial_devices(&mut devices, bluez_devices);
+            }
 
-        #[cfg(target_os = "linux")]
-        {
-            deduplicate_kernel_bluetooth_devices(&mut devices);
-            let bluez_devices = crate::linux_ble::scan_devices_cached_nonblocking();
-            merge_bluez_vial_devices(&mut devices, bluez_devices);
-        }
-
-        devices.retain(Device::is_ak820);
-        Ok(devices)
+            devices.retain(Device::is_ak820);
+            Ok(devices)
         }
     }
 
+    #[cfg(not(test))]
     pub fn scan(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {

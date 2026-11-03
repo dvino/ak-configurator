@@ -45,6 +45,7 @@ fn validate_portable_application_layout(source: &ApplicationLayout) -> Result<()
 
 impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(test)]
     pub(super) fn application_layout_file_dialog(&mut self, id: String, export: bool) {
         self.commit_pending_application_layout_edits();
         let action = if export {
@@ -56,7 +57,12 @@ impl EntropyApp {
         let dialog = rfd::FileDialog::new()
             .add_filter("Entropy layout", &["entlayout"])
             .set_file_name(&file_name);
-        self.spawn_file_dialog_with_default(action, dialog, export, export.then_some(file_name.as_str()));
+        self.spawn_file_dialog_with_default(
+            action,
+            dialog,
+            export,
+            export.then_some(file_name.as_str()),
+        );
     }
 
     pub(super) fn write_application_layout_export(&self, path: &Path, id: &str) -> Result<()> {

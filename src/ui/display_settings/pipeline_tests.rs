@@ -3,10 +3,10 @@
 use super::*;
 use std::time::{Duration, Instant};
 
-#[path = "tap_dance_tests.rs"]
-mod tap_dance_tests;
 #[path = "delete_catalog_tests.rs"]
 mod delete_catalog_tests;
+#[path = "tap_dance_tests.rs"]
+mod tap_dance_tests;
 
 fn pictogram_canvas_rect(output: &egui::FullOutput) -> egui::Rect {
     let lines: Vec<_> = output
@@ -879,7 +879,7 @@ fn full_ui_closed_picker_skips_saved_filter_and_repeated_name_translation() {
 fn cached_stock_records_keep_exact_legacy_matching_for_every_language_and_bitmap() {
     let _storage = crate::app::app_storage::ScopedTempConfig::new();
     for language in crate::i18n::Language::ALL {
-        for index in 0..BUILTIN_PICTOGRAM_KEYS.len() {
+        for (index, key) in BUILTIN_PICTOGRAM_KEYS.iter().enumerate() {
             let mut variants = vec![builtin_pictogram_bitmap(index)];
             if index < 38 {
                 variants.push(legacy_builtin_pictogram_bitmap(index));
@@ -887,10 +887,7 @@ fn cached_stock_records_keep_exact_legacy_matching_for_every_language_and_bitmap
             for bitmap in variants {
                 let original = SavedPictogram {
                     origin: PictogramOrigin::Legacy,
-                    name: format!(
-                        "  {}  ",
-                        crate::i18n::tr_catalog(language, BUILTIN_PICTOGRAM_KEYS[index])
-                    ),
+                    name: format!("  {}  ", crate::i18n::tr_catalog(language, key)),
                     color: [84, 189, 191],
                     bitmap: bitmap.to_vec(),
                 };
@@ -1110,7 +1107,7 @@ fn full_ui_repeated_assignments_use_actual_popup_without_reunlock() {
         }
         let requests = recorder.requests();
         assert_eq!(requests.len(), 27);
-        for transaction in requests.chunks_exact(9) {
+        for transaction in requests.as_chunks::<9>().0 {
             assert_eq!(transaction[0][0], 0xC0);
             assert_eq!(transaction[1][0], 0xC7);
             assert!(transaction[2..8].iter().all(|request| request[0] == 0xC8));

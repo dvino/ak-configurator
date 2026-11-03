@@ -3,6 +3,8 @@ use super::hid_protocol::*;
 use super::HidDevice;
 use anyhow::{bail, Context, Result};
 
+type UnlockKeys = Vec<(u8, u8)>;
+
 #[cfg(not(target_arch = "wasm32"))]
 impl HidDevice {
     pub fn get_protocol_version(&self) -> Result<u16> {
@@ -31,11 +33,13 @@ impl HidDevice {
         Ok(u32::from_le_bytes([resp[0], resp[1], resp[2], resp[3]]))
     }
 
+    #[cfg(test)]
     pub fn get_layout_json(&self) -> Result<serde_json::Value> {
         let sz = self.get_definition_size()?;
         self.get_layout_json_with_size(sz)
     }
 
+    #[cfg(test)]
     pub fn get_layout_json_with_size(&self, sz: u32) -> Result<serde_json::Value> {
         self.get_layout_json_with_size_and_progress(sz, |_, _| Ok(()))
     }
@@ -71,7 +75,7 @@ impl HidDevice {
             remaining -= chunk;
             block += 1;
             let completed = block as usize;
-            if completed == total_blocks || completed % 32 == 0 {
+            if completed == total_blocks || completed.is_multiple_of(32) {
                 progress(completed, total_blocks)?;
             }
         }
@@ -98,12 +102,12 @@ impl HidDevice {
     /// A firmware may retain the unlocked bit while a new physical unlock hold
     /// is pending; that state is not ready until the pending sequence finishes.
     /// Returns (ready, unlock_keys: Vec<(row,col)>).
-    pub fn get_unlock_status(&self) -> Result<(bool, Vec<(u8, u8)>)> {
+    pub fn get_unlock_status(&self) -> Result<(bool, UnlockKeys)> {
         let (unlocked, in_progress, keys) = self.get_unlock_status_with_progress()?;
         Ok((unlocked && !in_progress, keys))
     }
 
-    pub(crate) fn get_unlock_status_with_progress(&self) -> Result<(bool, bool, Vec<(u8, u8)>)> {
+    pub(crate) fn get_unlock_status_with_progress(&self) -> Result<(bool, bool, UnlockKeys)> {
         let resp = self
             .usb_send(&[CMD_VIA_VIAL_PREFIX, CMD_VIAL_GET_UNLOCK_STATUS])
             .context("failed to read Vial unlock status")?;
@@ -174,3 +178,7 @@ impl HidDevice {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "hid_vial_reference_tests.rs"]
+mod reference_wrapper_tests;

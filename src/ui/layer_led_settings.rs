@@ -147,8 +147,7 @@ impl EntropyApp {
                         .clamp(0.0, 100.0);
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(
                             self.app_settings.language,
                             "advanced_settings.led_brightness",
@@ -219,8 +218,7 @@ impl EntropyApp {
                     };
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(
                             self.app_settings.language,
                             "advanced_settings.led_timeout",
@@ -446,8 +444,7 @@ impl EntropyApp {
             .min((LAYER_LED_PALETTE.len() - 1) as u16) as u8;
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            content_width,
-            row_height,
+            egui::vec2(content_width, row_height),
             label,
             true,
             if suppress_tooltips {

@@ -5,7 +5,8 @@
 use std::{ffi::OsString, path::PathBuf, sync::OnceLock};
 
 struct Sandbox {
-    root: tempfile::TempDir,
+    // Retain ownership even when a test uses its separate config root.
+    _root: tempfile::TempDir,
     smoke: bool,
 }
 
@@ -22,7 +23,7 @@ pub(crate) fn smoke_requested() -> bool {
 pub(crate) fn config_dir() -> Option<PathBuf> {
     SANDBOX
         .get()
-        .map(|sandbox| sandbox.root.path().join("config"))
+        .map(|sandbox| sandbox._root.path().join("config"))
 }
 
 pub(crate) fn initialize(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
@@ -69,7 +70,7 @@ pub(crate) fn initialize(args: impl IntoIterator<Item = OsString>) -> Result<(),
         .tempdir()
         .map_err(|_| "Cannot create isolated application storage")?;
     SANDBOX
-        .set(Sandbox { root, smoke })
+        .set(Sandbox { _root: root, smoke })
         .map_err(|_| "Application isolation was already initialized".to_owned())
 }
 
@@ -85,6 +86,7 @@ mod tests {
             assert!(super::initialize(args.into_iter().map(Into::into)).is_err());
         }
         assert!(!super::isolated());
+        assert!(super::config_dir().is_none());
         assert!(crate::isolated_runtime());
     }
 }

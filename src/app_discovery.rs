@@ -164,12 +164,13 @@ fn foreground_monitor_snapshot() -> ForegroundStatus {
     if crate::isolated_runtime() {
         return ForegroundStatus {
             backend: "isolated runtime".to_owned(),
-            state: ForegroundState::BackendUnavailable("Host foreground monitoring is disabled in isolated runtime".to_owned()),
+            state: ForegroundState::BackendUnavailable(
+                "Host foreground monitoring is disabled in isolated runtime".to_owned(),
+            ),
         };
     }
     let state = FOREGROUND_MONITOR.get_or_init(|| Mutex::new(ForegroundStatus::default()));
     FOREGROUND_MONITOR_STARTED.get_or_init(|| {
-        let state = state;
         if let Err(error) = std::thread::Builder::new()
             .name("foreground-monitor".to_owned())
             .spawn(move || foreground_monitor_loop(state))
@@ -498,6 +499,7 @@ fn merge_applications(
     applications.truncate(512);
 }
 
+#[cfg(any(test, target_os = "macos"))]
 fn status_from_application(
     backend: impl Into<String>,
     application: Option<DetectedApplication>,
@@ -645,7 +647,7 @@ fn linux_gnome_wayland_session(desktop: &str) -> bool {
     ) == LinuxForegroundBackend::GnomeWayland
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(test, target_os = "linux"))]
 fn linux_gnome_wayland_session_for(
     desktop: &str,
     wayland_display: bool,
@@ -923,7 +925,7 @@ pub(crate) fn gnome_shell_integration_needed() -> bool {
     false
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) fn install_gnome_shell_integration() -> Result<String, String> {
     if crate::isolated_runtime() {
         return Err("GNOME integration installation is disabled in isolated runtime".to_owned());
@@ -1277,12 +1279,12 @@ fn collect_desktop_entries(directory: &Path, depth: usize, catalog: &mut LinuxAp
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(test, target_os = "linux"))]
 fn parse_desktop_entry(contents: &str) -> Option<DetectedApplication> {
     parse_desktop_entry_with_id(contents, None)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(test, target_os = "linux"))]
 fn parse_desktop_entry_with_id(
     contents: &str,
     desktop_id: Option<&str>,
@@ -3200,6 +3202,21 @@ mod tests {
             state: ForegroundState::BackendUnavailable("offline".to_owned()),
         };
         assert_ne!(no_window, unavailable);
+
+        let application = DetectedApplication {
+            executable: "fixture-editor".into(),
+            display_name: "Fixture Editor".into(),
+            identities: vec!["fixture-editor".into(), "org.example.Editor".into()],
+            window_title: "Draft — поиск".into(),
+        };
+        let focused = status_from_application(
+            String::from("owned test backend"),
+            Some(application.clone()),
+        );
+        assert_eq!(focused.backend, "owned test backend");
+        assert_eq!(focused.state, ForegroundState::Focused(application));
+        assert_ne!(focused, no_window);
+        assert_ne!(focused, unavailable);
     }
 
     #[cfg(target_os = "linux")]

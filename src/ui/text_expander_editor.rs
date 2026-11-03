@@ -74,8 +74,7 @@ impl EntropyApp {
                 let mut enabled = self.app_settings.text_expander_enabled;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     crate::i18n::tr_catalog(lang, "text_expander.enabled_label"),
                     true,
                     tooltip(crate::i18n::tr_catalog(
@@ -108,8 +107,7 @@ impl EntropyApp {
                 let mut remove_app: Option<String> = None;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     crate::i18n::tr_catalog(lang, "text_expander.blacklist_label"),
                     true,
                     tooltip(crate::i18n::tr_catalog(
@@ -508,8 +506,7 @@ impl EntropyApp {
                 let button_width = metrics.value(118.0);
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     crate::i18n::tr_catalog(lang, "text_expander.rules_file_label"),
                     true,
                     tooltip(crate::i18n::tr_catalog(
@@ -539,8 +536,7 @@ impl EntropyApp {
                 let mut remove_file: Option<usize> = None;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     crate::i18n::tr_catalog(lang, "text_expander.extra_rules_file_label"),
                     true,
                     tooltip(crate::i18n::tr_catalog(
@@ -960,8 +956,7 @@ impl EntropyApp {
                 let control_width = metrics.value(250.0);
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     crate::i18n::tr_catalog(lang, "text_expander.empty_rules_label"),
                     true,
                     tooltip(crate::i18n::tr_catalog(
@@ -1004,8 +999,7 @@ impl EntropyApp {
                 .unwrap_or_else(|| crate::i18n::tr_catalog(lang, "text_expander.rule_tooltip"));
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                content_width,
-                row_height,
+                egui::vec2(content_width, row_height),
                 label.as_str(),
                 true,
                 tooltip(rule_tooltip),

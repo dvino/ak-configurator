@@ -4,12 +4,12 @@ use super::*;
 use crate::ak820_openrgb_bridge::{Bridge, Status as BridgeStatus};
 use crate::ak820_rgb_audio::{self as audio, Capture, Options as AudioOptions};
 use crate::ak820_rgb_compositor::Scene;
-use crate::ak820_rgb_scheduler::{FRAME_INTERVAL_MS, Frame, FrameScheduler, SUSPEND_GAP_MS};
+use crate::ak820_rgb_scheduler::{Frame, FrameScheduler, FRAME_INTERVAL_MS, SUSPEND_GAP_MS};
 use crate::hid::{Ak820RgbRestoreResult, Ak820RgbStream, Ak820RgbStreamResult, HidDevice};
 use chrono::Timelike;
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, Ordering},
+    Arc,
 };
 use std::time::{Duration, Instant, SystemTime};
 
@@ -648,10 +648,6 @@ impl EntropyApp {
         self.ak820_rgb_runtime.preview
     }
 
-    pub(super) fn ak820_rgb_frame_duration(&self) -> Option<u64> {
-        self.ak820_rgb_runtime.last_frame_ms
-    }
-
     /// Poll before settings work so its handle is returned before another
     /// operation is selected. A stale result never replaces a newer handle.
     pub(super) fn poll_ak820_rgb_task(&mut self) {
@@ -1139,11 +1135,10 @@ mod tests {
         app.ak820_rgb_palette_request(&ctx, Some(snapshot.clone()));
         finish_frame(&mut app);
         assert_eq!(app.ak820_rgb_direct_capture().unwrap().hsv, snapshot.hsv);
-        assert!(
-            log.requests()
-                .iter()
-                .all(|p| p[0] != 9 && p[..2] != [7, 0x41])
-        );
+        assert!(log
+            .requests()
+            .iter()
+            .all(|p| p[0] != 9 && p[..2] != [7, 0x41]));
         assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
     }
 
@@ -1161,14 +1156,13 @@ mod tests {
         });
         app.connection_generation += 1;
         app.tick_ak820_rgb_scene(&egui::Context::default());
-        assert!(
-            app.ak820_rgb_runtime
-                .palette_task
-                .as_ref()
-                .unwrap()
-                .cancel
-                .load(Ordering::Acquire)
-        );
+        assert!(app
+            .ak820_rgb_runtime
+            .palette_task
+            .as_ref()
+            .unwrap()
+            .cancel
+            .load(Ordering::Acquire));
         sender
             .send(PaletteResult {
                 hid,
@@ -1375,11 +1369,10 @@ mod tests {
             app.tick_ak820_rgb_scene(&ctx);
         }
         assert_eq!(log.requests().len(), count);
-        assert!(
-            !log.requests()
-                .iter()
-                .any(|p| p[..2] == [7, 0x41] || p[0] == 9)
-        );
+        assert!(!log
+            .requests()
+            .iter()
+            .any(|p| p[..2] == [7, 0x41] || p[0] == 9));
     }
 
     #[test]
@@ -1416,26 +1409,24 @@ mod tests {
             generation: 0,
         });
         app.connection_generation = 1;
-        assert!(
-            tx.send(FrameResult {
+        assert!(tx
+            .send(FrameResult {
                 hid: old,
                 generation: 0,
                 outcome: Ok(Ak820RgbStreamResult::Cancelled),
                 elapsed_ms: 1
             })
-            .is_ok()
-        );
+            .is_ok());
         app.poll_ak820_rgb_task();
         assert!(app.ak820_rgb_scene_can_start());
         assert!(current_log.requests().is_empty());
-        assert!(
-            app.hid_device
-                .unwrap()
-                .ak820_image()
-                .unwrap()
-                .rgb_modes()
-                .contains(&1)
-        );
+        assert!(app
+            .hid_device
+            .unwrap()
+            .ak820_image()
+            .unwrap()
+            .rgb_modes()
+            .contains(&1));
     }
 
     #[test]
@@ -1457,11 +1448,9 @@ mod tests {
         let requests = log.requests();
         let packets: Vec<_> = requests.iter().filter(|p| p[..2] == [7, 0x42]).collect();
         assert!(packets.len() >= 10);
-        assert!(
-            packets[packets.len() - 10..]
-                .iter()
-                .all(|p| p[5..].iter().all(|&b| b == 0))
-        );
+        assert!(packets[packets.len() - 10..]
+            .iter()
+            .all(|p| p[5..].iter().all(|&b| b == 0)));
         assert!(!requests.iter().any(|p| p[0] == 9));
     }
 
@@ -1498,12 +1487,14 @@ mod tests {
         let mut app = EntropyApp::new_inert_for_test();
         app.ak820_demo = true;
         app.ak820_demo_profile = Some(ProfileId::Main);
-        let mut scene = Scene::default();
-        scene.quiet_hours = Some(crate::ak820_rgb_compositor::QuietHours {
-            start_minute: 60,
-            end_minute: 120,
-            brightness: 7,
-        });
+        let scene = Scene {
+            quiet_hours: Some(crate::ak820_rgb_compositor::QuietHours {
+                start_minute: 60,
+                end_minute: 120,
+                brightness: 7,
+            }),
+            ..Default::default()
+        };
         app.ak820_rgb_music_start(scene, AudioOptions::default(), true);
         assert!(matches!(
             app.ak820_rgb_runtime.playback.as_ref().unwrap().input,
@@ -1512,13 +1503,12 @@ mod tests {
         let p = app.ak820_rgb_runtime.playback.as_ref().unwrap();
         let (now, wall) = (p.started, p.last_wall_tick);
         app.tick_ak820_rgb_scene_at(&egui::Context::default(), now, wall, 90);
-        assert!(
-            app.ak820_rgb_scene_preview()
-                .unwrap()
-                .iter()
-                .flatten()
-                .all(|&c| c <= 7)
-        );
+        assert!(app
+            .ak820_rgb_scene_preview()
+            .unwrap()
+            .iter()
+            .flatten()
+            .all(|&c| c <= 7));
         assert!(app.hid_device.is_none());
         app.ak820_rgb_scene_stop();
         assert!(!app.ak820_rgb_scene_running());
@@ -1611,12 +1601,14 @@ mod tests {
             bridge,
             last: Some([[255, 128, 0]; crate::ak820_rgb::LED_COUNT]),
         };
-        let mut scene = Scene::default();
-        scene.quiet_hours = Some(crate::ak820_rgb_compositor::QuietHours {
-            start_minute: 60,
-            end_minute: 120,
-            brightness: 10,
-        });
+        let mut scene = Scene {
+            quiet_hours: Some(crate::ak820_rgb_compositor::QuietHours {
+                start_minute: 60,
+                end_minute: 120,
+                brightness: 10,
+            }),
+            ..Default::default()
+        };
         assert_eq!(
             input.frame(&scene, 0, 30).unwrap().unwrap()[0],
             [160, 80, 0]
@@ -1633,14 +1625,13 @@ mod tests {
         app.ak820_rgb_music_start(Scene::default(), AudioOptions::default(), true);
         app.tick_ak820_rgb_scene(&ctx);
         finish_frame(&mut app);
-        assert!(
-            app.ak820_rgb_runtime
-                .playback
-                .as_ref()
-                .unwrap()
-                .owned
-                .is_some()
-        );
+        assert!(app
+            .ak820_rgb_runtime
+            .playback
+            .as_ref()
+            .unwrap()
+            .owned
+            .is_some());
         // A cancellation result from a later frame must never keep playback
         // alive with an ownership token retired by the HID layer.
         let (sender, receiver) = mpsc::channel();

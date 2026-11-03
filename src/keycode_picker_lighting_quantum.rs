@@ -76,11 +76,13 @@ const RGB_MATRIX_CONTROL_KEYS: &[(&str, u16, &str)] = &[
     ("Speed +", 0x7A21, "Increase RGB Matrix animation speed"),
 ];
 
+type LightingSection<'a> = (&'static str, &'a [(&'a str, u16, &'a str)]);
+
 impl KeycodePicker {
     /// Lighting controls in the order the RGB tab shows them. The long
     /// caption stays searchable as an alias of the compact keycap label.
     pub(super) fn rgb_rows(&self) -> Vec<PickerRow> {
-        let sections: [(&'static str, &[(&str, u16, &str)]); 4] = [
+        let sections: [LightingSection<'_>; 4] = [
             ("key_picker_text.backlight", BACKLIGHT_KEYS),
             ("key_picker_text.rgb_underglow", RGB_UNDERGLOW_KEYS),
             ("key_picker_text.rgb_matrix_modes", RGB_MATRIX_MODE_KEYS),

@@ -260,11 +260,13 @@ fn preview_layout_geometry(
         ctx,
         layout,
         viewport,
-        ui_scale,
-        2.0,
-        2.0,
-        6.0,
-        Some(f32::INFINITY),
+        LayoutFit {
+            ui_scale,
+            top_reserved: 2.0,
+            bottom_reserved: 2.0,
+            fit_margin: 6.0,
+            max_scale_override: Some(f32::INFINITY),
+        },
         |key| EntropyApp::layout_key_visible(module_settings, layout, key, layout_options_value),
         |encoder| {
             EntropyApp::encoder_layout_condition_visible(layout, encoder, layout_options_value)

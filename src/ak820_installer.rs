@@ -131,6 +131,47 @@ impl CheckedLocalPackage {
         verify_exact_readback(rom, &self.expected)
     }
 }
+// Byte ownership is not installation authority; raw images include OEM and synthetic data.
+pub(crate) enum PreparedImageBytes {
+    Firmware(Box<CheckedLocalPackage>),
+    Raw {
+        source: Vec<u8>,
+        payload: Vec<u8>,
+        expected: Vec<u8>,
+    },
+}
+impl PreparedImageBytes {
+    pub(crate) fn source(&self) -> &[u8] {
+        match self {
+            Self::Firmware(package) => package.snapshot(),
+            Self::Raw { source, .. } => source,
+        }
+    }
+    pub(crate) fn payload(&self) -> &[u8] {
+        match self {
+            Self::Firmware(package) => package.payload(),
+            Self::Raw { payload, .. } => payload,
+        }
+    }
+    pub(crate) fn expected(&self) -> &[u8] {
+        match self {
+            Self::Firmware(package) => &package.expected,
+            Self::Raw { expected, .. } => expected,
+        }
+    }
+    pub(crate) fn verify_full_readback(&self, rom: &[u8]) -> BackupResult<()> {
+        let matches = match self {
+            Self::Firmware(package) => package.verify_full_readback(rom).is_ok(),
+            Self::Raw { expected, .. } => rom == expected,
+        };
+        if !matches {
+            return Err(
+                "Full-ROM readback differs; stop without retry or automatic recovery".into(),
+            );
+        }
+        Ok(())
+    }
+}
 fn verify_exact_readback(rom: &[u8], expected: &[u8]) -> BackupResult<()> {
     if rom.len() != 65536 || expected.len() != 65536 || rom != expected {
         return Err(
@@ -174,7 +215,9 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
         }
     }
     for row in &crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles {
-        let Some(exact) = row.settings_identity.as_ref() else { continue; };
+        let Some(exact) = row.settings_identity.as_ref() else {
+            continue;
+        };
         let identity = ImageIdentity {
             ihx_sha256: exact.ihx_sha256.clone(),
             code_sha256: exact.code_sha256.clone(),
@@ -192,6 +235,105 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Synthetic private data tests representation only, not preparation or admission.
+    fn synthetic_package() -> CheckedLocalPackage {
+        let snapshot = vec![0x5a; 65536];
+        let payload = vec![0xa5; APP_END - APP_START];
+        let mut expected = snapshot.clone();
+        expected[APP_START..APP_END].copy_from_slice(&payload);
+        CheckedLocalPackage {
+            summary: LocalPlanSummary {
+                target: ProfileId::Main,
+                snapshot_kind: SnapshotKind::Oem,
+                payload_sha256: String::new(),
+                snapshot_sha256: String::new(),
+                recovery_sha256: String::new(),
+                expected_rom_sha256: String::new(),
+                binding_sha256: String::new(),
+                application_bytes: payload.len(),
+                data_blocks: 0,
+                loader_checksum: 0,
+            },
+            payload,
+            snapshot,
+            recovery: Vec::new(),
+            expected,
+        }
+    }
+    #[test]
+    fn prepared_image_bytes_match_raw_and_executor_confirmation_preimage() {
+        let package = synthetic_package();
+        let raw = PreparedImageBytes::Raw {
+            source: package.snapshot.clone(),
+            payload: package.payload.clone(),
+            expected: package.expected.clone(),
+        };
+        let checked = PreparedImageBytes::Firmware(Box::new(package));
+        assert_eq!(checked.source(), raw.source());
+        assert_eq!(checked.payload(), raw.payload());
+        assert_eq!(checked.expected(), raw.expected());
+        let preimage = |images: &PreparedImageBytes| {
+            let release_pin = "synthetic-release";
+            let action = "synthetic";
+            let source_sha256 = sha256(images.source());
+            let payload_sha256 = sha256(images.payload());
+            let expected_sha256 = sha256(images.expected());
+            let settings = crate::ak820_install_executor::InstallSettingsOutcome::DefaultsRequested;
+            let hold = true;
+            format!("ak820-install-1|{release_pin}|{action}|{source_sha256}|{payload_sha256}|{expected_sha256}|{settings:?}|{hold}")
+        };
+        assert_eq!(preimage(&checked), preimage(&raw));
+        assert_eq!(
+            sha256(preimage(&checked).as_bytes()),
+            sha256(preimage(&raw).as_bytes())
+        );
+    }
+    #[test]
+    fn prepared_image_bytes_readback_matches_raw_and_preserves_errors() {
+        let package = synthetic_package();
+        let expected = package.expected.clone();
+        let raw = PreparedImageBytes::Raw {
+            source: package.snapshot.clone(),
+            payload: package.payload.clone(),
+            expected: expected.clone(),
+        };
+        let checked = PreparedImageBytes::Firmware(Box::new(package));
+        assert!(checked.verify_full_readback(&expected).is_ok());
+        assert!(raw.verify_full_readback(&expected).is_ok());
+        let mut reads = Vec::new();
+        for offset in [0, APP_START, 0xc700, 0xef00, 0xef80, 0xef90, APP_END, 65535] {
+            let mut changed = expected.clone();
+            changed[offset] ^= 1;
+            reads.push(changed);
+        }
+        reads.push(expected[..65535].to_vec());
+        let mut oversized = expected.clone();
+        oversized.push(0);
+        reads.push(oversized);
+        for read in reads {
+            assert_eq!(
+                checked.verify_full_readback(&read),
+                raw.verify_full_readback(&read)
+            );
+            assert_eq!(
+                checked.verify_full_readback(&read).unwrap_err(),
+                "Full-ROM readback differs; stop without retry or automatic recovery"
+            );
+            if let PreparedImageBytes::Firmware(package) = &checked {
+                assert_eq!(
+                    package.verify_full_readback(&read).unwrap_err(),
+                    "Full-ROM readback differs; stop without retry, reset or automatic recovery"
+                );
+            }
+        }
+        let malformed = PreparedImageBytes::Raw {
+            source: vec![],
+            payload: vec![],
+            expected: vec![1],
+        };
+        assert!(malformed.verify_full_readback(&[1]).is_ok());
+        assert!(malformed.verify_full_readback(&[]).is_err());
+    }
     #[test]
     fn arbitrary_or_incomplete_local_inputs_never_become_checked() {
         for profile in [

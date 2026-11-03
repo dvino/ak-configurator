@@ -2,7 +2,7 @@
 //! Offline schema03 codec ported from ak820 bef20f89d3da01d770767919bc7c8fc3c3a1a808
 //! util/ak820_extension_settings.py and keyboards/ajazz/ak820/ak820_settings.c.
 //! No transport, authorization, migration or live-write implementation.
-use crate::app::ak820_beta1_profiles::{ProfileId, matrix_profile};
+use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
 
 pub(crate) const SCHEMA: u32 = 0x082003;
 const SETTINGS: usize = 0x6a8;
@@ -418,14 +418,12 @@ mod tests {
         assert_eq!(ko.encode().unwrap().as_slice(), hex("040005003f0001000001"));
         assert_eq!(KeyOverride::decode(&ko.encode().unwrap()).unwrap(), ko);
         for value in [1, 3, 0xa5, 0xe8, 0x2004, 0xffff] {
-            assert!(
-                TapDance {
-                    outputs: [value, 0, 0, 0],
-                    term: 0
-                }
-                .encode()
-                .is_err()
-            );
+            assert!(TapDance {
+                outputs: [value, 0, 0, 0],
+                term: 0
+            }
+            .encode()
+            .is_err());
         }
         assert!(TapDance { term: 32768, ..td }.encode().is_err());
         for bad in [
@@ -441,15 +439,13 @@ mod tests {
         ] {
             assert!(bad.encode().is_err());
         }
-        assert!(
-            KeyOverride {
-                replacement: 0,
-                options: 0xb9,
-                ..ko
-            }
-            .encode()
-            .is_ok()
-        );
+        assert!(KeyOverride {
+            replacement: 0,
+            options: 0xb9,
+            ..ko
+        }
+        .encode()
+        .is_ok());
         for size in [0, 9, 11] {
             assert!(TapDance::decode(&vec![0; size]).is_err());
             assert!(KeyOverride::decode(&vec![0; size]).is_err());

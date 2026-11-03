@@ -637,13 +637,8 @@ impl EntropyApp {
         menu_width: f32,
     ) -> bool {
         let language = self.app_settings.language;
-        let [
-            copy_label,
-            paste_label,
-            mirror_label,
-            fill_none_label,
-            fill_inherit_label,
-        ] = layer_operation_menu_labels(language);
+        let [copy_label, paste_label, mirror_label, fill_none_label, fill_inherit_label] =
+            layer_operation_menu_labels(language);
         let paste_snapshot = self.layer_paste_snapshot();
         let mirror_mapping = self
             .layout
@@ -1743,12 +1738,10 @@ mod tests {
         click_layer_menu(&mut app, &ctx, 1);
         assert!(app.layer_write_task.is_some());
         drain_layer_write(&mut app, &ctx);
-        assert!(
-            recorder
-                .requests()
-                .iter()
-                .any(|p| p[..6] == [0x05, 1, 1, 0, 0, 4])
-        );
+        assert!(recorder
+            .requests()
+            .iter()
+            .any(|p| p[..6] == [0x05, 1, 1, 0, 0, 4]));
         assert_eq!(
             app.layout.as_ref().unwrap().get_keycode(1, 0),
             4,
@@ -1809,7 +1802,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn macropad_profile_paste_matrix_persists_without_firmware_or_default_mutation() {
         use crate::application_layouts::{
-            DEFAULT_APPLICATION_LAYOUT_ID as DEFAULT, DetectedApplication,
+            DetectedApplication, DEFAULT_APPLICATION_LAYOUT_ID as DEFAULT,
         };
         for source in [DEFAULT, "fixture_app_1", "other_app_2"] {
             for target in ["fixture_app_1", "other_app_2"] {
@@ -2004,12 +1997,10 @@ mod tests {
                 expected_second
             );
             assert_eq!(app.hid_device.is_none(), disconnect);
-            assert!(
-                !recorder
-                    .requests()
-                    .iter()
-                    .any(|r| r[0] == 0x05 && r[2..4] == [0, 2])
-            );
+            assert!(!recorder
+                .requests()
+                .iter()
+                .any(|r| r[0] == 0x05 && r[2..4] == [0, 2]));
             let key = app.application_layout_device_key().unwrap();
             assert_eq!(
                 crate::app::load_app_settings().application_layouts[&key],
@@ -2178,12 +2169,10 @@ mod tests {
             4
         );
         assert_eq!(app.layout.as_ref().unwrap().get_keycode(1, 0), 4);
-        assert!(
-            recorder
-                .requests()
-                .iter()
-                .any(|r| r[..6] == [5, 1, 1, 0, 0, 4])
-        );
+        assert!(recorder
+            .requests()
+            .iter()
+            .any(|r| r[..6] == [5, 1, 1, 0, 0, 4]));
         let key = app.application_layout_device_key().unwrap();
         assert_eq!(
             crate::app::load_app_settings().application_layouts[&key],

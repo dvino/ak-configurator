@@ -434,7 +434,6 @@ pub(super) fn history(root: &Path) -> BackupResult<BackupHistory> {
                     .unwrap_or("")
                     .into(),
                 source_profile: loaded.source_profile(),
-                schema: loaded.archive().source.schema,
                 manifest_sha256: loaded.archive().manifest_sha256.clone(),
             }),
             Err(_) => invalid_skipped += 1,
@@ -443,8 +442,6 @@ pub(super) fn history(root: &Path) -> BackupResult<BackupHistory> {
     Ok(BackupHistory {
         entries,
         invalid_skipped,
-        warning: (invalid_skipped > 0)
-            .then(|| format!("Skipped {invalid_skipped} invalid backup entries")),
     })
 }
 fn private_descriptor() -> BackupResult<Local> {

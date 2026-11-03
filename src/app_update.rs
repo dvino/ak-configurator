@@ -2,8 +2,10 @@
 #[path = "app_update/verified.rs"]
 pub(crate) mod verified;
 
+#[cfg(test)]
 const AK_CONFIGURATOR_LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/dvino/ak-configurator/releases/latest";
+#[cfg(test)]
 const AK_CONFIGURATOR_LATEST_RELEASE_PAGE: &str =
     "https://github.com/dvino/ak-configurator/releases/latest";
 const RMK_RELEASES_API: &str = "https://api.github.com/repos/ergohaven/rmk/releases?per_page=30";
@@ -25,19 +27,23 @@ pub(crate) enum VersionRelation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum UpdateAssetState {
     Available(UpdateAsset),
+    #[cfg(test)]
     MissingForPlatform,
+    #[cfg(test)]
     MetadataUnavailable,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct UpdateCheckResult {
     pub(crate) latest_version: String,
+    #[cfg(test)]
     pub(crate) release_url: String,
     pub(crate) platform_label: String,
     pub(crate) asset: UpdateAssetState,
     pub(crate) relation: VersionRelation,
 }
 
+#[cfg(test)]
 impl UpdateCheckResult {
     pub(crate) fn downloadable_asset(&self) -> Option<&UpdateAsset> {
         match &self.asset {
@@ -61,6 +67,7 @@ pub(crate) struct FirmwareUpdateCheckResult {
     pub(crate) relation: VersionRelation,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug)]
 pub(crate) enum UpdateCheckOutcome {
     Success(UpdateCheckResult),
@@ -74,9 +81,11 @@ pub(crate) enum FirmwareUpdateCheckOutcome {
     Failed(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) enum UpdateCheckState {
+    #[default]
     Idle,
+    #[cfg(test)]
     Checking {
         #[cfg(not(target_arch = "wasm32"))]
         receiver: std::sync::mpsc::Receiver<UpdateCheckOutcome>,
@@ -85,14 +94,9 @@ pub(crate) enum UpdateCheckState {
     Failed(String),
 }
 
-impl Default for UpdateCheckState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) enum FirmwareUpdateCheckState {
+    #[default]
     Unsupported,
     Checking {
         target: FirmwareReleaseTarget,
@@ -110,12 +114,6 @@ pub(crate) enum FirmwareUpdateCheckState {
         target: FirmwareReleaseTarget,
         error: String,
     },
-}
-
-impl Default for FirmwareUpdateCheckState {
-    fn default() -> Self {
-        Self::Unsupported
-    }
 }
 
 #[derive(serde::Deserialize)]
@@ -136,11 +134,13 @@ struct GitHubAsset {
     browser_download_url: String,
 }
 
+#[cfg(test)]
 enum AkConfiguratorReleaseAssets {
     Known(Vec<GitHubAsset>),
     Unavailable,
 }
 
+#[cfg(test)]
 struct LatestAkConfiguratorRelease {
     tag_name: String,
     html_url: String,
@@ -151,9 +151,13 @@ pub(crate) fn current_platform_label() -> String {
     format!("{} {}", normalized_os_label(), normalized_arch_label())
 }
 
+// Historical stable-metadata reference; the native UI uses verified::start_check.
+#[cfg(test)]
 pub(crate) fn start_update_check() -> UpdateCheckState {
     if crate::isolated_runtime() {
-        return UpdateCheckState::Failed("Network update checks are disabled in isolated runtime".to_owned());
+        return UpdateCheckState::Failed(
+            "Network update checks are disabled in isolated runtime".to_owned(),
+        );
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -228,6 +232,8 @@ pub(crate) fn retry_firmware_update_check(
     start_firmware_update_check(firmware_update_target(state).cloned())
 }
 
+// Historical metadata-worker model; the native UI polls AppUpdateRuntime.
+#[cfg(test)]
 pub(crate) fn poll_update_check(state: &mut UpdateCheckState) {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -471,11 +477,11 @@ fn launch_url_in_browser(url: &str) -> bool {
     }
     #[cfg(target_os = "linux")]
     {
-        return std::process::Command::new("xdg-open")
+        std::process::Command::new("xdg-open")
             .arg(url)
             .status()
             .map(|status| status.success())
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
@@ -517,6 +523,7 @@ fn is_trusted_github_release_url(url: &url::Url) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
 fn fetch_latest_release() -> Result<LatestAkConfiguratorRelease, String> {
     fetch_latest_release_with_fallback(
         || {
@@ -527,6 +534,7 @@ fn fetch_latest_release() -> Result<LatestAkConfiguratorRelease, String> {
     )
 }
 
+#[cfg(test)]
 fn fetch_latest_release_with_fallback(
     fetch_from_api: impl FnOnce() -> Result<LatestAkConfiguratorRelease, String>,
     fetch_from_redirect: impl FnOnce() -> Result<LatestAkConfiguratorRelease, String>,
@@ -540,6 +548,7 @@ fn fetch_latest_release_with_fallback(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
 fn fetch_latest_release_from_redirect() -> Result<LatestAkConfiguratorRelease, String> {
     let response = ureq::get(AK_CONFIGURATOR_LATEST_RELEASE_PAGE)
         .set(
@@ -552,6 +561,7 @@ fn fetch_latest_release_from_redirect() -> Result<LatestAkConfiguratorRelease, S
     release_from_latest_release_redirect(response.get_url())
 }
 
+#[cfg(test)]
 fn latest_ak_configurator_release_from_api(
     release: GitHubRelease,
 ) -> Result<LatestAkConfiguratorRelease, String> {
@@ -573,6 +583,7 @@ fn latest_ak_configurator_release_from_api(
     })
 }
 
+#[cfg(test)]
 fn release_from_latest_release_redirect(url: &str) -> Result<LatestAkConfiguratorRelease, String> {
     let tag_name = parse_ak_configurator_release_url(url)?;
 
@@ -583,6 +594,7 @@ fn release_from_latest_release_redirect(url: &str) -> Result<LatestAkConfigurato
     })
 }
 
+#[cfg(test)]
 fn parse_ak_configurator_release_url(url: &str) -> Result<String, String> {
     let parsed = url::Url::parse(url)
         .map_err(|error| format!("GitHub Releases redirect URL was invalid: {error}"))?;
@@ -610,6 +622,7 @@ fn parse_ak_configurator_release_url(url: &str) -> Result<String, String> {
     Ok((*tag).to_owned())
 }
 
+#[cfg(test)]
 fn parse_canonical_ak_configurator_release_tag(tag: &str) -> Option<semver::Version> {
     let version = semver::Version::parse(tag.strip_prefix('v')?).ok()?;
     if !version.pre.is_empty() || !version.build.is_empty() || format!("v{version}") != tag {
@@ -618,6 +631,7 @@ fn parse_canonical_ak_configurator_release_tag(tag: &str) -> Option<semver::Vers
     Some(version)
 }
 
+#[cfg(test)]
 fn canonical_ak_configurator_release_url(tag: &str) -> String {
     format!("https://github.com/dvino/ak-configurator/releases/tag/{tag}")
 }
@@ -641,6 +655,7 @@ fn fetch_github_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, Str
         .map_err(|error| format!("GitHub response parse failed: {error}"))
 }
 
+#[cfg(test)]
 fn build_update_result(latest: LatestAkConfiguratorRelease) -> UpdateCheckResult {
     let LatestAkConfiguratorRelease {
         tag_name,
@@ -700,6 +715,7 @@ fn build_firmware_update_result(
     })
 }
 
+#[cfg(test)]
 fn platform_asset_matches(asset: &GitHubAsset, tag: &str) -> bool {
     platform_asset_matches_for(
         std::env::consts::OS,
@@ -709,6 +725,7 @@ fn platform_asset_matches(asset: &GitHubAsset, tag: &str) -> bool {
     )
 }
 
+#[cfg(test)]
 fn platform_asset_matches_for(os: &str, arch: &str, tag: &str, asset_name: &str) -> bool {
     let Some(version) = tag.strip_prefix('v') else {
         return false;
@@ -728,6 +745,7 @@ fn platform_asset_matches_for(os: &str, arch: &str, tag: &str, asset_name: &str)
     asset_name == format!("ak-configurator-{version}-{suffix}")
 }
 
+#[cfg(test)]
 fn compare_ak_configurator_versions(current: &str, latest: &str) -> VersionRelation {
     let ordering = match (parse_semver(current), parse_semver(latest)) {
         (Some(current), Some(latest)) => current.cmp_precedence(&latest),
@@ -748,6 +766,7 @@ fn compare_firmware_versions(current: &str, latest: &str) -> VersionRelation {
     }
 }
 
+#[cfg(test)]
 fn parse_semver(version: &str) -> Option<semver::Version> {
     let version = version.trim();
     let version = version.strip_prefix('v').unwrap_or(version);
@@ -831,6 +850,19 @@ mod tests {
                     ),
                 })
                 .collect(),
+        }
+    }
+
+    #[test]
+    fn legacy_application_update_check_refuses_isolated_runtime() {
+        assert!(crate::isolated_runtime());
+        let state = start_update_check();
+        match state {
+            UpdateCheckState::Failed(error) => assert_eq!(
+                error,
+                "Network update checks are disabled in isolated runtime",
+            ),
+            state => panic!("legacy check must fail before spawning a worker: {state:?}"),
         }
     }
 

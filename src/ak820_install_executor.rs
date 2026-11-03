@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! One-attempt installation transaction. Only the native owner implements IO.
 use crate::ak820_image_pack::{APP_END, APP_START};
-use crate::ak820_installer::{CheckedLocalPackage, SnapshotKind};
+use crate::ak820_installer::{CheckedLocalPackage, PreparedImageBytes, SnapshotKind};
 use crate::ak820_loader::{self as loader, Command, PayloadReports};
-use crate::ak820_settings_backup::{BackupResult, sha256};
+use crate::ak820_settings_backup::{sha256, BackupResult};
 use crate::app::ak820_beta1_profiles::ProfileId;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
@@ -63,7 +63,10 @@ fn preserved_nvm(
     .expected_nvm()
     .to_vec())
 }
-fn require_install_transition(source: SnapshotKind, target: crate::ak820::ImageContract) -> BackupResult<()> {
+fn require_install_transition(
+    source: SnapshotKind,
+    target: crate::ak820::ImageContract,
+) -> BackupResult<()> {
     use crate::ak820::ImageContract::{Beta3, Beta4};
     match (source, target) {
         (SnapshotKind::Oem, Beta3(_) | Beta4(_))
@@ -79,9 +82,13 @@ fn require_request_admission(
     admission: Option<&crate::ak820_release::ReleaseAdmission>,
 ) -> BackupResult<()> {
     if matches!(request, InstallRequest::OemRollback { .. }) && source == SnapshotKind::Oem {
-        return Err("OEM rollback blocked: the OEM source cannot provide the required physical hold".into());
+        return Err(
+            "OEM rollback blocked: the OEM source cannot provide the required physical hold".into(),
+        );
     }
-    if let InstallRequest::Firmware { profile, image, .. } | InstallRequest::BundledFirmware { profile, image, .. } = request {
+    if let InstallRequest::Firmware { profile, image, .. }
+    | InstallRequest::BundledFirmware { profile, image, .. } = request
+    {
         let admission = admission.ok_or("Firmware release admission is required")?;
         if admission.image() != *image || image.profile() != Some(*profile) {
             return Err("Selected firmware image differs from its release authorization".into());
@@ -141,9 +148,7 @@ pub(crate) struct InstallationSummary {
     pub(crate) physical_hold: bool,
 }
 pub(crate) struct PreparedInstallation {
-    source: Vec<u8>,
-    expected: Vec<u8>,
-    payload: Vec<u8>,
+    images: PreparedImageBytes,
     summary: InstallationSummary,
     settings: InstallSettingsOutcome,
     provenance: Option<RecoveryProvenance>,
@@ -183,11 +188,15 @@ impl PreparedInstallation {
         {
             let recovery = match recovery {
                 Some(recovery) => Some(bundled_recovery(source_kind, &source, Some(recovery))?),
-                None if source_kind == SnapshotKind::Oem => Some(bundled_recovery(source_kind, &source, None)?),
+                None if source_kind == SnapshotKind::Oem => {
+                    Some(bundled_recovery(source_kind, &source, None)?)
+                }
                 None => None,
             };
             let nvm = match &settings {
-                InstallSettingsChoice::Defaults => crate::ak820_release::bundled_defaults_for_image(image)?,
+                InstallSettingsChoice::Defaults => {
+                    crate::ak820_release::bundled_defaults_for_image(image)?
+                }
                 InstallSettingsChoice::PreservedInPayload { nvm_sha256 } => {
                     if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
                         return Err("Beta.4.1 does not authorize preserving saved settings".into());
@@ -207,7 +216,9 @@ impl PreparedInstallation {
             } else {
                 let admission = admission.ok_or("Firmware release admission is required")?;
                 if admission.image() != image {
-                    return Err("Selected firmware image differs from its release authorization".into());
+                    return Err(
+                        "Selected firmware image differs from its release authorization".into(),
+                    );
                 }
                 crate::ak820_release::bundled_payload_from_project(admission, &source, Some(&nvm))?
             };
@@ -238,7 +249,7 @@ impl PreparedInstallation {
             InstallRequest::Firmware { profile, .. } => Some(*profile),
             _ => None,
         };
-        let (payload, action, hold, settings) = match request {
+        let (images, action, hold, settings) = match request {
             InstallRequest::BundledFirmware { .. } => {
                 return Err("Bundled request was not normalized".into());
             }
@@ -251,11 +262,23 @@ impl PreparedInstallation {
             } => {
                 let admission = admission.ok_or("Firmware release admission is required")?;
                 if admission.image() != image {
-                    return Err("Selected firmware image differs from its release authorization".into());
+                    return Err(
+                        "Selected firmware image differs from its release authorization".into(),
+                    );
                 }
                 admission.validate_payload(profile, &payload)?;
-                let package = CheckedLocalPackage::prepare_with_optional_recovery(profile, &payload, &source, recovery.as_deref(), image)?;
-                if source_kind == SnapshotKind::Oem && recovery.as_ref().is_some_and(|rom| *rom != source) {
+                let package = CheckedLocalPackage::prepare_with_optional_recovery(
+                    profile,
+                    &payload,
+                    &source,
+                    recovery.as_deref(),
+                    image,
+                )?;
+                if source_kind == SnapshotKind::Oem
+                    && recovery
+                        .as_ref()
+                        .is_some_and(|_| package.recovery() != source.as_slice())
+                {
                     return Err(
                         "Initial OEM reference must equal the complete fresh device capture".into(),
                     );
@@ -288,7 +311,7 @@ impl PreparedInstallation {
                     }
                 };
                 (
-                    payload,
+                    PreparedImageBytes::Firmware(Box::new(package)),
                     format!("firmware:{}:{}", admission.version(), profile.as_str()),
                     hold,
                     outcome,
@@ -314,24 +337,27 @@ impl PreparedInstallation {
                         "OEM recovery protected regions differ from the fresh device".into(),
                     );
                 }
+                let payload = recovery[APP_START..APP_END].to_vec();
+                let mut expected = source.clone();
+                expected[APP_START..APP_END].copy_from_slice(&payload);
                 (
-                    recovery[APP_START..APP_END].to_vec(),
+                    PreparedImageBytes::Raw {
+                        source,
+                        payload,
+                        expected,
+                    },
                     "oem-rollback".into(),
                     true,
                     InstallSettingsOutcome::OemSettings,
                 )
             }
         };
-        let mut expected = source.clone();
-        expected[APP_START..APP_END].copy_from_slice(&payload);
-        let source_sha256 = sha256(&source);
-        let payload_sha256 = sha256(&payload);
-        let expected_sha256 = sha256(&expected);
+        let source_sha256 = sha256(images.source());
+        let payload_sha256 = sha256(images.payload());
+        let expected_sha256 = sha256(images.expected());
         let confirmation_pin = sha256(format!("ak820-install-1|{release_pin}|{action}|{source_sha256}|{payload_sha256}|{expected_sha256}|{settings:?}|{hold}").as_bytes());
         Ok(Self {
-            source,
-            expected,
-            payload,
+            images,
             settings,
             provenance: captured_provenance,
             target,
@@ -400,7 +426,7 @@ pub(super) fn execute(
         if let Some(target) = plan.target {
             let admission =
                 admission.ok_or("Fresh release admission is required before execution")?;
-            admission.validate_payload(target, &plan.payload)?;
+            admission.validate_payload(target, plan.images.payload())?;
             if admission.metadata_sha256() != plan.release_metadata_sha {
                 return Err("Release metadata changed since preview".into());
             }
@@ -409,17 +435,17 @@ pub(super) fn execute(
             return Err("Installation confirmation does not match the displayed plan".into());
         }
         progress.store(0, Ordering::Release);
-        if io.read_rom()? != plan.source {
+        if io.read_rom()? != plan.images.source() {
             return Err("Device changed since installation preview".into());
         }
-        save_safety(&plan.source)?;
+        save_safety(plan.images.source())?;
         check()?;
         progress.store(10, Ordering::Release);
         if plan.summary.physical_hold {
             io.fresh_hold(cancel)?;
         }
         check()?;
-        if io.read_rom()? != plan.source {
+        if io.read_rom()? != plan.images.source() {
             return Err("Device changed during confirmation".into());
         }
         io.transition()?;
@@ -430,19 +456,15 @@ pub(super) fn execute(
         outcome = InstallFirmwareOutcome::Unknown;
         io.loader_command(Command::Erase, 0)?;
         io.loader_command(Command::Begin, 0)?;
-        for (index, block) in PayloadReports::new(&plan.payload)?.enumerate() {
+        for (index, block) in PayloadReports::new(plan.images.payload())?.enumerate() {
             io.loader_block(&block)?;
             progress.store(25 + ((index + 1) * 60 / 799) as u32, Ordering::Release);
         }
-        io.loader_command(Command::Checksum, loader::checksum(&plan.payload))?;
+        io.loader_command(Command::Checksum, loader::checksum(plan.images.payload()))?;
         io.loader_command(Command::Restart, 0)?;
         io.reconnect()?;
         progress.store(90, Ordering::Release);
-        if io.read_rom()? != plan.expected {
-            return Err(
-                "Full-ROM readback differs; stop without retry or automatic recovery".into(),
-            );
-        }
+        plan.images.verify_full_readback(&io.read_rom()?)?;
         outcome = InstallFirmwareOutcome::Verified;
         progress.store(100, Ordering::Release);
         Ok(())
@@ -511,10 +533,19 @@ mod tests {
                 let t = target.profile;
                 for from in [Alpha3, Beta2(s), Beta3(s), Beta4(s)] {
                     for to in [Alpha3, Beta2(t), Beta3(t), Beta4(t)] {
-                        let allowed = matches!((from, to),
-                            (Beta3(_), Beta3(_) | Beta4(_)) | (Beta4(_), Beta4(_)));
-                        assert_eq!(require_install_transition(SnapshotKind::Project(from), to).is_ok(), allowed, "{from:?} -> {to:?}");
-                        assert_eq!(require_install_transition(SnapshotKind::Oem, to).is_ok(), matches!(to, Beta3(_) | Beta4(_)));
+                        let allowed = matches!(
+                            (from, to),
+                            (Beta3(_), Beta3(_) | Beta4(_)) | (Beta4(_), Beta4(_))
+                        );
+                        assert_eq!(
+                            require_install_transition(SnapshotKind::Project(from), to).is_ok(),
+                            allowed,
+                            "{from:?} -> {to:?}"
+                        );
+                        assert_eq!(
+                            require_install_transition(SnapshotKind::Oem, to).is_ok(),
+                            matches!(to, Beta3(_) | Beta4(_))
+                        );
                     }
                 }
             }
@@ -531,21 +562,58 @@ mod tests {
             for source in crate::app::ak820_beta1_profiles::profiles() {
                 let s = source.profile;
                 for bundled in [false, true] {
-                    let request = |profile, image| if bundled {
-                        InstallRequest::BundledFirmware { profile, image, recovery: None, settings: InstallSettingsChoice::Defaults }
-                    } else {
-                        InstallRequest::Firmware { profile, image, payload: vec![], recovery: None, settings: InstallSettingsChoice::Defaults }
+                    let request = |profile, image| {
+                        if bundled {
+                            InstallRequest::BundledFirmware {
+                                profile,
+                                image,
+                                recovery: None,
+                                settings: InstallSettingsChoice::Defaults,
+                            }
+                        } else {
+                            InstallRequest::Firmware {
+                                profile,
+                                image,
+                                payload: vec![],
+                                recovery: None,
+                                settings: InstallSettingsChoice::Defaults,
+                            }
+                        }
                     };
                     let good = request(t, Beta4(t));
-                    for from in [SnapshotKind::Oem, SnapshotKind::Project(Beta3(s)), SnapshotKind::Project(Beta4(s))] {
+                    for from in [
+                        SnapshotKind::Oem,
+                        SnapshotKind::Project(Beta3(s)),
+                        SnapshotKind::Project(Beta4(s)),
+                    ] {
                         assert!(require_request_admission(&good, from, Some(&admission)).is_ok());
                     }
-                    assert!(require_request_admission(&good, SnapshotKind::Project(Beta2(s)), Some(&admission)).is_err());
+                    assert!(require_request_admission(
+                        &good,
+                        SnapshotKind::Project(Beta2(s)),
+                        Some(&admission)
+                    )
+                    .is_err());
                     assert!(require_request_admission(&good, SnapshotKind::Oem, None).is_err());
-                    assert!(require_request_admission(&request(t, Beta3(t)), SnapshotKind::Oem, Some(&admission)).is_err());
+                    assert!(require_request_admission(
+                        &request(t, Beta3(t)),
+                        SnapshotKind::Oem,
+                        Some(&admission)
+                    )
+                    .is_err());
                     if s != t {
-                        assert!(require_request_admission(&request(s, Beta4(t)), SnapshotKind::Oem, Some(&admission)).is_err());
-                        assert!(require_request_admission(&request(s, Beta4(s)), SnapshotKind::Oem, Some(&admission)).is_err());
+                        assert!(require_request_admission(
+                            &request(s, Beta4(t)),
+                            SnapshotKind::Oem,
+                            Some(&admission)
+                        )
+                        .is_err());
+                        assert!(require_request_admission(
+                            &request(s, Beta4(s)),
+                            SnapshotKind::Oem,
+                            Some(&admission)
+                        )
+                        .is_err());
                     }
                 }
             }
@@ -560,9 +628,11 @@ mod tests {
         let mut expected = source.clone();
         expected[APP_START..APP_END].copy_from_slice(&payload);
         PreparedInstallation {
-            source,
-            expected,
-            payload,
+            images: PreparedImageBytes::Raw {
+                source,
+                payload,
+                expected,
+            },
             settings: InstallSettingsOutcome::DefaultsRequested,
             provenance: None,
             target: None,
@@ -582,40 +652,71 @@ mod tests {
         Fake {
             calls: vec![],
             fail: None,
-            rom: p.source.clone(),
-            after: p.expected.clone(),
+            rom: p.images.source().to_vec(),
+            after: p.images.expected().to_vec(),
         }
     }
     #[test]
     fn oem_exception_and_project_hold_stop_before_transition_on_failure() {
         let rollback = InstallRequest::OemRollback {
             recovery: vec![],
-            provenance: RecoveryProvenance { format: String::new(), recovery_sha256: String::new(), owner_binding: String::new() },
+            provenance: RecoveryProvenance {
+                format: String::new(),
+                recovery_sha256: String::new(),
+                owner_binding: String::new(),
+            },
         };
         assert!(require_request_admission(&rollback, SnapshotKind::Oem, None).is_err());
-        assert!(require_request_admission(&rollback, SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)), None).is_ok());
+        assert!(require_request_admission(
+            &rollback,
+            SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)),
+            None
+        )
+        .is_ok());
 
         // Synthetic plans exercise execution without claiming synthetic ROM identity.
         for oem in [true, false] {
             let mut p = fixture();
             p.summary.source_is_oem = oem;
-            let source = if oem { SnapshotKind::Oem } else { SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)) };
+            let source = if oem {
+                SnapshotKind::Oem
+            } else {
+                SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main))
+            };
             p.summary.physical_hold = firmware_requires_hold(source);
             assert_eq!(p.summary.physical_hold, !oem);
             for pin in ["wrong", "stale"] {
                 let mut io = fake(&p);
-                let result = execute(&mut io, &p, None, pin, &AtomicBool::new(false), &AtomicU32::new(0), |_| panic!("unconfirmed safety save"));
+                let result = execute(
+                    &mut io,
+                    &p,
+                    None,
+                    pin,
+                    &AtomicBool::new(false),
+                    &AtomicU32::new(0),
+                    |_| panic!("unconfirmed safety save"),
+                );
                 assert_eq!(result.firmware, InstallFirmwareOutcome::NotAttempted);
                 assert!(io.calls.is_empty());
             }
             let mut io = fake(&p);
-            if !oem { io.fail = Some(2); }
+            if !oem {
+                io.fail = Some(2);
+            }
             let mut saved = false;
-            let result = execute(&mut io, &p, None, "fixture", &AtomicBool::new(false), &AtomicU32::new(0), |rom| {
-                assert_eq!(rom, p.source);
-                saved = true;
-                Ok(())
-            });
+            let result = execute(
+                &mut io,
+                &p,
+                None,
+                "fixture",
+                &AtomicBool::new(false),
+                &AtomicU32::new(0),
+                |rom| {
+                    assert_eq!(rom, p.images.source());
+                    saved = true;
+                    Ok(())
+                },
+            );
             assert!(saved);
             if oem {
                 assert_eq!(result.firmware, InstallFirmwareOutcome::Verified);
@@ -635,7 +736,7 @@ mod tests {
         let progress = AtomicU32::new(0);
         let cancel = AtomicBool::new(false);
         let result = execute(&mut io, &p, None, "fixture", &cancel, &progress, |rom| {
-            assert_eq!(rom, p.source);
+            assert_eq!(rom, p.images.source());
             Ok(())
         });
         assert_eq!(result.firmware, InstallFirmwareOutcome::Verified);
@@ -713,8 +814,12 @@ mod tests {
     #[test]
     fn bundled_preparation_has_no_unverified_oem_reference_fallback() {
         let source = vec![0; 65536];
-        let error =
-            bundled_recovery(SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)), &source, None).unwrap_err();
+        let error = bundled_recovery(
+            SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)),
+            &source,
+            None,
+        )
+        .unwrap_err();
         assert!(error.contains("existing personal OEM reference"));
         for size in [0, 1, 65535, 65537] {
             assert!(bundled_recovery(SnapshotKind::Oem, &vec![0; size], None).is_err());
@@ -723,14 +828,12 @@ mod tests {
         // supplied explicitly or selected as a no-archive source candidate.
         assert!(bundled_recovery(SnapshotKind::Oem, &source, None).is_err());
         assert!(bundled_recovery(SnapshotKind::Oem, &source, Some(vec![0; 65536])).is_err());
-        assert!(
-            bundled_recovery(
-                SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)),
-                &source,
-                Some(vec![])
-            )
-            .is_err()
-        );
+        assert!(bundled_recovery(
+            SnapshotKind::Project(crate::ak820::ImageContract::Beta3(ProfileId::Main)),
+            &source,
+            Some(vec![])
+        )
+        .is_err());
         assert!(preserved_nvm(SnapshotKind::Oem, &source, ProfileId::Main).is_err());
         let request = InstallRequest::BundledFirmware {
             profile: ProfileId::Main,

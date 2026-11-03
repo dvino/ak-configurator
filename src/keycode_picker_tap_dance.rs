@@ -152,8 +152,7 @@ impl KeycodePicker {
                                     .collect::<Vec<_>>();
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         language,
                                         "tap_dance_editor.picker_item",
@@ -184,8 +183,7 @@ impl KeycodePicker {
                             1 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(language, "tap_dance_editor.td_name"),
                                     true,
                                     (!list.suppress_tooltips).then_some(crate::i18n::tr_catalog(
@@ -198,8 +196,7 @@ impl KeycodePicker {
                                             ui,
                                             ui.make_persistent_id(("tap_dance_name", n)),
                                             &mut edited_name,
-                                            control_width,
-                                            control_height,
+                                            egui::vec2(control_width, control_height),
                                             crate::i18n::tr_catalog(
                                                 language,
                                                 "tap_dance_editor.td_name",
@@ -283,8 +280,7 @@ impl KeycodePicker {
                                 };
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     label,
                                     true,
                                     (!list.suppress_tooltips).then_some(tooltip),
@@ -307,8 +303,7 @@ impl KeycodePicker {
                             6 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         language,
                                         "tap_dance_editor.tapping_term",
@@ -331,8 +326,7 @@ impl KeycodePicker {
                                                 n,
                                             )),
                                             &mut value,
-                                            metrics.value(82.0),
-                                            control_height,
+                                            egui::vec2(metrics.value(82.0), control_height),
                                             "",
                                             5,
                                             egui::Align::Center,

@@ -19,7 +19,10 @@ fn key(device: &crate::device::Device) -> Result<String> {
 }
 
 #[cfg(unix)]
-pub(crate) struct DeviceLease(std::fs::File);
+pub(crate) struct DeviceLease {
+    // Ownership keeps flock held until this guard is dropped; no reads needed.
+    _file: std::fs::File,
+}
 
 #[cfg(unix)]
 impl DeviceLease {
@@ -76,7 +79,7 @@ impl DeviceLease {
         }
         // Never unlink a lock: another process may already be waiting on this
         // inode. Closing the handle releases the advisory lock after a crash too.
-        Ok(Self(file))
+        Ok(Self { _file: file })
     }
 }
 
@@ -155,6 +158,38 @@ mod tests {
     use super::*;
     use std::fs::{self, File};
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn device_owner_rejects_non_ak820_empty_and_nul_paths_before_lock_creation() {
+        let mut device = crate::device::Device {
+            name: "Offline ownership refusal fixture".into(),
+            vendor_id: 0x1209,
+            product_id: 0x1234,
+            manufacturer: String::new(),
+            serial_number: "offline-refusal".into(),
+            bus_type: "Usb".into(),
+            path: String::new(),
+            instance_token: String::new(),
+            firmware: crate::firmware::FirmwareProtocol::Vial,
+        };
+        assert_eq!(
+            DeviceLease::acquire(&device).err().unwrap().to_string(),
+            "Cannot establish AK820 device ownership"
+        );
+        device.vendor_id = 0x320f;
+        device.product_id = 0x505b;
+        assert!(device.is_ak820());
+        assert_eq!(
+            DeviceLease::acquire(&device).err().unwrap().to_string(),
+            "Cannot establish AK820 device ownership"
+        );
+        device.path = "\0".into();
+        assert!(DeviceLease::acquire(&device)
+            .err()
+            .unwrap()
+            .root_cause()
+            .is::<std::ffi::NulError>());
+    }
 
     #[test]
     fn device_owner_contends_until_last_handle_closes() {

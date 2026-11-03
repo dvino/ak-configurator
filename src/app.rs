@@ -2,10 +2,10 @@ use crate::device::{Device, DeviceIdentity, DeviceManager};
 use crate::firmware::FirmwareProtocol;
 #[path = "ui/ak820_backup_inspection.rs"]
 mod ak820_backup_inspection;
-#[path = "ui/ak820_help.rs"]
-mod ak820_help_ui;
 #[path = "ak820_beta1_profiles.rs"]
 pub(crate) mod ak820_beta1_profiles;
+#[path = "ui/ak820_help.rs"]
+mod ak820_help_ui;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "ui/ak820_install.rs"]
 mod ak820_install;
@@ -94,7 +94,7 @@ use app_update::*;
 mod app_repaint;
 #[cfg(not(target_arch = "wasm32"))]
 use app_repaint::*;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "application_layout_portable.rs"]
 mod application_layout_portable;
 #[path = "entlayout.rs"]
@@ -176,6 +176,7 @@ mod encoder_visibility_settings_ui;
 mod file_browser;
 #[path = "ui/file_dialog.rs"]
 mod file_dialog;
+#[cfg(test)]
 #[path = "ui/grave_escape_settings.rs"]
 mod grave_escape_settings_ui;
 #[path = "ui/key_assignment.rs"]

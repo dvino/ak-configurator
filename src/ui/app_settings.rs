@@ -137,8 +137,7 @@ impl EntropyApp {
                     let mut selected_language = self.app_settings.language;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::LanguageLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::LanguageTooltip)),
@@ -211,15 +210,17 @@ impl EntropyApp {
                         #[cfg(not(target_arch = "wasm32"))]
                         self.set_app_language(selected_language);
                         #[cfg(target_arch = "wasm32")]
-                        { self.app_settings.language = selected_language; save_app_settings(&self.app_settings); }
+                        {
+                            self.app_settings.language = selected_language;
+                            save_app_settings(&self.app_settings);
+                        }
                     }
                 }
                 1 => {
                     let mut selected_key_legend_layout = self.app_settings.key_legend_layout;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(lang, "ui.key_legends_label"),
                         true,
                         tooltip(crate::i18n::tr_catalog(lang, "ui.key_legends_tooltip")),
@@ -319,8 +320,7 @@ impl EntropyApp {
                     );
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         close_behavior_label,
                         true,
                         tooltip(close_behavior_tooltip),
@@ -354,8 +354,7 @@ impl EntropyApp {
                     let mut launch_at_startup = self.app_settings.launch_at_startup;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::LaunchAtStartupLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::LaunchAtStartupTooltip)),
@@ -395,8 +394,7 @@ impl EntropyApp {
                     );
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         launch_background_label,
                         true,
                         tooltip(launch_background_tooltip),
@@ -425,8 +423,7 @@ impl EntropyApp {
                     let mut show_shifted_symbols = self.app_settings.show_shifted_number_symbols;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::ShiftedNumberSymbolsLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::ShiftedNumberSymbolsTooltip)),
@@ -449,8 +446,7 @@ impl EntropyApp {
                     let mut layer_hover_preview = self.app_settings.layer_hover_preview;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::LayerHoverPreviewLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::LayerHoverPreviewTooltip)),
@@ -476,8 +472,7 @@ impl EntropyApp {
                     let mut encoder_hover_enlarge = self.app_settings.encoder_hover_enlarge;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::EncoderHoverZoomLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::EncoderHoverZoomTooltip)),
@@ -500,8 +495,7 @@ impl EntropyApp {
                     let mut selected_accent = self.app_settings.accent_color;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr(lang, TrKey::AccentColorLabel),
                         true,
                         tooltip(crate::i18n::tr(lang, TrKey::AccentColorTooltip)),
@@ -552,8 +546,7 @@ impl EntropyApp {
                 9 => {
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(lang, "onboarding_tour.settings_row_label"),
                         true,
                         tooltip(crate::i18n::tr_catalog(
@@ -585,8 +578,7 @@ impl EntropyApp {
                     );
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(lang, "ui.diagnostics_mode_label"),
                         true,
                         (!suppress_tooltips).then_some(diagnostics_tooltip.as_str()),
@@ -615,8 +607,7 @@ impl EntropyApp {
                     let mut show_signature = self.app_settings.show_made_by_signature;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(lang, "ui.show_made_by_signature_label"),
                         true,
                         tooltip(crate::i18n::tr_catalog(
@@ -642,8 +633,7 @@ impl EntropyApp {
                     let mut assign_transparent = self.app_settings.middle_click_assigns_transparent;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(lang, "ui.middle_click_transparent_label"),
                         true,
                         tooltip(crate::i18n::tr_catalog(
@@ -696,8 +686,7 @@ impl EntropyApp {
 
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            content_width,
-            row_height,
+            egui::vec2(content_width, row_height),
             crate::i18n::tr_catalog(lang, "ui.vial_udev_rules_label"),
             true,
             tooltip,
@@ -728,7 +717,8 @@ impl EntropyApp {
     pub(super) fn run_linux_vial_udev_rules_install(&mut self) {
         let script = "linux/udev/install-vial-rules.sh";
         let Some(script_path) = crate::linux_setup::setup_script_path(script) else {
-            self.status_msg = format!("Could not find {script}; run it from the AK Configurator folder");
+            self.status_msg =
+                format!("Could not find {script}; run it from the AK Configurator folder");
             return;
         };
 

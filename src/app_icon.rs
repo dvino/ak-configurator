@@ -11,7 +11,11 @@ pub(crate) fn rgba_icon(size: u32) -> Vec<u8> {
 
 pub(crate) fn egui_icon(size: u32) -> egui::IconData {
     let size = size.max(1);
-    egui::IconData { rgba: rgba_icon(size), width: size, height: size }
+    egui::IconData {
+        rgba: rgba_icon(size),
+        width: size,
+        height: size,
+    }
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]

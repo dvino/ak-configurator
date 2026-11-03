@@ -119,7 +119,7 @@ unsafe fn text(d: CF, key: &str, optional: bool, hidapi_limit: bool) -> Result<S
         return Err(error(key));
     }
     let len = CFStringGetLength(v);
-    if len < 0 || len > 65536 {
+    if !(0..=65536).contains(&len) {
         return Err(error(key));
     }
     let len = if hidapi_limit { len.min(255) } else { len };
@@ -142,9 +142,8 @@ unsafe fn text(d: CF, key: &str, optional: bool, hidapi_limit: bool) -> Result<S
         return Err(error(key));
     }
     let mut out = String::new();
-    for chunk in bytes[..used as usize].chunks_exact(4) {
-        let ch = char::from_u32(u32::from_le_bytes(chunk.try_into().unwrap()))
-            .ok_or_else(|| error(key))?;
+    for chunk in bytes[..used as usize].as_chunks::<4>().0 {
+        let ch = char::from_u32(u32::from_le_bytes(*chunk)).ok_or_else(|| error(key))?;
         if ch == '\0' {
             break;
         }
@@ -178,7 +177,7 @@ unsafe fn usb_ancestry(entry: u32) -> Result<bool, String> {
             return Ok(false);
         }
         let mut parent = 0;
-        if IORegistryEntryGetParentEntry(current, b"IOService\0".as_ptr().cast(), &mut parent) != 0
+        if IORegistryEntryGetParentEntry(current, c"IOService".as_ptr(), &mut parent) != 0
             || parent == 0
         {
             return Err(error("USB ancestry"));
@@ -247,7 +246,7 @@ pub(super) fn scan() -> Result<Vec<Device>, String> {
     unsafe {
         // Kernel-side matching only USB IOHIDDevice services. Never enumerate
         // Bluetooth services or create a global IOHID manager/run-loop source.
-        let matching = IOServiceMatching(b"IOHIDDevice\0".as_ptr().cast());
+        let matching = IOServiceMatching(c"IOHIDDevice".as_ptr());
         if matching.is_null() {
             return Err(error("matching allocation"));
         }

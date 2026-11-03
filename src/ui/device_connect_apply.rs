@@ -450,10 +450,9 @@ mod tests {
         assert_no_applied_connection(&app);
         assert!(app.retiring_connects.is_empty());
         assert!(requests.try_recv().is_err());
-        assert!(
-            tx.send(ConnectTaskMessage::Progress("too late".to_owned()))
-                .is_err()
-        );
+        assert!(tx
+            .send(ConnectTaskMessage::Progress("too late".to_owned()))
+            .is_err());
         b_tx.send(ConnectTaskMessage::Done(Box::new(Ok(connection_result(
             "Current B",
         )))))
@@ -702,10 +701,9 @@ mod tests {
                 .map(String::as_str),
             Some("Current B")
         );
-        assert!(
-            !app.device_display_names
-                .contains_key(&connection_device("A").display_name_cache_key())
-        );
+        assert!(!app
+            .device_display_names
+            .contains_key(&connection_device("A").display_name_cache_key()));
         assert!(app.pending_device_connect.is_none());
         assert!(matches!(app.connect_state, ConnectState::Idle));
     }
@@ -1066,7 +1064,10 @@ impl EntropyApp {
         {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
             debug_assert!(self.retiring_connects.len() < MAX_CONNECT_WORKERS);
-            self.retiring_connects.push(RetiringConnect { device, rx });
+            self.retiring_connects.push(RetiringConnect {
+                device: *device,
+                rx,
+            });
         }
     }
 
@@ -1571,11 +1572,6 @@ impl EntropyApp {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    fn sync_layer_names_to_firmware(&self) {
-        let _ = self.write_layer_names_to_firmware(&self.layer_names);
-    }
-
     /// Write `names` to firmware (qsid 200 + layer), one layer at a time so a
     /// single failing SET does not abort the rest. Skips names that already
     /// match. Returns the indices of layers whose write did not land, so callers
@@ -1701,7 +1697,7 @@ mod qa_followup_reconnect {
         let (hid, _) = crate::hid::HidDevice::test_device();
         ConnectResult {
             device_name: device.name.clone(),
-            keyboard_id: keyboard_id,
+            keyboard_id,
             vial_unlock_status: Default::default(),
             hid_device: Some(hid),
             layout: layout(),
@@ -1773,7 +1769,7 @@ mod qa_followup_reconnect {
         p.source_levels = vec![42; PICTOGRAM_WIDTH * PICTOGRAM_HEIGHT];
         p.undo = vec![vec![17; PICTOGRAM_WIDTH * PICTOGRAM_HEIGHT]];
         p.library
-            .set(PictogramKind::Macro, 0, &vec![0xAA; PICTOGRAM_BYTES]);
+            .set(PictogramKind::Macro, 0, &[0xAA; PICTOGRAM_BYTES]);
         assert!(app.apply_current_pictogram(ctx));
         poll_upload(&mut app, ctx);
         let ConnectState::Reconnecting(reconnect) = &app.connect_state else {
@@ -1796,7 +1792,7 @@ mod qa_followup_reconnect {
         let (tx, rx) = mpsc::channel();
         let now = std::time::Instant::now();
         app.connect_state = ConnectState::Loading {
-            device: app.device_manager.devices()[app.selected_device.unwrap()].clone(),
+            device: Box::new(app.device_manager.devices()[app.selected_device.unwrap()].clone()),
             cancel: Default::default(),
             rx,
             started_at: now,

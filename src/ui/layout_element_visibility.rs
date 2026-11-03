@@ -170,7 +170,9 @@ impl EntropyApp {
         self.editing_layer_layout_id = None;
         self.editing_layer_device_key = None;
         #[cfg(not(target_arch = "wasm32"))]
-        { self.editing_layer_generation = None; }
+        {
+            self.editing_layer_generation = None;
+        }
         self.editing_layout_visibility = true;
     }
 
@@ -225,7 +227,10 @@ impl EntropyApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppSettings, EntropyApp, KeyboardLayout, LayoutElementVisibility, MainMenuTab};
+    use super::{
+        AppSettings, EntropyApp, KeyboardLayout, LayoutElementVisibility, LayoutGeometry,
+        MainMenuTab,
+    };
 
     #[test]
     fn device_visibility_key_distinguishes_same_model_serials() {
@@ -386,11 +391,13 @@ mod tests {
                         &layout,
                         &ctx,
                         egui::vec2(900.0, 700.0),
-                        100.0,
-                        100.0,
-                        80.0,
-                        4.0,
-                        80.0,
+                        LayoutGeometry {
+                            offset_x: 100.0,
+                            offset_y: 100.0,
+                            unit: 80.0,
+                            padding: 4.0,
+                            layout_h: 80.0,
+                        },
                     );
                 },
             );
@@ -484,11 +491,13 @@ mod tests {
                         &combined_layout,
                         &ctx,
                         egui::vec2(900.0, 700.0),
-                        100.0,
-                        100.0,
-                        80.0,
-                        4.0,
-                        80.0,
+                        LayoutGeometry {
+                            offset_x: 100.0,
+                            offset_y: 100.0,
+                            unit: 80.0,
+                            padding: 4.0,
+                            layout_h: 80.0,
+                        },
                     );
                 },
             );

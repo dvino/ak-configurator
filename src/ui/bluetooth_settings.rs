@@ -137,8 +137,7 @@ impl EntropyApp {
                     let mut enabled = setting.value;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        content_width,
-                        row_height,
+                        egui::vec2(content_width, row_height),
                         crate::i18n::tr_catalog(
                             self.app_settings.language,
                             "bluetooth_settings.charge_indicator",
@@ -223,8 +222,7 @@ impl EntropyApp {
         let selected_idx = (setting.value as usize).min(variants.len().saturating_sub(1));
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            content_width,
-            row_height,
+            egui::vec2(content_width, row_height),
             label.as_str(),
             true,
             tooltip.as_deref(),
@@ -367,11 +365,13 @@ mod tests {
         assert!(app.hid_device.is_none());
         assert!(app.vial_hid_task_active());
 
-        let mut input = egui::RawInput::default();
-        input.screen_rect = Some(egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(900.0, 700.0),
-        ));
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 700.0),
+            )),
+            ..Default::default()
+        };
         let output = ctx.run_ui(input, |ui| {
             app.draw_bluetooth_settings_page(ui, ui.max_rect());
         });

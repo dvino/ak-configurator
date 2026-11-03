@@ -2,16 +2,16 @@
 //! Offline restore planning from pinned settings_backup.py/settings_workflow.py.
 //! No transport or execution API. A successful plan grants no write permission.
 use crate::ak820_settings_backup::{
-    BackupResult, ImageIdentity, ValidatedArchive, canonical, macro_chunks, rgb_wire,
-    rgb_wire_for_profile, sha256, transition_allowed, translate_rgb,
+    canonical, macro_chunks, rgb_wire, rgb_wire_for_profile, sha256, transition_allowed,
+    translate_rgb, BackupResult, ImageIdentity, ValidatedArchive,
 };
 use crate::ak820_settings_model::{settings_from_nvm, validate_nvm};
-use crate::ak820_typed_storage::{Extensions, QmkSettings, SCHEMA, slot_offset};
+use crate::ak820_typed_storage::{slot_offset, Extensions, QmkSettings, SCHEMA};
 use crate::app::ak820_beta1_profiles::{
-    KeycodeSource, ProfileId, firmware_matrix, historical_settings_identities,
-    historical_settings_identity, matrix_profile,
+    firmware_matrix, historical_settings_identities, historical_settings_identity, matrix_profile,
+    KeycodeSource, ProfileId,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// Requirements for a future executor, never evidence that they were fulfilled.
 /// Owned values are exposed only by shared reference, including on every setter.
@@ -64,6 +64,7 @@ pub(crate) struct RestoreStep {
     preconditions: Vec<RestorePrecondition>,
 }
 impl RestoreStep {
+    #[cfg(test)]
     pub(crate) fn preconditions(&self) -> &[RestorePrecondition] {
         &self.preconditions
     }
@@ -92,6 +93,7 @@ pub(crate) struct RestorePlan {
     final_extensions: Option<Extensions>,
 }
 impl RestorePlan {
+    #[cfg(test)]
     pub(crate) fn preconditions(&self) -> &[RestorePrecondition] {
         &self.preconditions
     }
@@ -99,6 +101,7 @@ impl RestorePlan {
     pub(crate) fn final_getters(&self) -> &Value {
         &self.final_getters
     }
+    #[cfg(test)]
     pub(crate) fn final_extensions(&self) -> Option<&Extensions> {
         self.final_extensions.as_ref()
     }
@@ -121,12 +124,17 @@ impl RestorePlan {
     pub(crate) fn final_readback(&self) -> ReadExpectation {
         ReadExpectation::FullNvm(self.expected.clone())
     }
+    #[cfg(test)]
     pub(crate) fn requires_fresh_physical_unlock(&self) -> bool {
         true
     }
 }
 fn require(ok: bool, message: &str) -> BackupResult<()> {
-    if ok { Ok(()) } else { Err(message.into()) }
+    if ok {
+        Ok(())
+    } else {
+        Err(message.into())
+    }
 }
 fn hex_bytes(value: &Value) -> BackupResult<Vec<u8>> {
     let s = value.as_str().ok_or("Expected hexadecimal string")?;
@@ -252,20 +260,21 @@ pub(crate) fn plan_restore(
     plan_with_registry(
         archive,
         source_nvm,
-        source_profile.or_else(|| {
-            historical_settings_identity(
-                &archive.source.ihx_sha256,
-                &archive.source.code_sha256,
-                archive.source.schema,
-            )
-            .and_then(|h| h.profile)
-        }),
-        source_combo,
+        (
+            source_profile.or_else(|| {
+                historical_settings_identity(
+                    &archive.source.ihx_sha256,
+                    &archive.source.code_sha256,
+                    archive.source.schema,
+                )
+                .and_then(|h| h.profile)
+            }),
+            source_combo,
+        ),
         target_profile,
         target_identity,
         target_nvm,
-        &trusted,
-        &pairs,
+        (&trusted, &pairs),
     )
 }
 
@@ -323,13 +332,11 @@ pub(crate) fn plan_factory_reset(
 fn plan_with_registry(
     archive: &ValidatedArchive,
     source_nvm: &[u8],
-    source_profile: Option<ProfileId>,
-    source_combo: bool,
+    (source_profile, source_combo): (Option<ProfileId>, bool),
     target_profile: ProfileId,
     target: &ImageIdentity,
     before: &[u8],
-    trusted: &[ImageIdentity],
-    pairs: &[(String, String)],
+    (trusted, pairs): (&[ImageIdentity], &[(String, String)]),
 ) -> BackupResult<RestorePlan> {
     // Unknown identities reach this fallback only through the private synthetic registry seam.
     let target_row =
@@ -723,7 +730,7 @@ impl RestorePlan {
                 expected,
             });
         }
-        expectations.push(ReadExpectation::FullNvm(self.expected.clone()));
+        expectations.push(self.final_readback());
         self.steps.push(RestoreStep {
             preconditions: self.preconditions.clone(),
             command,
@@ -732,8 +739,9 @@ impl RestorePlan {
         });
     }
 }
-/// Catalog-bound offline firmware-image migration; never a device operation.
+/// Test/reference-only catalog-bound offline migration; never a device operation.
 /// Schema01 remains unsupported: its semantic migration gate is unavailable.
+#[cfg(test)]
 pub(crate) fn migrate_schema02_to03(
     source: &[u8],
     from: &ImageIdentity,
@@ -771,6 +779,7 @@ pub(crate) fn migrate_schema02_to03(
     Ok(candidate)
 }
 // Private transform permits synthetic fixtures, never caller-supplied trust.
+#[cfg(test)]
 fn migrate_with_registry(
     source: &[u8],
     from: &ImageIdentity,
@@ -944,13 +953,11 @@ mod tests {
         plan_with_registry(
             &a,
             raw,
-            None,
-            true,
+            (None, true),
             ProfileId::Main,
             &image,
             target,
-            &[image.clone()],
-            &[],
+            (std::slice::from_ref(&image), &[]),
         )
     }
     #[test]
@@ -974,28 +981,24 @@ mod tests {
         let plan = plan_restore(&saved_archive, &raw, ProfileId::Code, &to, &before).unwrap();
         assert_eq!(plan.expected_nvm()[24], (5 << 2) | 1);
         let fixed = super::tests::archive(plan.expected_nvm(), to.clone(), ProfileId::Code);
-        assert!(
-            plan_restore(
-                &fixed,
-                plan.expected_nvm(),
-                ProfileId::Code,
-                &to,
-                plan.expected_nvm()
-            )
-            .unwrap()
-            .steps()
-            .is_empty()
-        );
+        assert!(plan_restore(
+            &fixed,
+            plan.expected_nvm(),
+            ProfileId::Code,
+            &to,
+            plan.expected_nvm()
+        )
+        .unwrap()
+        .steps()
+        .is_empty());
         let mut unknown = from.clone();
         unknown.definition_sha256 = "0".repeat(64);
         assert!(migrate_schema02_to03(&raw, &unknown, ProfileId::Code, &to).is_err());
         assert!(migrate_schema02_to03(&migrated, &to, ProfileId::Code, &from).is_err());
         raw[24] = (5 << 2) | 1; // Historical Direct is unavailable on Code.
-        assert!(
-            migrate_schema02_to03(&raw, &from, ProfileId::Code, &to)
-                .unwrap_err()
-                .contains("RGB effect")
-        );
+        assert!(migrate_schema02_to03(&raw, &from, ProfileId::Code, &to)
+            .unwrap_err()
+            .contains("RGB effect"));
         let direct = archive(&raw, from.clone(), ProfileId::Main);
         assert!(plan_restore(&direct, &raw, ProfileId::Code, &to, &before).is_err());
         assert_eq!(before, nvm(SCHEMA));
@@ -1044,11 +1047,9 @@ mod tests {
                 .contains("preserve existing nonempty Combos")
         );
         assert_eq!(before, snapshot);
-        assert!(
-            migrate_schema02_to03(&raw, &from, ProfileId::Main, &target)
-                .unwrap_err()
-                .contains("reserved Combo")
-        );
+        assert!(migrate_schema02_to03(&raw, &from, ProfileId::Main, &target)
+            .unwrap_err()
+            .contains("reserved Combo"));
         raw[0x658..0x6a8].fill(0);
         assert!(migrate_schema02_to03(&raw, &from, ProfileId::Main, &target).is_ok());
     }
@@ -1087,35 +1088,31 @@ mod tests {
                 reject_preexisting_unlock: true
             }
         ));
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::DiscoveredComboCount { expected: 8 })
-        );
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::QueriedActiveQsid {
-                    expected: matrix_profile(ProfileId::Main)
-                        .capabilities
-                        .runtime_qmk_settings_ids
-                        .clone()
-                })
-        );
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::PinnedSource {
-                    archive_manifest_sha256: "synthetic".into(),
-                    identity: image('a', 0x082002),
-                    nvm: saved.clone()
-                })
-        );
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::SelectedTarget {
-                    profile: ProfileId::Main,
-                    identity: image('a', 0x082002),
-                    nvm: before.clone()
-                })
-        );
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::DiscoveredComboCount { expected: 8 }));
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::QueriedActiveQsid {
+                expected: matrix_profile(ProfileId::Main)
+                    .capabilities
+                    .runtime_qmk_settings_ids
+                    .clone()
+            }));
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::PinnedSource {
+                archive_manifest_sha256: "synthetic".into(),
+                identity: image('a', 0x082002),
+                nvm: saved.clone()
+            }));
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::SelectedTarget {
+                profile: ProfileId::Main,
+                identity: image('a', 0x082002),
+                nvm: before.clone()
+            }));
         for requirement in [
             RestorePrecondition::RevalidateSourceBeforeFirstSetter,
             RestorePrecondition::FreshUnlockedStatusBeforeEachSetter,
@@ -1125,11 +1122,10 @@ mod tests {
         ] {
             assert!(p.preconditions().contains(&requirement));
         }
-        assert!(
-            p.steps()
-                .iter()
-                .all(|step| step.preconditions() == p.preconditions())
-        );
+        assert!(p
+            .steps()
+            .iter()
+            .all(|step| step.preconditions() == p.preconditions()));
         assert_eq!(
             p.final_getters(),
             &archive(&saved, image('a', 0x082002), ProfileId::Main).settings
@@ -1147,17 +1143,24 @@ mod tests {
             }
         ));
         assert!(matches!(&p.steps()[0].expectations()[1],ReadExpectation::FullNvm(v) if v==&saved));
+        let ReadExpectation::FullNvm(mut owned_snapshot) = p.final_readback() else {
+            panic!("final readback must retain the full NVM snapshot");
+        };
+        assert_eq!(owned_snapshot, saved);
+        owned_snapshot.fill(0xFF);
+        assert_ne!(owned_snapshot, saved);
+        assert_eq!(p.expected_nvm(), saved);
+        assert_eq!(p.before_nvm(), before);
+        assert!(matches!(&p.steps()[0].expectations()[1],ReadExpectation::FullNvm(v) if v==&saved));
     }
     #[test]
     fn core_direct_palette_and_macro_padding_block_before_planning() {
         let before = nvm(0x082002);
         let mut saved = before.clone();
         saved[3] = 1;
-        assert!(
-            plan(&saved, &before)
-                .unwrap_err()
-                .contains("no restore setter")
-        );
+        assert!(plan(&saved, &before)
+            .unwrap_err()
+            .contains("no restore setter"));
         let mut saved = before.clone();
         saved[24] = 21;
         assert!(plan(&saved, &before).unwrap_err().contains("palette"));
@@ -1174,15 +1177,13 @@ mod tests {
         saved[0x81e..0x82e].fill(0);
         saved[0x7f1] = 46;
         let p = plan(&saved, &before).unwrap();
-        assert!(
-            p.steps()
-                .iter()
-                .all(|step| step.preconditions() == p.preconditions())
-        );
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::FinalGetterReconciliation)
-        );
+        assert!(p
+            .steps()
+            .iter()
+            .all(|step| step.preconditions() == p.preconditions()));
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::FinalGetterReconciliation));
         assert_eq!(p.steps().len(), 2);
         assert_eq!(p.steps()[0].command(), "upload_macro_chunk");
         assert_eq!(p.steps()[0].expectations().len(), 2);
@@ -1197,19 +1198,15 @@ mod tests {
         let before = nvm(0x082002);
         let mut saved = before.clone();
         saved[0x640..0x642].copy_from_slice(&0x5700u16.to_be_bytes());
-        assert!(
-            plan(&saved, &before)
-                .unwrap_err()
-                .contains("Unsupported encoders")
-        );
+        assert!(plan(&saved, &before)
+            .unwrap_err()
+            .contains("Unsupported encoders"));
         let mut saved = before.clone();
         saved[0x800..0x804].copy_from_slice(&[1, 5, 0x53, 0x7c]);
         saved[0x7f1] = 20;
-        assert!(
-            plan(&saved, &before)
-                .unwrap_err()
-                .contains("Unsupported macro")
-        );
+        assert!(plan(&saved, &before)
+            .unwrap_err()
+            .contains("Unsupported macro"));
     }
     #[test]
     fn exact_transition_and_archive_binding_fail_closed() {
@@ -1217,65 +1214,52 @@ mod tests {
         let a = image('a', 0x082002);
         let b = image('b', 0x082002);
         let archive = archive(&raw, a.clone(), ProfileId::Main);
-        assert!(
-            plan_with_registry(
-                &archive,
-                &raw,
-                None,
-                true,
-                ProfileId::Main,
-                &b,
-                &raw,
-                &[a.clone(), b.clone()],
-                &[]
-            )
-            .is_err()
-        );
-        assert!(
-            plan_with_registry(
-                &archive,
-                &raw,
-                None,
-                true,
-                ProfileId::Main,
-                &b,
-                &raw,
+        assert!(plan_with_registry(
+            &archive,
+            &raw,
+            (None, true),
+            ProfileId::Main,
+            &b,
+            &raw,
+            (&[a.clone(), b.clone()], &[])
+        )
+        .is_err());
+        assert!(plan_with_registry(
+            &archive,
+            &raw,
+            (None, true),
+            ProfileId::Main,
+            &b,
+            &raw,
+            (
                 &[a.clone(), b.clone()],
                 &[(a.ihx_sha256.clone(), b.ihx_sha256.clone())]
             )
-            .is_ok()
-        );
+        )
+        .is_ok());
         let mut altered = raw.clone();
         altered[0x3f] = 1;
-        assert!(
-            plan_with_registry(
-                &archive,
-                &altered,
-                None,
-                true,
-                ProfileId::Main,
-                &a,
-                &raw,
-                &[a.clone()],
-                &[]
-            )
-            .unwrap_err()
-            .contains("archive")
-        );
-        assert!(
-            plan_with_registry(
-                &archive,
-                &raw,
-                None,
-                true,
-                ProfileId::Main,
-                &a,
-                &raw,
-                &[a.clone(), a.clone()],
-                &[]
-            )
-            .is_err()
-        );
+        assert!(plan_with_registry(
+            &archive,
+            &altered,
+            (None, true),
+            ProfileId::Main,
+            &a,
+            &raw,
+            (std::slice::from_ref(&a), &[])
+        )
+        .unwrap_err()
+        .contains("archive"));
+        assert!(plan_with_registry(
+            &archive,
+            &raw,
+            (None, true),
+            ProfileId::Main,
+            &a,
+            &raw,
+            (&[a.clone(), a.clone()], &[])
+        )
+        .is_err());
     }
     #[test]
     fn schema_migration_is_exact_and_preserves_combos_macro_and_core() {
@@ -1310,13 +1294,11 @@ mod tests {
         let p = plan_with_registry(
             &archive,
             &before,
-            Some(ProfileId::Code),
-            true,
+            (Some(ProfileId::Code), true),
             ProfileId::Code,
             &id,
             &before,
-            &[id.clone()],
-            &[],
+            (std::slice::from_ref(&id), &[]),
         )
         .unwrap();
         assert!(p.steps().is_empty());
@@ -1324,47 +1306,40 @@ mod tests {
             p.final_extensions(),
             Some(&Extensions::decode_nvm(&before).unwrap())
         );
-        assert!(
-            p.preconditions()
-                .contains(&RestorePrecondition::QueriedActiveQsid {
-                    expected: matrix_profile(ProfileId::Code)
-                        .capabilities
-                        .runtime_qmk_settings_ids
-                        .clone()
-                })
-        );
+        assert!(p
+            .preconditions()
+            .contains(&RestorePrecondition::QueriedActiveQsid {
+                expected: matrix_profile(ProfileId::Code)
+                    .capabilities
+                    .runtime_qmk_settings_ids
+                    .clone()
+            }));
         let mut source = before.clone();
         let mut extensions = Extensions::decode_nvm(&source).unwrap();
         extensions.settings.set(4, 321).unwrap();
         source[0x6a8..0x6c0].copy_from_slice(&extensions.settings.encode());
         let changed = super::tests::archive(&source, id.clone(), ProfileId::Code);
-        assert!(
-            plan_with_registry(
-                &changed,
-                &source,
-                Some(ProfileId::Code),
-                true,
-                ProfileId::Code,
-                &id,
-                &before,
-                &[id.clone()],
-                &[]
-            )
-            .unwrap_err()
-            .contains("Inactive QMK")
-        );
+        assert!(plan_with_registry(
+            &changed,
+            &source,
+            (Some(ProfileId::Code), true),
+            ProfileId::Code,
+            &id,
+            &before,
+            (std::slice::from_ref(&id), &[])
+        )
+        .unwrap_err()
+        .contains("Inactive QMK"));
         let mut blank = before.clone();
         blank[0x6a8..0x6c0].fill(255);
         let p = plan_with_registry(
             &archive,
             &before,
-            Some(ProfileId::Code),
-            true,
+            (Some(ProfileId::Code), true),
             ProfileId::Code,
             &id,
             &blank,
-            &[id.clone()],
-            &[],
+            (std::slice::from_ref(&id), &[]),
         )
         .unwrap();
         assert_eq!(p.expected_nvm(), blank);

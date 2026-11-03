@@ -218,7 +218,9 @@ struct QueryFinished(std::sync::mpsc::Sender<()>, bool);
 
 impl Drop for QueryFinished {
     fn drop(&mut self) {
-        if self.1 { let _ = self.0.send(()); }
+        if self.1 {
+            let _ = self.0.send(());
+        }
     }
 }
 
@@ -556,12 +558,12 @@ fn adopted_clock_bridge_reopens_dedicated_after_path_disappears() {
     );
 }
 
-
 #[test]
 fn slow_desktop_query_cannot_stall_fresh_volume_on_real_bridge() {
     use std::sync::atomic::AtomicU8;
     struct Source {
-        value: Arc<AtomicU8>, blocked: usize,
+        value: Arc<AtomicU8>,
+        blocked: usize,
         entered: std::sync::mpsc::Sender<()>,
         release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
         once: bool,
@@ -571,14 +573,26 @@ fn slow_desktop_query_cannot_stall_fresh_volume_on_real_bridge() {
             if index == self.blocked && !self.once {
                 self.once = true;
                 self.entered.send(()).unwrap();
-                self.release.lock().unwrap().recv_timeout(Duration::from_secs(5)).unwrap();
+                self.release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
             }
         }
     }
     impl DesktopSource for Source {
-        fn volume(&mut self) -> Option<u8> { Some(self.value.load(Ordering::SeqCst)) }
-        fn layout(&mut self) -> Option<u8> { self.query(1); Some(1) }
-        fn media(&mut self) -> Option<MediaInfo> { self.query(2); Some(MediaInfo::default()) }
+        fn volume(&mut self) -> Option<u8> {
+            Some(self.value.load(Ordering::SeqCst))
+        }
+        fn layout(&mut self) -> Option<u8> {
+            self.query(1);
+            Some(1)
+        }
+        fn media(&mut self) -> Option<MediaInfo> {
+            self.query(2);
+            Some(MediaInfo::default())
+        }
     }
     for blocked in [1, 2] {
         let volume = Arc::new(AtomicU8::new(10));
@@ -587,20 +601,39 @@ fn slow_desktop_query_cannot_stall_fresh_volume_on_real_bridge() {
         let (release, resume) = std::sync::mpsc::channel();
         let resume = Arc::new(Mutex::new(resume));
         let service = HostDataService::start(move || Source {
-            value: value.clone(), blocked, entered: entered.clone(), release: resume.clone(), once: false,
+            value: value.clone(),
+            blocked,
+            entered: entered.clone(),
+            release: resume.clone(),
+            once: false,
         });
         let (hid, recorder) = crate::hid::HidDevice::test_device();
         let mut bridge = QmkHidHostBridge::start_with_desktop_service(
             target("volume-lane"),
-            HostDataMode { volume: true, layout: blocked == 1, media: blocked == 2, ..Default::default() },
-            hid.shared_output(), HostProtocol::Selected(true), service, open_host_data_hid,
+            HostDataMode {
+                volume: true,
+                layout: blocked == 1,
+                media: blocked == 2,
+                ..Default::default()
+            },
+            hid.shared_output(),
+            HostProtocol::Selected(true),
+            service,
+            open_host_data_hid,
         );
         ack.recv_timeout(Duration::from_secs(2)).unwrap();
         volume.store(70, Ordering::SeqCst);
         let until = Instant::now() + Duration::from_millis(600);
         let mut fresh = false;
         while Instant::now() < until {
-            if recorder.requests().iter().any(|p| p.starts_with(&[DATA_VOLUME,70])) { fresh = true; break; }
+            if recorder
+                .requests()
+                .iter()
+                .any(|p| p.starts_with(&[DATA_VOLUME, 70]))
+            {
+                fresh = true;
+                break;
+            }
             thread::sleep(Duration::from_millis(2));
         }
         // Always release/stop before asserting; a RED must not leak a worker.

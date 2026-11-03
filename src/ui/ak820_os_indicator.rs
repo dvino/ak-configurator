@@ -11,7 +11,7 @@ enum Job {
         enabled: bool,
     },
     Write {
-        hid: crate::hid::HidDevice,
+        hid: Box<crate::hid::HidDevice>,
         generation: u64,
         mode: Mode,
         layout: Option<&'static str>,
@@ -27,7 +27,7 @@ struct Sample {
 
 enum WorkerResult {
     Sample(Sample),
-    Write(Finished),
+    Write(Box<Finished>),
 }
 #[derive(Clone, Copy, Default)]
 enum IndicatorStatus {
@@ -127,14 +127,14 @@ impl Runtime {
                         } else {
                             hid.ak820_os_indicator_set(mode).map_err(|e| e.to_string())
                         };
-                        WorkerResult::Write(Finished {
-                            hid,
+                        WorkerResult::Write(Box::new(Finished {
+                            hid: *hid,
                             generation,
                             mode,
                             layout,
                             result,
                             sent: true,
-                        })
+                        }))
                     }
                 };
                 if finished.send(result).is_err() {
@@ -263,7 +263,7 @@ impl EntropyApp {
                 }
                 return;
             }
-            WorkerResult::Write(result) => result,
+            WorkerResult::Write(result) => *result,
         };
         runtime.in_flight = false;
         if result.generation != self.connection_generation {
@@ -390,7 +390,7 @@ impl EntropyApp {
                 runtime.loan_selected = self.selected_device;
                 runtime.in_flight = true;
                 let job = Job::Write {
-                    hid,
+                    hid: Box::new(hid),
                     generation: sample.generation,
                     mode,
                     layout: sample.layout,
@@ -398,7 +398,7 @@ impl EntropyApp {
                 };
                 if let Err(error) = runtime.worker.as_ref().unwrap().send(job) {
                     if let Job::Write { hid, .. } = error.0 {
-                        self.hid_device = Some(hid);
+                        self.hid_device = Some(*hid);
                     }
                     runtime.in_flight = false;
                     runtime.scheduler.completed(
@@ -570,6 +570,7 @@ impl EntropyApp {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn draw_ak820_os_indicator_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -704,7 +705,6 @@ pub(crate) fn run_background_helper() -> HelperExit {
     let mut faulted = FaultedEndpoints::default();
     let mut active: Option<(String, crate::hid::HidDevice, Mode, Option<Instant>)> = None;
     let mut last_scan_at: Option<Instant> = None;
-    let mut enumerated_devices = Vec::new();
     loop {
         let cycle_started = Instant::now();
         let settings = load_app_settings().ak820_os_indicator;
@@ -739,11 +739,10 @@ pub(crate) fn run_background_helper() -> HelperExit {
                     continue;
                 }
             };
-            enumerated_devices = devices;
-            let keys: Vec<String> = enumerated_devices.iter().map(endpoint_key).collect();
+            let keys: Vec<String> = devices.iter().map(endpoint_key).collect();
             faulted.observed(&keys);
-            let candidate = if enumerated_devices.len() == 1 {
-                enumerated_devices.first()
+            let candidate = if devices.len() == 1 {
+                devices.first()
             } else {
                 None
             };
@@ -1001,6 +1000,66 @@ mod background_tests {
         assert!(app.ak820_os_indicator_owns_hid());
         assert!(requests.requests().is_empty());
         drop(hid);
+    }
+
+    #[test]
+    fn stopped_worker_returns_the_borrowed_hid_without_writing() {
+        let (mut app, jobs, _finished, requests) = sampled_app();
+        drop(jobs);
+        app.ak820_os_indicator_runtime.sample = Some(Sample {
+            generation: app.connection_generation,
+            layout: Some("en"),
+            sampled: Instant::now(),
+        });
+        app.tick_ak820_os_indicator(&egui::Context::default());
+        assert!(app.hid_device.as_ref().unwrap().ak820_editing_ready());
+        assert!(!app.ak820_os_indicator_owns_hid());
+        assert!(app.ak820_os_indicator_runtime.scheduler.failed());
+        assert!(matches!(
+            app.ak820_os_indicator_runtime.status,
+            IndicatorStatus::WorkerStopped
+        ));
+        assert!(requests.requests().is_empty());
+    }
+
+    #[test]
+    fn completed_loan_restores_only_the_matching_connection() {
+        for stale in [false, true] {
+            let (mut app, jobs, finished, requests) = sampled_app();
+            app.ak820_os_indicator_runtime.sample = Some(Sample {
+                generation: app.connection_generation,
+                layout: Some("en"),
+                sampled: Instant::now(),
+            });
+            app.tick_ak820_os_indicator(&egui::Context::default());
+            let Job::Write {
+                hid,
+                generation,
+                mode,
+                layout,
+                ..
+            } = jobs.try_recv().unwrap()
+            else {
+                panic!("expected write loan");
+            };
+            if stale {
+                app.connection_generation += 1;
+            }
+            finished
+                .send(WorkerResult::Write(Box::new(Finished {
+                    hid: *hid,
+                    generation,
+                    mode,
+                    layout,
+                    result: Ok(()),
+                    sent: true,
+                })))
+                .unwrap();
+            app.poll_ak820_os_indicator_task();
+            assert!(!app.ak820_os_indicator_owns_hid());
+            assert_eq!(app.hid_device.is_some(), !stale);
+            assert!(requests.requests().is_empty());
+        }
     }
 
     #[test]

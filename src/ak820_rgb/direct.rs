@@ -1,6 +1,6 @@
 //! Exact beta.3 Direct v1 wire contract. No legacy fallback or write retries.
 use super::{LED_COUNT, RGB_MAX_BRIGHTNESS};
-use anyhow::{Result, bail, ensure};
+use anyhow::{bail, ensure, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) type Hsv = [[u8; 3]; LED_COUNT];
@@ -395,9 +395,11 @@ pub(crate) mod tests {
 
     #[test]
     fn coherent_getter_reads_dark_palette_and_restarts_only_generation_races() {
-        let mut fake = Fake::default();
-        fake.stale_reads = 2;
-        fake.flags = 0;
+        let mut fake = Fake {
+            stale_reads: 2,
+            flags: 0,
+            ..Default::default()
+        };
         let actual = snapshot(&mut |p| fake.send(p)).unwrap();
         assert_eq!(actual.generation, 1);
         assert_eq!(actual.flags, 0);
@@ -424,35 +426,35 @@ pub(crate) mod tests {
         assert_eq!(fake.hsv, [[20, 255, 160]; LED_COUNT]);
         assert_eq!(fake.writes.len(), 13);
         assert_eq!(fake.writes.iter().filter(|p| p[1] == 0x45).count(), 1);
-        let mut fake = Fake::default();
-        fake.bad_readback = true;
-        assert!(
-            commit(
-                &mut |p| fake.send(p),
-                &input,
-                1,
-                u32::MAX,
-                &AtomicBool::new(false)
-            )
-            .is_err()
-        );
+        let mut fake = Fake {
+            bad_readback: true,
+            ..Default::default()
+        };
+        assert!(commit(
+            &mut |p| fake.send(p),
+            &input,
+            1,
+            u32::MAX,
+            &AtomicBool::new(false)
+        )
+        .is_err());
     }
     #[test]
     fn every_upload_failure_leaves_active_palette_and_stops_without_retry_abort_or_restore() {
         for first in (0..82).step_by(8) {
-            let mut fake = Fake::default();
-            fake.fail_chunk = Some(first);
+            let mut fake = Fake {
+                fail_chunk: Some(first),
+                ..Default::default()
+            };
             let original = fake.hsv;
-            assert!(
-                commit(
-                    &mut |p| fake.send(p),
-                    &[[0; 3]; LED_COUNT],
-                    1,
-                    u32::MAX,
-                    &AtomicBool::new(false)
-                )
-                .is_err()
-            );
+            assert!(commit(
+                &mut |p| fake.send(p),
+                &[[0; 3]; LED_COUNT],
+                1,
+                u32::MAX,
+                &AtomicBool::new(false)
+            )
+            .is_err());
             assert_eq!(fake.hsv, original);
             assert_eq!(fake.generation, u32::MAX);
             assert_eq!(fake.writes.len(), first as usize / 8 + 2);
@@ -463,28 +465,24 @@ pub(crate) mod tests {
     fn runtime_contract_mismatch_and_malformed_reads_fail_immediately() {
         for byte in 2..14 {
             let mut fake = Fake::default();
-            assert!(
-                negotiate(&mut |p| {
-                    let mut r = fake.send(p)?;
-                    r[byte] ^= 1;
-                    Ok(r)
-                })
-                .is_err()
-            );
-        }
-        let mut calls = 0;
-        assert!(
-            snapshot(&mut |p| {
-                calls += 1;
-                let mut f = Fake::default();
-                let mut r = f.send(p)?;
-                if p[1] == 0x46 {
-                    r[3] ^= 1;
-                }
+            assert!(negotiate(&mut |p| {
+                let mut r = fake.send(p)?;
+                r[byte] ^= 1;
                 Ok(r)
             })
-            .is_err()
-        );
+            .is_err());
+        }
+        let mut calls = 0;
+        assert!(snapshot(&mut |p| {
+            calls += 1;
+            let mut f = Fake::default();
+            let mut r = f.send(p)?;
+            if p[1] == 0x46 {
+                r[3] ^= 1;
+            }
+            Ok(r)
+        })
+        .is_err());
         assert_eq!(calls, 3);
     }
 
@@ -517,22 +515,20 @@ pub(crate) mod tests {
         for failed_request in [[7, 0x43], [7, 0x45], [8, 0x47]] {
             let mut fake = Fake::default();
             let mut attempts = Vec::new();
-            assert!(
-                commit(
-                    &mut |p| {
-                        attempts.push([p[0], p[1]]);
-                        if p[..2] == failed_request {
-                            bail!("scripted operation failure");
-                        }
-                        fake.send(p)
-                    },
-                    &[[0; 3]; LED_COUNT],
-                    1,
-                    u32::MAX,
-                    &AtomicBool::new(false)
-                )
-                .is_err()
-            );
+            assert!(commit(
+                &mut |p| {
+                    attempts.push([p[0], p[1]]);
+                    if p[..2] == failed_request {
+                        bail!("scripted operation failure");
+                    }
+                    fake.send(p)
+                },
+                &[[0; 3]; LED_COUNT],
+                1,
+                u32::MAX,
+                &AtomicBool::new(false)
+            )
+            .is_err());
             assert_eq!(attempts.last(), Some(&failed_request));
             assert_eq!(attempts.iter().filter(|p| **p == failed_request).count(), 1);
             assert!(!fake.writes.iter().any(|p| p[1] == 0x46));
@@ -542,22 +538,20 @@ pub(crate) mod tests {
             );
         }
         let mut fake = Fake::default();
-        assert!(
-            commit(
-                &mut |p| {
-                    let mut r = fake.send(p)?;
-                    if p[..2] == [7, 0x43] {
-                        r[3] ^= 1;
-                    }
-                    Ok(r)
-                },
-                &[[0; 3]; LED_COUNT],
-                1,
-                u32::MAX,
-                &AtomicBool::new(false)
-            )
-            .is_err()
-        );
+        assert!(commit(
+            &mut |p| {
+                let mut r = fake.send(p)?;
+                if p[..2] == [7, 0x43] {
+                    r[3] ^= 1;
+                }
+                Ok(r)
+            },
+            &[[0; 3]; LED_COUNT],
+            1,
+            u32::MAX,
+            &AtomicBool::new(false)
+        )
+        .is_err());
         assert_eq!(fake.writes.len(), 1);
     }
 

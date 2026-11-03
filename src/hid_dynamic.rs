@@ -10,6 +10,17 @@ type TapDanceData = (u16, u16, u16, u16, u16);
 type ComboData = ([u16; 4], u16);
 type DynamicEntryCounts = (u8, u8, u8, u8, u8);
 
+/// Raw Vial key-override fields; encoding does not impose typed-storage policy.
+pub(crate) struct KeyOverrideRecord {
+    pub(crate) trigger: u16,
+    pub(crate) replacement: u16,
+    pub(crate) layers: u16,
+    pub(crate) trigger_mods: u8,
+    pub(crate) negative_mod_mask: u8,
+    pub(crate) suppressed_mods: u8,
+    pub(crate) options: u8,
+}
+
 fn parse_dynamic_entry_counts_response(
     command: &[u8],
     resp: &[u8; MSG_LEN],
@@ -73,6 +84,7 @@ impl HidDevice {
     }
 
     /// Get number of combo entries available
+    #[cfg(test)]
     pub fn get_combo_count(&self) -> Result<u8> {
         let (_, combo, _, _, _) = self.get_dynamic_entry_counts()?;
         Ok(combo)
@@ -131,12 +143,14 @@ impl HidDevice {
     }
 
     /// Get number of key override entries available
+    #[cfg(test)]
     pub fn get_key_override_count(&self) -> Result<u8> {
         let (_, _, key_override, _, _) = self.get_dynamic_entry_counts()?;
         Ok(key_override)
     }
 
     /// Get number of alt repeat key entries available
+    #[cfg(test)]
     pub fn get_alt_repeat_key_count(&self) -> Result<u8> {
         let (_, _, _, alt_repeat, _) = self.get_dynamic_entry_counts()?;
         Ok(alt_repeat)
@@ -155,17 +169,16 @@ impl HidDevice {
     }
 
     /// Set key override entry
-    pub fn set_key_override(
-        &self,
-        idx: u8,
-        trigger: u16,
-        replacement: u16,
-        layers: u16,
-        trigger_mods: u8,
-        negative_mod_mask: u8,
-        suppressed_mods: u8,
-        options: u8,
-    ) -> Result<()> {
+    pub fn set_key_override(&self, idx: u8, record: KeyOverrideRecord) -> Result<()> {
+        let KeyOverrideRecord {
+            trigger,
+            replacement,
+            layers,
+            trigger_mods,
+            negative_mod_mask,
+            suppressed_mods,
+            options,
+        } = record;
         let mut cmd = [0u8; 32];
         cmd[0] = CMD_VIA_VIAL_PREFIX;
         cmd[1] = CMD_VIAL_DYNAMIC_ENTRY_OP;
@@ -222,6 +235,7 @@ impl HidDevice {
     }
 
     /// Get number of tap dance entries available
+    #[cfg(test)]
     pub fn get_tap_dance_count(&self) -> Result<u8> {
         let (tap_dance, _, _, _, _) = self.get_dynamic_entry_counts()?;
         Ok(tap_dance)
@@ -299,6 +313,142 @@ impl HidDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_count_wrappers_request_fresh_authoritative_fields() {
+        let (hid, log) = HidDevice::test_device();
+        let responses = [
+            [10, 255, 12, 13],
+            [20, 21, 0, 23],
+            [30, 31, 32, 250],
+            [200, 41, 42, 43],
+        ]
+        .map(|fields| {
+            let mut response = [0; MSG_LEN];
+            response[..4].copy_from_slice(&fields);
+            response[31] = 0xA5;
+            response
+        });
+        log.respond_with(responses);
+        assert_eq!(hid.get_combo_count().unwrap(), 255);
+        assert_eq!(hid.get_key_override_count().unwrap(), 0);
+        assert_eq!(hid.get_alt_repeat_key_count().unwrap(), 250);
+        assert_eq!(hid.get_tap_dance_count().unwrap(), 200);
+        let mut expected = [0; MSG_LEN];
+        expected[..3].copy_from_slice(&[0xFE, 0x0D, 0]);
+        assert_eq!(log.requests(), vec![expected; 4]);
+    }
+
+    #[test]
+    fn reference_count_wrappers_propagate_unsupported_and_transport_errors() {
+        let getters: [fn(&HidDevice) -> Result<u8>; 4] = [
+            HidDevice::get_combo_count,
+            HidDevice::get_key_override_count,
+            HidDevice::get_alt_repeat_key_count,
+            HidDevice::get_tap_dance_count,
+        ];
+        for get in getters {
+            for marker in [0xFE, 0xFF] {
+                let (hid, log) = HidDevice::test_device();
+                let mut response = [0; MSG_LEN];
+                response[..3].copy_from_slice(&[marker, 0x0D, 0]);
+                log.respond_with([response]);
+                assert_eq!(
+                    get(&hid).unwrap_err().to_string(),
+                    "Vial dynamic entries are unsupported"
+                );
+                assert_eq!(log.requests().len(), 1);
+            }
+            let (hid, log) = HidDevice::test_device();
+            log.respond_by(|_| Some(Err("scripted count transport fault".into())));
+            let error = get(&hid).unwrap_err();
+            assert!(format!("{error:#}").contains("scripted count transport fault"));
+            assert_eq!(log.requests().len(), 1);
+        }
+    }
+
+    #[test]
+    fn key_override_wire_record_preserves_all_bits_and_padding() {
+        let (hid, log) = HidDevice::test_device();
+        log.respond_with([[0; MSG_LEN]; 2]);
+        hid.set_key_override(
+            0xAB,
+            KeyOverrideRecord {
+                trigger: 0x1234,
+                replacement: 0xABCD,
+                layers: 0xFFFF,
+                trigger_mods: 0x96,
+                negative_mod_mask: 0x69,
+                suppressed_mods: 0xA5,
+                options: 0xFF,
+            },
+        )
+        .unwrap();
+        hid.set_key_override(
+            0,
+            KeyOverrideRecord {
+                trigger: 0,
+                replacement: 0,
+                layers: 0,
+                trigger_mods: 0,
+                negative_mod_mask: 0,
+                suppressed_mods: 0,
+                options: 0,
+            },
+        )
+        .unwrap();
+        let mut expected_bits = [0; MSG_LEN];
+        expected_bits[..14].copy_from_slice(&[
+            0xFE, 0x0D, 0x06, 0xAB, 0x34, 0x12, 0xCD, 0xAB, 0xFF, 0xFF, 0x96, 0x69, 0xA5, 0xFF,
+        ]);
+        let mut expected_zero = [0; MSG_LEN];
+        expected_zero[..3].copy_from_slice(&[0xFE, 0x0D, 0x06]);
+        assert_eq!(log.requests(), vec![expected_bits, expected_zero]);
+    }
+
+    #[test]
+    fn key_override_wire_record_preserves_device_error_without_retry() {
+        let (hid, log) = HidDevice::test_device();
+        log.respond_with([[7; MSG_LEN]]);
+        let error = hid
+            .set_key_override(
+                0,
+                KeyOverrideRecord {
+                    trigger: 4,
+                    replacement: 5,
+                    layers: 1,
+                    trigger_mods: 0,
+                    negative_mod_mask: 0,
+                    suppressed_mods: 0,
+                    options: 1,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.to_string(), "key override set error: 7");
+        assert_eq!(log.requests().len(), 1);
+    }
+
+    #[test]
+    fn key_override_wire_record_preserves_transport_error_without_retry() {
+        let (hid, log) = HidDevice::test_device();
+        log.respond_by(|_| Some(Err("scripted key-override transport fault".into())));
+        let error = hid
+            .set_key_override(
+                0,
+                KeyOverrideRecord {
+                    trigger: 4,
+                    replacement: 5,
+                    layers: 1,
+                    trigger_mods: 0,
+                    negative_mod_mask: 0,
+                    suppressed_mods: 0,
+                    options: 1,
+                },
+            )
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("scripted key-override transport fault"));
+        assert_eq!(log.requests().len(), 1);
+    }
 
     #[test]
     fn dynamic_entry_counts_reject_an_unsupported_qmk_echo() {

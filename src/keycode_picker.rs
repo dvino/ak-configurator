@@ -263,10 +263,10 @@ mod tests {
             ..Default::default()
         };
         picker.search.query = "tap dan".into();
-        let mut harness = egui_kittest::Harness::new_state(
-            |ctx, picker: &mut KeycodePicker| {
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, picker: &mut KeycodePicker| {
                 picker.show(
-                    ctx,
+                    ui.ctx(),
                     DeferredPickerDataState::Ready,
                     DeferredPickerDataState::Ready,
                 );
@@ -295,10 +295,10 @@ mod tests {
             vial_quantum_pending_mod: Some(0x0100),
             ..Default::default()
         };
-        let mut harness = egui_kittest::Harness::new_state(
-            |ctx, picker: &mut KeycodePicker| {
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, picker: &mut KeycodePicker| {
                 picker.show(
-                    ctx,
+                    ui.ctx(),
                     DeferredPickerDataState::Ready,
                     DeferredPickerDataState::Ready,
                 );
@@ -328,10 +328,10 @@ mod tests {
     fn open_picker_harness(picker: KeycodePicker) -> egui_kittest::Harness<'static, KeycodePicker> {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1_400.0, 1_000.0))
-            .build_state(
-                |ctx, picker: &mut KeycodePicker| {
+            .build_ui_state(
+                |ui, picker: &mut KeycodePicker| {
                     picker.show(
-                        ctx,
+                        ui.ctx(),
                         DeferredPickerDataState::Ready,
                         DeferredPickerDataState::Ready,
                     );
@@ -347,10 +347,10 @@ mod tests {
     ) -> egui_kittest::Harness<'static, KeycodePicker> {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 500.0))
-            .build_state(
-                |ctx, picker: &mut KeycodePicker| {
+            .build_ui_state(
+                |ui, picker: &mut KeycodePicker| {
                     picker.show(
-                        ctx,
+                        ui.ctx(),
                         DeferredPickerDataState::Ready,
                         DeferredPickerDataState::Ready,
                     );
@@ -1077,17 +1077,21 @@ mod tests {
     #[test]
     fn pending_modifier_picker_renders_layout_and_list_tabs() {
         let ctx = egui::Context::default();
-        let mut picker = KeycodePicker::default();
-        picker.language = crate::i18n::Language::English;
-        picker.open = true;
-        picker.vial_quantum_pending_mod = Some(0x0100);
+        let mut picker = KeycodePicker {
+            language: crate::i18n::Language::English,
+            open: true,
+            vial_quantum_pending_mod: Some(0x0100),
+            ..Default::default()
+        };
 
         let mut render = || {
-            let mut input = egui::RawInput::default();
-            input.screen_rect = Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1_100.0, 800.0),
-            ));
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1_100.0, 800.0),
+                )),
+                ..Default::default()
+            };
             ctx.run_ui(input, |_ui| {
                 picker.show(
                     &ctx,
@@ -1647,13 +1651,11 @@ impl KeycodePicker {
     }
 
     fn ak820_beta1_source_supports(&self, value: u16, source: Ak820Beta1KeycodeSource) -> bool {
-        self.ak820_beta1_keycodes
-            .as_ref()
-            .map_or(true, |allowlists| {
-                allowlists
-                    .get(&source)
-                    .is_some_and(|allowed| allowed.contains(&value))
-            })
+        self.ak820_beta1_keycodes.as_ref().is_none_or(|allowlists| {
+            allowlists
+                .get(&source)
+                .is_some_and(|allowed| allowed.contains(&value))
+        })
     }
 
     fn assign_keycode_value(&mut self, value: u16) {
@@ -1999,20 +2001,19 @@ impl KeycodePicker {
         let td_key_pick_open = self.td_key_pick.is_some() || self.td_mod_key_pick.is_some();
         let advanced_slot_open = self.advanced_slot_picker.is_some();
 
+        self.popup_state.begin_frame(PopupKey::Picker, self.open);
         self.popup_state
-            .begin_frame(PopupKey::PickerWindow, self.open);
+            .begin_frame(PopupKey::MacroKeyPick, macro_key_pick_open);
         self.popup_state
-            .begin_frame(PopupKey::MacroKeyPickWindow, macro_key_pick_open);
+            .begin_frame(PopupKey::RegularKeyPick, regular_key_pick_open);
         self.popup_state
-            .begin_frame(PopupKey::RegularKeyPickWindow, regular_key_pick_open);
+            .begin_frame(PopupKey::PickLayer, layer_pick_open);
         self.popup_state
-            .begin_frame(PopupKey::PickLayerWindow, layer_pick_open);
+            .begin_frame(PopupKey::PendingKeyPick, pending_key_pick_open);
         self.popup_state
-            .begin_frame(PopupKey::PendingKeyPickWindow, pending_key_pick_open);
+            .begin_frame(PopupKey::TdKeyPick, td_key_pick_open);
         self.popup_state
-            .begin_frame(PopupKey::TdKeyPickWindow, td_key_pick_open);
-        self.popup_state
-            .begin_frame(PopupKey::AdvancedSlotWindow, advanced_slot_open);
+            .begin_frame(PopupKey::AdvancedSlot, advanced_slot_open);
 
         if !self.open && !macro_key_pick_open && !td_key_pick_open && !advanced_slot_open {
             return;
@@ -2056,7 +2057,7 @@ impl KeycodePicker {
             crate::ui_style::centered_modal_window(
                 ctx,
                 &title,
-                self.popup_state.id(PopupKey::MacroKeyPickWindow),
+                self.popup_state.id(PopupKey::MacroKeyPick),
                 &mut pick_open,
                 popup_size,
             )
@@ -2304,7 +2305,7 @@ impl KeycodePicker {
         crate::ui_style::centered_modal_window(
             ctx,
             tr_picker(self.language, "key_picker.title"),
-            self.popup_state.id(PopupKey::PickerWindow),
+            self.popup_state.id(PopupKey::Picker),
             &mut still_open,
             picker_size,
         )
@@ -2547,7 +2548,7 @@ impl KeycodePicker {
         crate::ui_style::centered_modal_window(
             ctx,
             window_title.as_str(),
-            self.popup_state.id(PopupKey::RegularKeyPickWindow),
+            self.popup_state.id(PopupKey::RegularKeyPick),
             &mut still_open,
             popup_size,
         )
@@ -2736,7 +2737,7 @@ impl KeycodePicker {
             let _resp_win = crate::ui_style::centered_modal_window(
                 ctx,
                 tr_picker(self.language, "key_picker.pick_layer_title"),
-                self.popup_state.id(PopupKey::PickLayerWindow),
+                self.popup_state.id(PopupKey::PickLayer),
                 &mut still_open,
                 Vec2::new(300.0, 120.0),
             )
@@ -2834,7 +2835,7 @@ impl KeycodePicker {
             let _resp_win = crate::ui_style::centered_modal_window(
                 ctx,
                 title,
-                self.popup_state.id(PopupKey::PendingKeyPickWindow),
+                self.popup_state.id(PopupKey::PendingKeyPick),
                 &mut still_open,
                 popup_size,
             )

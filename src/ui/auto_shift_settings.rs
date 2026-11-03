@@ -213,8 +213,7 @@ impl EntropyApp {
             };
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                content_width,
-                row_height,
+                egui::vec2(content_width, row_height),
                 row.0,
                 enabled,
                 tooltip,
@@ -239,8 +238,7 @@ impl EntropyApp {
             }
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                content_width,
-                row_height,
+                egui::vec2(content_width, row_height),
                 row.0,
                 enabled,
                 tooltip,
@@ -254,8 +252,10 @@ impl EntropyApp {
                         field_width,
                         "",
                         5,
-                        egui::Align::RIGHT,
-                        enabled,
+                        crate::ui_style::TextFieldInteraction {
+                            alignment: egui::Align::RIGHT,
+                            enabled,
+                        },
                     );
                     let resp = settings_field_unit_tooltip(
                         resp,
@@ -374,7 +374,7 @@ mod tests {
     }
 
     fn draw_page(app: &mut EntropyApp, ctx: &egui::Context) -> egui::FullOutput {
-        ctx.run(
+        ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -382,8 +382,8 @@ mod tests {
                 )),
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let rect = ui.max_rect();
                     app.draw_auto_shift_settings_page(ui, rect, true);
                 });
@@ -392,7 +392,7 @@ mod tests {
     }
 
     fn draw_enable_row(app: &mut EntropyApp, ctx: &egui::Context, events: Vec<egui::Event>) {
-        let _ = ctx.run(
+        let _ = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -401,8 +401,8 @@ mod tests {
                 events,
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let origin = ui.cursor().min;
                     let list = AdaptiveSettingsListViewport {
                         viewport: ui.max_rect(),
@@ -421,7 +421,7 @@ mod tests {
                         content_height: 54.0,
                     };
                     app.draw_auto_shift_row(ui, 0, &list, 86.0, true);
-                    ctx.data_mut(|data| {
+                    ui.ctx().data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("auto_shift_test_switch_center"),
                             egui::pos2(origin.x + 520.0 - 23.0, origin.y + 27.0),
@@ -460,7 +460,7 @@ mod tests {
                 modifiers: Default::default(),
             },
         ];
-        let _ = ctx.run(
+        let _ = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -469,15 +469,15 @@ mod tests {
                 events,
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let rect = ui.max_rect();
                     app.draw_auto_shift_settings_page(ui, rect, true);
                 });
             },
         );
         ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("auto_shift_timeout")));
-        let _ = ctx.run(
+        let _ = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -499,8 +499,8 @@ mod tests {
                 ],
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let rect = ui.max_rect();
                     app.draw_auto_shift_settings_page(ui, rect, true);
                 });

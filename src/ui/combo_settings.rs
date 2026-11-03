@@ -248,8 +248,7 @@ impl EntropyApp {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_content_width,
-                    row_height,
+                    egui::vec2(row_content_width, row_height),
                     crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.entry"),
                     true,
                     Some(crate::i18n::tr_catalog(
@@ -359,8 +358,7 @@ impl EntropyApp {
                 let mut combo_name_changed = false;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_content_width,
-                    row_height,
+                    egui::vec2(row_content_width, row_height),
                     crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.name"),
                     true,
                     Some(crate::i18n::tr_catalog(
@@ -374,8 +372,7 @@ impl EntropyApp {
                                 ui,
                                 egui::Id::new(("combo_name", combo_idx)),
                                 name,
-                                control_width,
-                                control_height,
+                                egui::vec2(control_width, control_height),
                                 crate::i18n::tr_catalog(
                                     self.app_settings.language,
                                     "alt_repeat_editor.name",
@@ -406,8 +403,7 @@ impl EntropyApp {
                 let color_swatch_size = metrics.size(64.0, 34.0);
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_content_width,
-                    row_height,
+                    egui::vec2(row_content_width, row_height),
                     crate::i18n::tr_catalog(self.app_settings.language, "common.color"),
                     true,
                     Some(crate::i18n::tr_catalog(
@@ -552,8 +548,7 @@ impl EntropyApp {
 
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_content_width,
-                    input_keys_row_height,
+                    egui::vec2(row_content_width, input_keys_row_height),
                     crate::i18n::tr_catalog(self.app_settings.language, "combo_editor.input_keys"),
                     true,
                     Some(crate::i18n::tr_catalog(
@@ -613,8 +608,7 @@ impl EntropyApp {
 
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_content_width,
-                    input_keys_row_height,
+                    egui::vec2(row_content_width, input_keys_row_height),
                     crate::i18n::tr_catalog(self.app_settings.language, "combo_editor.output_key"),
                     true,
                     Some(crate::i18n::tr_catalog(
@@ -686,8 +680,7 @@ impl EntropyApp {
                     let mut picked_layer = None;
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        row_content_width,
-                        row_height,
+                        egui::vec2(row_content_width, row_height),
                         crate::i18n::tr_catalog(self.app_settings.language, "combo_editor.layer"),
                         true,
                         Some(crate::i18n::tr_catalog(
@@ -748,8 +741,7 @@ impl EntropyApp {
                 } else if let Some(current_combo_term) = self.combo_term {
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        row_content_width,
-                        row_height,
+                        egui::vec2(row_content_width, row_height),
                         crate::i18n::tr_catalog(self.app_settings.language, "common.timeout"),
                         true,
                         Some(crate::i18n::tr_catalog(
@@ -776,8 +768,7 @@ impl EntropyApp {
                                         ui,
                                         edit_id,
                                         &mut combo_term_text,
-                                        70.0 * scale,
-                                        control_height,
+                                        egui::vec2(70.0 * scale, control_height),
                                         "",
                                         4,
                                         egui::Align::RIGHT,
@@ -1041,19 +1032,20 @@ mod tests {
         events: Vec<egui::Event>,
         size: egui::Vec2,
     ) -> egui::FullOutput {
-        ctx.run(
+        ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
                 events,
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                let ctx = root_ui.ctx().clone();
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let content_rect = egui::Rect::from_min_max(
                         egui::pos2(20.0, 100.0),
                         egui::pos2(size.x - 20.0, size.y - 76.0),
                     );
-                    app.draw_combo_settings_page(ui, ctx, content_rect);
+                    app.draw_combo_settings_page(ui, &ctx, content_rect);
                     ui.painter().text(
                         egui::pos2(size.x * 0.5, size.y - 38.0),
                         egui::Align2::CENTER_CENTER,

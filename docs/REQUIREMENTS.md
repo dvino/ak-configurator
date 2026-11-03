@@ -4,9 +4,9 @@
 
 **Status:** agreed requirements for future work
 
-**Version:** 0.8
+**Version:** 0.9
 
-**Date:** 2026-10-27
+**Date:** 2026-11-01
 
 This document sets requirements for AK Configurator, maintained in the separate `dvino/ak-configurator` repository. It reuses Entropy, whose pinned upstream source is [5b222b5d6349fb351f53b36c66169095b3039fc1](https://github.com/ergohaven/entropy/tree/5b222b5d6349fb351f53b36c66169095b3039fc1). AK820 firmware remains in `dvino/ak820`. It does not confirm that these features have been implemented or authorize operations on a physical keyboard. Current source files, built artifacts, and installed firmware are checked separately.
 
@@ -22,7 +22,7 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **Acceptance:** flashing is available only for the listed model and a confirmed revision. An unknown device or protected area blocks the write and explains why.
 
-**AKW-003 · Web/Desktop.** The configurator must support exact AK820 profile image contracts and must not infer write or installation authority from catalog membership. Beta.4.1 is the default installer target, with beta.3 available as an alternate. Beta.4.1 flashing requires explicit prerelease opt-in and exact catalog/matrix/per-image IHX and packed-CODE bindings. Hardware validation remains false, while saved-settings writes and restore remain unavailable. The beta.4 read-only catalog does not authorize flashing; per-profile flags never override release-level policy. Profiles are selected as complete images; there is no all-module image, arbitrary module switching, or compilation on demand.
+**AKW-003 · Web/Desktop.** The configurator must support exact AK820 profile image contracts and must not infer write or installation authority from catalog membership. Beta.5 is the default installer target only after its final release inputs are pinned and verified. Permitted beta.5 transitions are beta.4/4.1→beta.5 and beta.5→beta.5; beta.3→beta.5 and unknown sources are denied. Beta.4.1 and beta.3 remain explicit legacy targets. Flashing requires explicit prerelease opt-in and exact catalog/matrix/per-image IHX and packed-CODE bindings. Hardware validation remains false, while saved-settings writes and restore remain unavailable. Exact beta.5 QS record v3 and QSID 23 are read-only recognition requirements; catalog transitions never authorize settings restore. Profiles are selected as complete images; there is no all-module image, arbitrary module switching, or compilation on demand.
 
 **Acceptance:** profile membership, limits and measured resources agree with the firmware matrix and module descriptions. Catalog availability, release approval, standalone-installer inclusion, settings support and companion installation support are shown separately. Legacy beta.2 standalone-installer coverage does not establish beta.3 admission, companion installation or physical qualification. A profile name or a successful offline test does not enable writes.
 

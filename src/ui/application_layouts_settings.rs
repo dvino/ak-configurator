@@ -120,6 +120,7 @@ fn application_picker_geometry(viewport: egui::Vec2, scale: f32) -> ApplicationP
     }
 }
 
+#[cfg(test)]
 fn centered_application_picker_content_rect(
     available: egui::Rect,
     requested_width: f32,
@@ -362,8 +363,7 @@ impl EntropyApp {
                 ui,
                 ui.make_persistent_id("autolayer_manage_category_name"),
                 &mut self.application_categories_name,
-                width,
-                metrics.settings_control_height(),
+                egui::vec2(width, metrics.settings_control_height()),
                 app_layout_text(language, "Название категории", "Category name"),
                 48,
                 egui::Align::Min,
@@ -560,8 +560,7 @@ impl EntropyApp {
         if visible_rows.contains(&0) {
             crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            row_width,
-            row_height,
+            egui::vec2(row_width, row_height),
             app_layout_text(language, "Включить", "Enable"),
             true,
             Some(app_layout_text(language,
@@ -581,8 +580,7 @@ impl EntropyApp {
         if visible_rows.contains(&1) {
             crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            row_width,
-            row_height,
+            egui::vec2(row_width, row_height),
             app_layout_text(
                 language,
                 "Автоматически возвращаться к Default",
@@ -641,8 +639,7 @@ impl EntropyApp {
         if visible_rows.contains(&next_row) {
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                row_width,
-                row_height,
+                egui::vec2(row_width, row_height),
                 app_layout_text(language, "Раскладка", "Layout"),
                 true,
                 Some(layout_selector_tooltip),
@@ -667,9 +664,11 @@ impl EntropyApp {
                         ui,
                         dropdown_id,
                         &dropdown,
-                        &layouts[0],
-                        &groups,
-                        &selected_id,
+                        crate::ui_style::GroupedDropdownOptions {
+                            default: &layouts[0],
+                            groups: &groups,
+                            selected_id: &selected_id,
+                        },
                         control_width,
                         control_font,
                     );
@@ -722,8 +721,7 @@ impl EntropyApp {
             if visible_rows.contains(&(next_row + 1)) {
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_width,
-                    row_height,
+                    egui::vec2(row_width, row_height),
                     app_layout_text(language, "Приложение", "Application"),
                     !is_default,
                     Some(application_tooltip),
@@ -741,8 +739,10 @@ impl EntropyApp {
                                 pair.leading.width(),
                                 app_layout_text(language, "Исполняемый файл", "Executable"),
                                 120,
-                                egui::Align::Min,
-                                false,
+                                crate::ui_style::TextFieldInteraction {
+                                    alignment: egui::Align::Min,
+                                    enabled: false,
+                                },
                             )
                             .on_hover_text(application_tooltip)
                         });
@@ -773,8 +773,7 @@ impl EntropyApp {
             );
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                row_width,
-                row_height,
+                egui::vec2(row_width, row_height),
                 app_layout_text(language, "Категории", "Categories"),
                 true,
                 Some(tooltip),
@@ -926,8 +925,7 @@ impl EntropyApp {
         if visible_rows.contains(&row) {
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                row_width,
-                row_height,
+                egui::vec2(row_width, row_height),
                 app_layout_text(language, "Детектор окон", "Window detector"),
                 true,
                 Some(detector_tooltip),
@@ -957,8 +955,7 @@ impl EntropyApp {
             if visible_rows.contains(&row) {
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    row_width,
-                    row_height,
+                    egui::vec2(row_width, row_height),
                     app_layout_text(language, "Интеграция GNOME", "GNOME integration"),
                     true,
                     Some(integration_tooltip),
@@ -1005,8 +1002,7 @@ impl EntropyApp {
                 if visible_rows.contains(&row) {
                     crate::ui_style::settings_list_row_with_tooltip(
                         ui,
-                        row_width,
-                        row_height,
+                        egui::vec2(row_width, row_height),
                         app_layout_text(language, "Статус установки", "Installation status"),
                         true,
                         Some(&message),
@@ -1072,8 +1068,7 @@ impl EntropyApp {
         if visible_rows.contains(&row) {
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                row_width,
-                row_height,
+                egui::vec2(row_width, row_height),
                 app_layout_text(language, "Приложение в фокусе", "Focused application"),
                 true,
                 Some(foreground_tooltip),
@@ -1104,8 +1099,7 @@ impl EntropyApp {
         if visible_rows.contains(&row) {
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                row_width,
-                row_height,
+                egui::vec2(row_width, row_height),
                 app_layout_text(language, "Активная раскладка", "Active layout"),
                 true,
                 Some(active_layout_tooltip),
@@ -1400,8 +1394,7 @@ impl EntropyApp {
                             ui,
                             ui.make_persistent_id("application_picker_layout_name"),
                             &mut self.application_picker_name,
-                            content_width,
-                            metrics.settings_control_height(),
+                            egui::vec2(content_width, metrics.settings_control_height()),
                             app_layout_text(language, "Название раскладки", "Layout name"),
                             80,
                             egui::Align::Min,
@@ -1439,8 +1432,7 @@ impl EntropyApp {
                         ui,
                         ui.make_persistent_id("application_picker_search_v2"),
                         &mut self.application_picker_search,
-                        content_width,
-                        metrics.settings_control_height(),
+                        egui::vec2(content_width, metrics.settings_control_height()),
                         app_layout_text(language, "Поиск приложения", "Search applications"),
                         120,
                         egui::Align::Min,
@@ -1797,8 +1789,7 @@ mod tests {
             |ui| {
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    452.0,
-                    54.0,
+                    egui::vec2(452.0, 54.0),
                     "Window detector",
                     true,
                     Some("Current detector status"),
@@ -2341,7 +2332,7 @@ mod tests {
             app.application_picker_name = "Unsaved name".to_owned();
             let ctx = egui::Context::default();
             for _ in 0..3 {
-                ctx.run_ui(egui::RawInput::default(), |ui| {
+                let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
                     app.draw_application_picker_v2(ui.ctx());
                 });
             }
@@ -2946,7 +2937,8 @@ mod tests {
 
         let application = control_pair_geometry(content, trailing_width, gap, content.height());
 
-        for pair in [application] {
+        {
+            let pair = application;
             assert!((pair.trailing.left() - pair.leading.right() - gap).abs() <= 0.01);
             assert!((pair.leading.left() - content.left()).abs() <= 0.01);
             assert!((pair.trailing.right() - content.right()).abs() <= 0.01);
@@ -3005,11 +2997,13 @@ mod tests {
         let mut open = true;
 
         for _ in 0..3 {
-            let mut input = egui::RawInput::default();
-            input.screen_rect = Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(726.0, 620.0),
-            ));
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(726.0, 620.0),
+                )),
+                ..Default::default()
+            };
             let _ = ctx.run_ui(input, |_ui| {
                 let id = egui::Id::new("application_picker_real_window_test");
                 let response = crate::ui_style::centered_modal_window(

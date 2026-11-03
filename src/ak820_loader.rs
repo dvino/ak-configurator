@@ -52,7 +52,7 @@ pub(crate) fn response_delay(command: Command) -> Duration {
 }
 /// Pure packetization; arbitrary full-ROM writes and partial images are rejected.
 pub(crate) struct PayloadReports<'a> {
-    blocks: std::slice::ChunksExact<'a, u8>,
+    blocks: std::slice::Iter<'a, [u8; BLOCK_SIZE]>,
 }
 impl<'a> PayloadReports<'a> {
     pub(crate) fn new(payload: &'a [u8]) -> BackupResult<Self> {
@@ -60,7 +60,7 @@ impl<'a> PayloadReports<'a> {
             return Err("Loader requires the complete application window".into());
         }
         Ok(Self {
-            blocks: payload.chunks_exact(BLOCK_SIZE),
+            blocks: payload.as_chunks::<BLOCK_SIZE>().0.iter(),
         })
     }
 }

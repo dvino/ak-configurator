@@ -15,8 +15,10 @@ static TRAY_GUI: std::sync::Mutex<Option<TrayGui>> = std::sync::Mutex::new(None)
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 static TRAY_HANDLERS: std::sync::Once = std::sync::Once::new();
 
+#[cfg(any(target_os = "windows", test))]
 const AUTOSTART_WINDOWS_VALUE: &str = "AK Configurator";
 const AUTOSTART_LINUX_FILE: &str = "ak-configurator.desktop";
+#[cfg(any(target_os = "macos", test))]
 const AUTOSTART_MACOS_FILE: &str = "com.dvino.ak-configurator.plist";
 const AUTOSTART_MACOS_LABEL: &str = "com.dvino.ak-configurator";
 
@@ -38,8 +40,13 @@ fn should_handoff_close_to_helper(
 
 #[cfg(target_os = "linux")]
 fn linux_can_hide_window(display: Option<raw_window_handle::RawDisplayHandle>) -> bool {
-    matches!(display, Some(raw_window_handle::RawDisplayHandle::Xlib(_)
-        | raw_window_handle::RawDisplayHandle::Xcb(_)))
+    matches!(
+        display,
+        Some(
+            raw_window_handle::RawDisplayHandle::Xlib(_)
+                | raw_window_handle::RawDisplayHandle::Xcb(_)
+        )
+    )
 }
 
 impl EntropyApp {
@@ -51,7 +58,9 @@ impl EntropyApp {
 
     #[cfg(target_os = "linux")]
     pub(super) fn handle_linux_start_minimized(&mut self, ctx: &egui::Context) {
-        if !self.linux_start_minimized_pending { return; }
+        if !self.linux_start_minimized_pending {
+            return;
+        }
         self.linux_start_minimized_pending = false;
         if linux_can_hide_window(self.parent_display_handle) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
@@ -63,9 +72,11 @@ impl EntropyApp {
     #[cfg(target_os = "linux")]
     fn linux_hide_unavailable_status(&mut self) {
         self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
-            "Сворачивание в трей недоступно в этом оконном окружении; окно остаётся открытым.".into()
+            "Сворачивание в трей недоступно в этом оконном окружении; окно остаётся открытым."
+                .into()
         } else {
-            "Hiding to the tray is unavailable on this window backend; the window remains open.".into()
+            "Hiding to the tray is unavailable on this window backend; the window remains open."
+                .into()
         };
     }
     #[cfg(target_os = "windows")]
@@ -197,7 +208,9 @@ impl EntropyApp {
 
     pub(super) fn restore_from_tray(&mut self, ctx: &egui::Context) {
         #[cfg(target_os = "linux")]
-        { self.linux_window_hidden_to_tray = false; }
+        {
+            self.linux_window_hidden_to_tray = false;
+        }
         #[cfg(target_os = "windows")]
         if let Some(hwnd) = self.windows_hwnd {
             self.windows_window_hidden_to_tray = false;
@@ -263,7 +276,12 @@ impl EntropyApp {
     /// turns into a tray hide or a new background-helper handoff.
     pub(super) fn request_explicit_quit(&mut self, ctx: &egui::Context) {
         if super::ak820_offline_files::is_busy(ctx) {
-            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian { "Дождитесь завершения работы с файлом перед выходом" } else { "Wait for the file operation to finish before quitting" }.into();
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Дождитесь завершения работы с файлом перед выходом"
+            } else {
+                "Wait for the file operation to finish before quitting"
+            }
+            .into();
             return;
         }
         if should_keep_vial_unlock_visible(self.unlock_open, self.vial_unlock_polling) {
@@ -299,7 +317,12 @@ impl EntropyApp {
         }
         if super::ak820_offline_files::is_busy(ctx) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian { "Дождитесь завершения работы с файлом перед выходом" } else { "Wait for the file operation to finish before quitting" }.into();
+            self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                "Дождитесь завершения работы с файлом перед выходом"
+            } else {
+                "Wait for the file operation to finish before quitting"
+            }
+            .into();
             return;
         }
 
@@ -427,7 +450,6 @@ impl EntropyApp {
                 self.restore_from_tray(ctx);
                 self.status_msg = "No system tray host is available".into();
             }
-            return;
         }
         #[cfg(target_os = "macos")]
         {
@@ -855,19 +877,27 @@ impl EntropyApp {
     #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     pub(super) fn native_tray_available(&self) -> bool {
         #[cfg(target_os = "linux")]
-        { linux_tray_available() }
+        {
+            linux_tray_available()
+        }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
-        { self.tray_icon.is_some() }
+        {
+            self.tray_icon.is_some()
+        }
     }
 
     #[cfg(target_os = "linux")]
     pub(super) fn ensure_tray_icon(&mut self, ctx: &egui::Context) {
         #[cfg(not(test))]
         {
-            *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) =
-                Some(TrayGui { context: ctx.clone() });
+            *TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner()) = Some(TrayGui {
+                context: ctx.clone(),
+            });
             let mut tray = LINUX_TRAY.lock().unwrap_or_else(|e| e.into_inner());
-            if tray.as_ref().is_some_and(|tray| !tray.available.load(std::sync::atomic::Ordering::Acquire)) {
+            if tray
+                .as_ref()
+                .is_some_and(|tray| !tray.available.load(std::sync::atomic::Ordering::Acquire))
+            {
                 *tray = None;
             }
             if tray.is_none() {
@@ -1341,17 +1371,38 @@ mod tests {
     use super::*;
 
     #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_desktop_exec_arg_quotes_paths_and_escapes_field_codes() {
+        for (value, expected) in [
+            ("", "\"\""),
+            ("/opt/ak", "\"/opt/ak\""),
+            ("/opt/AK Configurator", "\"/opt/AK Configurator\""),
+            ("/home/Юзер/ak", "\"/home/Юзер/ak\""),
+            ("%f %U", "\"%%f %%U\""),
+            (r"a\b", r#""a\\b""#),
+            (r#"a"b`$%c"#, r#""a\"b\`\$%%c""#),
+        ] {
+            assert_eq!(desktop_exec_arg(value), expected, "input {value:?}");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     fn wayland_display() -> raw_window_handle::RawDisplayHandle {
-        raw_window_handle::RawDisplayHandle::Wayland(
-            raw_window_handle::WaylandDisplayHandle::new(std::ptr::NonNull::dangling()))
+        raw_window_handle::RawDisplayHandle::Wayland(raw_window_handle::WaylandDisplayHandle::new(
+            std::ptr::NonNull::dangling(),
+        ))
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_backend_policy_uses_actual_handle_and_fails_closed() {
         use raw_window_handle::{RawDisplayHandle, XcbDisplayHandle, XlibDisplayHandle};
-        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0)))));
-        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xcb(XcbDisplayHandle::new(None, 0)))));
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xlib(
+            XlibDisplayHandle::new(None, 0)
+        ))));
+        assert!(linux_can_hide_window(Some(RawDisplayHandle::Xcb(
+            XcbDisplayHandle::new(None, 0)
+        ))));
         assert!(!linux_can_hide_window(Some(wayland_display())));
         assert!(!linux_can_hide_window(None));
     }
@@ -1364,7 +1415,12 @@ mod tests {
         app.app_settings.minimize_to_tray_on_close = true;
         let ctx = egui::Context::default();
         let mut input = egui::RawInput::default();
-        input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().events.push(egui::ViewportEvent::Close);
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .events
+            .push(egui::ViewportEvent::Close);
         let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
         let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
         assert!(commands.contains(&egui::ViewportCommand::CancelClose));
@@ -1372,8 +1428,12 @@ mod tests {
         assert!(!commands.contains(&egui::ViewportCommand::Minimized(true)));
         assert!(!app.linux_window_hidden_to_tray);
         assert!(app.status_msg.contains("unavailable"));
-        let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.minimize_window_to_tray(&ctx));
-        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        let output = ctx.run_ui(egui::RawInput::default(), |_ui| {
+            app.minimize_window_to_tray(&ctx)
+        });
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .contains(&egui::ViewportCommand::Minimized(true)));
         assert!(!app.linux_window_hidden_to_tray);
     }
 
@@ -1381,15 +1441,32 @@ mod tests {
     #[test]
     fn linux_start_minimized_only_uses_x11_and_runs_once() {
         use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle};
-        for (handle, expected) in [(Some(wayland_display()), false), (None, false),
-            (Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0))), true)] {
+        for (handle, expected) in [
+            (Some(wayland_display()), false),
+            (None, false),
+            (
+                Some(RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0))),
+                true,
+            ),
+        ] {
             let mut app = EntropyApp::new_inert_for_test().with_start_minimized_on_linux();
             app.parent_display_handle = handle;
             let ctx = egui::Context::default();
-            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
-            assert_eq!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)), expected);
-            let output = ctx.run_ui(egui::RawInput::default(), |_ui| app.handle_linux_start_minimized(&ctx));
-            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| {
+                app.handle_linux_start_minimized(&ctx)
+            });
+            assert_eq!(
+                output.viewport_output[&egui::ViewportId::ROOT]
+                    .commands
+                    .contains(&egui::ViewportCommand::Minimized(true)),
+                expected
+            );
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| {
+                app.handle_linux_start_minimized(&ctx)
+            });
+            assert!(!output.viewport_output[&egui::ViewportId::ROOT]
+                .commands
+                .contains(&egui::ViewportCommand::Minimized(true)));
         }
     }
 
@@ -1537,16 +1614,18 @@ mod tests {
 // winit's event loop. Keeping the connection owns the exported object, and
 // dropping it unregisters the icon before the GUI is destroyed.
 #[cfg(target_os = "linux")]
-static LINUX_TRAY: std::sync::Mutex<Option<LinuxTray>> =
-    std::sync::Mutex::new(None);
+static LINUX_TRAY: std::sync::Mutex<Option<LinuxTray>> = std::sync::Mutex::new(None);
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 struct LinuxTrayItem;
 
 #[cfg(target_os = "linux")]
 fn request_linux_tray_restore() {
-    let context = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner())
-        .as_ref().map(|gui| gui.context.clone());
+    let context = TRAY_GUI
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|gui| gui.context.clone());
     if let Some(context) = context {
         TRAY_RESTORE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
         context.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -1556,43 +1635,61 @@ fn request_linux_tray_restore() {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 #[zbus::interface(name = "org.kde.StatusNotifierItem")]
 impl LinuxTrayItem {
-    fn activate(&self, _x: i32, _y: i32) { request_linux_tray_restore(); }
-    fn secondary_activate(&self, _x: i32, _y: i32) { request_linux_tray_restore(); }
+    fn activate(&self, _x: i32, _y: i32) {
+        request_linux_tray_restore();
+    }
+    fn secondary_activate(&self, _x: i32, _y: i32) {
+        request_linux_tray_restore();
+    }
     fn context_menu(&self, _x: i32, _y: i32) {}
     fn scroll(&self, _delta: i32, _orientation: &str) {}
     #[zbus(property)]
-    fn category(&self) -> &str { "ApplicationStatus" }
+    fn category(&self) -> &str {
+        "ApplicationStatus"
+    }
     #[zbus(property)]
-    fn id(&self) -> &str { "ak-configurator" }
+    fn id(&self) -> &str {
+        "ak-configurator"
+    }
     #[zbus(property)]
-    fn title(&self) -> &str { "AK Configurator" }
+    fn title(&self) -> &str {
+        "AK Configurator"
+    }
     #[zbus(property)]
-    fn status(&self) -> &str { "Active" }
+    fn status(&self) -> &str {
+        "Active"
+    }
     #[zbus(property)]
-    fn window_id(&self) -> u32 { 0 }
+    fn window_id(&self) -> u32 {
+        0
+    }
     #[zbus(property)]
-    fn icon_name(&self) -> &str { "" }
+    fn icon_name(&self) -> &str {
+        ""
+    }
     #[zbus(property)]
     fn icon_pixmap(&self) -> Vec<(i32, i32, Vec<u8>)> {
         let rgba = crate::app_icon::rgba_icon(32);
         let mut argb = Vec::with_capacity(rgba.len());
-        for pixel in rgba.chunks_exact(4) {
+        for pixel in rgba.as_chunks::<4>().0 {
             argb.extend_from_slice(&[pixel[3], pixel[0], pixel[1], pixel[2]]);
         }
         vec![(32, 32, argb)]
     }
     #[zbus(property)]
-    fn item_is_menu(&self) -> bool { false }
+    fn item_is_menu(&self) -> bool {
+        false
+    }
     #[zbus(property)]
     fn menu(&self) -> zbus::zvariant::ObjectPath<'static> {
         zbus::zvariant::ObjectPath::try_from("/MenuBar").expect("static menu path")
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 fn create_linux_tray() -> anyhow::Result<LinuxTray> {
     let connection = zbus::blocking::connection::Builder::session()?
         .method_timeout(std::time::Duration::from_millis(750))
@@ -1600,36 +1697,53 @@ fn create_linux_tray() -> anyhow::Result<LinuxTray> {
         .serve_at("/MenuBar", LinuxTrayMenu)?
         .build()?;
     let watcher = zbus::blocking::Proxy::new(
-        &connection, "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+        &connection,
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
         "org.kde.StatusNotifierWatcher",
     )?;
-    anyhow::ensure!(watcher.get_property::<bool>("IsStatusNotifierHostRegistered")?,
-        "no StatusNotifier host registered");
+    anyhow::ensure!(
+        watcher.get_property::<bool>("IsStatusNotifierHostRegistered")?,
+        "no StatusNotifier host registered"
+    );
     let owner = linux_watcher_owner(&connection)?;
     let _: () = watcher.call("RegisterStatusNotifierItem", &("/StatusNotifierItem",))?;
-    anyhow::ensure!(linux_watcher_owner(&connection)? == owner,
-        "StatusNotifier watcher changed during registration");
+    anyhow::ensure!(
+        linux_watcher_owner(&connection)? == owner,
+        "StatusNotifier watcher changed during registration"
+    );
     let available = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let worker_available = available.clone();
     let (stop, stopped) = std::sync::mpsc::channel();
     let monitor = connection.clone();
-    std::thread::Builder::new().name("linux-tray-monitor".into()).spawn(move || {
-        while matches!(stopped.recv_timeout(std::time::Duration::from_millis(500)),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout)) {
-            let healthy = linux_watcher_owner(&monitor).is_ok_and(|current| current == owner)
-                && linux_tray_host_registered(&monitor).unwrap_or(false);
-            if !healthy {
-                worker_available.store(false, std::sync::atomic::Ordering::Release);
-                // Teardown disconnects the stop channel and clears the GUI relay.
-                // Never hold the tray mutex while calling back into egui.
-                if matches!(stopped.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)) {
-                    request_linux_tray_restore();
+    std::thread::Builder::new()
+        .name("linux-tray-monitor".into())
+        .spawn(move || {
+            while matches!(
+                stopped.recv_timeout(std::time::Duration::from_millis(500)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                let healthy = linux_watcher_owner(&monitor).is_ok_and(|current| current == owner)
+                    && linux_tray_host_registered(&monitor).unwrap_or(false);
+                if !healthy {
+                    worker_available.store(false, std::sync::atomic::Ordering::Release);
+                    // Teardown disconnects the stop channel and clears the GUI relay.
+                    // Never hold the tray mutex while calling back into egui.
+                    if matches!(
+                        stopped.try_recv(),
+                        Err(std::sync::mpsc::TryRecvError::Empty)
+                    ) {
+                        request_linux_tray_restore();
+                    }
+                    break;
                 }
-                break;
             }
-        }
-    })?;
-    Ok(LinuxTray { _connection: connection, available, stop })
+        })?;
+    Ok(LinuxTray {
+        _connection: connection,
+        available,
+        stop,
+    })
 }
 
 #[cfg(target_os = "linux")]
@@ -1642,32 +1756,49 @@ struct LinuxTray {
 #[cfg(target_os = "linux")]
 impl Drop for LinuxTray {
     fn drop(&mut self) {
-        self.available.store(false, std::sync::atomic::Ordering::Release);
+        self.available
+            .store(false, std::sync::atomic::Ordering::Release);
         let _ = self.stop.send(());
         // The worker exits after its current bounded call. No GUI-thread join.
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 fn linux_watcher_owner(connection: &zbus::blocking::Connection) -> zbus::Result<String> {
-    let bus = zbus::blocking::Proxy::new(connection, "org.freedesktop.DBus",
-        "/org/freedesktop/DBus", "org.freedesktop.DBus")?;
+    let bus = zbus::blocking::Proxy::new(
+        connection,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+    )?;
     bus.call("GetNameOwner", &("org.kde.StatusNotifierWatcher",))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 fn linux_tray_host_registered(connection: &zbus::blocking::Connection) -> anyhow::Result<bool> {
     // Explicit Properties.Get avoids the proxy property cache after host loss.
-    let properties = zbus::blocking::Proxy::new(connection, "org.kde.StatusNotifierWatcher",
-        "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties")?;
-    let value: zbus::zvariant::OwnedValue = properties.call("Get",
-        &("org.kde.StatusNotifierWatcher", "IsStatusNotifierHostRegistered"))?;
+    let properties = zbus::blocking::Proxy::new(
+        connection,
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.freedesktop.DBus.Properties",
+    )?;
+    let value: zbus::zvariant::OwnedValue = properties.call(
+        "Get",
+        &(
+            "org.kde.StatusNotifierWatcher",
+            "IsStatusNotifierHostRegistered",
+        ),
+    )?;
     Ok(bool::try_from(value)?)
 }
 
 #[cfg(target_os = "linux")]
 fn linux_tray_available() -> bool {
-    LINUX_TRAY.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+    LINUX_TRAY
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
         .is_some_and(|tray| tray.available.load(std::sync::atomic::Ordering::Acquire))
 }
 
@@ -1688,28 +1819,43 @@ fn linux_menu_properties(id: i32, names: &[String]) -> zbus::fdo::Result<LinuxMe
     use zbus::zvariant::{OwnedValue, Value};
     let mut properties = LinuxMenuProperties::new();
     if id == 0 {
-        properties.insert("children-display".into(),
-            OwnedValue::try_from(Value::from("submenu")).expect("static menu property"));
+        properties.insert(
+            "children-display".into(),
+            OwnedValue::try_from(Value::from("submenu")).expect("static menu property"),
+        );
     } else {
-        let (_, label) = LINUX_TRAY_MENU_ITEMS.iter().find(|(item, _)| *item == id)
+        let (_, label) = LINUX_TRAY_MENU_ITEMS
+            .iter()
+            .find(|(item, _)| *item == id)
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("Unknown menu item {id}")))?;
-        properties.insert("label".into(),
-            OwnedValue::try_from(Value::from(*label)).expect("static menu property"));
+        properties.insert(
+            "label".into(),
+            OwnedValue::try_from(Value::from(*label)).expect("static menu property"),
+        );
         properties.insert("enabled".into(), true.into());
         properties.insert("visible".into(), true.into());
     }
-    if !names.is_empty() { properties.retain(|name, _| names.contains(name)); }
+    if !names.is_empty() {
+        properties.retain(|name, _| names.contains(name));
+    }
     Ok(properties)
 }
 
 #[cfg(target_os = "linux")]
 fn linux_menu_event(id: i32, event_id: &str) -> zbus::fdo::Result<()> {
     linux_menu_properties(id, &[])?;
-    if event_id != "clicked" { return Ok(()); }
-    if id == 1 { request_linux_tray_restore(); }
+    if event_id != "clicked" {
+        return Ok(());
+    }
+    if id == 1 {
+        request_linux_tray_restore();
+    }
     if id == 2 {
-        let context = TRAY_GUI.lock().unwrap_or_else(|e| e.into_inner())
-            .as_ref().map(|gui| gui.context.clone());
+        let context = TRAY_GUI
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|gui| gui.context.clone());
         if let Some(context) = context {
             TRAY_QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
             context.request_repaint();
@@ -1722,40 +1868,65 @@ fn linux_menu_event(id: i32, event_id: &str) -> zbus::fdo::Result<()> {
 #[zbus::interface(name = "com.canonical.dbusmenu")]
 impl LinuxTrayMenu {
     #[zbus(property)]
-    fn version(&self) -> u32 { 3 }
+    fn version(&self) -> u32 {
+        3
+    }
     #[zbus(property)]
-    fn text_direction(&self) -> &str { "ltr" }
+    fn text_direction(&self) -> &str {
+        "ltr"
+    }
     #[zbus(property)]
-    fn status(&self) -> &str { "normal" }
+    fn status(&self) -> &str {
+        "normal"
+    }
     #[zbus(property)]
-    fn icon_theme_path(&self) -> Vec<String> { Vec::new() }
-    fn get_layout(&self, parent_id: i32, recursion_depth: i32,
-        property_names: Vec<String>) -> zbus::fdo::Result<(u32, LinuxMenuLayout)> {
+    fn icon_theme_path(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn get_layout(
+        &self,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<(u32, LinuxMenuLayout)> {
         use zbus::zvariant::{OwnedValue, Value};
         if recursion_depth < -1 {
-            return Err(zbus::fdo::Error::InvalidArgs("Invalid recursion depth".into()));
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "Invalid recursion depth".into(),
+            ));
         }
         let properties = linux_menu_properties(parent_id, &property_names)?;
         let mut children = Vec::new();
         if parent_id == 0 && recursion_depth != 0 {
             for (id, _) in LINUX_TRAY_MENU_ITEMS {
                 let properties = linux_menu_properties(id, &property_names)?;
-                children.push(OwnedValue::try_from(Value::new(
-                    (id, properties, Vec::<OwnedValue>::new())))
-                    .expect("static menu layout"));
+                children.push(
+                    OwnedValue::try_from(Value::new((id, properties, Vec::<OwnedValue>::new())))
+                        .expect("static menu layout"),
+                );
             }
         }
         Ok((1, (parent_id, properties, children)))
     }
-    fn get_group_properties(&self, ids: Vec<i32>, property_names: Vec<String>)
-        -> zbus::fdo::Result<Vec<(i32, LinuxMenuProperties)>> {
+    fn get_group_properties(
+        &self,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<(i32, LinuxMenuProperties)>> {
         let ids = if ids.is_empty() {
-            std::iter::once(0).chain(LINUX_TRAY_MENU_ITEMS.iter().map(|(id, _)| *id)).collect()
-        } else { ids };
-        ids.into_iter().map(|id| Ok((id, linux_menu_properties(id, &property_names)?))).collect()
+            std::iter::once(0)
+                .chain(LINUX_TRAY_MENU_ITEMS.iter().map(|(id, _)| *id))
+                .collect()
+        } else {
+            ids
+        };
+        ids.into_iter()
+            .map(|id| Ok((id, linux_menu_properties(id, &property_names)?)))
+            .collect()
     }
     fn get_property(&self, id: i32, name: &str) -> zbus::fdo::Result<zbus::zvariant::OwnedValue> {
-        linux_menu_properties(id, &[])?.remove(name)
+        linux_menu_properties(id, &[])?
+            .remove(name)
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("Unknown menu property {name}")))
     }
     fn about_to_show(&self, id: i32) -> zbus::fdo::Result<bool> {
@@ -1763,16 +1934,26 @@ impl LinuxTrayMenu {
         Ok(false)
     }
     fn about_to_show_group(&self, ids: Vec<i32>) -> (Vec<i32>, Vec<i32>) {
-        let errors = ids.into_iter().filter(|id| linux_menu_properties(*id, &[]).is_err()).collect();
+        let errors = ids
+            .into_iter()
+            .filter(|id| linux_menu_properties(*id, &[]).is_err())
+            .collect();
         (Vec::new(), errors)
     }
-    fn event(&self, id: i32, event_id: &str, _data: zbus::zvariant::Value<'_>, _timestamp: u32)
-        -> zbus::fdo::Result<()> {
+    fn event(
+        &self,
+        id: i32,
+        event_id: &str,
+        _data: zbus::zvariant::Value<'_>,
+        _timestamp: u32,
+    ) -> zbus::fdo::Result<()> {
         linux_menu_event(id, event_id)
     }
     fn event_group(&self, events: Vec<(i32, String, zbus::zvariant::OwnedValue, u32)>) -> Vec<i32> {
-        events.into_iter().filter_map(|(id, event_id, _, _)|
-            linux_menu_event(id, &event_id).err().map(|_| id)).collect()
+        events
+            .into_iter()
+            .filter_map(|(id, event_id, _, _)| linux_menu_event(id, &event_id).err().map(|_| id))
+            .collect()
     }
 }
 
@@ -1801,14 +1982,21 @@ mod linux_menu_tests {
     #[test]
     fn grouped_menu_reads_and_invalid_ids_follow_contract() {
         let menu = LinuxTrayMenu;
-        let properties = menu.get_group_properties(vec![1, 2], vec!["enabled".into()]).unwrap();
+        let properties = menu
+            .get_group_properties(vec![1, 2], vec!["enabled".into()])
+            .unwrap();
         assert_eq!(properties.len(), 2);
-        assert!(properties.iter().all(|(_, values)| values.len() == 1 && values.contains_key("enabled")));
+        assert!(properties
+            .iter()
+            .all(|(_, values)| values.len() == 1 && values.contains_key("enabled")));
         assert_eq!(menu.get_group_properties(vec![], vec![]).unwrap().len(), 3);
         assert!(menu.get_group_properties(vec![99], vec![]).is_err());
         assert!(menu.get_property(1, "label").is_ok());
         assert!(menu.get_property(1, "missing").is_err());
         assert_eq!(menu.about_to_show_group(vec![0, 1, 99]), (vec![], vec![99]));
-        assert_eq!(menu.event_group(vec![(99, "clicked".into(), true.into(), 0)]), vec![99]);
+        assert_eq!(
+            menu.event_group(vec![(99, "clicked".into(), true.into(), 0)]),
+            vec![99]
+        );
     }
 }

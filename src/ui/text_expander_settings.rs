@@ -182,8 +182,7 @@ impl EntropyApp {
                 ui,
                 ui.make_persistent_id(("text_expander_trigger", idx)),
                 &mut rule.trigger,
-                width,
-                metrics.settings_control_height(),
+                egui::vec2(width, metrics.settings_control_height()),
                 crate::i18n::tr_catalog(lang, "text_expander.trigger_hint"),
                 32,
                 egui::Align::Min,
@@ -265,8 +264,7 @@ impl EntropyApp {
 
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            content_width,
-            row_height,
+            egui::vec2(content_width, row_height),
             crate::i18n::tr_catalog(lang, text_expander_backend_label_key()),
             true,
             (!suppress_tooltips).then_some(crate::i18n::tr_catalog(

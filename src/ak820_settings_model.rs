@@ -4,11 +4,11 @@
 //! NVM-only parsing proves storage structure, not a running firmware identity.
 use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
 use crate::ak820_settings_backup::{
-    BackupResult, ImageIdentity, macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256,
+    macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256, BackupResult, ImageIdentity,
 };
 use crate::ak820_typed_storage::{Extensions, NonQsExtensions, SCHEMA};
-use crate::app::ak820_beta1_profiles::{ProfileId, historical_settings_identity, matrix_profile};
-use serde_json::{Map, Value, json};
+use crate::app::ak820_beta1_profiles::{historical_settings_identity, matrix_profile, ProfileId};
+use serde_json::{json, Map, Value};
 
 const MASK: [u8; 16] = [
     0x3f, 0x2f, 0x3f, 0x1f, 0x1f, 0x3f, 0x1f, 0x1f, 0x1f, 0x3f, 0x3f, 0x3f, 0x07, 0x3f, 0x3c, 0x2e,
@@ -25,7 +25,11 @@ const LIMITATIONS: [&str; 6] = [
 // This is hardware-revision validation, never physical-unit ownership evidence.
 const PROTECTED_SHA: &str = "9c4d481c14fe26b58f0f3eee81e84f45f118e06d755fd051da8d1cea5d78eb33";
 fn require(ok: bool, msg: &str) -> BackupResult<()> {
-    if ok { Ok(()) } else { Err(msg.into()) }
+    if ok {
+        Ok(())
+    } else {
+        Err(msg.into())
+    }
 }
 fn hex(raw: &[u8]) -> String {
     raw.iter().map(|b| format!("{b:02x}")).collect()
@@ -318,9 +322,10 @@ fn derive_settings(
     Ok(result)
 }
 
-/// Production archive callback for a catalog-qualified beta image. All checks
-/// precede derivation. Protected-span hash pins a hardware revision; unit-level
-/// ownership/recovery binding and live stable reads remain separate gates.
+/// Test-reference profile-only archive callback for a catalog-qualified beta image.
+/// All checks precede derivation. Protected-span hash pins a hardware revision;
+/// unit-level ownership/recovery binding and live stable reads remain separate gates.
+#[cfg(test)]
 pub(crate) fn decode_trusted_rom(
     rom: &[u8],
     nvm: &[u8],
@@ -348,15 +353,19 @@ fn decode_catalog_rom(
     image: Option<crate::ak820::ImageContract>,
 ) -> BackupResult<Value> {
     if let Some(profile) = profile {
-        let contract = image.and_then(|image| image.matrix_profile()).unwrap_or_else(|| crate::app::ak820_beta1_profiles::previous_firmware_matrix()
-            .profiles
-            .iter()
-            .find(|r| {
-                r.settings_identity
-                    .as_ref()
-                    .is_some_and(|i| i.ihx_sha256 == identity.ihx_sha256)
-            })
-            .unwrap_or_else(|| matrix_profile(profile)));
+        let contract = image
+            .and_then(|image| image.matrix_profile())
+            .unwrap_or_else(|| {
+                crate::app::ak820_beta1_profiles::previous_firmware_matrix()
+                    .profiles
+                    .iter()
+                    .find(|r| {
+                        r.settings_identity
+                            .as_ref()
+                            .is_some_and(|i| i.ihx_sha256 == identity.ihx_sha256)
+                    })
+                    .unwrap_or_else(|| matrix_profile(profile))
+            });
         let exact = contract
             .settings_identity
             .as_ref()
@@ -435,7 +444,7 @@ fn decode_catalog_rom(
     if historical_settings_identity(&identity.ihx_sha256, &identity.code_sha256, identity.schema)
         .is_some()
     {
-        for record in nvm[0x658..0x6a8].chunks_exact(10) {
+        for record in nvm[0x658..0x6a8].as_chunks::<10>().0 {
             require(
                 le(&record[8..]) != 0x7c73,
                 "Historical image does not support Combo Caps Word action",
@@ -447,7 +456,15 @@ fn decode_catalog_rom(
         None => rgb_wire(&nvm[24..32], false)?,
     };
     let combos = match profile {
-        Some(p) => image.and_then(|image| image.matrix_profile()).unwrap_or_else(|| matrix_profile(p)).capabilities.dynamic_entries.combos > 0,
+        Some(p) => {
+            image
+                .and_then(|image| image.matrix_profile())
+                .unwrap_or_else(|| matrix_profile(p))
+                .capabilities
+                .dynamic_entries
+                .combos
+                > 0
+        }
         None => {
             historical_settings_identity(
                 &identity.ihx_sha256,
@@ -463,14 +480,25 @@ fn decode_catalog_rom(
     Ok(settings)
 }
 fn settings_from_nvm_for_contract(
-    nvm: &[u8], rgb: &[u8], combos: bool, image: Option<crate::ak820::ImageContract>,
+    nvm: &[u8],
+    rgb: &[u8],
+    combos: bool,
+    image: Option<crate::ak820::ImageContract>,
 ) -> BackupResult<Value> {
     if let Some(image @ crate::ak820::ImageContract::Beta4(_)) = image {
-        let exact = image.matrix_profile().and_then(|row| row.settings_identity.as_ref())
+        let exact = image
+            .matrix_profile()
+            .and_then(|row| row.settings_identity.as_ref())
             .ok_or("Image lacks qualified packed CODE identity")?;
         settings_from_nvm_for_image_with_capabilities_offline(
-            nvm, rgb, combos, ImageVersion::V2, ImageVersion::V2,
-            OfflineSettingsCapabilities { combo_media: exact.combo_media },
+            nvm,
+            rgb,
+            combos,
+            ImageVersion::V2,
+            ImageVersion::V2,
+            OfflineSettingsCapabilities {
+                combo_media: exact.combo_media,
+            },
         )
     } else {
         settings_from_nvm(nvm, rgb, combos)
@@ -482,7 +510,11 @@ pub(crate) fn apply_image_limitations(settings: &mut Value, identity: &ImageIden
     let direct = crate::app::ak820_beta1_profiles::firmware_matrix()
         .profiles
         .iter()
-        .chain(crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles.iter())
+        .chain(
+            crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix()
+                .profiles
+                .iter(),
+        )
         .any(|r| {
             r.settings_identity.as_ref().is_some_and(|i| {
                 i.ihx_sha256 == identity.ihx_sha256
@@ -507,12 +539,25 @@ pub(crate) fn validate_profile_archive(
 ) -> BackupResult<crate::ak820_settings_backup::ValidatedArchive> {
     let value = crate::ak820_settings_backup::parse_json(manifest)?;
     let identity = ImageIdentity {
-        ihx_sha256: value["source_ihx_sha256"].as_str().ok_or("Missing archive image")?.into(),
-        code_sha256: value["code_sha256"].as_str().ok_or("Missing archive CODE")?.into(),
-        definition_sha256: value["definition_sha256"].as_str().ok_or("Missing archive definition")?.into(),
-        schema: value["nvm_schema"].as_u64().and_then(|v| u32::try_from(v).ok()).ok_or("Invalid archive schema")?,
+        ihx_sha256: value["source_ihx_sha256"]
+            .as_str()
+            .ok_or("Missing archive image")?
+            .into(),
+        code_sha256: value["code_sha256"]
+            .as_str()
+            .ok_or("Missing archive CODE")?
+            .into(),
+        definition_sha256: value["definition_sha256"]
+            .as_str()
+            .ok_or("Missing archive definition")?
+            .into(),
+        schema: value["nvm_schema"]
+            .as_u64()
+            .and_then(|v| u32::try_from(v).ok())
+            .ok_or("Invalid archive schema")?,
     };
-    let image = profile_image_for_identity(profile, &identity).ok_or("Unsupported exact archive image")?;
+    let image =
+        profile_image_for_identity(profile, &identity).ok_or("Unsupported exact archive image")?;
     validate_image_archive(manifest, files, image, expected_manifest)
 }
 
@@ -526,7 +571,8 @@ pub(crate) fn profile_image_for_identity(
         && exact.ihx_sha256 == identity.ihx_sha256
         && exact.code_sha256 == identity.code_sha256
         && exact.definition_sha256 == identity.definition_sha256
-        && exact.nvm_schema == identity.schema).then_some(image)
+        && exact.nvm_schema == identity.schema)
+        .then_some(image)
 }
 
 pub(crate) fn validate_image_archive(
@@ -535,7 +581,9 @@ pub(crate) fn validate_image_archive(
     image: crate::ak820::ImageContract,
     expected_manifest: Option<&str>,
 ) -> BackupResult<crate::ak820_settings_backup::ValidatedArchive> {
-    let exact = image.matrix_profile().and_then(|row| row.settings_identity.as_ref())
+    let exact = image
+        .matrix_profile()
+        .and_then(|row| row.settings_identity.as_ref())
         .ok_or("Image lacks qualified packed CODE identity")?;
     let identity = ImageIdentity {
         ihx_sha256: exact.ihx_sha256.clone(),
@@ -574,7 +622,7 @@ pub(crate) fn validate_historical_archive(
     crate::ak820_settings_backup::validate_archive(
         manifest,
         files,
-        &[identity.clone()],
+        std::slice::from_ref(identity),
         expected_manifest,
         |rom, nvm, image| decode_catalog_rom(rom, nvm, image, None, None),
     )
@@ -671,17 +719,15 @@ mod tests {
                     hex(&[4, 0, 5, 0, 0, 0, 0, 0, output as u8, 0])
                 );
             }
-            assert!(
-                settings_from_nvm_for_image_with_capabilities_offline(
-                    &nvm,
-                    &[0; 6],
-                    true,
-                    ImageVersion::V1,
-                    ImageVersion::V2,
-                    capable,
-                )
-                .is_err()
-            );
+            assert!(settings_from_nvm_for_image_with_capabilities_offline(
+                &nvm,
+                &[0; 6],
+                true,
+                ImageVersion::V1,
+                ImageVersion::V2,
+                capable,
+            )
+            .is_err());
             let disabled = settings_from_nvm_for_image_with_capabilities_offline(
                 &nvm,
                 &[0; 6],
@@ -710,33 +756,7 @@ mod tests {
             nvm[0x658..0x662].copy_from_slice(&[0, 0, 0, 0, 0x20, 8, 1, 0, 0xa8, 0]);
             nvm[0x658..0x65a].copy_from_slice(&a.to_le_bytes());
             nvm[0x65a..0x65c].copy_from_slice(&b.to_le_bytes());
-            assert!(
-                settings_from_nvm_for_image_with_capabilities_offline(
-                    &nvm,
-                    &[0; 6],
-                    true,
-                    ImageVersion::V2,
-                    ImageVersion::V2,
-                    capable,
-                )
-                .is_err()
-            );
-            assert!(
-                settings_from_nvm_for_image_with_capabilities_offline(
-                    &nvm,
-                    &[0; 6],
-                    false,
-                    ImageVersion::V2,
-                    ImageVersion::V2,
-                    capable,
-                )
-                .is_ok()
-            );
-        }
-        let mut nvm = modeled_nvm(SCHEMA);
-        nvm[0x658..0x662].fill(255);
-        assert!(
-            settings_from_nvm_for_image_with_capabilities_offline(
+            assert!(settings_from_nvm_for_image_with_capabilities_offline(
                 &nvm,
                 &[0; 6],
                 true,
@@ -744,10 +764,8 @@ mod tests {
                 ImageVersion::V2,
                 capable,
             )
-            .is_err()
-        );
-        assert!(
-            settings_from_nvm_for_image_with_capabilities_offline(
+            .is_err());
+            assert!(settings_from_nvm_for_image_with_capabilities_offline(
                 &nvm,
                 &[0; 6],
                 false,
@@ -755,8 +773,28 @@ mod tests {
                 ImageVersion::V2,
                 capable,
             )
-            .is_ok()
-        );
+            .is_ok());
+        }
+        let mut nvm = modeled_nvm(SCHEMA);
+        nvm[0x658..0x662].fill(255);
+        assert!(settings_from_nvm_for_image_with_capabilities_offline(
+            &nvm,
+            &[0; 6],
+            true,
+            ImageVersion::V2,
+            ImageVersion::V2,
+            capable,
+        )
+        .is_err());
+        assert!(settings_from_nvm_for_image_with_capabilities_offline(
+            &nvm,
+            &[0; 6],
+            false,
+            ImageVersion::V2,
+            ImageVersion::V2,
+            capable,
+        )
+        .is_ok());
     }
     #[test]
     fn offline_v1_complete_json_matches_production_and_preserves_input() {
@@ -788,7 +826,10 @@ mod tests {
                 let original = nvm.clone();
                 let result = offline(&nvm, ImageVersion::V2, ImageVersion::V2, true).unwrap();
                 let image = crate::ak820::ImageContract::Beta4(ProfileId::Main);
-                assert_eq!(settings_from_nvm_for_contract(&nvm, &[0; 6], true, Some(image)).unwrap(), result);
+                assert_eq!(
+                    settings_from_nvm_for_contract(&nvm, &[0; 6], true, Some(image)).unwrap(),
+                    result
+                );
                 assert_eq!(result["extensions"]["version"], 1);
                 let qs = &result["extensions"]["qmk_settings"];
                 assert_eq!(qs.as_object().unwrap().len(), 9);
@@ -984,11 +1025,9 @@ mod tests {
     fn legacy_nvm_needs_explicit_migration_before_derivation() {
         let nvm = modeled_nvm(0x082001);
         assert!(validate_nvm(&nvm, 0x082001).is_ok());
-        assert!(
-            settings_from_nvm(&nvm, &[], false)
-                .unwrap_err()
-                .contains("explicit migration")
-        );
+        assert!(settings_from_nvm(&nvm, &[], false)
+            .unwrap_err()
+            .contains("explicit migration"));
     }
     #[test]
     fn malformed_nvm_fails_before_derivation() {
@@ -1042,7 +1081,12 @@ mod tests {
         use crate::ak820::ImageContract::{Beta3, Beta4};
         for row in crate::app::ak820_beta1_profiles::profiles() {
             for image in [Beta3(row.profile), Beta4(row.profile)] {
-                let exact = image.matrix_profile().unwrap().settings_identity.as_ref().unwrap();
+                let exact = image
+                    .matrix_profile()
+                    .unwrap()
+                    .settings_identity
+                    .as_ref()
+                    .unwrap();
                 let nvm = modeled_nvm(exact.nvm_schema);
                 let mut rom = vec![0; 65536];
                 rom[0xc700..0xef00].copy_from_slice(&nvm);
@@ -1053,8 +1097,15 @@ mod tests {
                     ("read-log.jsonl".to_owned(), Vec::new()),
                     (".gitignore".to_owned(), b"*\n".to_vec()),
                 ]);
-                let records: Map<String, Value> = files.iter().map(|(name, bytes)|
-                    (name.clone(), json!({"size":bytes.len(), "sha256":sha256(bytes)}))).collect();
+                let records: Map<String, Value> = files
+                    .iter()
+                    .map(|(name, bytes)| {
+                        (
+                            name.clone(),
+                            json!({"size":bytes.len(), "sha256":sha256(bytes)}),
+                        )
+                    })
+                    .collect();
                 let manifest = json!({
                     "format": crate::ak820_settings_backup::FORMAT_V2,
                     "created_utc": "synthetic", "device": {"vid":0x320f,"pid":0x505b,"vial_uid":"0470ff9001b915d3"},
@@ -1064,7 +1115,9 @@ mod tests {
                     "scope":"saved supported settings and exposed RGB values; not all current RAM", "files":records
                 });
                 let raw = canonical(&manifest).unwrap();
-                assert!(validate_profile_archive(&raw, &files, row.profile, None).unwrap_err().contains("protected"));
+                assert!(validate_profile_archive(&raw, &files, row.profile, None)
+                    .unwrap_err()
+                    .contains("protected"));
                 assert!(validate_image_archive(&raw, &files, image, Some("wrong-pin")).is_err());
             }
         }
@@ -1076,8 +1129,18 @@ mod tests {
         for row in crate::app::ak820_beta1_profiles::profiles() {
             let p = row.profile;
             for image in [Beta2(p), Beta3(p), Beta4(p)] {
-                let exact = image.matrix_profile().unwrap().settings_identity.as_ref().unwrap();
-                let identity = ImageIdentity { ihx_sha256: exact.ihx_sha256.clone(), code_sha256: exact.code_sha256.clone(), definition_sha256: exact.definition_sha256.clone(), schema: exact.nvm_schema };
+                let exact = image
+                    .matrix_profile()
+                    .unwrap()
+                    .settings_identity
+                    .as_ref()
+                    .unwrap();
+                let identity = ImageIdentity {
+                    ihx_sha256: exact.ihx_sha256.clone(),
+                    code_sha256: exact.code_sha256.clone(),
+                    definition_sha256: exact.definition_sha256.clone(),
+                    schema: exact.nvm_schema,
+                };
                 assert_eq!(profile_image_for_identity(p, &identity), Some(image));
                 for field in 0..4 {
                     let mut wrong = identity.clone();
@@ -1089,9 +1152,19 @@ mod tests {
                     }
                     assert_eq!(profile_image_for_identity(p, &wrong), None);
                 }
-                let other = if p == ProfileId::Main { ProfileId::Game } else { ProfileId::Main };
+                let other = if p == ProfileId::Main {
+                    ProfileId::Game
+                } else {
+                    ProfileId::Main
+                };
                 assert_eq!(profile_image_for_identity(other, &identity), None);
-                assert!(validate_image_archive(b"{}", &std::collections::BTreeMap::new(), image, None).is_err());
+                assert!(validate_image_archive(
+                    b"{}",
+                    &std::collections::BTreeMap::new(),
+                    image,
+                    None
+                )
+                .is_err());
             }
         }
     }
@@ -1104,14 +1177,32 @@ mod tests {
         for row in crate::app::ak820_beta1_profiles::profiles() {
             let profile = row.profile;
             let identity = |image: crate::ak820::ImageContract| {
-                let exact = image.matrix_profile().unwrap().settings_identity.as_ref().unwrap();
-                ImageIdentity { ihx_sha256: exact.ihx_sha256.clone(), code_sha256: exact.code_sha256.clone(), definition_sha256: exact.definition_sha256.clone(), schema: exact.nvm_schema }
+                let exact = image
+                    .matrix_profile()
+                    .unwrap()
+                    .settings_identity
+                    .as_ref()
+                    .unwrap();
+                ImageIdentity {
+                    ihx_sha256: exact.ihx_sha256.clone(),
+                    code_sha256: exact.code_sha256.clone(),
+                    definition_sha256: exact.definition_sha256.clone(),
+                    schema: exact.nvm_schema,
+                }
             };
             let beta3 = Beta3(profile);
             let beta4 = Beta4(profile);
             for (image, other) in [(beta3, beta4), (beta4, beta3)] {
-                assert!(decode_trusted_rom_for_image(&rom, nvm, &identity(image), image).unwrap_err().contains("protected"));
-                assert!(decode_trusted_rom_for_image(&rom, nvm, &identity(other), image).unwrap_err().contains("catalog"));
+                assert!(
+                    decode_trusted_rom_for_image(&rom, nvm, &identity(image), image)
+                        .unwrap_err()
+                        .contains("protected")
+                );
+                assert!(
+                    decode_trusted_rom_for_image(&rom, nvm, &identity(other), image)
+                        .unwrap_err()
+                        .contains("catalog")
+                );
             }
             assert!(crate::ak820_installer::classify_snapshot(&rom).is_err());
         }
@@ -1130,18 +1221,14 @@ mod tests {
         let n = modeled_nvm(identity.schema);
         let mut rom = vec![0; 65536];
         rom[0xc700..0xef00].copy_from_slice(&n);
-        assert!(
-            decode_trusted_rom(&rom, &n, &identity, id)
-                .unwrap_err()
-                .contains("protected")
-        );
+        assert!(decode_trusted_rom(&rom, &n, &identity, id)
+            .unwrap_err()
+            .contains("protected"));
         assert!(decode_trusted_rom(&rom[..100], &n, &identity, id).is_err());
         let mut wrong = identity.clone();
         wrong.code_sha256 = "0".repeat(64);
-        assert!(
-            decode_trusted_rom(&rom, &n, &wrong, id)
-                .unwrap_err()
-                .contains("catalog")
-        );
+        assert!(decode_trusted_rom(&rom, &n, &wrong, id)
+            .unwrap_err()
+            .contains("catalog"));
     }
 }

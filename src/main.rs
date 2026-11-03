@@ -8,14 +8,17 @@ mod ak820_diagnostics;
 mod ak820_help;
 mod ak820_image_pack;
 mod ak820_install_executor;
+// Pure offline model: no production caller or hardware authority.
+#[cfg(test)]
 mod ak820_install_plan;
 mod ak820_installer;
 mod ak820_loader;
 mod ak820_offline_project;
-mod ak820_vial;
 #[cfg(not(target_arch = "wasm32"))]
 mod ak820_openrgb_bridge;
 mod ak820_os_indicator;
+mod ak820_qs_nvm_migration_offline;
+mod ak820_qs_versioned_offline;
 mod ak820_release;
 mod ak820_restore_plan;
 mod ak820_rgb;
@@ -24,12 +27,11 @@ mod ak820_rgb_audio;
 mod ak820_rgb_compositor;
 mod ak820_rgb_scheduler;
 mod ak820_settings_backup;
+mod ak820_settings_identity_metadata_offline;
 mod ak820_settings_model;
 mod ak820_typed_storage;
-mod ak820_qs_versioned_offline;
-mod ak820_qs_nvm_migration_offline;
-mod ak820_settings_identity_metadata_offline;
 mod ak820_versioned_backup_offline;
+mod ak820_vial;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod app_discovery;
@@ -48,14 +50,14 @@ mod integration_icons;
 mod keyboard;
 mod keycode;
 mod keycode_picker;
-#[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
-mod mcp;
 #[cfg(test)]
 mod layouts;
 #[cfg(target_os = "linux")]
 mod linux_ble;
 #[cfg(target_os = "linux")]
 mod linux_setup;
+#[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+mod mcp;
 #[cfg(not(target_arch = "wasm32"))]
 mod package_self_check;
 #[cfg(not(target_arch = "wasm32"))]
@@ -418,7 +420,10 @@ fn main() -> eframe::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let args: Vec<_> = std::env::args_os().skip(1).collect();
-        if args.iter().any(|arg| arg.to_string_lossy().starts_with("--mcp-")) {
+        if args
+            .iter()
+            .any(|arg| arg.to_string_lossy().starts_with("--mcp-"))
+        {
             #[cfg(feature = "mcp")]
             {
                 if let Err(error) = mcp::run(&args) {
@@ -505,12 +510,16 @@ fn main() -> eframe::Result<()> {
         run_native_gui(launch_minimized)?;
         #[cfg(not(target_arch = "wasm32"))]
         if runtime_safety::smoke_requested() {
-            let report = app::smoke_result().unwrap_or_else(|| serde_json::json!({
-                "format": "ak820-runtime-smoke-1", "status": "failed",
-                "error": "Native application exited before producing its smoke report"
-            }));
+            let report = app::smoke_result().unwrap_or_else(|| {
+                serde_json::json!({
+                    "format": "ak820-runtime-smoke-1", "status": "failed",
+                    "error": "Native application exited before producing its smoke report"
+                })
+            });
             println!("{}", report);
-            if report["status"] != "passed" { std::process::exit(1); }
+            if report["status"] != "passed" {
+                std::process::exit(1);
+            }
             return Ok(());
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -561,8 +570,7 @@ fn initialize_gui(ctx: &egui::Context, launch_minimized: bool) -> Box<dyn eframe
     );
     fonts.font_data.insert(
         "montserrat_medium".to_owned(),
-        egui::FontData::from_static(include_bytes!("../assets/Montserrat-Medium.ttf"))
-            .into(),
+        egui::FontData::from_static(include_bytes!("../assets/Montserrat-Medium.ttf")).into(),
     );
     fonts.font_data.insert(
         "dejavu".to_owned(),
@@ -570,15 +578,12 @@ fn initialize_gui(ctx: &egui::Context, launch_minimized: bool) -> Box<dyn eframe
     );
     fonts.font_data.insert(
         "noto_symbols".to_owned(),
-        egui::FontData::from_static(include_bytes!(
-            "../assets/NotoSansSymbols2-Regular.ttf"
-        ))
-        .into(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoSansSymbols2-Regular.ttf"))
+            .into(),
     );
     fonts.font_data.insert(
         "noto_emoji".to_owned(),
-        egui::FontData::from_static(include_bytes!("../assets/NotoEmoji-Regular.ttf"))
-            .into(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoEmoji-Regular.ttf")).into(),
     );
     for (name, data) in [
         (
@@ -684,11 +689,14 @@ fn initialize_gui(ctx: &egui::Context, launch_minimized: bool) -> Box<dyn eframe
         app
     };
     #[cfg(target_os = "linux")]
-    let app = if launch_minimized { app.with_start_minimized_on_linux() } else { app };
+    let app = if launch_minimized {
+        app.with_start_minimized_on_linux()
+    } else {
+        app
+    };
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     if launch_minimized {
-        ctx
-            .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
     }
     #[cfg(not(target_arch = "wasm32"))]
     if runtime_safety::smoke_requested() {

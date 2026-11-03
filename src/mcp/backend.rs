@@ -120,7 +120,10 @@ impl Backend {
                 self.work(move |e, s| e.devices(s, p.refresh)).await
             }
             "ak820_session" => match parse!(dto::Session) {
-                dto::Session::Open { device_id, load: _ } => self.start_open(device_id),
+                dto::Session::Open {
+                    device_id,
+                    load: dto::DiagnosticLoad::Diagnostics,
+                } => self.start_open(device_id),
                 dto::Session::Status { device_session_id } => {
                     self.cached_session(&device_session_id)
                 }
@@ -190,7 +193,7 @@ impl Backend {
                 match p {
                     dto::Trace::Start {
                         device_session_id,
-                        mode: _,
+                        mode: dto::TraceMode::Metadata,
                         max_bytes,
                         max_seconds,
                     } => {
@@ -667,6 +670,28 @@ fn image_json(image: crate::ak820::ImageContract) -> Value {
     json!({"status":"verified","release":crate::app::ak820_beta1_profiles::BETA_RELEASE,"profile":profile.as_str(),"ihx_sha256":row.build_identity.ihx_sha256,"packed_code_sha256":row.code_identity.sha256,"provenance":"FD00 manifest plus complete packed CODE matched compiled catalog","catalog_sha256":crate::app::ak820_beta1_profiles::SOURCE_CATALOG_SHA256})
 }
 
+// Only classify local errors. Their potentially private text never leaves the process.
+fn classify(error: &anyhow::Error) -> &'static str {
+    let message = format!("{error:#}").to_ascii_lowercase();
+    if crate::hid::is_transport_disconnect_error(error) {
+        "DISCONNECTED"
+    } else if message.contains("timeout")
+        || message.contains("timed out")
+        || message.contains("deadline")
+    {
+        "TIMEOUT"
+    } else if message.contains("malformed")
+        || message.contains("reply")
+        || message.contains("format")
+    {
+        "MALFORMED_REPLY"
+    } else if message.contains("differs") {
+        "IMAGE_MISMATCH"
+    } else {
+        "UNKNOWN_IMAGE"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -689,6 +714,67 @@ mod tests {
             .is_none());
         first.shutdown();
         second.shutdown();
+    }
+    #[test]
+    fn queued_mock_open_cancels_before_access_and_releases_owner() {
+        use std::time::Duration;
+        let backend = Backend::new(true);
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        backend
+            .inner
+            .sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .send(Box::new(move |_, _| {
+                started_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }))
+            .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let accepted = backend
+                .call(
+                    "ak820_session",
+                    json!({"action":"open","device_id":"mock-1","load":"diagnostics"}),
+                )
+                .await;
+            let op = accepted["data"]["operation_id"].as_str().unwrap();
+            let running = backend
+                .call(
+                    "ak820_operation",
+                    json!({"action":"cancel","operation_id":op}),
+                )
+                .await;
+            assert_eq!(running["data"]["state"], "running");
+            release_tx.send(()).unwrap();
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let result = backend
+                        .call(
+                            "ak820_operation",
+                            json!({"action":"status","operation_id":op}),
+                        )
+                        .await;
+                    if result["data"]["state"] != "running" {
+                        assert_eq!(result["data"]["state"], "cancelled");
+                        assert_eq!(result["data"]["lease_held"], false);
+                        assert_eq!(result["data"]["result"]["error"]["code"], "CANCELLED");
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+        });
+        backend.shutdown();
     }
     #[test]
     fn mock_selection_session_and_stale_ids_are_process_local() {
@@ -784,27 +870,5 @@ mod tests {
             .expect("bounded mock workflow");
         });
         backend.shutdown();
-    }
-}
-
-// Only classify local errors. Their potentially private text never leaves the process.
-fn classify(error: &anyhow::Error) -> &'static str {
-    let message = format!("{error:#}").to_ascii_lowercase();
-    if crate::hid::is_transport_disconnect_error(error) {
-        "DISCONNECTED"
-    } else if message.contains("timeout")
-        || message.contains("timed out")
-        || message.contains("deadline")
-    {
-        "TIMEOUT"
-    } else if message.contains("malformed")
-        || message.contains("reply")
-        || message.contains("format")
-    {
-        "MALFORMED_REPLY"
-    } else if message.contains("differs") {
-        "IMAGE_MISMATCH"
-    } else {
-        "UNKNOWN_IMAGE"
     }
 }

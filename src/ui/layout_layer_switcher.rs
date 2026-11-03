@@ -169,9 +169,11 @@ impl EntropyApp {
             ui,
             dropdown_id,
             &response,
-            &options[0],
-            &groups,
-            &current_id,
+            crate::ui_style::GroupedDropdownOptions {
+                default: &options[0],
+                groups: &groups,
+                selected_id: &current_id,
+            },
             selector_width,
             12.5,
             Some(app_layout_text(language, "Настроить", "Configure")),
@@ -404,7 +406,9 @@ impl EntropyApp {
                     self.editing_layer_layout_id = None;
                     self.editing_layer_device_key = None;
                     #[cfg(not(target_arch = "wasm32"))]
-                    { self.editing_layer_generation = None; }
+                    {
+                        self.editing_layer_generation = None;
+                    }
                 }
             } else {
                 // Fixed arrow positions based on max 7-char name width so
@@ -504,7 +508,9 @@ impl EntropyApp {
                     self.editing_layer = Some(selected);
                     self.editing_layer_device_key = self.application_layout_device_key();
                     #[cfg(not(target_arch = "wasm32"))]
-                    { self.editing_layer_generation = Some(self.connection_generation); }
+                    {
+                        self.editing_layer_generation = Some(self.connection_generation);
+                    }
                     self.editing_layer_text = raw_name.clone();
                     self.editing_layer_layout_id = self
                         .application_layout_editor_active
@@ -1163,7 +1169,7 @@ mod tests {
     #[test]
     fn application_selector_hover_uses_bottom_hint_instead_of_tooltip() {
         let ctx = egui::Context::default();
-        ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        ctx.global_style_mut(|style| style.interaction.tooltip_delay = 0.0);
         let mut app = EntropyApp::new_inert_for_test();
         app.app_settings.language = crate::i18n::Language::English;
         app.application_layout_editor_active = true;

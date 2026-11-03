@@ -142,8 +142,10 @@ mod tests {
     }
     #[test]
     fn layout_transition_is_sampled_promptly_without_extra_same_mode_writes() {
-        assert!(SAMPLE_INTERVAL_MS <= 100);
-        assert!(SAMPLE_INTERVAL_MS * 2 < 2_000);
+        const {
+            assert!(SAMPLE_INTERVAL_MS <= 100);
+            assert!(SAMPLE_INTERVAL_MS * 2 < 2_000);
+        }
         assert!(should_send(Mode::Off, Some(Mode::On), false));
         assert!(should_send(Mode::On, Some(Mode::Off), false));
         assert!(!should_send(Mode::Off, Some(Mode::Off), false));

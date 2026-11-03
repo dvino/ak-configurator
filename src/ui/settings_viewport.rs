@@ -4,6 +4,7 @@ pub(crate) fn responsive_settings_editor_scale(ctx: &egui::Context) -> f32 {
     crate::ui_style::ResponsiveMetrics::from_ctx(ctx).scale
 }
 
+#[cfg(test)]
 pub(crate) fn responsive_settings_visible_rows(
     ctx: &egui::Context,
     available_height: f32,

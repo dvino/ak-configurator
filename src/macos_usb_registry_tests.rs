@@ -10,7 +10,8 @@ enum Value {
     Array(Vec<CF>),
 }
 struct State {
-    arena: Vec<Box<RefCell<Value>>>,
+    // CF pointers must stay stable as the arena grows.
+    arena: Vec<std::pin::Pin<Box<RefCell<Value>>>>,
     properties: CF,
     parent: CF,
     case: u8,
@@ -35,8 +36,8 @@ thread_local! { static OS: RefCell<State> = RefCell::new(State::default()); }
 fn alloc(v: Value) -> CF {
     OS.with(|s| {
         let mut s = s.borrow_mut();
-        let b = Box::new(RefCell::new(v));
-        let p = (&*b as *const RefCell<Value>).cast();
+        let b = Box::pin(RefCell::new(v));
+        let p = (b.as_ref().get_ref() as *const RefCell<Value>).cast();
         s.arena.push(b);
         p
     })

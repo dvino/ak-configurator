@@ -1,17 +1,28 @@
 use super::*;
 
+pub(super) struct LayoutChromeGeometry {
+    pub(super) top_base_y: f32,
+    pub(super) main_tabs_h: f32,
+    pub(super) layer_bar_h: f32,
+    pub(super) top_reserved_h: f32,
+    pub(super) viewport: egui::Rect,
+}
+
 impl EntropyApp {
     pub(super) fn draw_layout_chrome(
         &mut self,
         ui: &mut egui::Ui,
         layout: &KeyboardLayout,
         ctx: &egui::Context,
-        top_base_y: f32,
-        main_tabs_h: f32,
-        layer_bar_h: f32,
-        top_reserved_h: f32,
-        viewport: egui::Rect,
+        geometry: LayoutChromeGeometry,
     ) -> bool {
+        let LayoutChromeGeometry {
+            top_base_y,
+            main_tabs_h,
+            layer_bar_h,
+            top_reserved_h,
+            viewport,
+        } = geometry;
         let typing_trainer_page = self.main_menu_tab == MainMenuTab::Advanced
             && self.settings_tab == SettingsTab::TypingTrainer;
         if typing_trainer_page {
@@ -77,13 +88,25 @@ impl EntropyApp {
                 MainMenuTab::Settings | MainMenuTab::Advanced
             ) {
                 #[cfg(not(target_arch = "wasm32"))]
-                let editable = matches!(self.settings_tab, SettingsTab::AppSettings | SettingsTab::OsIndicator | SettingsTab::AboutEntropy)
-                    || self.hid_device.as_ref().and_then(crate::hid::HidDevice::ak820_failure).is_none();
+                let editable = matches!(
+                    self.settings_tab,
+                    SettingsTab::AppSettings | SettingsTab::AboutEntropy
+                ) || self
+                    .hid_device
+                    .as_ref()
+                    .and_then(crate::hid::HidDevice::ak820_failure)
+                    .is_none();
+                #[cfg(all(test, not(target_arch = "wasm32")))]
+                let editable = editable || matches!(self.settings_tab, SettingsTab::OsIndicator);
                 #[cfg(target_arch = "wasm32")]
                 let editable = true;
                 ui.add_enabled_ui(editable, |ui| {
                     self.draw_settings_screen(
-                        ui, layout, ctx, chrome_rect.top() + top_reserved_h, chrome_rect,
+                        ui,
+                        layout,
+                        ctx,
+                        chrome_rect.top() + top_reserved_h,
+                        chrome_rect,
                     );
                 });
                 return true;

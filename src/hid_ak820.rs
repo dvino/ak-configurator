@@ -1,9 +1,9 @@
 //! AK820's checked settings path. The proxy owns transport; this parent-side
 //! session serializes a setter with its storage check and exact readback.
-use super::{HidDevice, MSG_LEN, padded_request};
+use super::{padded_request, HidDevice, MSG_LEN};
 use crate::ak820::ImageContract;
 use crate::app::ak820_beta1_profiles::KeycodeSource;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{bail, ensure, Context, Result};
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -15,7 +15,7 @@ pub(crate) struct Ak820RgbStream {
     previous: Option<[u8; MSG_LEN]>,
     image: ImageContract,
     owner: std::sync::Arc<()>,
-    direct_previous: Option<crate::ak820_rgb::direct::Snapshot>,
+    direct_previous: Option<std::sync::Arc<crate::ak820_rgb::direct::Snapshot>>,
     direct_generation: Option<u32>,
 }
 
@@ -239,7 +239,7 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
             ),
             // Unlock is available only as an explicit UI action; connection is
             // read-only and never starts, polls or cancels an unlock itself.
-            6 | 7 | 8 => (tail(2), true),
+            6..=8 => (tail(2), true),
             13 => match p[2] {
                 0 => (tail(3), false),
                 3 => (p[3] < 8 && tail(4), false),
@@ -419,7 +419,9 @@ fn capture_reconcile_getters(
     );
     let qsid_reply = send(&[0xfe, 9, 0, 0])?;
     let ids: Vec<u16> = qsid_reply
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .collect();
     let end = ids
@@ -466,8 +468,8 @@ fn capture_reconcile_getters(
             .map_err(anyhow::Error::msg)?;
         (values, extensions.tap_dance, extensions.key_overrides)
     } else {
-        let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(nvm)
-            .map_err(anyhow::Error::msg)?;
+        let extensions =
+            crate::ak820_typed_storage::Extensions::decode_nvm(nvm).map_err(anyhow::Error::msg)?;
         let values = image
             .qsid_ids()
             .iter()
@@ -493,7 +495,7 @@ fn capture_reconcile_getters(
         (5, contract.capabilities.dynamic_entries.key_overrides),
     ] {
         for index in 0..count {
-            let reply = send(&[0xfe, 13, op, index as u8])?;
+            let reply = send(&[0xfe, 13, op, index])?;
             let expected = if op == 1 {
                 tap_dance[index as usize].encode()
             } else {
@@ -663,6 +665,7 @@ impl HidDevice {
 
     /// Read the stored RAM palette without selecting Direct or enabling RGB.
     /// Exact catalog identity and runtime negotiation are both mandatory.
+    #[cfg(test)]
     pub(crate) fn ak820_direct_snapshot(&self) -> Result<crate::ak820_rgb::direct::Snapshot> {
         self.ak820_direct_snapshot_with_cancel(&AtomicBool::new(false))
     }
@@ -699,6 +702,7 @@ impl HidDevice {
 
     /// Explicit separate RAM import. Uses a fresh generation and never selects
     /// Direct, enables lighting, saves EEPROM, retries or restores after failure.
+    #[cfg(test)]
     pub(crate) fn ak820_restore_direct_palette(
         &self,
         palette: &crate::ak820_rgb::direct::Snapshot,
@@ -780,6 +784,7 @@ impl HidDevice {
     /// Explicit static palette apply under the single session owner. Exact
     /// Direct v1 images commit atomically with readback; legacy fastset images
     /// provide acknowledgements only.
+    #[cfg(test)]
     pub(crate) fn ak820_apply_palette(
         &self,
         frame: &[[u8; 3]; crate::ak820_rgb::LED_COUNT],
@@ -864,7 +869,7 @@ impl HidDevice {
                 } else {
                     let captured = direct::snapshot(&mut send)?;
                     let generation = captured.generation;
-                    direct_previous = Some(captured);
+                    direct_previous = Some(std::sync::Arc::new(captured));
                     generation
                 };
                 let hsv = frame.map(crate::ak820_rgb::rgb_to_hsv);
@@ -1063,7 +1068,7 @@ impl HidDevice {
         let result = (|| {
             for (index, chunk) in data.chunks(28).enumerate() {
                 let offset = index * 28;
-                let mut request = [0; 32];
+                let mut request = [0; crate::ak820::REPORT_SIZE];
                 request[..4].copy_from_slice(&[
                     0x0F,
                     (offset >> 8) as u8,
@@ -1142,7 +1147,10 @@ impl HidDevice {
     }
 
     fn ak820_read_rom_checked(
-        &self, start: usize, length: usize, boundary: impl Fn() -> Result<()>,
+        &self,
+        start: usize,
+        length: usize,
+        boundary: impl Fn() -> Result<()>,
     ) -> Result<Vec<u8>> {
         ensure!(
             start <= 65536 && length <= 65536 - start,
@@ -1182,7 +1190,12 @@ impl HidDevice {
             "Unknown AK820 Vial identity"
         );
         self.ak820_storage_check()?;
-        self.ak820.as_ref().unwrap().lock().unwrap_or_else(|e| e.into_inner()).image = Some(image);
+        self.ak820
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .image = Some(image);
         Ok(())
     }
 
@@ -1192,8 +1205,9 @@ impl HidDevice {
         &self,
         progress: impl Fn(&str) -> Result<(), String>,
     ) -> Result<ImageContract> {
-        let manifest = self.ak820_read_rom_checked(0xEF80, 64,
-            || progress("Reading AK820 manifest").map_err(anyhow::Error::msg))?;
+        let manifest = self.ak820_read_rom_checked(0xEF80, 64, || {
+            progress("Reading AK820 manifest").map_err(anyhow::Error::msg)
+        })?;
         let parsed = crate::ak820::parse_manifest(&manifest).map_err(|e| {
             anyhow::anyhow!("Unknown or trial AK820 firmware ({e:?}); settings remain read-only")
         })?;
@@ -1212,8 +1226,11 @@ impl HidDevice {
                 "Checking AK820 firmware… {}%",
                 (start - 0x2800) * 100 / (0xC700 - 0x2800)
             );
-            hash.update(self.ak820_read_rom_checked(start, (0xC700 - start).min(27 * 32),
-                || progress(&message).map_err(anyhow::Error::msg))?);
+            hash.update(self.ak820_read_rom_checked(
+                start,
+                (0xC700 - start).min(27 * 32),
+                || progress(&message).map_err(anyhow::Error::msg),
+            )?);
         }
         let digest: [u8; 32] = hash.finalize().into();
         let image = crate::ak820::identify_image(&manifest, &digest).context(
@@ -1230,10 +1247,15 @@ impl HidDevice {
         cancel: &AtomicBool,
     ) -> Result<(ImageContract, crate::ak820_diagnostics::Status)> {
         ensure!(self.ak820.is_some(), "Not an AK820 connection");
-        ensure!(self.ak820_failure().is_none(), "AK820 diagnostic session is stopped");
+        ensure!(
+            self.ak820_failure().is_none(),
+            "AK820 diagnostic session is stopped"
+        );
         let started = std::time::Instant::now();
         let boundary = || -> Result<(), String> {
-            if cancel.load(Ordering::Acquire) { return Err("AK820 diagnostic operation cancelled".into()); }
+            if cancel.load(Ordering::Acquire) {
+                return Err("AK820 diagnostic operation cancelled".into());
+            }
             if started.elapsed() > std::time::Duration::from_secs(120) {
                 return Err("AK820 diagnostic identity deadline exceeded".into());
             }
@@ -1241,37 +1263,62 @@ impl HidDevice {
         };
         let result = (|| {
             let image = self.ak820_identify_code(|_| boundary())?;
-            ensure!(matches!(image, ImageContract::Beta3(_)),
-                "Diagnostic bootstrap supports exact beta.3 images only");
-            self.ak820.as_ref().unwrap().lock().unwrap_or_else(|e| e.into_inner()).image = Some(image);
+            ensure!(
+                matches!(image, ImageContract::Beta3(_)),
+                "Diagnostic bootstrap supports exact beta.3 images only"
+            );
+            self.ak820
+                .as_ref()
+                .unwrap()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .image = Some(image);
             boundary().map_err(anyhow::Error::msg)?;
             let status = self.ak820_diagnostic_status()?;
             if status.ensure_ready().is_err() {
                 return Ok((image, status));
             }
             boundary().map_err(anyhow::Error::msg)?;
-            ensure!(self.get_protocol_version()? == 9, "Unknown AK820 VIA protocol");
+            ensure!(
+                self.get_protocol_version()? == 9,
+                "Unknown AK820 VIA protocol"
+            );
             boundary().map_err(anyhow::Error::msg)?;
             // Recheck before each ordinary group; a dirty status must never be
             // consumed by a getter that can enter the firmware NVM batching.
             let status = self.ak820_diagnostic_status()?;
-            if status.ensure_ready().is_err() { return Ok((image, status)); }
-            ensure!(self.get_keyboard_id()? == (6, crate::ak820::VIAL_UID),
-                "Unknown AK820 Vial identity");
+            if status.ensure_ready().is_err() {
+                return Ok((image, status));
+            }
+            ensure!(
+                self.get_keyboard_id()? == (6, crate::ak820::VIAL_UID),
+                "Unknown AK820 Vial identity"
+            );
             boundary().map_err(anyhow::Error::msg)?;
             Ok((image, self.ak820_diagnostic_status()?))
         })();
-        if let Err(error) = &result { self.ak820_fail(error); }
+        if let Err(error) = &result {
+            self.ak820_fail(error);
+        }
         result
     }
 
     #[cfg(any(feature = "mcp", test))]
     pub(crate) fn ak820_diagnostic_status(&self) -> Result<crate::ak820_diagnostics::Status> {
-        ensure!(matches!(self.ak820_image(), Some(ImageContract::Beta3(_))),
-            "FD01 diagnostics require an exact beta.3 image");
-        ensure!(self.ak820_failure().is_none(), "AK820 diagnostic session is stopped");
-        let result = self.usb_send(&[0xfd, 1]).and_then(|reply| crate::ak820_diagnostics::Status::decode(&reply));
-        if let Err(error) = &result { self.ak820_fail(error); }
+        ensure!(
+            matches!(self.ak820_image(), Some(ImageContract::Beta3(_))),
+            "FD01 diagnostics require an exact beta.3 image"
+        );
+        ensure!(
+            self.ak820_failure().is_none(),
+            "AK820 diagnostic session is stopped"
+        );
+        let result = self
+            .usb_send(&[0xfd, 1])
+            .and_then(|reply| crate::ak820_diagnostics::Status::decode(&reply));
+        if let Err(error) = &result {
+            self.ak820_fail(error);
+        }
         result
     }
 
@@ -1452,12 +1499,12 @@ impl HidDevice {
     #[cfg(test)]
     pub(crate) fn test_ak820_device(ready: bool) -> (Self, super::TestHidRecorder) {
         let (mut hid, recorder) = Self::test_device();
-        hid.ak820 = Some(std::sync::Mutex::new(Ak820Session {
+        hid.ak820 = Some(Box::new(std::sync::Mutex::new(Ak820Session {
             image: ready.then_some(ImageContract::Alpha3),
             loaded: ready,
             failure: None,
             rgb_owner: None,
-        }));
+        })));
         (hid, recorder)
     }
 
@@ -1583,7 +1630,9 @@ mod tests {
                 ImageContract::Beta3(row.profile),
                 ImageContract::Beta4(row.profile),
             ] {
-                let error = capture_decode_rom(image, &rom, nvm).unwrap_err().to_string();
+                let error = capture_decode_rom(image, &rom, nvm)
+                    .unwrap_err()
+                    .to_string();
                 assert!(error.contains("protected"), "{image:?}: {error}");
                 assert!(capture_decode_rom(image, &rom[..100], nvm).is_err());
             }
@@ -1698,4 +1747,8 @@ mod restore_executor;
 
 #[path = "hid_ak820_install.rs"]
 mod install;
-pub(crate) use install::{InstallUsb, WireCommand, usb_port};
+pub(crate) use install::usb_port;
+#[cfg(not(test))]
+pub(crate) use install::InstallUsb;
+#[cfg(not(test))]
+pub(crate) use install::WireCommand;

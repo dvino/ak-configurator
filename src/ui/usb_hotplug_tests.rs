@@ -519,8 +519,8 @@ mod usb_hotplug_tests {
                 assert!(app.hid_device.is_none());
                 let mut output = None;
                 for _ in 0..2 {
-                    output = Some(ctx.run(egui::RawInput::default(), |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
+                    output = Some(ctx.run_ui(egui::RawInput::default(), |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
                             let rect = ui.max_rect();
                             app.draw_device_selection_empty_state(ui, rect);
                         });
@@ -551,8 +551,8 @@ mod usb_hotplug_tests {
                 assert!(connect_rx.try_recv().is_err());
                 // Real open failures still retain the error heading and detail.
                 app.status_msg = "Open failed: fixture access denied".into();
-                let output = ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
+                let output = ctx.run_ui(egui::RawInput::default(), |root_ui| {
+                    egui::CentralPanel::default().show_inside(root_ui, |ui| {
                         let rect = ui.max_rect();
                         app.draw_device_selection_empty_state(ui, rect);
                     });
@@ -603,7 +603,7 @@ mod usb_hotplug_tests {
                 });
             } else {
                 app.connect_state = ConnectState::Loading {
-                    device: bluetooth,
+                    device: Box::new(bluetooth),
                     rx: owner_rx,
                     started_at: std::time::Instant::now(),
                     last_progress_at: std::time::Instant::now(),

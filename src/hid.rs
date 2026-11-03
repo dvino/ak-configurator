@@ -1,14 +1,18 @@
 /// Vial protocol implementation over HID.
 /// Based on vial-gui Python source: protocol/keyboard_comm.py
 use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
+#[cfg(not(test))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[path = "hid_proxy.rs"]
 mod hid_proxy;
+#[cfg(not(test))]
+pub(crate) use hid_proxy::claim_open_target;
 pub use hid_proxy::run_hid_proxy_if_requested;
 use hid_proxy::HidProxy;
-pub(crate) use hid_proxy::{claim_open_target, HidRetirement};
+pub(crate) use hid_proxy::HidRetirement;
 
 #[path = "hid_protocol.rs"]
 pub(crate) mod hid_protocol;
@@ -100,22 +104,31 @@ const SM62_DISPLAY_READ_TIMEOUT_MS: i32 = 6_000;
 // response window; timing out here incorrectly tears down the whole connection.
 const PICTOGRAM_SLOT_COMMIT_READ_TIMEOUT_MS: i32 = 2_500;
 const WINDOWS_BLE_READ_TIMEOUT_MS: i32 = 2_500;
+#[cfg(not(test))]
 const WINDOWS_BLE_READ_SLICE_MS: i32 = 250;
 const WINDOWS_BLE_SETTLE_DELAY: Duration = Duration::from_millis(12);
 #[cfg(target_os = "linux")]
+#[cfg(not(test))]
 const LINUX_BLE_NOTIFICATION_PROBE_TIMEOUT_MS: i32 = 80;
 #[cfg(target_os = "linux")]
 const LINUX_BLE_UNCORRELATED_REPLY_SETTLE: Duration = Duration::from_millis(32);
+#[cfg(not(test))]
 const VIAL_GUI_RETRY_DELAY: Duration = Duration::from_millis(500);
+#[cfg(not(test))]
 const HID_OPEN_RETRIES: usize = 5;
+#[cfg(not(test))]
 const HID_OPEN_RETRY_DELAY: Duration = Duration::from_millis(250);
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[cfg(not(test))]
 const HID_REPORT_DESCRIPTOR_MAX: usize = 4_096;
 #[cfg(target_os = "linux")]
+#[cfg(not(test))]
 const BLUETOOTH_HID_PLATFORM: &str = "Linux";
 #[cfg(target_os = "macos")]
+#[cfg(not(test))]
 const BLUETOOTH_HID_PLATFORM: &str = "macOS";
 #[cfg(target_os = "windows")]
+#[cfg(not(test))]
 const BLUETOOTH_HID_PLATFORM: &str = "Windows";
 
 pub(crate) const MACOS_HID_INPUT_MONITORING_REQUIRED: &str =
@@ -166,6 +179,7 @@ impl std::fmt::Display for UnsafeBluetoothReportMap {
 impl std::error::Error for UnsafeBluetoothReportMap {}
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[cfg(not(test))]
 fn is_unsafe_bluetooth_report_map(error: &anyhow::Error) -> bool {
     error
         .chain()
@@ -177,6 +191,7 @@ mod hid_parse;
 
 #[path = "hid_dynamic.rs"]
 mod hid_dynamic;
+pub(crate) use hid_dynamic::KeyOverrideRecord;
 
 #[path = "hid_macros.rs"]
 mod hid_macros;
@@ -202,7 +217,8 @@ pub struct HidDevice {
     backend: HidBackend,
     unlock_confirmation_pending: std::sync::atomic::AtomicBool,
     read_only: Option<ReadOnlyHidSession>,
-    ak820: Option<std::sync::Mutex<Ak820Session>>,
+    // Allocate optional protocol state only for an AK820 handle, not inline in every handle.
+    ak820: Option<Box<std::sync::Mutex<Ak820Session>>>,
 }
 
 /// A read-only HID session (`--export-layout`): every handle opened while it
@@ -267,7 +283,9 @@ impl ReadOnlyHidSession {
         let started = std::time::Instant::now();
         let result = send();
         #[cfg(feature = "mcp")]
-        self.ledger().trace.record(data, started.elapsed(), result.is_ok());
+        self.ledger()
+            .trace
+            .record(data, started.elapsed(), result.is_ok());
         if result.is_err() {
             self.ledger().failed_reads.push(padded_request(data));
         }
@@ -298,7 +316,9 @@ impl ReadOnlyHidSession {
     }
     #[cfg(feature = "mcp")]
     pub(crate) fn trace_synthetic_status(&self) {
-        self.ledger().trace.record(&[0xfd, 1], std::time::Duration::ZERO, true);
+        self.ledger()
+            .trace
+            .record(&[0xfd, 1], std::time::Duration::ZERO, true);
     }
 }
 
@@ -313,6 +333,8 @@ fn padded_request(data: &[u8]) -> [u8; MSG_LEN] {
 #[cfg(test)]
 type TestHidResponder =
     Box<dyn FnMut(&[u8; MSG_LEN]) -> Option<Result<[u8; MSG_LEN], String>> + Send>;
+#[cfg(test)]
+type TestOutputHook = Box<dyn FnMut(&[u8]) + Send>;
 
 #[cfg(test)]
 #[derive(Clone)]
@@ -323,7 +345,7 @@ pub(crate) struct TestHidRecorder {
     responses: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<[u8; MSG_LEN]>>>,
     responder: std::sync::Arc<std::sync::Mutex<Option<TestHidResponder>>>,
     output_connected: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    output_hook: std::sync::Arc<std::sync::Mutex<Option<Box<dyn FnMut(&[u8]) + Send>>>>,
+    output_hook: std::sync::Arc<std::sync::Mutex<Option<TestOutputHook>>>,
 }
 
 #[cfg(test)]
@@ -383,6 +405,7 @@ pub(crate) enum TestHidFault {
 
 #[cfg(not(target_arch = "wasm32"))]
 enum HidBackend {
+    #[cfg(not(test))]
     Local {
         device: hidapi::HidDevice,
         transport: HidTransport,
@@ -392,10 +415,11 @@ enum HidBackend {
     },
     Proxy(std::sync::Arc<HidProxy>),
     #[cfg(target_os = "linux")]
-    LinuxBle(crate::linux_ble::LinuxBleDevice),
+    #[cfg(not(test))]
+    LinuxBle(Box<crate::linux_ble::LinuxBleDevice>),
     #[cfg(test)]
     Test {
-        recorder: TestHidRecorder,
+        recorder: Box<TestHidRecorder>,
         combo: std::sync::Mutex<([u16; 4], u16)>,
         qmk_settings: std::sync::Mutex<std::collections::BTreeMap<u16, u16>>,
         fault_after_requests: std::sync::Mutex<Option<(usize, TestHidFault)>>,
@@ -403,6 +427,7 @@ enum HidBackend {
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(not(test))]
 pub(crate) struct LinuxBluetoothHidWriter {
     device: hidapi::HidDevice,
     write_framing: HidWriteFraming,
@@ -410,7 +435,9 @@ pub(crate) struct LinuxBluetoothHidWriter {
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(not(test))]
 impl LinuxBluetoothHidWriter {
+    #[cfg(not(test))]
     pub(crate) fn open(device: &crate::device::Device) -> Result<Self> {
         let local = HidDevice::open_fresh_for_local(device)?;
         let HidBackend::Local {
@@ -457,6 +484,7 @@ enum HidWriteFraming {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl HidWriteFraming {
+    #[cfg(not(test))]
     fn report_id(self) -> Option<u8> {
         match self {
             Self::ReportIdPrefixed(report_id) => Some(report_id),
@@ -476,9 +504,11 @@ impl HidTransport {
 impl HidDevice {
     pub fn is_bluetooth_transport(&self) -> bool {
         match &self.backend {
+            #[cfg(not(test))]
             HidBackend::Local { transport, .. } => transport.is_bluetooth(),
             HidBackend::Proxy(proxy) => proxy.is_bluetooth_transport(),
             #[cfg(target_os = "linux")]
+            #[cfg(not(test))]
             HidBackend::LinuxBle(_) => true,
             #[cfg(test)]
             HidBackend::Test { .. } => false,
@@ -540,6 +570,7 @@ impl SharedHidOutput {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn for_host_bridge(
         &self,
         mode: crate::qmk_hid_host::HostDataMode,
@@ -559,6 +590,7 @@ impl SharedHidOutput {
         output
     }
 
+    #[cfg(test)]
     pub(crate) fn host_session_is_current(&self) -> bool {
         self.host_lease
             .as_ref()
@@ -633,12 +665,14 @@ pub fn is_disconnect_error(error: &anyhow::Error) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn device_info_matches(info: &hidapi::DeviceInfo, device: &crate::device::Device) -> bool {
     info.usage_page() == 0xFF60
         && info.usage() == 0x61
         && device.permits_hid_target(&device_from_info(info))
 }
 
+#[cfg(not(test))]
 fn device_from_info(info: &hidapi::DeviceInfo) -> crate::device::Device {
     let path = info.path().to_string_lossy().into_owned();
     crate::device::Device {
@@ -679,7 +713,7 @@ impl HidDevice {
             read_only: None,
             ak820: None,
             backend: HidBackend::Test {
-                recorder: recorder.clone(),
+                recorder: Box::new(recorder.clone()),
                 combo: std::sync::Mutex::new(([0; 4], 0)),
                 qmk_settings: std::sync::Mutex::new(std::collections::BTreeMap::new()),
                 fault_after_requests: std::sync::Mutex::new(fault_after_requests),
@@ -724,10 +758,10 @@ impl HidDevice {
         }
         #[cfg(not(test))]
         {
-        if !device.is_ak820() {
-            bail!("AK Configurator supports only the wired AK820 Raw HID interface");
-        }
-        Self::open_proxy_for(device)
+            if !device.is_ak820() {
+                bail!("AK Configurator supports only the wired AK820 Raw HID interface");
+            }
+            Self::open_proxy_for(device)
         }
     }
 
@@ -744,23 +778,23 @@ impl HidDevice {
         }
         #[cfg(not(test))]
         {
-        #[cfg(target_os = "linux")]
-        if device.uses_bluez_gatt_transport() {
-            match crate::linux_ble::LinuxBleDevice::open(device) {
-                Ok(bluez_device) => {
-                    return Ok(Self {
-                        unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
-                        read_only: read_only_hid_session(),
-                        ak820: None,
-                        backend: HidBackend::LinuxBle(bluez_device),
-                    })
+            #[cfg(target_os = "linux")]
+            if device.uses_bluez_gatt_transport() {
+                match crate::linux_ble::LinuxBleDevice::open(device) {
+                    Ok(bluez_device) => {
+                        return Ok(Self {
+                            unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
+                            read_only: read_only_hid_session(),
+                            ak820: None,
+                            backend: HidBackend::LinuxBle(Box::new(bluez_device)),
+                        })
+                    }
+                    Err(error) => log::warn!(
+                        "Direct BlueZ GATT unavailable: {error:#}; trying validated kernel HID"
+                    ),
                 }
-                Err(error) => log::warn!(
-                    "Direct BlueZ GATT unavailable: {error:#}; trying validated kernel HID"
-                ),
             }
-        }
-        Self::open_fresh_for_local(device)
+            Self::open_fresh_for_local(device)
         }
     }
 
@@ -790,6 +824,7 @@ impl HidDevice {
             HidBackend::Test { recorder, .. } => {
                 recorder.host_output.with_settings_write_paused(operation)
             }
+            #[cfg(not(test))]
             _ => operation(),
         }
     }
@@ -809,8 +844,9 @@ impl HidDevice {
             HidBackend::Test { recorder, .. } => Some(SharedHidOutput {
                 host_output: recorder.host_output.clone(),
                 host_lease: None,
-                backend: SharedHidOutputBackend::Test(recorder.clone()),
+                backend: SharedHidOutputBackend::Test(recorder.as_ref().clone()),
             }),
+            #[cfg(not(test))]
             _ => None,
         }
     }
@@ -823,21 +859,22 @@ impl HidDevice {
         }
         #[cfg(not(test))]
         {
-        #[cfg(target_os = "macos")]
-        let open_result = with_macos_bluetooth_hid_access(
-            device.is_bluetooth_transport(),
-            crate::smart_input::input_monitoring_access_granted,
-            crate::smart_input::request_input_monitoring_access,
-            || Self::open_fresh_for_local_after_access_request(device),
-        );
+            #[cfg(target_os = "macos")]
+            let open_result = with_macos_bluetooth_hid_access(
+                device.is_bluetooth_transport(),
+                crate::smart_input::input_monitoring_access_granted,
+                crate::smart_input::request_input_monitoring_access,
+                || Self::open_fresh_for_local_after_access_request(device),
+            );
 
-        #[cfg(not(target_os = "macos"))]
-        let open_result = Self::open_fresh_for_local_after_access_request(device);
+            #[cfg(not(target_os = "macos"))]
+            let open_result = Self::open_fresh_for_local_after_access_request(device);
 
-        open_result
+            open_result
         }
     }
 
+    #[cfg(not(test))]
     fn open_fresh_for_local_after_access_request(device: &crate::device::Device) -> Result<Self> {
         let mut last_error = None;
         for attempt in 0..HID_OPEN_RETRIES {
@@ -862,6 +899,7 @@ impl HidDevice {
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("unable to open the device")))
     }
 
+    #[cfg(not(test))]
     fn open_proxy_for(device: &crate::device::Device) -> Result<Self> {
         Ok(Self {
             unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
@@ -871,6 +909,7 @@ impl HidDevice {
         })
     }
 
+    #[cfg(not(test))]
     fn try_open_fresh_for(device: &crate::device::Device) -> Result<Self> {
         #[cfg(not(test))]
         if crate::isolated_runtime() {
@@ -946,6 +985,7 @@ impl HidDevice {
         ensure_output_report_len(data)?;
 
         match &self.backend {
+            #[cfg(not(test))]
             HidBackend::Local {
                 device,
                 write_framing,
@@ -954,6 +994,7 @@ impl HidDevice {
             } => write_output_report_local(device, *write_framing, path.as_deref(), data),
             HidBackend::Proxy(proxy) => proxy.write_output_report(data),
             #[cfg(target_os = "linux")]
+            #[cfg(not(test))]
             HidBackend::LinuxBle(device) => device.write_output_report(data),
             #[cfg(test)]
             HidBackend::Test { recorder, .. } => record_test_output_report(recorder, data),
@@ -994,6 +1035,7 @@ impl HidDevice {
 
     fn usb_send_untraced(&self, data: &[u8]) -> Result<[u8; MSG_LEN]> {
         match &self.backend {
+            #[cfg(not(test))]
             HidBackend::Local {
                 device,
                 transport,
@@ -1010,6 +1052,7 @@ impl HidDevice {
             ),
             HidBackend::Proxy(proxy) => proxy.usb_send(data),
             #[cfg(target_os = "linux")]
+            #[cfg(not(test))]
             HidBackend::LinuxBle(device) => {
                 device.send(data, |response| response_matches_command(data, response))
             }
@@ -1135,6 +1178,7 @@ fn device_transport(device: &crate::device::Device) -> HidTransport {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn ensure_hid_path_present(path: Option<&Path>) -> Result<()> {
     #[cfg(target_os = "linux")]
     if let Some(path) = path {
@@ -1176,6 +1220,7 @@ fn record_test_output_report(recorder: &TestHidRecorder, data: &[u8]) -> Result<
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn write_output_report_local(
     device: &hidapi::HidDevice,
     write_framing: HidWriteFraming,
@@ -1347,6 +1392,7 @@ fn display_diagnostic_response(request: &[u8], response: &[u8; MSG_LEN]) -> Stri
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn usb_send_local(
     device: &hidapi::HidDevice,
     transport: HidTransport,
@@ -1489,6 +1535,7 @@ fn local_hid_write_frame(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn detect_hid_write_framing(
     device: &hidapi::HidDevice,
     transport: HidTransport,
@@ -1703,6 +1750,7 @@ pub(crate) fn vial_report_id_from_hid_descriptor(descriptor: &[u8]) -> Option<u8
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn read_response(
     device: &hidapi::HidDevice,
     transport: HidTransport,
@@ -1799,6 +1847,7 @@ fn decode_hid_response(
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(not(test))]
 fn read_response_via_input_report(
     device: &hidapi::HidDevice,
     write_framing: HidWriteFraming,
@@ -2004,7 +2053,7 @@ fn response_matches_qmk_settings_query(command: &[u8], resp: &[u8; MSG_LEN]) -> 
     let cursor = u16::from_le_bytes([qsid_bytes[0], qsid_bytes[1]]);
     let mut reached_terminator = false;
 
-    for chunk in resp.chunks_exact(2) {
+    for chunk in resp.as_chunks::<2>().0 {
         let qsid = u16::from_le_bytes([chunk[0], chunk[1]]);
         if qsid == u16::MAX {
             reached_terminator = true;
@@ -2017,6 +2066,7 @@ fn response_matches_qmk_settings_query(command: &[u8], resp: &[u8; MSG_LEN]) -> 
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(test))]
 fn drain_pending_reports(device: &hidapi::HidDevice) {
     let mut read_buf = [0u8; MSG_LEN + 1];
     for _ in 0..16 {

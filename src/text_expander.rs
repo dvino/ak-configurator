@@ -29,6 +29,7 @@ pub struct TextExpansionConfig {
     pub app_blacklist: Vec<String>,
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextExpansionMatch {
     pub typed_trigger_chars: usize,
@@ -36,6 +37,7 @@ pub struct TextExpansionMatch {
     pub cursor_back_chars: usize,
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 #[derive(Clone, Debug)]
 pub struct TextExpansionEngine {
     rules: Vec<TextExpansionRule>,
@@ -43,12 +45,14 @@ pub struct TextExpansionEngine {
     max_buffer_chars: usize,
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 impl Default for TextExpansionEngine {
     fn default() -> Self {
         Self::new(Vec::new())
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 impl TextExpansionEngine {
     pub fn new(rules: Vec<TextExpansionRule>) -> Self {
         let max_trigger_chars = rules
@@ -153,16 +157,19 @@ impl TextExpansionEngine {
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 pub fn rule_usable(rule: &TextExpansionRule) -> bool {
     rule.enabled
         && runtime_trigger_usable(&rule.trigger)
         && !prepare_replacement(&rule.replacement).0.is_empty()
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn runtime_trigger_usable(trigger: &str) -> bool {
     valid_trigger(trigger) || valid_legacy_trigger_stem(trigger)
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn valid_legacy_trigger_stem(trigger: &str) -> bool {
     let trimmed = trigger.trim();
     trimmed == trigger
@@ -172,18 +179,21 @@ fn valid_legacy_trigger_stem(trigger: &str) -> bool {
         && !trigger.chars().any(char::is_control)
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 #[derive(Clone, Debug)]
 struct ActivationTrigger {
     text: String,
     priority: TriggerMatchPriority,
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum TriggerMatchPriority {
     Alias,
     Primary,
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn activation_triggers(trigger: &str) -> Vec<ActivationTrigger> {
     let base = if valid_trigger(trigger) {
         vec![trigger.to_owned()]
@@ -207,6 +217,7 @@ fn activation_triggers(trigger: &str) -> Vec<ActivationTrigger> {
     triggers
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn push_unique_activation_trigger(
     triggers: &mut Vec<ActivationTrigger>,
     text: String,
@@ -219,12 +230,14 @@ fn push_unique_activation_trigger(
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn push_unique_trigger(triggers: &mut Vec<String>, trigger: String) {
     if !triggers.iter().any(|item| item == &trigger) {
         triggers.push(trigger);
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn qwerty_jcuken_aliases(trigger: &str) -> Vec<String> {
     let mut aliases = Vec::new();
     if let Some(alias) = qwerty_jcuken_alias(trigger, false) {
@@ -244,6 +257,7 @@ fn qwerty_jcuken_aliases(trigger: &str) -> Vec<String> {
     aliases
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn qwerty_jcuken_physical_prefix_aliases(trigger: &str) -> Vec<String> {
     let Some(first) = trigger.chars().next() else {
         return Vec::new();
@@ -266,6 +280,7 @@ fn qwerty_jcuken_physical_prefix_aliases(trigger: &str) -> Vec<String> {
     aliases
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn qwerty_jcuken_alias(trigger: &str, map_prefix: bool) -> Option<String> {
     let mut changed = false;
     let mut output = String::with_capacity(trigger.len());
@@ -282,6 +297,7 @@ fn qwerty_jcuken_alias(trigger: &str, map_prefix: bool) -> Option<String> {
     changed.then_some(output)
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn qwerty_jcuken_prefix_alias(trigger: &str) -> Option<String> {
     let mut chars = trigger.chars();
     let first = chars.next()?;
@@ -290,6 +306,7 @@ fn qwerty_jcuken_prefix_alias(trigger: &str) -> Option<String> {
     Some(format!("{mapped}{rest}"))
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn qwerty_jcuken_char_alias(ch: char) -> Option<char> {
     match ch {
         'q' => Some('й'),
@@ -480,6 +497,7 @@ fn decode_text_escapes(raw: &str) -> String {
     output
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }

@@ -86,13 +86,21 @@ mod clock_player_parity_tests {
                         let render = |mode, live| {
                             let output = ctx.run_ui(egui::RawInput::default(), |ui| {
                                 egui::CentralPanel::default().frame(egui::Frame::NONE).show_inside(ui, |ui| {
+                                    let state = Sm62PreviewState {
+                                        settings: &[mode,0,20,1,1],
+                                        scene: 0,
+                                        date_enabled: true,
+                                        side,
+                                        language,
+                                        stars_enabled: stars,
+                                        screens_off: false,
+                                        clock_live: live,
+                                    };
                                     if framed {
                                         ui.set_width(240.0 * scale + 14.0);
-                                        draw_sm62_preview(ui, &[mode,0,20,1,1], 0, true,
-                                            280.0 * scale + 14.0, side, language, stars, false, live);
+                                        draw_sm62_preview(ui, state, 280.0 * scale + 14.0);
                                     } else {
-                                        paint_sm62_screen(ui, screen, &[mode,0,20,1,1], 0,
-                                            true, side, language, stars, false, live);
+                                        paint_sm62_screen(ui, screen, state);
                                     }
                                 });
                             });
@@ -134,7 +142,8 @@ fn sm62_clock_font(size: usize) -> &'static Sm62ClockFont {
 fn sm62_clock_text_width(text: &str, size: usize) -> f32 {
     text.chars().filter_map(|c| sm62_clock_font(size).glyphs.iter().find(|g| g[0] == c as i32)).map(|g| g[6] as f32).sum()
 }
-fn paint_sm62_clock_label(ui: &egui::Ui, screen: egui::Rect, text: &str, size: usize, x: f32, y: f32, width: f32, align: u8, color: Color32) {
+fn paint_sm62_clock_label(ui: &egui::Ui, screen: egui::Rect, text: &str, size: usize, geometry: (f32, f32, f32), align: u8, color: Color32) {
+    let (x, y, width) = geometry;
     let font = sm62_clock_font(size);
     let texture = if size == 48 {
         sm62_keymap_texture(ui.ctx(), "sm62-unbounded-48", include_bytes!("../../assets/sm62/clock-unbounded-48.png"))
@@ -155,9 +164,9 @@ fn paint_sm62_clock_time(ui: &egui::Ui, screen: egui::Rect, time: &str) {
     let (hours,minutes) = time.split_once(':').unwrap_or(("SM","62"));
     let cream = Color32::from_rgb(255,248,231);
     let gold = Color32::from_rgb(242,219,149);
-    paint_sm62_clock_label(ui,screen,hours,48,7.0,124.0,98.0,2,cream);
-    paint_sm62_clock_label(ui,screen,":",48,110.0,124.0,20.0,1,gold);
-    paint_sm62_clock_label(ui,screen,minutes,48,132.0,124.0,84.0,0,cream);
+    paint_sm62_clock_label(ui,screen,hours,48,(7.0,124.0,98.0),2,cream);
+    paint_sm62_clock_label(ui,screen,":",48,(110.0,124.0,20.0),1,gold);
+    paint_sm62_clock_label(ui,screen,minutes,48,(132.0,124.0,84.0),0,cream);
 }
 // Mirror the accepted firmware's visible-bounds centering, using the original
 // Unbounded48 atlas/metrics. Live clock geometry is deliberately unchanged.
@@ -168,10 +177,10 @@ fn paint_sm62_clock_fallback(ui: &egui::Ui, screen: egui::Rect) {
     let shift = ((240.0 - (right - left)) / 2.0).floor() - left;
     let cream = Color32::from_rgb(255,248,231);
     let gold = Color32::from_rgb(242,219,149);
-    paint_sm62_clock_label(ui,screen,"SM",48,7.0+shift,124.0,98.0,2,cream);
-    paint_sm62_clock_label(ui,screen,":",48,110.0+shift,124.0,20.0,1,gold);
-    paint_sm62_clock_label(ui,screen,"62",48,132.0+shift,124.0,84.0,0,cream);
+    paint_sm62_clock_label(ui,screen,"SM",48,(7.0+shift,124.0,98.0),2,cream);
+    paint_sm62_clock_label(ui,screen,":",48,(110.0+shift,124.0,20.0),1,gold);
+    paint_sm62_clock_label(ui,screen,"62",48,(132.0+shift,124.0,84.0),0,cream);
 }
 fn paint_sm62_date(ui: &egui::Ui, screen: egui::Rect, date: &str) {
-    paint_sm62_clock_label(ui,screen,date,16,50.0,170.0,140.0,1,Color32::from_rgb(193,193,192));
+    paint_sm62_clock_label(ui,screen,date,16,(50.0,170.0,140.0),1,Color32::from_rgb(193,193,192));
 }

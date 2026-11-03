@@ -370,9 +370,11 @@ impl EntropyApp {
                             &target.title,
                         );
                         self.queue_module_setting_write(
-                            group_title,
-                            target.title,
-                            display_label,
+                            super::settings_write_queue::ModuleSettingMetadata {
+                                group_title,
+                                field_title: target.title,
+                                display_label,
+                            },
                             target.qsid,
                             target.width,
                             old_value,
@@ -397,9 +399,11 @@ impl EntropyApp {
         let requested = Self::module_setting_transport_value(field, value);
 
         self.queue_module_setting_write(
-            group_title,
-            field_title,
-            display_label,
+            super::settings_write_queue::ModuleSettingMetadata {
+                group_title,
+                field_title,
+                display_label,
+            },
             field.qsid,
             field.width,
             old_value,
@@ -443,8 +447,7 @@ impl EntropyApp {
                 let mut checked = raw_value & mask != 0;
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     label.as_str(),
                     true,
                     tooltip.as_deref(),
@@ -471,8 +474,7 @@ impl EntropyApp {
                 let field_width = metrics.value(86.0);
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     label.as_str(),
                     true,
                     tooltip.as_deref(),
@@ -493,8 +495,7 @@ impl EntropyApp {
                             ui,
                             edit_id,
                             &mut text,
-                            field_width,
-                            metrics.settings_control_height(),
+                            egui::vec2(field_width, metrics.settings_control_height()),
                             "",
                             5,
                             egui::Align::Center,
@@ -541,8 +542,7 @@ impl EntropyApp {
                 }
                 crate::ui_style::settings_list_row_with_tooltip(
                     ui,
-                    content_width,
-                    row_height,
+                    egui::vec2(content_width, row_height),
                     label.as_str(),
                     true,
                     tooltip.as_deref(),
@@ -774,8 +774,7 @@ impl EntropyApp {
         });
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            content_width,
-            row_height,
+            egui::vec2(content_width, row_height),
             crate::i18n::tr_catalog(lang, "modules_settings.module_side"),
             true,
             tooltip.as_deref(),

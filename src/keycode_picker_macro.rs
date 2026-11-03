@@ -362,8 +362,7 @@ impl KeycodePicker {
                                     .collect::<Vec<_>>();
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(language, "macro_editor.picker_item"),
                                     true,
                                     (!list.suppress_tooltips).then_some(crate::i18n::tr_catalog(
@@ -391,8 +390,7 @@ impl KeycodePicker {
                             1 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(language, "macro_editor.macro_name"),
                                     true,
                                     (!list.suppress_tooltips).then_some(crate::i18n::tr_catalog(
@@ -405,8 +403,7 @@ impl KeycodePicker {
                                             ui,
                                             ui.make_persistent_id(("macro_name", grid_id, n)),
                                             &mut edited_name,
-                                            control_width,
-                                            control_height,
+                                            egui::vec2(control_width, control_height),
                                             crate::i18n::tr_catalog(
                                                 language,
                                                 "macro_editor.macro_name",
@@ -423,8 +420,7 @@ impl KeycodePicker {
                             2 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         language,
                                         "macro_editor.macro_description",
@@ -444,8 +440,7 @@ impl KeycodePicker {
                                                 n,
                                             )),
                                             &mut edited_description,
-                                            control_width,
-                                            control_height,
+                                            egui::vec2(control_width, control_height),
                                             crate::i18n::tr_catalog(
                                                 language,
                                                 "macro_editor.macro_description",
@@ -468,8 +463,7 @@ impl KeycodePicker {
                                     let mut added_action = None;
                                     crate::ui_style::settings_list_row_with_tooltip(
                                         ui,
-                                        row_content_width,
-                                        row_height,
+                                        egui::vec2(row_content_width, row_height),
                                         crate::i18n::tr_catalog(language, "macro_editor.actions"),
                                         true,
                                         (!list.suppress_tooltips).then_some(
@@ -590,8 +584,7 @@ impl KeycodePicker {
 
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     label,
                                     true,
                                     (!list.suppress_tooltips).then_some(tooltip),
@@ -642,8 +635,7 @@ impl KeycodePicker {
                                                         action_idx,
                                                     )),
                                                     text,
-                                                    editor_width,
-                                                    control_height,
+                                                    egui::vec2(editor_width, control_height),
                                                     crate::i18n::tr_catalog(
                                                         language,
                                                         "macro_editor.type_text_here",
@@ -690,8 +682,7 @@ impl KeycodePicker {
                                                         action_idx,
                                                     )),
                                                     &mut value,
-                                                    metrics.value(82.0),
-                                                    control_height,
+                                                    egui::vec2(metrics.value(82.0), control_height),
                                                     "",
                                                     5,
                                                     egui::Align::Center,
@@ -1093,7 +1084,7 @@ mod tests {
                 f16 = macro_picker_text_position(&output, "F16");
             }
             macro_picker_click(&mut picker, &ctx, f16.expect("visible F16 choice"));
-            assert_eq!(picker.macro_actions[0], [expected.clone()]);
+            assert_eq!(picker.macro_actions[0], *std::slice::from_ref(&expected));
             assert_eq!(picker.macro_texts[0], [1, opcode, 0x6B, 0x0F]);
             assert_eq!(decode_macro_actions(&picker.macro_texts[0]), [expected]);
             assert!(picker.macros_dirty);

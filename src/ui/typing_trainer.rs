@@ -24,12 +24,11 @@ impl EntropyApp {
     }
 
     pub(super) fn pause_typing_trainer_if_inactive(&mut self, now: std::time::Instant) {
-        if self.main_menu_tab != MainMenuTab::Advanced
-            || self.settings_tab != SettingsTab::TypingTrainer
+        if (self.main_menu_tab != MainMenuTab::Advanced
+            || self.settings_tab != SettingsTab::TypingTrainer)
+            && self.typing_trainer.pause_if_running(now)
         {
-            if self.typing_trainer.pause_if_running(now) {
-                self.flush_typing_trainer_symbol_stats();
-            }
+            self.flush_typing_trainer_symbol_stats();
         }
     }
 

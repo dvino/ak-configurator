@@ -13,6 +13,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+#[cfg(not(test))]
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(12);
 // Must exceed the longest helper-side USB command. Pictogram SLOT_COMMIT may
 // synchronously program flash for up to 2.5 s; queued host-data writes share the
@@ -30,6 +31,7 @@ const MAX_FRAME: usize = 4_096;
 // bound, and no new helper can bypass an unreclaimed physical reservation.
 const MAX_UNSETTLED_HELPERS: usize = 2;
 const OUTPUT_PREFIX: &str = "output:";
+#[cfg(not(test))]
 const INSTALL_PREFIX: &str = "ak820-install:";
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -127,6 +129,7 @@ struct HelperCommand {
 }
 
 impl HidProxy {
+    #[cfg(not(test))]
     pub(super) fn open(device: &Device) -> Result<Self> {
         let exe = std::env::current_exe().context("Failed to find Entropy executable")?;
         let mut command = Command::new(exe);
@@ -146,6 +149,7 @@ impl HidProxy {
         )
     }
 
+    #[cfg(not(test))]
     pub(super) fn open_install(device: &Device) -> Result<Self> {
         let mut command = Command::new(std::env::current_exe()?);
         command
@@ -351,6 +355,7 @@ impl HidProxy {
         Ok(out)
     }
 
+    #[cfg(not(test))]
     pub(super) fn install_command(
         &self,
         command: &super::hid_ak820::WireCommand,
@@ -401,6 +406,7 @@ struct ProxyClaim {
 
 /// Extend this helper's reservation BEFORE opening any direct/fallback target.
 /// This handshake travels over the existing startup IPC, not another transport.
+#[cfg(not(test))]
 pub(crate) fn claim_open_target(target: &Device) -> Result<()> {
     writeln!(
         std::io::stdout(),
@@ -523,7 +529,7 @@ fn read_frame(reader: &mut impl BufRead) -> Result<String> {
     if bytes.len() > MAX_FRAME || !bytes.ends_with(b"\n") {
         bail!("HID helper disconnected or returned oversized/unterminated frame");
     }
-    Ok(String::from_utf8(bytes).context("HID helper returned non-UTF8 frame")?)
+    String::from_utf8(bytes).context("HID helper returned non-UTF8 frame")
 }
 
 fn validate_response(line: &str, output: bool, startup: bool) -> Result<()> {
@@ -721,6 +727,15 @@ fn emit_response(response: &ProxyResponse) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+fn run_hid_proxy(_device: Device, install_only: bool) -> Result<()> {
+    if install_only {
+        bail!("Physical installation is disabled in test builds");
+    }
+    bail!("Live HID is disabled in unit tests; use an explicit test device")
+}
+
+#[cfg(not(test))]
 fn run_hid_proxy(device: Device, install_only: bool) -> Result<()> {
     // The actual transport owner holds this across every request and its final
     // handle drop. A GUI crash cannot release it while its helper is still alive.
@@ -739,11 +754,13 @@ fn run_hid_proxy(device: Device, install_only: bool) -> Result<()> {
         data: None,
         error: None,
     })?;
-    let mut install: Option<super::hid_ak820::InstallUsb> = if install_only {
+    let install: Option<super::hid_ak820::InstallUsb> = if install_only {
         Some(super::hid_ak820::InstallUsb::open(&device)?)
     } else {
         None
     };
+    #[cfg(not(test))]
+    let mut install = install;
     let mut reader = BufReader::new(std::io::stdin());
     loop {
         let line = read_frame(&mut reader)?;
@@ -755,7 +772,10 @@ fn run_hid_proxy(device: Device, install_only: bool) -> Result<()> {
         let result = if let Some(encoded) = line.strip_prefix(INSTALL_PREFIX) {
             (|| -> Result<Option<String>> {
                 #[cfg(test)]
-                bail!("Physical installation is disabled in test builds");
+                {
+                    let _ = encoded;
+                    bail!("Physical installation is disabled in test builds");
+                }
                 #[cfg(not(test))]
                 {
                     if install.is_none() {
@@ -814,11 +834,13 @@ fn bytes_to_hex(data: &[u8]) -> String {
 }
 
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>> {
-    if hex.len() % 2 != 0 || hex.len() > MSG_LEN * 2 {
+    if !hex.len().is_multiple_of(2) || hex.len() > MSG_LEN * 2 {
         bail!("Invalid HID hex length");
     }
     hex.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| Ok((hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?))
         .collect()
 }
@@ -836,6 +858,35 @@ fn hex_nibble(byte: u8) -> Result<u8> {
 mod tests {
     use super::*;
     use std::sync::MutexGuard;
+
+    #[test]
+    fn unit_helper_refuses_install_and_normal_owners_before_lease_or_transport() {
+        let mut ak820 = device("unit-refusal");
+        ak820.vendor_id = 0x320f;
+        ak820.product_id = 0x505b;
+        // A lease attempt would reject this missing path instead of returning
+        // the unit-test refusal. No endpoint or ownership file is needed.
+        ak820.path.clear();
+        assert!(ak820.is_ak820());
+        let mut generic_empty = device("generic-empty-refusal");
+        generic_empty.path.clear();
+        for candidate in [device("generic-refusal"), generic_empty, ak820] {
+            for (install_only, expected) in [
+                (true, "Physical installation is disabled in test builds"),
+                (
+                    false,
+                    "Live HID is disabled in unit tests; use an explicit test device",
+                ),
+            ] {
+                assert_eq!(
+                    run_hid_proxy(candidate.clone(), install_only)
+                        .unwrap_err()
+                        .to_string(),
+                    expected
+                );
+            }
+        }
+    }
 
     static TEST_SERIAL: Mutex<()> = Mutex::new(());
     const TEST_TIMEOUT: Duration = Duration::from_millis(200);

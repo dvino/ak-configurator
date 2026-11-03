@@ -97,7 +97,8 @@ fn open_directory(path: &Path) -> std::io::Result<std::fs::File> {
 #[cfg(windows)]
 fn open_directory(path: &Path) -> std::io::Result<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new().read(true)
+    std::fs::OpenOptions::new()
+        .read(true)
         .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)
 }
@@ -115,7 +116,9 @@ fn identity(file: &std::fs::File) -> std::io::Result<(u64, u64)> {
 #[cfg(windows)]
 fn identity(file: &std::fs::File) -> std::io::Result<(u64, u64)> {
     use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
     let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     if unsafe { GetFileInformationByHandle(file.as_raw_handle() as _, &mut info) } == 0 {
         return Err(std::io::Error::last_os_error());
@@ -320,17 +323,16 @@ impl FileBrowser {
             ));
         }
         if let Some(listing) = &self.listing {
-            if listing.truncated {
-                if ui
+            if listing.truncated
+                && ui
                     .button(if russian {
                         "Следующие записи"
                     } else {
                         "Next entries"
                     })
                     .clicked()
-                {
-                    next_page = true;
-                }
+            {
+                next_page = true;
             }
             if listing.omitted {
                 ui.label(if russian {
@@ -394,7 +396,11 @@ mod tests {
         let mut browser = FileBrowser {
             directory: PathBuf::from("new"),
             mode: BrowserMode::Directory,
-            listing: Some(Listing { entries: vec![], truncated: false, omitted: false }),
+            listing: Some(Listing {
+                entries: vec![],
+                truncated: false,
+                omitted: false,
+            }),
             error: None,
             pending: None,
             cursor: None,
@@ -403,7 +409,11 @@ mod tests {
         assert!(browser.listing.is_none());
         assert!(browser.error.is_some());
         let directory = tempfile::tempdir().unwrap();
-        browser.listing = Some(Listing { entries: vec![], truncated: true, omitted: false });
+        browser.listing = Some(Listing {
+            entries: vec![],
+            truncated: true,
+            omitted: false,
+        });
         let (_, _, cursor) = load_directory(directory.path()).unwrap();
         browser.request_page(&egui::Context::default(), Some(cursor));
         assert!(browser.listing.is_some());

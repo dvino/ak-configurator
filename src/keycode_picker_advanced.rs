@@ -52,7 +52,7 @@ impl KeycodePicker {
     pub(super) fn close_advanced_slot_picker(&mut self) {
         self.advanced_slot_picker = None;
         self.advanced_macro_layer = None;
-        self.popup_state.on_close(PopupKey::AdvancedSlotWindow);
+        self.popup_state.on_close(PopupKey::AdvancedSlot);
     }
 
     pub(super) fn close_advanced_slot_picker_on_escape(&mut self, escape_pressed: bool) -> bool {
@@ -114,7 +114,7 @@ impl KeycodePicker {
         crate::ui_style::centered_modal_window(
             ctx,
             title,
-            self.popup_state.id(PopupKey::AdvancedSlotWindow),
+            self.popup_state.id(PopupKey::AdvancedSlot),
             &mut open,
             popup_size,
         )

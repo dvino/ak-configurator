@@ -1,0 +1,975 @@
+    Checking ak-configurator v0.1.0-alpha.1 (LOCAL_WORK/ak-configurator-beta5-review)
+warning: unused import: `std::fs`
+  --> src/ak820_backup_files.rs:17:5
+   |
+17 | use std::fs;
+   |     ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/runtime_smoke_app.rs:38:13
+   |
+38 |         let mut result = Self {
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `ui`
+   --> src/ui/application_layouts_settings.rs:963:22
+    |
+963 |                     |ui| {
+    |                      ^^ help: if this is intentional, prefix it with an underscore: `_ui`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `control_height`
+   --> src/ui/application_layouts_settings.rs:912:9
+    |
+912 |         control_height: f32,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_control_height`
+
+warning: unused variable: `input_report_polling`
+    --> src/hid.rs:1401:5
+     |
+1401 |     input_report_polling: &std::sync::atomic::AtomicBool,
+     |     ^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_input_report_polling`
+
+warning: constant `AUTOSTART_LINUX_FILE` is never used
+  --> src/ui/window_lifecycle.rs:20:7
+   |
+20 | const AUTOSTART_LINUX_FILE: &str = "ak-configurator.desktop";
+   |       ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `UnidentifiedWindow` is never constructed
+  --> src/app_discovery.rs:28:5
+   |
+26 | pub(crate) enum ForegroundState {
+   |                 --------------- variant in this enum
+27 |     Focused(DetectedApplication),
+28 |     UnidentifiedWindow(String),
+   |     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `ForegroundState` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `gnome_shell_integration_needed` is never used
+   --> src/app_discovery.rs:924:15
+    |
+924 | pub(crate) fn gnome_shell_integration_needed() -> bool {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_stdout` is never used
+    --> src/app_discovery.rs:2770:4
+     |
+2770 | fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
+     |    ^^^^^^^^^^^^^^
+
+warning: variant `LinuxBluetoothUnnumbered` is never constructed
+   --> src/hid.rs:482:5
+    |
+480 | enum HidWriteFraming {
+    |      --------------- variant in this enum
+481 |     ReportIdPrefixed(u8),
+482 |     LinuxBluetoothUnnumbered,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `HidWriteFraming` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `report_id` is never used
+   --> src/hid.rs:488:8
+    |
+486 | impl HidWriteFraming {
+    | -------------------- method in this implementation
+487 |     #[cfg(not(test))]
+488 |     fn report_id(self) -> Option<u8> {
+    |        ^^^^^^^^^
+
+warning: function `vial_reply_is_uncorrelated` is never used
+  --> src/hid_protocol.rs:70:15
+   |
+70 | pub(crate) fn vial_reply_is_uncorrelated(command: &[u8]) -> bool {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `RunInBackgroundLabel`, `RunInBackgroundTooltip`, `LaunchMinimizedLabel`, and `LaunchMinimizedTooltip` are never constructed
+   --> src/i18n.rs:329:5
+    |
+296 | pub enum Key {
+    |          --- variants in this enum
+...
+329 |     RunInBackgroundLabel,
+    |     ^^^^^^^^^^^^^^^^^^^^
+330 |     RunInBackgroundTooltip,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+...
+333 |     LaunchMinimizedLabel,
+    |     ^^^^^^^^^^^^^^^^^^^^
+334 |     LaunchMinimizedTooltip,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `Key` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `remember_foreground_app` is never used
+  --> src/smart_input.rs:57:15
+   |
+57 | pub(crate) fn remember_foreground_app(candidate: TextExpanderAppCandidate) {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `text_expander_enabled` is never used
+   --> src/smart_input.rs:115:4
+    |
+115 | fn text_expander_enabled() -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `text_expander_suppressed_for_context` is never used
+   --> src/smart_input.rs:123:4
+    |
+123 | fn text_expander_suppressed_for_context() -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `foreground_app_blacklisted` is never used
+   --> src/smart_input.rs:131:4
+    |
+131 | fn foreground_app_blacklisted(app_blacklist: &[String]) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `text_expander_runs_outside_entropy_process` is never used
+   --> src/smart_input.rs:162:8
+    |
+162 | pub fn text_expander_runs_outside_entropy_process() -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `start` is never used
+   --> src/smart_input.rs:324:8
+    |
+324 | pub fn start() {
+    |        ^^^^^
+
+warning: function `foreground_process_name_lower` is never used
+ --> src/smart_input_windows.rs:7:4
+  |
+7 | fn foreground_process_name_lower() -> Option<String> {
+  |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `foreground_is_current_process` is never used
+  --> src/smart_input_windows.rs:12:4
+   |
+12 | fn foreground_is_current_process() -> bool {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remember_current_foreground_app` is never used
+   --> src/smart_input_windows.rs:197:4
+    |
+197 | fn remember_current_foreground_app() {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `foreground_app_blacklisted` is never used
+   --> src/smart_input_windows.rs:204:15
+    |
+204 | pub(super) fn foreground_app_blacklisted(app_blacklist: &[String]) -> bool {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `start` is never used
+   --> src/smart_input_windows.rs:220:15
+    |
+220 | pub(super) fn start() {
+    |               ^^^^^
+
+warning: function `modifier_down` is never used
+   --> src/smart_input_windows.rs:231:4
+    |
+231 | fn modifier_down(vk: i32) -> bool {
+    |    ^^^^^^^^^^^^^
+
+warning: function `run_windows_keyboard_hook_loop` is never used
+   --> src/smart_input_windows.rs:236:11
+    |
+236 | unsafe fn run_windows_keyboard_hook_loop() {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `foreground_event_proc` is never used
+   --> src/smart_input_windows.rs:271:27
+    |
+271 | unsafe extern "system" fn foreground_event_proc(
+    |                           ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `keyboard_proc` is never used
+   --> src/smart_input_windows.rs:288:27
+    |
+288 | unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: usize, l_param: isize) -> isize {
+    |                           ^^^^^^^^^^^^^
+
+warning: function `text_expander_char_for_key` is never used
+   --> src/smart_input_windows.rs:329:11
+    |
+329 | unsafe fn text_expander_char_for_key(info: &KBDLLHOOKSTRUCT) -> Option<char> {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `foreground_keyboard_layout` is never used
+   --> src/smart_input_windows.rs:375:11
+    |
+375 | unsafe fn foreground_keyboard_layout() -> *mut core::ffi::c_void {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `set_keyboard_state_down` is never used
+   --> src/smart_input_windows.rs:388:4
+    |
+388 | fn set_keyboard_state_down(keyboard_state: &mut [u8; 256], vk: i32, down: bool) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `should_reset_text_expander_for_vk` is never used
+   --> src/smart_input_windows.rs:399:4
+    |
+399 | fn should_reset_text_expander_for_vk(vk: u32) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `schedule_text_expansion` is never used
+   --> src/smart_input_windows.rs:407:4
+    |
+407 | fn schedule_text_expansion(expansion: crate::text_expander::TextExpansionMatch) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `send_text_expansion` is never used
+   --> src/smart_input_windows.rs:415:11
+    |
+415 | unsafe fn send_text_expansion(expansion: &crate::text_expander::TextExpansionMatch) {
+    |           ^^^^^^^^^^^^^^^^^^^
+
+warning: function `should_use_clipboard_paste` is never used
+   --> src/smart_input_windows.rs:432:4
+    |
+432 | fn should_use_clipboard_paste(text: &str) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `WindowsTextUnit` is never used
+   --> src/smart_input_windows.rs:438:6
+    |
+438 | enum WindowsTextUnit {
+    |      ^^^^^^^^^^^^^^^
+
+warning: function `windows_text_units` is never used
+   --> src/smart_input_windows.rs:444:4
+    |
+444 | fn windows_text_units(text: &str) -> impl Iterator<Item = WindowsTextUnit> + '_ {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `windows_clipboard_text` is never used
+   --> src/smart_input_windows.rs:462:4
+    |
+462 | fn windows_clipboard_text(text: &str) -> String {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `paste_text_with_clipboard_restore` is never used
+   --> src/smart_input_windows.rs:474:11
+    |
+474 | unsafe fn paste_text_with_clipboard_restore(text: &str) -> bool {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_clipboard_text` is never used
+   --> src/smart_input_windows.rs:495:11
+    |
+495 | unsafe fn read_clipboard_text() -> Option<String> {
+    |           ^^^^^^^^^^^^^^^^^^^
+
+warning: function `set_clipboard_text` is never used
+   --> src/smart_input_windows.rs:520:11
+    |
+520 | unsafe fn set_clipboard_text(text: &str) -> bool {
+    |           ^^^^^^^^^^^^^^^^^^
+
+warning: function `send_ctrl_v` is never used
+   --> src/smart_input_windows.rs:557:11
+    |
+557 | unsafe fn send_ctrl_v() -> bool {
+    |           ^^^^^^^^^^^
+
+warning: function `send_unicode_text` is never used
+   --> src/smart_input_windows.rs:578:11
+    |
+578 | unsafe fn send_unicode_text(text: &str) {
+    |           ^^^^^^^^^^^^^^^^^
+
+warning: function `send_text_expansion_line_break` is never used
+   --> src/smart_input_windows.rs:605:11
+    |
+605 | unsafe fn send_text_expansion_line_break() {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `send_vk_tap` is never used
+   --> src/smart_input_windows.rs:631:11
+    |
+631 | unsafe fn send_vk_tap(vk: u16) {
+    |           ^^^^^^^^^^^
+
+warning: function `send_vk_keyup` is never used
+   --> src/smart_input_windows.rs:646:11
+    |
+646 | unsafe fn send_vk_keyup(vk: u16) {
+    |           ^^^^^^^^^^^^^
+
+warning: constant `WH_KEYBOARD_LL` is never used
+   --> src/smart_input_windows.rs:659:7
+    |
+659 | const WH_KEYBOARD_LL: i32 = 13;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `HC_ACTION` is never used
+   --> src/smart_input_windows.rs:661:7
+    |
+661 | const HC_ACTION: i32 = 0;
+    |       ^^^^^^^^^
+
+warning: constant `WM_KEYDOWN` is never used
+   --> src/smart_input_windows.rs:663:7
+    |
+663 | const WM_KEYDOWN: usize = 0x0100;
+    |       ^^^^^^^^^^
+
+warning: constant `WM_SYSKEYDOWN` is never used
+   --> src/smart_input_windows.rs:665:7
+    |
+665 | const WM_SYSKEYDOWN: usize = 0x0104;
+    |       ^^^^^^^^^^^^^
+
+warning: constant `VK_SHIFT` is never used
+   --> src/smart_input_windows.rs:667:7
+    |
+667 | const VK_SHIFT: i32 = 0x10;
+    |       ^^^^^^^^
+
+warning: constant `VK_CONTROL` is never used
+   --> src/smart_input_windows.rs:669:7
+    |
+669 | const VK_CONTROL: i32 = 0x11;
+    |       ^^^^^^^^^^
+
+warning: constant `VK_MENU` is never used
+   --> src/smart_input_windows.rs:671:7
+    |
+671 | const VK_MENU: i32 = 0x12;
+    |       ^^^^^^^
+
+warning: constant `VK_CAPITAL` is never used
+   --> src/smart_input_windows.rs:673:7
+    |
+673 | const VK_CAPITAL: i32 = 0x14;
+    |       ^^^^^^^^^^
+
+warning: constant `VK_BACK` is never used
+   --> src/smart_input_windows.rs:675:7
+    |
+675 | const VK_BACK: i32 = 0x08;
+    |       ^^^^^^^
+
+warning: constant `VK_TAB` is never used
+   --> src/smart_input_windows.rs:677:7
+    |
+677 | const VK_TAB: i32 = 0x09;
+    |       ^^^^^^
+
+warning: constant `VK_RETURN` is never used
+   --> src/smart_input_windows.rs:679:7
+    |
+679 | const VK_RETURN: i32 = 0x0D;
+    |       ^^^^^^^^^
+
+warning: constant `VK_ESCAPE` is never used
+   --> src/smart_input_windows.rs:681:7
+    |
+681 | const VK_ESCAPE: i32 = 0x1B;
+    |       ^^^^^^^^^
+
+warning: constant `VK_LEFT` is never used
+   --> src/smart_input_windows.rs:683:7
+    |
+683 | const VK_LEFT: i32 = 0x25;
+    |       ^^^^^^^
+
+warning: constant `VK_UP` is never used
+   --> src/smart_input_windows.rs:685:7
+    |
+685 | const VK_UP: i32 = 0x26;
+    |       ^^^^^
+
+warning: constant `VK_RIGHT` is never used
+   --> src/smart_input_windows.rs:687:7
+    |
+687 | const VK_RIGHT: i32 = 0x27;
+    |       ^^^^^^^^
+
+warning: constant `VK_DOWN` is never used
+   --> src/smart_input_windows.rs:689:7
+    |
+689 | const VK_DOWN: i32 = 0x28;
+    |       ^^^^^^^
+
+warning: constant `VK_LWIN` is never used
+   --> src/smart_input_windows.rs:691:7
+    |
+691 | const VK_LWIN: i32 = 0x5B;
+    |       ^^^^^^^
+
+warning: constant `VK_RWIN` is never used
+   --> src/smart_input_windows.rs:693:7
+    |
+693 | const VK_RWIN: i32 = 0x5C;
+    |       ^^^^^^^
+
+warning: constant `VK_V` is never used
+   --> src/smart_input_windows.rs:695:7
+    |
+695 | const VK_V: i32 = 0x56;
+    |       ^^^^
+
+warning: constant `LLKHF_INJECTED` is never used
+   --> src/smart_input_windows.rs:697:7
+    |
+697 | const LLKHF_INJECTED: u32 = 0x10;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `INPUT_KEYBOARD` is never used
+   --> src/smart_input_windows.rs:699:7
+    |
+699 | const INPUT_KEYBOARD: u32 = 1;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `KEYEVENTF_KEYUP` is never used
+   --> src/smart_input_windows.rs:701:7
+    |
+701 | const KEYEVENTF_KEYUP: u32 = 0x0002;
+    |       ^^^^^^^^^^^^^^^
+
+warning: constant `KEYEVENTF_UNICODE` is never used
+   --> src/smart_input_windows.rs:703:7
+    |
+703 | const KEYEVENTF_UNICODE: u32 = 0x0004;
+    |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `CF_UNICODETEXT` is never used
+   --> src/smart_input_windows.rs:705:7
+    |
+705 | const CF_UNICODETEXT: u32 = 13;
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `GMEM_MOVEABLE` is never used
+   --> src/smart_input_windows.rs:707:7
+    |
+707 | const GMEM_MOVEABLE: u32 = 0x0002;
+    |       ^^^^^^^^^^^^^
+
+warning: constant `EVENT_SYSTEM_FOREGROUND` is never used
+   --> src/smart_input_windows.rs:711:7
+    |
+711 | const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `WINEVENT_OUTOFCONTEXT` is never used
+   --> src/smart_input_windows.rs:713:7
+    |
+713 | const WINEVENT_OUTOFCONTEXT: u32 = 0x0000;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: static `CLIPBOARD_PASTE_LOCK` is never used
+   --> src/smart_input_windows.rs:726:8
+    |
+726 | static CLIPBOARD_PASTE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: type alias `HHOOK` is never used
+   --> src/smart_input_windows.rs:729:6
+    |
+729 | type HHOOK = *mut core::ffi::c_void;
+    |      ^^^^^
+
+warning: type alias `HWINEVENTHOOK` is never used
+   --> src/smart_input_windows.rs:731:6
+    |
+731 | type HWINEVENTHOOK = *mut core::ffi::c_void;
+    |      ^^^^^^^^^^^^^
+
+warning: type alias `HINSTANCE` is never used
+   --> src/smart_input_windows.rs:733:6
+    |
+733 | type HINSTANCE = *mut core::ffi::c_void;
+    |      ^^^^^^^^^
+
+warning: struct `KBDLLHOOKSTRUCT` is never constructed
+   --> src/smart_input_windows.rs:742:8
+    |
+742 | struct KBDLLHOOKSTRUCT {
+    |        ^^^^^^^^^^^^^^^
+
+warning: struct `MSG` is never constructed
+   --> src/smart_input_windows.rs:753:8
+    |
+753 | struct MSG {
+    |        ^^^
+
+warning: associated functions `keyboard_unicode` and `keyboard_vk` are never used
+   --> src/smart_input_windows.rs:773:8
+    |
+772 | impl INPUT {
+    | ---------- associated functions in this implementation
+773 |     fn keyboard_unicode(unit: u16, key_up: bool) -> Self {
+    |        ^^^^^^^^^^^^^^^^
+...
+789 |     fn keyboard_vk(vk: u16, key_up: bool) -> Self {
+    |        ^^^^^^^^^^^
+
+warning: function `SetWindowsHookExW` is never used
+   --> src/smart_input_windows.rs:845:8
+    |
+845 |     fn SetWindowsHookExW(
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `CallNextHookEx` is never used
+   --> src/smart_input_windows.rs:851:8
+    |
+851 |     fn CallNextHookEx(hhk: HHOOK, nCode: i32, wParam: usize, lParam: isize) -> isize;
+    |        ^^^^^^^^^^^^^^
+
+warning: function `UnhookWindowsHookEx` is never used
+   --> src/smart_input_windows.rs:852:8
+    |
+852 |     fn UnhookWindowsHookEx(hhk: HHOOK) -> i32;
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `SetWinEventHook` is never used
+   --> src/smart_input_windows.rs:853:8
+    |
+853 |     fn SetWinEventHook(
+    |        ^^^^^^^^^^^^^^^
+
+warning: function `UnhookWinEvent` is never used
+   --> src/smart_input_windows.rs:864:8
+    |
+864 |     fn UnhookWinEvent(hWinEventHook: HWINEVENTHOOK) -> i32;
+    |        ^^^^^^^^^^^^^^
+
+warning: function `GetMessageW` is never used
+   --> src/smart_input_windows.rs:865:8
+    |
+865 |     fn GetMessageW(lpMsg: *mut MSG, hWnd: HWND, wMsgFilterMin: u32, wMsgFilterMax: u32) -> i32;
+    |        ^^^^^^^^^^^
+
+warning: function `TranslateMessage` is never used
+   --> src/smart_input_windows.rs:866:8
+    |
+866 |     fn TranslateMessage(lpMsg: *const MSG) -> i32;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `DispatchMessageW` is never used
+   --> src/smart_input_windows.rs:867:8
+    |
+867 |     fn DispatchMessageW(lpMsg: *const MSG) -> isize;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `SendInput` is never used
+   --> src/smart_input_windows.rs:868:8
+    |
+868 |     fn SendInput(cInputs: u32, pInputs: *const INPUT, cbSize: i32) -> u32;
+    |        ^^^^^^^^^
+
+warning: function `GetAsyncKeyState` is never used
+   --> src/smart_input_windows.rs:869:8
+    |
+869 |     fn GetAsyncKeyState(vKey: i32) -> i16;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `GetKeyboardState` is never used
+   --> src/smart_input_windows.rs:870:8
+    |
+870 |     fn GetKeyboardState(lpKeyState: *mut u8) -> i32;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `GetKeyState` is never used
+   --> src/smart_input_windows.rs:871:8
+    |
+871 |     fn GetKeyState(nVirtKey: i32) -> i16;
+    |        ^^^^^^^^^^^
+
+warning: function `GetKeyboardLayout` is never used
+   --> src/smart_input_windows.rs:872:8
+    |
+872 |     fn GetKeyboardLayout(idThread: u32) -> *mut core::ffi::c_void;
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `ToUnicodeEx` is never used
+   --> src/smart_input_windows.rs:873:8
+    |
+873 |     fn ToUnicodeEx(
+    |        ^^^^^^^^^^^
+
+warning: function `OpenClipboard` is never used
+   --> src/smart_input_windows.rs:898:8
+    |
+898 |     fn OpenClipboard(hWndNewOwner: HWND) -> i32;
+    |        ^^^^^^^^^^^^^
+
+warning: function `CloseClipboard` is never used
+   --> src/smart_input_windows.rs:899:8
+    |
+899 |     fn CloseClipboard() -> i32;
+    |        ^^^^^^^^^^^^^^
+
+warning: function `EmptyClipboard` is never used
+   --> src/smart_input_windows.rs:900:8
+    |
+900 |     fn EmptyClipboard() -> i32;
+    |        ^^^^^^^^^^^^^^
+
+warning: function `GetClipboardData` is never used
+   --> src/smart_input_windows.rs:901:8
+    |
+901 |     fn GetClipboardData(uFormat: u32) -> HANDLE;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `SetClipboardData` is never used
+   --> src/smart_input_windows.rs:902:8
+    |
+902 |     fn SetClipboardData(uFormat: u32, hMem: HANDLE) -> HANDLE;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `GetModuleHandleW` is never used
+   --> src/smart_input_windows.rs:919:8
+    |
+919 |     fn GetModuleHandleW(lpModuleName: *const u16) -> HINSTANCE;
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `GlobalAlloc` is never used
+   --> src/smart_input_windows.rs:928:8
+    |
+928 |     fn GlobalAlloc(uFlags: u32, dwBytes: usize) -> HANDLE;
+    |        ^^^^^^^^^^^
+
+warning: function `GlobalLock` is never used
+   --> src/smart_input_windows.rs:929:8
+    |
+929 |     fn GlobalLock(hMem: HANDLE) -> *mut core::ffi::c_void;
+    |        ^^^^^^^^^^
+
+warning: function `GlobalUnlock` is never used
+   --> src/smart_input_windows.rs:930:8
+    |
+930 |     fn GlobalUnlock(hMem: HANDLE) -> i32;
+    |        ^^^^^^^^^^^^
+
+warning: function `GlobalFree` is never used
+   --> src/smart_input_windows.rs:931:8
+    |
+931 |     fn GlobalFree(hMem: HANDLE) -> HANDLE;
+    |        ^^^^^^^^^^
+
+warning: struct `TextExpansionMatch` is never constructed
+  --> src/text_expander.rs:34:12
+   |
+34 | pub struct TextExpansionMatch {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: fields `rules`, `buffer`, and `max_buffer_chars` are never read
+  --> src/text_expander.rs:43:5
+   |
+42 | pub struct TextExpansionEngine {
+   |            ------------------- fields in this struct
+43 |     rules: Vec<TextExpansionRule>,
+   |     ^^^^^
+44 |     buffer: String,
+   |     ^^^^^^
+45 |     max_buffer_chars: usize,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `TextExpansionEngine` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: multiple methods are never used
+   --> src/text_expander.rs:75:12
+    |
+ 56 | impl TextExpansionEngine {
+    | ------------------------ methods in this implementation
+...
+ 75 |     pub fn reset(&mut self) {
+    |            ^^^^^
+...
+ 79 |     pub fn backspace(&mut self) {
+    |            ^^^^^^^^^
+...
+ 83 |     pub fn push_char(&mut self, ch: char) -> Option<TextExpansionMatch> {
+    |            ^^^^^^^^^
+...
+ 93 |     fn trim_buffer(&mut self) {
+    |        ^^^^^^^^^^^
+...
+108 |     fn find_match(&self) -> Option<TextExpansionMatch> {
+    |        ^^^^^^^^^^
+...
+131 |     fn has_longer_pending_trigger(&self, trigger: &ActivationTrigger) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+144 |     fn boundary_ok(&self, trigger: &str) -> bool {
+    |        ^^^^^^^^^^^
+
+warning: function `rule_usable` is never used
+   --> src/text_expander.rs:161:8
+    |
+161 | pub fn rule_usable(rule: &TextExpansionRule) -> bool {
+    |        ^^^^^^^^^^^
+
+warning: function `runtime_trigger_usable` is never used
+   --> src/text_expander.rs:168:4
+    |
+168 | fn runtime_trigger_usable(trigger: &str) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `valid_legacy_trigger_stem` is never used
+   --> src/text_expander.rs:173:4
+    |
+173 | fn valid_legacy_trigger_stem(trigger: &str) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ActivationTrigger` is never constructed
+   --> src/text_expander.rs:184:8
+    |
+184 | struct ActivationTrigger {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: enum `TriggerMatchPriority` is never used
+   --> src/text_expander.rs:191:6
+    |
+191 | enum TriggerMatchPriority {
+    |      ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `activation_triggers` is never used
+   --> src/text_expander.rs:197:4
+    |
+197 | fn activation_triggers(trigger: &str) -> Vec<ActivationTrigger> {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_unique_activation_trigger` is never used
+   --> src/text_expander.rs:221:4
+    |
+221 | fn push_unique_activation_trigger(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_unique_trigger` is never used
+   --> src/text_expander.rs:234:4
+    |
+234 | fn push_unique_trigger(triggers: &mut Vec<String>, trigger: String) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `qwerty_jcuken_aliases` is never used
+   --> src/text_expander.rs:241:4
+    |
+241 | fn qwerty_jcuken_aliases(trigger: &str) -> Vec<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `qwerty_jcuken_physical_prefix_aliases` is never used
+   --> src/text_expander.rs:261:4
+    |
+261 | fn qwerty_jcuken_physical_prefix_aliases(trigger: &str) -> Vec<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `qwerty_jcuken_alias` is never used
+   --> src/text_expander.rs:284:4
+    |
+284 | fn qwerty_jcuken_alias(trigger: &str, map_prefix: bool) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `qwerty_jcuken_prefix_alias` is never used
+   --> src/text_expander.rs:301:4
+    |
+301 | fn qwerty_jcuken_prefix_alias(trigger: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `qwerty_jcuken_char_alias` is never used
+   --> src/text_expander.rs:310:4
+    |
+310 | fn qwerty_jcuken_char_alias(ch: char) -> Option<char> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `is_word_char` is never used
+   --> src/text_expander.rs:501:4
+    |
+501 | fn is_word_char(ch: char) -> bool {
+    |    ^^^^^^^^^^^^
+
+warning: `CreateMutexW` redeclared with a different signature
+   --> src/main.rs:341:5
+    |
+341 | /     fn CreateMutexW(
+342 | |         lpMutexAttributes: *mut core::ffi::c_void,
+343 | |         bInitialOwner: i32,
+344 | |         lpName: *const u16,
+345 | |     ) -> *mut core::ffi::c_void;
+    | |________________________________^ this signature doesn't match the previous declaration
+    |
+   ::: src/hid_ownership.rs:92:5
+    |
+ 92 | /     fn CreateMutexW(
+ 93 | |         attributes: *const core::ffi::c_void,
+ 94 | |         initial_owner: i32,
+ 95 | |         name: *const u16,
+ 96 | |     ) -> *mut core::ffi::c_void;
+    | |________________________________- `CreateMutexW` previously declared here
+    |
+    = note: expected `unsafe extern "system" fn(*const c_void, i32, *const u16) -> *mut c_void`
+               found `unsafe extern "system" fn(*mut c_void, i32, *const u16) -> *mut c_void`
+    = note: `#[warn(clashing_extern_declarations)]` on by default
+
+warning: `ak-configurator` (bin "ak-configurator") generated 121 warnings (run `cargo fix --bin "ak-configurator" -p ak-configurator` to apply 4 suggestions)
+warning: function `read_validated_archive` is never used
+   --> src/ak820_backup_files.rs:504:8
+    |
+504 | pub fn read_validated_archive(path: &Path, profile: ProfileId) -> BackupResult<ValidatedArchive> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `rom_sha256` is never read
+   --> src/ak820_backup_files.rs:706:16
+    |
+702 | pub(crate) struct InstallSnapshotReceipt {
+    |                   ---------------------- field in this struct
+...
+706 |     pub(crate) rom_sha256: String,
+    |                ^^^^^^^^^^
+    |
+    = note: `InstallSnapshotReceipt` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: variant `TextExpanderSetup` is never constructed
+    --> src/app_state.rs:3579:5
+     |
+3572 | pub(crate) enum SettingsTab {
+     |                 ----------- variant in this enum
+...
+3579 |     TextExpanderSetup,
+     |     ^^^^^^^^^^^^^^^^^
+     |
+     = note: `SettingsTab` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `open_text_expander_setup_page` is never used
+   --> src/ui/settings_shell.rs:233:19
+    |
+  3 | impl EntropyApp {
+    | --------------- method in this implementation
+...
+233 |     pub(super) fn open_text_expander_setup_page(&mut self) {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `suppress_tooltips` is never read
+  --> src/ui/universal_symbols_setup.rs:52:5
+   |
+46 | struct UniversalSymbolsRowContext {
+   |        -------------------------- field in this struct
+...
+52 |     suppress_tooltips: bool,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `UniversalSymbolsRowContext` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `context` and `windows_hwnd` are never read
+  --> src/ui/window_lifecycle.rs:9:5
+   |
+ 8 | struct TrayGui {
+   |        ------- fields in this struct
+ 9 |     context: egui::Context,
+   |     ^^^^^^^
+10 |     #[cfg(target_os = "windows")]
+11 |     windows_hwnd: Option<isize>,
+   |     ^^^^^^^^^^^^
+
+warning: static `TRAY_HANDLERS` is never used
+  --> src/ui/window_lifecycle.rs:16:8
+   |
+16 | static TRAY_HANDLERS: std::sync::Once = std::sync::Once::new();
+   |        ^^^^^^^^^^^^^
+
+warning: function `status_from_application` is never used
+   --> src/app_discovery.rs:503:4
+    |
+503 | fn status_from_application(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `tray_icon` is never used
+  --> src/app_icon.rs:22:15
+   |
+22 | pub(crate) fn tray_icon(size: u32) -> Option<tray_icon::Icon> {
+   |               ^^^^^^^^^
+
+warning: function `scan` is never used
+  --> src/usb_discovery.rs:71:15
+   |
+71 | pub(super) fn scan() -> Result<Vec<Device>, String> {
+   |               ^^^^
+
+warning: function `text` is never used
+  --> src/usb_discovery.rs:97:8
+   |
+97 |     fn text(w: &[u16]) -> String {
+   |        ^^^^
+
+warning: function `is_usb` is never used
+   --> src/usb_discovery.rs:102:15
+    |
+102 |     unsafe fn is_usb(interface: *const u16) -> Result<bool, String> {
+    |               ^^^^^^
+
+warning: struct `Handle` is never constructed
+   --> src/usb_discovery.rs:154:12
+    |
+154 |     struct Handle(HANDLE);
+    |            ^^^^^^
+
+warning: struct `Preparsed` is never constructed
+   --> src/usb_discovery.rs:162:12
+    |
+162 |     struct Preparsed(PHIDP_PREPARSED_DATA);
+    |            ^^^^^^^^^
+
+warning: function `string` is never used
+   --> src/usb_discovery.rs:170:15
+    |
+170 |     unsafe fn string(
+    |               ^^^^^^
+
+warning: function `usb_info` is never used
+   --> src/usb_discovery.rs:188:15
+    |
+188 |     unsafe fn usb_info(path: &[u16]) -> Result<Option<Device>, String> {
+    |               ^^^^^^^^
+
+warning: function `scan` is never used
+   --> src/usb_discovery.rs:243:19
+    |
+243 |     pub(super) fn scan() -> Result<Vec<Device>, String> {
+    |                   ^^^^
+
+warning: constant `WINDOWS_BLE_SETTLE_DELAY` is never used
+   --> src/hid.rs:109:7
+    |
+109 | const WINDOWS_BLE_SETTLE_DELAY: Duration = Duration::from_millis(12);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `usb_port` is never used
+   --> src/hid_ak820_install.rs:621:15
+    |
+621 | pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
+    |               ^^^^^^^^
+
+warning: function `key` is never used
+ --> src/hid_ownership.rs:8:4
+  |
+8 | fn key(device: &crate::device::Device) -> Result<String> {
+  |    ^^^
+
+warning: associated function `acquire` is never used
+   --> src/hid_ownership.rs:103:19
+    |
+102 | impl DeviceLease {
+    | ---------------- associated function in this implementation
+103 |     pub(crate) fn acquire(device: &crate::device::Device) -> Result<Self> {
+    |                   ^^^^^^^
+
+warning: `ak-configurator` (bin "ak-configurator" test) generated 118 warnings (96 duplicates) (run `cargo fix --bin "ak-configurator" -p ak-configurator --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 19.90s

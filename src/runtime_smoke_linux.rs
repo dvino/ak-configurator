@@ -146,7 +146,7 @@ impl TrayFixture {
                     .checked_mul(*h as usize)
                     .and_then(|n| n.checked_mul(4))
                     == Some(bytes.len())
-                && bytes.chunks_exact(4).any(|pixel| pixel[0] != 0)),
+                && bytes.as_chunks::<4>().0.iter().any(|pixel| pixel[0] != 0)),
             "tray icon has no valid visible ARGB pixmap"
         );
         let menu_path: zbus::zvariant::OwnedObjectPath = item.get_property("Menu")?;

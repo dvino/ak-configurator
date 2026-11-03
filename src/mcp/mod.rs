@@ -1,4 +1,5 @@
 //! Optional, local stdio diagnostic entry point. No GUI or USB startup work.
+mod artifacts;
 mod backend;
 mod dto;
 mod mock;
@@ -64,12 +65,48 @@ pub fn run(raw_args: &[std::ffi::OsString]) -> anyhow::Result<()> {
 struct Adapter {
     backend: backend::Backend,
 }
+// MCP tool schemas require an object root. Some clients also reject the
+// equivalent boolean `true` shorthand in nested property schemas.
+fn portable_schema(value: &mut Value) {
+    if let Some(object) = value.as_object_mut() {
+        for key in ["properties", "$defs", "patternProperties"] {
+            if let Some(fields) = object.get_mut(key).and_then(Value::as_object_mut) {
+                for schema in fields.values_mut() {
+                    if *schema == Value::Bool(true) {
+                        *schema = serde_json::json!({});
+                    } else {
+                        portable_schema(schema);
+                    }
+                }
+            }
+        }
+        if let Some(items) = object.get_mut("items") {
+            if *items == Value::Bool(true) {
+                *items = serde_json::json!({});
+            } else {
+                portable_schema(items);
+            }
+        }
+        for key in ["oneOf", "anyOf", "allOf"] {
+            if let Some(branches) = object.get_mut(key).and_then(Value::as_array_mut) {
+                for branch in branches {
+                    portable_schema(branch);
+                }
+            }
+        }
+    }
+}
 fn definition<T: schemars::JsonSchema>(
     name: &'static str,
     description: &'static str,
     read_only: bool,
 ) -> Tool {
-    let schema = serde_json::to_value(schemars::schema_for!(T)).expect("static schema");
+    let mut schema = serde_json::to_value(schemars::schema_for!(T)).expect("static schema");
+    portable_schema(&mut schema);
+    schema
+        .as_object_mut()
+        .expect("schema object")
+        .insert("type".into(), Value::String("object".into()));
     let mut tool = Tool::new(
         name,
         description,
@@ -80,8 +117,9 @@ fn definition<T: schemars::JsonSchema>(
             .read_only(read_only)
             .destructive(false),
     );
-    let output = serde_json::to_value(schemars::schema_for!(dto::ResultEnvelope))
+    let mut output = serde_json::to_value(schemars::schema_for!(dto::ResultEnvelope))
         .expect("static output schema");
+    portable_schema(&mut output);
     tool.output_schema = Some(std::sync::Arc::new(
         output.as_object().expect("schema object").clone(),
     ));
@@ -186,5 +224,40 @@ impl ServerHandler for Adapter {
             request.uri,
         )])
         .into())
+    }
+}
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+
+    #[test]
+    fn mcp_tool_schemas_have_object_roots_and_portable_any_values() {
+        for tool in tools() {
+            assert_eq!(
+                tool.input_schema.get("type"),
+                Some(&serde_json::json!("object"))
+            );
+            let output = tool.output_schema.expect("output schema");
+            assert_eq!(output["properties"]["data"], serde_json::json!({}));
+            assert_eq!(output["properties"]["image"], serde_json::json!({}));
+            assert_eq!(output["properties"]["verification"], serde_json::json!({}));
+        }
+    }
+
+    #[test]
+    fn mcp_portable_schema_keeps_boolean_constraints() {
+        let mut schema = serde_json::json!({
+            "properties": {"any": true, "nested": {"items": true}},
+            "additionalProperties": false,
+            "required": ["any"]
+        });
+        portable_schema(&mut schema);
+        assert_eq!(schema["properties"]["any"], serde_json::json!({}));
+        assert_eq!(
+            schema["properties"]["nested"]["items"],
+            serde_json::json!({})
+        );
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["required"], serde_json::json!(["any"]));
     }
 }

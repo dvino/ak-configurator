@@ -57,7 +57,10 @@ impl Bridge {
         // Unit tests deliberately bind ephemeral loopback fixtures. Offline GUI
         // modes must not start integrations merely by traversing their panels.
         if !cfg!(test) && crate::isolated_runtime() {
-            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "OpenRGB integration is disabled in isolated mode"));
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "OpenRGB integration is disabled in isolated mode",
+            ));
         }
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))?;
         listener.set_nonblocking(true)?;

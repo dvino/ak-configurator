@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Pinned public release inputs and admission. No device authorization is
 //! implied: fresh per-operation confirmation belongs to the installer.
-use crate::ak820_image_pack::{
-    EntryMode, default_nvm, read_symbols,
-};
-use crate::ak820_settings_backup::{BackupResult, sha256};
+use crate::ak820_image_pack::{default_nvm, read_symbols, EntryMode};
+use crate::ak820_settings_backup::{sha256, BackupResult};
 use crate::app::ak820_beta1_profiles::{self as beta, ProfileId};
 use serde::{Deserialize, Serialize};
 
@@ -129,7 +127,9 @@ pub(crate) fn authorize_beta4_1_image(
         || selected[0]["ihx_sha256"].as_str() != Some(expected_ihx_sha256)
         || selected[0]["code_sha256"].as_str() != Some(expected_code_sha256)
     {
-        return Err("Beta.4.1 flashing authorization does not match the exact profile image".into());
+        return Err(
+            "Beta.4.1 flashing authorization does not match the exact profile image".into(),
+        );
     }
     Ok(Beta4InstallAuthorization {
         profile,
@@ -172,12 +172,20 @@ impl ReleaseAdmission {
             .settings_identity
             .as_ref()
             .ok_or("Missing packed image policy")?;
-        let bindings = catalog["flashing_authorized_images"].as_array()
+        let bindings = catalog["flashing_authorized_images"]
+            .as_array()
             .ok_or("Beta.3 release catalog has no exact flashing image bindings")?;
-        let selected: Vec<_> = bindings.iter().filter(|entry| entry["profile"].as_str() == Some(profile.as_str())).collect();
-        if selected.len() != 1 || selected[0]["ihx_sha256"].as_str() != Some(exact.ihx_sha256.as_str())
-            || selected[0]["code_sha256"].as_str() != Some(exact.code_sha256.as_str()) {
-            return Err("Beta.3 flashing authorization does not match the exact profile image".into());
+        let selected: Vec<_> = bindings
+            .iter()
+            .filter(|entry| entry["profile"].as_str() == Some(profile.as_str()))
+            .collect();
+        if selected.len() != 1
+            || selected[0]["ihx_sha256"].as_str() != Some(exact.ihx_sha256.as_str())
+            || selected[0]["code_sha256"].as_str() != Some(exact.code_sha256.as_str())
+        {
+            return Err(
+                "Beta.3 flashing authorization does not match the exact profile image".into(),
+            );
         }
         Ok(Self {
             profile,
@@ -190,7 +198,10 @@ impl ReleaseAdmission {
     }
     pub(crate) fn beta4_1(profile: ProfileId, prerelease_opt_in: bool) -> BackupResult<Self> {
         if !prerelease_opt_in {
-            return Err("The bundled firmware is a prerelease; enable prerelease installation explicitly".into());
+            return Err(
+                "The bundled firmware is a prerelease; enable prerelease installation explicitly"
+                    .into(),
+            );
         }
         if sha256(BETA4_1_CATALOG.as_bytes()) != BETA4_1_CATALOG_SHA256 {
             return Err("Bundled beta.4.1 release catalog differs from its reviewed digest".into());
@@ -202,10 +213,15 @@ impl ReleaseAdmission {
             || catalog["assets"]["capability-catalog.json"]["sha256"].as_str()
                 != Some(beta::BETA4_1_CAPABILITY_SHA256)
         {
-            return Err("Beta.4.1 release catalog does not bind the pinned matrix and capability catalog".into());
+            return Err(
+                "Beta.4.1 release catalog does not bind the pinned matrix and capability catalog"
+                    .into(),
+            );
         }
         let exact = beta::beta4_1_matrix_profile(profile)
-            .settings_identity.as_ref().ok_or("Missing beta.4.1 packed image policy")?;
+            .settings_identity
+            .as_ref()
+            .ok_or("Missing beta.4.1 packed image policy")?;
         authorize_beta4_1_image(
             BETA4_1_CATALOG.as_bytes(),
             BETA4_1_CATALOG_SHA256,
@@ -222,7 +238,9 @@ impl ReleaseAdmission {
             packed_code_sha256: exact.code_sha256.clone(),
         })
     }
-    pub(crate) fn image(&self) -> crate::ak820::ImageContract { self.image }
+    pub(crate) fn image(&self) -> crate::ak820::ImageContract {
+        self.image
+    }
     pub(crate) fn with_observation(self, observation: &ReleaseObservation) -> BackupResult<Self> {
         if observation.blocks_current_release() {
             return Err(
@@ -233,7 +251,10 @@ impl ReleaseAdmission {
         Ok(self)
     }
     pub(crate) fn validate_payload(&self, profile: ProfileId, payload: &[u8]) -> BackupResult<()> {
-        let exact = self.image.matrix_profile().ok_or("Missing exact image matrix")?
+        let exact = self
+            .image
+            .matrix_profile()
+            .ok_or("Missing exact image matrix")?
             .settings_identity
             .as_ref()
             .ok_or("Missing packed image policy")?;
@@ -252,6 +273,7 @@ impl ReleaseAdmission {
     pub(crate) fn version(&self) -> &'static str {
         self.version
     }
+    #[cfg(test)]
     pub(crate) fn offline_notice(&self) -> &'static str {
         if self.version == BETA4_1_RELEASE {
             "Pinned published beta.4.1 catalog; a later withdrawal may be unknown offline."
@@ -345,15 +367,18 @@ pub(crate) fn sources_for_image(
 pub(crate) fn bundled_defaults(profile: ProfileId) -> BackupResult<Vec<u8>> {
     defaults_for_image(crate::ak820::ImageContract::Beta3(profile))
 }
-pub(crate) fn bundled_defaults_for_image(image: crate::ak820::ImageContract) -> BackupResult<Vec<u8>> {
+pub(crate) fn bundled_defaults_for_image(
+    image: crate::ak820::ImageContract,
+) -> BackupResult<Vec<u8>> {
     defaults_for_image(image)
 }
 pub(crate) fn defaults_for_image(image: crate::ak820::ImageContract) -> BackupResult<Vec<u8>> {
     let (ihx, map) = sources_for_image(image)?;
     default_nvm(ihx, &read_symbols(map)?)
 }
-/// Prepare a firmware payload offline, with either explicit settings or factory
-/// defaults. The real installer subsequently binds it to a fresh device read.
+/// Test-reference profile-only specialization of offline firmware preparation.
+/// Settings/defaults and image packing use the shared image-specific function.
+#[cfg(test)]
 pub(crate) fn bundled_payload(
     profile: ProfileId,
     recovery: &[u8],
@@ -377,13 +402,16 @@ pub(crate) fn bundled_payload_for_image(
             &defaults
         }
     };
-    Ok(
-        crate::ak820_image_pack::pack_candidate_for_image(
-            ihx, &symbols, recovery, nvm, EntryMode::Permanent, image,
-        )?
-            .bytes()
-            .to_vec(),
-    )
+    Ok(crate::ak820_image_pack::pack_candidate_for_image(
+        ihx,
+        &symbols,
+        recovery,
+        nvm,
+        EntryMode::Permanent,
+        image,
+    )?
+    .bytes()
+    .to_vec())
 }
 
 /// Prepare from an exact project capture; this neither creates an OEM backup
@@ -405,7 +433,12 @@ pub(crate) fn bundled_payload_from_project(
         }
     };
     let candidate = crate::ak820_image_pack::pack_candidate_from_project_for_image(
-        ihx, &symbols, source, nvm, EntryMode::Permanent, image,
+        ihx,
+        &symbols,
+        source,
+        nvm,
+        EntryMode::Permanent,
+        image,
     )?;
     admission.validate_payload(admission.profile, candidate.bytes())?;
     Ok(candidate.bytes().to_vec())
@@ -524,6 +557,17 @@ pub(crate) fn check_bundled_release() -> BackupResult<ReleaseObservation> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn reference_offline_notice_does_not_claim_current_withdrawal_knowledge() {
+        for profile in beta::profiles() {
+            let admission = ReleaseAdmission::beta4_1(profile.profile, true).unwrap();
+            assert_eq!(
+                admission.offline_notice(),
+                "Pinned published beta.4.1 catalog; a later withdrawal may be unknown offline."
+            );
+        }
+    }
+
     fn beta4_1_test_catalog() -> serde_json::Value {
         serde_json::json!({
             "format": "ak820-beta-release-catalog-1",
@@ -564,7 +608,10 @@ mod tests {
         assert_eq!(admission.profile, ProfileId::Main);
         assert_eq!(admission.ihx_sha256, "a".repeat(64));
         assert_eq!(admission.code_sha256, "b".repeat(64));
-        assert_eq!(admission.catalog_sha256, sha256(&serde_json::to_vec(&catalog).unwrap()));
+        assert_eq!(
+            admission.catalog_sha256,
+            sha256(&serde_json::to_vec(&catalog).unwrap())
+        );
     }
 
     #[test]
@@ -584,7 +631,10 @@ mod tests {
         }
 
         let mut missing_images = beta4_1_test_catalog();
-        missing_images.as_object_mut().unwrap().remove("flashing_authorized_images");
+        missing_images
+            .as_object_mut()
+            .unwrap()
+            .remove("flashing_authorized_images");
         assert!(authorize_synthetic(&missing_images).is_err());
 
         let mut wrong_profile = beta4_1_test_catalog();
@@ -622,7 +672,10 @@ mod tests {
         assert_eq!(matrix.profiles.len(), 10);
         for row in &matrix.profiles {
             let admission = ReleaseAdmission::beta4_1(row.profile, true).unwrap();
-            assert_eq!(admission.image(), crate::ak820::ImageContract::Beta4(row.profile));
+            assert_eq!(
+                admission.image(),
+                crate::ak820::ImageContract::Beta4(row.profile)
+            );
             let (ihx, map) = sources_for_image(admission.image()).unwrap();
             assert_eq!(sha256(ihx.as_bytes()), admission.ihx_sha256);
             assert_eq!(sha256(map.as_bytes()), row.identity.map_sha256);
@@ -632,10 +685,9 @@ mod tests {
 
     #[test]
     fn published_beta4_catalog_remains_read_only_until_beta4_1() {
-        let catalog: serde_json::Value = serde_json::from_str(include_str!(
-            "../assets/ak820/beta4-release-catalog.json"
-        ))
-        .unwrap();
+        let catalog: serde_json::Value =
+            serde_json::from_str(include_str!("../assets/ak820/beta4-release-catalog.json"))
+                .unwrap();
         assert_eq!(catalog["flashing_authorized"], false);
         assert_eq!(catalog["settings_writes_authorized"], false);
         assert!(!beta::beta4_settings_writes_authorized(ProfileId::Main));
@@ -699,11 +751,15 @@ mod tests {
         for image in beta::profiles() {
             let profile = image.profile;
             assert!(ReleaseAdmission::bundled(profile, false).is_err());
-            assert!(ReleaseAdmission::bundled(profile, true).unwrap_err().contains("does not authorize flashing"));
+            assert!(ReleaseAdmission::bundled(profile, true)
+                .unwrap_err()
+                .contains("does not authorize flashing"));
             let nvm = bundled_defaults(profile).unwrap();
             assert_eq!(sha256(&nvm), expected[profile.as_str()].as_str().unwrap());
-            assert!(ReleaseAdmission::beta4_1(profile, true).unwrap()
-                .validate_payload(profile, &vec![0; 51136]).is_err());
+            assert!(ReleaseAdmission::beta4_1(profile, true)
+                .unwrap()
+                .validate_payload(profile, &vec![0; 51136])
+                .is_err());
             // Public linked files do not substitute for a private OEM source.
             assert!(bundled_payload(profile, &[0; 65536], None).is_err());
         }
@@ -735,12 +791,10 @@ mod tests {
         assert!(remembered.blocked);
         remembered.apply(observe(&api()).unwrap());
         assert!(remembered.blocked);
-        assert!(
-            ReleaseAdmission::beta4_1(ProfileId::Main, true)
-                .unwrap()
-                .with_observation(&remembered)
-                .is_err()
-        );
+        assert!(ReleaseAdmission::beta4_1(ProfileId::Main, true)
+            .unwrap()
+            .with_observation(&remembered)
+            .is_err());
         let mut unknown = api();
         unknown["assets"][0]["digest"] = serde_json::Value::Null;
         assert!(observe(&unknown).is_err());

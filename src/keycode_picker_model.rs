@@ -262,7 +262,8 @@ impl KeycodeTab {
                 matches!(kc.category, KeycodeCategory::Basic) && is_symbol(kc.value)
             }
             KeycodeTab::Modifiers => matches!(kc.category, KeycodeCategory::Modifier),
-            KeycodeTab::Layers => matches!(kc.category, KeycodeCategory::Layer),
+            // Layer actions are encoded dynamically, not static catalog rows.
+            KeycodeTab::Layers => false,
             KeycodeTab::Media => {
                 matches!(kc.category, KeycodeCategory::Media | KeycodeCategory::Mouse)
             }
@@ -294,7 +295,7 @@ impl KeycodeTab {
                 KeycodeCategory::Basic
                 | KeycodeCategory::Function
                 | KeycodeCategory::Navigation => KeycodeTab::Basic,
-                KeycodeCategory::Modifier | KeycodeCategory::Layer => KeycodeTab::Modifiers,
+                KeycodeCategory::Modifier => KeycodeTab::Modifiers,
                 KeycodeCategory::Media | KeycodeCategory::Mouse | KeycodeCategory::Numpad => {
                     KeycodeTab::Special
                 }
@@ -319,10 +320,7 @@ fn is_symbol(value: u16) -> bool {
 }
 
 fn is_modifier_or_layer_action(value: u16) -> bool {
-    matches!(
-        value,
-        0x0100..=0x3FFF | 0x4000..=0x4FFF | 0x5000..=0x52FF
-    )
+    matches!(value, 0x0100..=0x52FF)
 }
 
 #[cfg(test)]

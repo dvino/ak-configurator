@@ -56,7 +56,9 @@ const IBUS_COMPONENT_NAME: &str = "org.freedesktop.IBus.Entropy";
 /// Scans the component directories. Hits the filesystem, so callers cache the
 /// result rather than asking once per frame.
 pub(crate) fn ibus_registration() -> IbusRegistration {
-    if crate::isolated_runtime() { return IbusRegistration::default(); }
+    if crate::isolated_runtime() {
+        return IbusRegistration::default();
+    }
     let user_dir = user_ibus_component_dir();
     ibus_registration_in(
         user_dir.as_deref(),
@@ -175,32 +177,23 @@ fn xdg_data_home() -> Option<PathBuf> {
 }
 
 pub(crate) fn setup_script_path(script: &str) -> Option<PathBuf> {
-    if crate::isolated_runtime() { return None; }
+    if crate::isolated_runtime() {
+        return None;
+    }
     find_existing_resource(script).or_else(|| materialize_bundled_resource_group(script).ok())
 }
 
 pub(crate) fn bundled_ibus_engine_path() -> Option<PathBuf> {
-    if crate::isolated_runtime() { return None; }
+    if crate::isolated_runtime() {
+        return None;
+    }
     const ENGINE: &str = "linux/ibus/entropy-ibus-engine";
     find_existing_resource(ENGINE).or_else(|| materialize_bundled_resource_group(ENGINE).ok())
 }
 
-pub(crate) fn ibus_user_installation_is_current() -> bool {
-    if crate::isolated_runtime() { return false; }
-    let Some(data_home) = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".local/share"))
-        })
-    else {
-        return false;
-    };
-
-    ibus_user_installation_is_current_at(&data_home)
-}
-
+// Fixture-only comparison. Production installation uses its backend-specific
+// checks rather than assuming these bundled bytes describe the active engine.
+#[cfg(test)]
 fn ibus_user_installation_is_current_at(data_home: &Path) -> bool {
     let engine_path = data_home.join("entropy/ibus/entropy-ibus-engine");
     let component_path = data_home.join("ibus/component/entropy-universal-symbols.xml");
@@ -266,7 +259,8 @@ fn materialize_bundled_resource_group(resource: &str) -> std::io::Result<PathBuf
 }
 
 fn bundled_resource_root() -> PathBuf {
-    crate::cache_dir().unwrap_or_else(std::env::temp_dir)
+    crate::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
         .join("bundled")
         .join(env!("CARGO_PKG_VERSION"))
 }

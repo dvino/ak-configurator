@@ -241,7 +241,7 @@ pub(super) fn responsive_picker_element_scale(ctx: &egui::Context) -> f32 {
 }
 
 pub(super) fn responsive_picker_key_size(ctx: &egui::Context) -> Vec2 {
-    Vec2::splat(54.0 * responsive_picker_element_scale(ctx))
+    picker_scaled_size(ctx, 54.0, 54.0)
 }
 
 pub(super) fn picker_scaled_size(ctx: &egui::Context, width: f32, height: f32) -> Vec2 {
@@ -550,8 +550,30 @@ mod tests {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
             ..Default::default()
         };
-        let _ = ctx.run(input, |_| {});
+        let _ = ctx.run_ui(input, |_| {});
         ctx
+    }
+
+    #[test]
+    fn picker_scaled_dimensions_and_key_size_follow_literal_viewport_vectors() {
+        for (viewport, expected, key_side) in [
+            (Vec2::new(1200.0, 700.0), Vec2::new(100.0, 200.0), 54.0_f32),
+            (Vec2::splat(1830.0), Vec2::new(106.0, 212.0), 57.24_f32),
+            (Vec2::splat(2160.0), Vec2::new(112.0, 224.0), 60.48_f32),
+            (Vec2::splat(4320.0), Vec2::new(112.0, 224.0), 60.48_f32),
+        ] {
+            let ctx = context_for(viewport);
+            let actual = picker_scaled_size(&ctx, 100.0, 200.0);
+            assert!((actual.x - expected.x).abs() < 0.0001_f32);
+            assert!((actual.y - expected.y).abs() < 0.0001_f32);
+            assert_eq!(picker_scaled_size(&ctx, 0.0, 0.0), Vec2::ZERO);
+            let negative = picker_scaled_size(&ctx, -100.0, 0.0);
+            assert!((negative.x + expected.x).abs() < 0.0001_f32);
+            assert_eq!(negative.y, 0.0);
+            let key = responsive_picker_key_size(&ctx);
+            assert!((key.x - key_side).abs() < 0.0001_f32);
+            assert_eq!(key.x, key.y);
+        }
     }
 
     #[test]

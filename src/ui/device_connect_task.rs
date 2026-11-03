@@ -552,7 +552,9 @@ fn supports_vial_macro_ext_keycodes(
 
 impl EntropyApp {
     pub(super) fn start_connect(&mut self, device_idx: usize) {
-        if self.ak820_demo { return; }
+        if self.ak820_demo {
+            return;
+        }
         self.start_connect_with_reconnect(device_idx, None);
     }
 
@@ -750,7 +752,7 @@ impl EntropyApp {
         let now = std::time::Instant::now();
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         self.connect_state = ConnectState::Loading {
-            device: dev.clone(),
+            device: Box::new(dev.clone()),
             rx,
             started_at: now,
             last_progress_at: now,
@@ -777,6 +779,7 @@ impl EntropyApp {
                 Ok(())
             };
             let result = (|| -> Result<ConnectResult, String> {
+                #[cfg(not(test))]
                 use crate::hid::HidDevice;
 
                 progress("Opening HID device…")?;
@@ -969,15 +972,16 @@ impl EntropyApp {
                     // 318/319. The paged QMK query advances by the highest ID in a
                     // page, so it can skip 230..239. Probe the actual device before
                     // deciding that its display controls are unavailable.
-                    if dev.is_ergohaven_sm62()
-                        && !(230..=239).all(|qsid| settings.contains(&qsid))
+                    if dev.is_ergohaven_sm62() && !(230..=239).all(|qsid| settings.contains(&qsid))
                     {
                         let probe = (230..=239)
                             .map(|qsid| dev_conn.get_qmk_setting_u8(qsid))
                             .collect::<anyhow::Result<Vec<_>>>();
                         if let Ok(values) = probe {
-                            if values[0] <= 3 && values[5] <= 3
-                                && values[2] <= 240 && values[7] <= 240
+                            if values[0] <= 3
+                                && values[5] <= 3
+                                && values[2] <= 240
+                                && values[7] <= 240
                                 && [1, 3, 4, 6, 8, 9].iter().all(|index| values[*index] <= 1)
                             {
                                 settings.extend(230..=239);
@@ -1171,15 +1175,17 @@ impl EntropyApp {
                     }
                 }
 
-                let layer_name_updates = (!staged_bluetooth_load)
-                    .then(|| {
+                let layer_name_updates = if !staged_bluetooth_load {
+                    {
                         layer_name_sync_updates(
                             &layout.layer_names,
                             &current_firmware_layer_names,
                             &supported_qmk_settings,
                         )
-                    })
-                    .unwrap_or_default();
+                    }
+                } else {
+                    Default::default()
+                };
                 if !layer_name_updates.is_empty() {
                     progress("Syncing layer names…")?;
                     for (qsid, name) in layer_name_updates {
@@ -1917,7 +1923,7 @@ mod tests {
         app.device_manager.replace_devices(vec![target]);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         app.connect_state = ConnectState::Loading {
-            device: app.device_manager.devices()[0].clone(),
+            device: Box::new(app.device_manager.devices()[0].clone()),
             rx: std::sync::mpsc::channel().1,
             started_at: std::time::Instant::now(),
             last_progress_at: std::time::Instant::now(),

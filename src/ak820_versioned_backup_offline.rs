@@ -7,9 +7,9 @@
 use crate::ak820_qs_versioned_offline::ImageVersion;
 use crate::ak820_settings_backup::{self, BackupResult, ImageIdentity};
 use crate::ak820_settings_model::{
-    OfflineSettingsCapabilities, settings_from_nvm_for_image_with_capabilities_offline,
+    settings_from_nvm_for_image_with_capabilities_offline, OfflineSettingsCapabilities,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Explicit format assumptions for one exact identity, not trusted admission.
@@ -267,7 +267,7 @@ mod tests {
             let result = validate_offline_envelope(
                 &manifest,
                 &files,
-                &[c.clone()],
+                std::slice::from_ref(&c),
                 Some(&sha256(&manifest)),
                 fixture_only,
             )
@@ -294,44 +294,38 @@ mod tests {
                 2 => changed.identity.definition_sha256 = "d".repeat(64),
                 _ => changed.identity.schema = 0x082002,
             }
-            assert!(
-                validate_offline_envelope(
-                    &manifest,
-                    &files,
-                    &[changed.clone()],
-                    None,
-                    |_, _, _| panic!("identity failure must precede callback")
-                )
-                .is_err()
-            );
+            assert!(validate_offline_envelope(
+                &manifest,
+                &files,
+                &[changed.clone()],
+                None,
+                |_, _, _| panic!("identity failure must precede callback")
+            )
+            .is_err());
         }
         changed = c.clone();
         changed.identity.code_sha256 = "d".repeat(64);
-        assert!(
-            validate_offline_envelope(
+        assert!(validate_offline_envelope(
+            &manifest,
+            &files,
+            &[c.clone(), changed.clone()],
+            None,
+            |_, _, _| panic!("conflicting IHX must precede callback")
+        )
+        .unwrap_err()
+        .contains("conflicting"));
+        for version in [ImageVersion::V1, ImageVersion::V2] {
+            changed = c.clone();
+            changed.version = version;
+            assert!(validate_offline_envelope(
                 &manifest,
                 &files,
                 &[c.clone(), changed.clone()],
                 None,
-                |_, _, _| panic!("conflicting IHX must precede callback")
+                |_, _, _| panic!("duplicate must precede callback")
             )
             .unwrap_err()
-            .contains("conflicting")
-        );
-        for version in [ImageVersion::V1, ImageVersion::V2] {
-            changed = c.clone();
-            changed.version = version;
-            assert!(
-                validate_offline_envelope(
-                    &manifest,
-                    &files,
-                    &[c.clone(), changed.clone()],
-                    None,
-                    |_, _, _| panic!("duplicate must precede callback")
-                )
-                .unwrap_err()
-                .contains("conflicting")
-            );
+            .contains("conflicting"));
         }
     }
 
@@ -341,14 +335,19 @@ mod tests {
         let (manifest, mut files) = envelope(&nvm(None), &c);
         let manifest = mutate_nvm(&manifest, &mut files, 0x6a8, 0x99);
         let calls = Cell::new(0);
-        let error =
-            validate_offline_envelope(&manifest, &files, &[c.clone()], None, |rom, nvm, got| {
+        let error = validate_offline_envelope(
+            &manifest,
+            &files,
+            std::slice::from_ref(&c),
+            None,
+            |rom, nvm, got| {
                 calls.set(calls.get() + 1);
                 assert_eq!(got.identity, c.identity);
                 assert_eq!(&rom[0xc700..0xef00], nvm);
                 Err("fixture validator rejected ROM".into())
-            })
-            .unwrap_err();
+            },
+        )
+        .unwrap_err();
         assert_eq!(error, "fixture validator rejected ROM");
         assert_eq!(calls.get(), 1);
         // Rehashed bytes reach QS validation after the callback succeeds.
@@ -371,9 +370,14 @@ mod tests {
         ] {
             let (manifest, mut files) = envelope(&nvm(None), &c);
             let manifest = mutate_nvm(&manifest, &mut files, at, byte);
-            let error =
-                validate_offline_envelope(&manifest, &files, &[c.clone()], None, fixture_only)
-                    .unwrap_err();
+            let error = validate_offline_envelope(
+                &manifest,
+                &files,
+                std::slice::from_ref(&c),
+                None,
+                fixture_only,
+            )
+            .unwrap_err();
             assert!(
                 error.to_lowercase().contains(&message.to_lowercase()),
                 "{at:x}: {error}"
@@ -400,10 +404,14 @@ mod tests {
         let mut nvm = nvm(Some(RecordVersion::V1));
         nvm[0x658..0x662].copy_from_slice(&[4, 0, 5, 0, 0x20, 8, 1, 0, 0xa8, 0]);
         let (manifest, files) = envelope(&nvm, &capable);
-        assert!(
-            validate_offline_envelope(&manifest, &files, &[capable.clone()], None, fixture_only)
-                .is_ok()
-        );
+        assert!(validate_offline_envelope(
+            &manifest,
+            &files,
+            &[capable.clone()],
+            None,
+            fixture_only
+        )
+        .is_ok());
         assert_eq!(
             validate_offline_envelope(&manifest, &files, &[contract()], None, fixture_only)
                 .unwrap_err(),
@@ -423,9 +431,13 @@ mod tests {
         let (manifest, mut files) = envelope(&nvm(None), &c);
         files.get_mut("saved-nvm.bin").unwrap()[0] ^= 1;
         assert_eq!(
-            validate_offline_envelope(&manifest, &files, &[c.clone()], None, |_, _, _| panic!(
-                "hash failure must precede callback"
-            ))
+            validate_offline_envelope(
+                &manifest,
+                &files,
+                std::slice::from_ref(&c),
+                None,
+                |_, _, _| panic!("hash failure must precede callback")
+            )
             .unwrap_err(),
             "Backup hash/size mismatch"
         );
@@ -446,11 +458,13 @@ mod tests {
         );
         let mut incomplete = c;
         incomplete.limitations.clear();
-        assert!(
-            validate_offline_envelope(&manifest, &files, &[incomplete], None, |_, _, _| panic!(
-                "incomplete contract must precede callback"
-            ))
-            .is_err()
-        );
+        assert!(validate_offline_envelope(
+            &manifest,
+            &files,
+            &[incomplete],
+            None,
+            |_, _, _| panic!("incomplete contract must precede callback")
+        )
+        .is_err());
     }
 }

@@ -11,10 +11,12 @@
 //! beta2 compressed defaults follow the pinned release packer contract.
 use crate::ak820_settings_backup::{sha256, BackupResult};
 use crate::ak820_settings_model::validate_nvm;
+#[cfg(test)]
 use crate::app::ak820_beta1_profiles::ProfileId;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+#[cfg(test)]
 pub(crate) const SOURCE_REVISION: &str = "bef20f89d3da01d770767919bc7c8fc3c3a1a808";
 pub(crate) const APP_START: usize = 0x2800;
 pub(crate) const APP_END: usize = 0xefc0;
@@ -160,12 +162,14 @@ pub(crate) fn default_nvm(ihx: &str, symbols: &Symbols) -> BackupResult<Vec<u8>>
     nvm[3] = 1;
     nvm[24..32].copy_from_slice(&[5, 0, 255, 80, 96, 255, 0, 0]);
     nvm[37..40].copy_from_slice(&[3, 0x20, 8]);
-    for key in nvm[0x40..0x658].chunks_exact_mut(2) {
+    for key in nvm[0x40..0x658].as_chunks_mut::<2>().0 {
         key.copy_from_slice(&[0, 1]);
     }
     for (target, value) in nvm[0x40..0x240]
-        .chunks_exact_mut(2)
-        .zip(keys.chunks_exact(2))
+        .as_chunks_mut::<2>()
+        .0
+        .iter_mut()
+        .zip(keys.as_chunks::<2>().0.iter())
     {
         target.copy_from_slice(&[value[1], value[0]]);
     }
@@ -186,11 +190,13 @@ fn need(ok: bool, message: &str) -> BackupResult<()> {
 }
 fn unhex(text: &str) -> BackupResult<Vec<u8>> {
     need(
-        text.is_ascii() && text.len() % 2 == 0,
+        text.is_ascii() && text.len().is_multiple_of(2),
         "Malformed hexadecimal data",
     )?;
     text.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|p| {
             let digit = |v: u8| {
                 (v as char)
@@ -367,8 +373,9 @@ pub(crate) enum EntryMode {
 /// An offline candidate has no ownership or hardware qualification capability.
 #[derive(Debug)]
 pub(crate) struct OfflineCandidate {
+    // Mode is encoded in the validated payload, not duplicated as mutable
+    // metadata that could disagree with the image being prepared.
     payload: Vec<u8>,
-    pub(crate) mode: EntryMode,
 }
 impl OfflineCandidate {
     pub(crate) fn bytes(&self) -> &[u8] {
@@ -378,6 +385,7 @@ impl OfflineCandidate {
 /// Explicit NVM input is required; no implicit OEM settings migration/defaulting.
 /// Unknown catalog identities and unqualified profiles fail closed. Trial CODE
 /// differs from permanent CODE, so a permanent-only catalog rejects trial output.
+#[cfg(test)]
 pub(crate) fn pack_candidate(
     ihx: &str,
     symbols: &Symbols,
@@ -404,11 +412,26 @@ pub(crate) fn pack_candidate_for_image(
     image: crate::ak820::ImageContract,
 ) -> BackupResult<OfflineCandidate> {
     image.profile().ok_or("Image has no profile")?;
-    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
-        .settings_identity.as_ref().ok_or("Profile lacks qualified packed identity")?;
-    need(sha256(ihx.as_bytes()) == exact.ihx_sha256, "Linked input differs from catalog")?;
+    let exact = image
+        .matrix_profile()
+        .ok_or("Image lacks a pinned profile matrix")?
+        .settings_identity
+        .as_ref()
+        .ok_or("Profile lacks qualified packed identity")?;
+    need(
+        sha256(ihx.as_bytes()) == exact.ihx_sha256,
+        "Linked input differs from catalog",
+    )?;
     validate_native_revision(stock)?;
-    pack_with_routine(ihx, symbols, stock, &stock[0xe650..0xe6a7], nvm, mode, image)
+    pack_with_routine(
+        ihx,
+        symbols,
+        stock,
+        &stock[0xe650..0xe6a7],
+        nvm,
+        mode,
+        image,
+    )
 }
 
 /// A classified project capture supplies its embedded routine, not an OEM ROM.
@@ -420,10 +443,21 @@ pub(crate) fn pack_candidate_from_project_for_image(
     mode: EntryMode,
     image: crate::ak820::ImageContract,
 ) -> BackupResult<OfflineCandidate> {
-    if !matches!(crate::ak820_installer::classify_snapshot(source)?, crate::ak820_installer::SnapshotKind::Project(_)) {
+    if !matches!(
+        crate::ak820_installer::classify_snapshot(source)?,
+        crate::ak820_installer::SnapshotKind::Project(_)
+    ) {
         return Err("A classified project source is required".into());
     }
-    pack_with_routine(ihx, symbols, source, &source[0x2830..0x2887], nvm, mode, image)
+    pack_with_routine(
+        ihx,
+        symbols,
+        source,
+        &source[0x2830..0x2887],
+        nvm,
+        mode,
+        image,
+    )
 }
 
 fn pack_with_routine(
@@ -436,7 +470,9 @@ fn pack_with_routine(
     image: crate::ak820::ImageContract,
 ) -> BackupResult<OfflineCandidate> {
     image.profile().ok_or("Image has no profile")?;
-    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
+    let exact = image
+        .matrix_profile()
+        .ok_or("Image lacks a pinned profile matrix")?
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;
@@ -448,10 +484,11 @@ fn pack_with_routine(
     let data = read_ihex(ihx)?;
     let payload = pack_core(&data, symbols, source, routine, nvm, mode, exact.nvm_schema)?;
     validate_catalog_payload_for_image(&payload, image)?;
-    Ok(OfflineCandidate { payload, mode })
+    Ok(OfflineCandidate { payload })
 }
 /// Structural verification is separate from catalog approval. A self-consistent
 /// manifest and checksum never suffice to qualify a custom image.
+#[cfg(test)]
 pub(crate) fn validate_catalog_payload(
     payload: &[u8],
     profile: ProfileId,
@@ -462,7 +499,9 @@ pub(crate) fn validate_catalog_payload_for_image(
     payload: &[u8],
     image: crate::ak820::ImageContract,
 ) -> BackupResult<EntryMode> {
-    let exact = image.matrix_profile().ok_or("Image lacks a pinned profile matrix")?
+    let exact = image
+        .matrix_profile()
+        .ok_or("Image lacks a pinned profile matrix")?
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;
@@ -621,6 +660,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reference_preparation_rejects_malformed_candidate_bytes() {
+        use crate::ak820_install_plan::{
+            InputOrigin, MetadataFreshness, PreparationContext, PreparedInstall, ReleaseSelection,
+            SettingsChoice,
+        };
+        // Historical metadata must exist to exercise payload checks, not an earlier refusal.
+        // Its presence and these private malformed candidates never establish admission.
+        assert!(
+            crate::app::ak820_beta1_profiles::matrix_profile(ProfileId::Main)
+                .settings_identity
+                .is_some()
+        );
+        let source = vec![0; 65536];
+        for (length, error) in [
+            (0, "Wrong update image length; full ROM forbidden"),
+            (0xc7bf, "Wrong update image length; full ROM forbidden"),
+            (0xc7c1, "Wrong update image length; full ROM forbidden"),
+            (0xc7c0, "Unknown application manifest"),
+        ] {
+            let candidate = OfflineCandidate {
+                payload: vec![0; length],
+            };
+            let result = PreparedInstall::firmware(
+                &candidate,
+                ProfileId::Main,
+                InputOrigin::Local,
+                ReleaseSelection {
+                    version: "fixture-only".into(),
+                    metadata_sha256: "a".repeat(64),
+                    freshness: MetadataFreshness::Known {
+                        checked_at: 1,
+                        expires_at: 100,
+                    },
+                    prerelease: false,
+                    prerelease_opt_in: false,
+                    revoked_images: vec![],
+                },
+                SettingsChoice::Defaults,
+                PreparationContext {
+                    source: &source,
+                    fresh_backup: &source,
+                    generation: 7,
+                    now: 10,
+                },
+            );
+            assert_eq!(result.unwrap_err(), error, "length {length}");
+        }
+    }
+
+    #[test]
     fn printed_map_allows_unused_truncated_names_but_rejects_ambiguous_inputs() {
         let text = "C: 00003027 _encoder_map\nC: 00004000 _truncated_unused_function_name\nC: 00004004 _truncated_unused_function_name\n";
         assert_eq!(read_symbols(text).unwrap()["_encoder_map"], 0x3027);
@@ -678,7 +767,7 @@ mod tests {
         let mut nvm = vec![0; 0x2800];
         nvm[..2].copy_from_slice(&[0xe6, 0xfe]);
         nvm[37..40].copy_from_slice(&[2, 0x20, 8]);
-        for p in nvm[0x40..0x658].chunks_exact_mut(2) {
+        for p in nvm[0x40..0x658].as_chunks_mut::<2>().0 {
             p.copy_from_slice(&[0, 1]);
         }
         nvm[0x7f1..0x7f3].copy_from_slice(&16u16.to_le_bytes());
@@ -702,7 +791,16 @@ mod tests {
                 "c2a3cebf0006ca8bb6ff81e8a0eb0889ca9e010ba9b2493ce87a94a625b8a088",
             ),
         ] {
-            let payload = pack_core(&data, &s, &stock, &stock[0xe650..0xe6a7], &nvm, mode, 0x082002).unwrap();
+            let payload = pack_core(
+                &data,
+                &s,
+                &stock,
+                &stock[0xe650..0xe6a7],
+                &nvm,
+                mode,
+                0x082002,
+            )
+            .unwrap();
             assert_eq!(sha256(&payload), digest);
             assert_eq!(verify_payload(&payload, 0x082002).unwrap(), mode);
             assert!(validate_catalog_payload(&payload, ProfileId::Main).is_err());
@@ -716,11 +814,37 @@ mod tests {
     fn project_path_rejects_unclassified_sources_and_core_uses_explicit_routine() {
         let (data, symbols, stock, nvm) = fixture();
         let routine = [0x5a; 0x57];
-        let payload = pack_core(&data, &symbols, &stock, &routine, &nvm, EntryMode::Permanent, 0x082002).unwrap();
+        let payload = pack_core(
+            &data,
+            &symbols,
+            &stock,
+            &routine,
+            &nvm,
+            EntryMode::Permanent,
+            0x082002,
+        )
+        .unwrap();
         assert_eq!(&payload[0x30..0x87], &routine);
-        assert!(pack_core(&data, &symbols, &stock, &routine[..86], &nvm, EntryMode::Permanent, 0x082002).is_err());
+        assert!(pack_core(
+            &data,
+            &symbols,
+            &stock,
+            &routine[..86],
+            &nvm,
+            EntryMode::Permanent,
+            0x082002
+        )
+        .is_err());
         for source in [&stock[..], &stock[..100]] {
-            assert!(pack_candidate_from_project_for_image("", &symbols, source, &nvm, EntryMode::Permanent, crate::ak820::ImageContract::Beta3(ProfileId::Main)).is_err());
+            assert!(pack_candidate_from_project_for_image(
+                "",
+                &symbols,
+                source,
+                &nvm,
+                EntryMode::Permanent,
+                crate::ak820::ImageContract::Beta3(ProfileId::Main)
+            )
+            .is_err());
         }
     }
     #[test]
@@ -800,12 +924,39 @@ mod tests {
     fn faults_stop_before_output() {
         let (mut d, mut s, stock, nvm) = fixture();
         s.insert("l_PSEG".into(), 1);
-        assert!(pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).is_err());
+        assert!(pack_core(
+            &d,
+            &s,
+            &stock,
+            &stock[0xe650..0xe6a7],
+            &nvm,
+            EntryMode::Permanent,
+            0x082002
+        )
+        .is_err());
         s.insert("l_PSEG".into(), 0);
         d.insert(0x3100, 0);
-        assert!(pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).is_err());
+        assert!(pack_core(
+            &d,
+            &s,
+            &stock,
+            &stock[0xe650..0xe6a7],
+            &nvm,
+            EntryMode::Permanent,
+            0x082002
+        )
+        .is_err());
         let (d, s, stock, nvm) = fixture();
-        let good = pack_core(&d, &s, &stock, &stock[0xe650..0xe6a7], &nvm, EntryMode::Permanent, 0x082002).unwrap();
+        let good = pack_core(
+            &d,
+            &s,
+            &stock,
+            &stock[0xe650..0xe6a7],
+            &nvm,
+            EntryMode::Permanent,
+            0x082002,
+        )
+        .unwrap();
         for offset in [
             0,
             0x9f00,

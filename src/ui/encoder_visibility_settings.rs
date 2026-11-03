@@ -150,16 +150,14 @@ impl EntropyApp {
             {
                 for (field_idx, field) in group.fields.iter().enumerate() {
                     let name = group.kind.field_base_title(&field.title);
-                    if name.to_ascii_lowercase().ends_with(" interval")
-                        || name.to_ascii_lowercase().ends_with(" steps")
-                    {
-                        if fixed_encoder_field_number(
+                    if (name.to_ascii_lowercase().ends_with(" interval")
+                        || name.to_ascii_lowercase().ends_with(" steps"))
+                        && fixed_encoder_field_number(
                             name,
                             fixed_encoder_side_size(layout).unwrap_or(0),
                         ) == Some(1)
-                        {
-                            rows.push(EncoderSettingsRow::Field(group_idx, field_idx));
-                        }
+                    {
+                        rows.push(EncoderSettingsRow::Field(group_idx, field_idx));
                     }
                 }
             }
@@ -331,8 +329,7 @@ impl EntropyApp {
         let mut switch_enabled = self.encoder_visibility[encoder_idx];
         crate::ui_style::settings_list_row_with_tooltip(
             ui,
-            row.content_width,
-            row.height,
+            egui::vec2(row.content_width, row.height),
             &label,
             true,
             (!row.suppress_tooltips).then_some(tooltip.as_str()),
@@ -418,8 +415,8 @@ impl EntropyApp {
                     ui.set_clip_rect(list.viewport);
                     ui.set_min_size(list.content_rect.size());
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    for row_idx in list.first_visible_row..list.last_visible_row {
-                        match rows[row_idx] {
+                    for &row in &rows[list.first_visible_row..list.last_visible_row] {
+                        match row {
                             EncoderSettingsRow::Visibility(encoder_idx, option_idx) => {
                                 self.draw_encoder_visibility_setting_row(
                                     ui,
@@ -631,10 +628,7 @@ mod tests {
                 assert!(settings.layout_element_visibility[device_key]
                     .hidden_encoders
                     .contains(&(side_size as u8)));
-                assert_eq!(
-                    legacy[side_size], false,
-                    "shared legacy default must survive"
-                );
+                assert!(!legacy[side_size], "shared legacy default must survive");
             }
             assert!(settings.layout_element_visibility[&first]
                 .hidden_encoders

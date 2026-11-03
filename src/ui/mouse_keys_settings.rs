@@ -184,8 +184,7 @@ impl EntropyApp {
 
             crate::ui_style::settings_list_row_with_tooltip(
                 ui,
-                content_width,
-                row_height,
+                egui::vec2(content_width, row_height),
                 crate::i18n::tr_catalog(lang, label),
                 true,
                 if suppress_tooltips {
@@ -210,8 +209,7 @@ impl EntropyApp {
                         ui,
                         edit_id,
                         &mut text,
-                        field_width,
-                        control_height,
+                        egui::vec2(field_width, control_height),
                         "",
                         5,
                         egui::Align::RIGHT,
@@ -270,7 +268,7 @@ mod tests {
         ctx: &egui::Context,
         events: Vec<egui::Event>,
     ) -> egui::FullOutput {
-        ctx.run(
+        ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
@@ -279,8 +277,8 @@ mod tests {
                 events,
                 ..Default::default()
             },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            |root_ui| {
+                egui::CentralPanel::default().show_inside(root_ui, |ui| {
                     let rect = ui.max_rect();
                     app.draw_mouse_keys_settings_page(ui, rect);
                 });
@@ -290,29 +288,58 @@ mod tests {
 
     fn replace_mouse_delay_text(app: &mut EntropyApp, ctx: &egui::Context, text: &str) {
         let output = draw_page(app, ctx, vec![]);
-        let pos = output.shapes.iter().find_map(|shape| match &shape.shape {
-            egui::Shape::Text(galley) if galley.galley.job.text == app.mouse_keys_settings.delay.to_string() => {
-                Some(galley.pos + galley.galley.size() / 2.0)
-            }
-            _ => None,
-        }).expect("Mouse Keys delay field text is visible");
-        draw_page(app, ctx, vec![
-            egui::Event::PointerMoved(pos),
-            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
-            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
-        ]);
+        let pos = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(galley)
+                    if galley.galley.job.text == app.mouse_keys_settings.delay.to_string() =>
+                {
+                    Some(galley.pos + galley.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .expect("Mouse Keys delay field text is visible");
+        draw_page(
+            app,
+            ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
         let edit_id = egui::Id::new(("mouse_keys_edit", 9u16));
         ctx.memory_mut(|memory| memory.request_focus(edit_id));
-        draw_page(app, ctx, vec![
-            egui::Event::Key {
-                key: egui::Key::A,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers { ctrl: true, mac_cmd: true, command: true, ..Default::default() },
-            },
-            egui::Event::Text(text.into()),
-        ]);
+        draw_page(
+            app,
+            ctx,
+            vec![
+                egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers {
+                        ctrl: true,
+                        mac_cmd: true,
+                        command: true,
+                        ..Default::default()
+                    },
+                },
+                egui::Event::Text(text.into()),
+            ],
+        );
     }
 
     fn qmk_set_requests(recorder: &crate::hid::TestHidRecorder) -> Vec<[u8; 32]> {
@@ -342,7 +369,10 @@ mod tests {
         app.mouse_keys_settings.loaded_qsids.mark(9);
         draw_page(&mut app, &ctx, vec![]);
         draw_page(&mut app, &ctx, vec![]);
-        assert!(recorder.requests().is_empty(), "rendering editable values must not write");
+        assert!(
+            recorder.requests().is_empty(),
+            "rendering editable values must not write"
+        );
     }
 
     #[test]
@@ -358,7 +388,7 @@ mod tests {
         assert_eq!(writes.len(), 1);
         assert_eq!(u16::from_le_bytes([writes[0][2], writes[0][3]]), 9);
         assert_eq!(writes[0][4], 123);
-        assert_eq!(app.mouse_keys_settings.loaded_qsids.contains(9), true);
+        assert!(app.mouse_keys_settings.loaded_qsids.contains(9));
     }
 
     #[test]
@@ -370,6 +400,9 @@ mod tests {
         replace_mouse_delay_text(&mut app, &ctx, "x");
 
         assert_eq!(app.mouse_keys_settings.delay, 20);
-        assert!(qmk_set_requests(&recorder).is_empty(), "invalid text must fail closed");
+        assert!(
+            qmk_set_requests(&recorder).is_empty(),
+            "invalid text must fail closed"
+        );
     }
 }

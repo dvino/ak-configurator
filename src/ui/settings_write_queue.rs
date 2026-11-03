@@ -54,6 +54,21 @@ enum SettingsWriteTarget {
     },
 }
 
+struct SettingsReadbackState<'a> {
+    module_settings: &'a mut ModuleSettingsState,
+    touchpad_settings: &'a mut TouchpadSettingsState,
+    tap_hold_settings: &'a mut TapHoldSettingsState,
+    one_shot_settings: &'a mut OneShotSettingsState,
+    layer_led_settings: &'a mut LayerLedSettingsState,
+    display_settings: &'a mut DisplaySettingsState,
+}
+
+pub(super) struct ModuleSettingMetadata {
+    pub(super) group_title: String,
+    pub(super) field_title: String,
+    pub(super) display_label: String,
+}
+
 impl SettingsWriteTarget {
     fn display_label(&self) -> &str {
         match self {
@@ -111,12 +126,14 @@ impl SettingsWriteTarget {
 
     fn reconcile_readback(
         &self,
-        module_settings: &mut ModuleSettingsState,
-        touchpad_settings: &mut TouchpadSettingsState,
-        tap_hold_settings: &mut TapHoldSettingsState,
-        one_shot_settings: &mut OneShotSettingsState,
-        layer_led_settings: &mut LayerLedSettingsState,
-        display_settings: &mut DisplaySettingsState,
+        SettingsReadbackState {
+            module_settings,
+            touchpad_settings,
+            tap_hold_settings,
+            one_shot_settings,
+            layer_led_settings,
+            display_settings,
+        }: SettingsReadbackState<'_>,
         qsid: u16,
         readback: u16,
     ) {
@@ -173,7 +190,8 @@ impl SettingsWriteTarget {
                 if (248..=249).contains(&qsid) && display_settings.sm62_screens_off_supported {
                     let side = (qsid - 248) as usize;
                     display_settings.sm62_screens_off_values[side] = readback.min(1) as u8;
-                    display_settings.confirmed_sm62_screens_off_values[side] = readback.min(1) as u8;
+                    display_settings.confirmed_sm62_screens_off_values[side] =
+                        readback.min(1) as u8;
                     return;
                 }
                 if (244..=245).contains(&qsid) && display_settings.sm62_language_supported {
@@ -323,7 +341,9 @@ impl SettingsWriteQueueState {
         // every frame prevents readback from ever becoming confirmed.
         if request.target.is_display() {
             if let Some(entry) = self.statuses.get(&request.qsid) {
-                if matches!(entry.status, SettingsWriteStatus::Pending) && entry.requested == request.requested {
+                if matches!(entry.status, SettingsWriteStatus::Pending)
+                    && entry.requested == request.requested
+                {
                     return entry.request_id;
                 }
             }
@@ -515,10 +535,14 @@ pub(super) fn write_qmk_setting_value(
             }
         });
         if (230..=249).contains(&qsid) {
-            log::debug!("SM62 setting SET finished qsid={qsid} ok={}", result.is_ok());
+            log::debug!(
+                "SM62 setting SET finished qsid={qsid} ok={}",
+                result.is_ok()
+            );
         }
         result.map_err(|error| {
-            disconnected.set(!hid.is_transport_available() || setting_error_is_disconnect(qsid, &error));
+            disconnected
+                .set(!hid.is_transport_available() || setting_error_is_disconnect(qsid, &error));
             error.to_string()
         })
     };
@@ -540,10 +564,15 @@ pub(super) fn write_qmk_setting_value(
                 }
             });
             if (230..=249).contains(&qsid) {
-                log::debug!("SM62 setting GET finished qsid={qsid} ok={}", result.is_ok());
+                log::debug!(
+                    "SM62 setting GET finished qsid={qsid} ok={}",
+                    result.is_ok()
+                );
             }
             result.map_err(|error| {
-                disconnected.set(!hid.is_transport_available() || setting_error_is_disconnect(qsid, &error));
+                disconnected.set(
+                    !hid.is_transport_available() || setting_error_is_disconnect(qsid, &error),
+                );
                 error.to_string()
             })
         })
@@ -593,13 +622,18 @@ impl EntropyApp {
     // state uncertain: the last confirmed value is not a safe equality gate.
     // Keep Pending coalescing, and never turn this into a repaint retry.
     pub(super) fn explicit_display_setting_needs_write(
-        &self, qsid: u16, confirmed: u16, requested: u16,
+        &self,
+        qsid: u16,
+        confirmed: u16,
+        requested: u16,
     ) -> bool {
         if let Some(pending) = self.pending_settings_write_value(qsid) {
             requested != pending
         } else {
-            matches!(self.settings_write_status(qsid), Some(SettingsWriteStatus::Failed(_)))
-                || requested != confirmed
+            matches!(
+                self.settings_write_status(qsid),
+                Some(SettingsWriteStatus::Failed(_))
+            ) || requested != confirmed
         }
     }
 
@@ -672,9 +706,11 @@ impl EntropyApp {
 
     pub(super) fn queue_module_setting_write(
         &mut self,
-        group_title: String,
-        field_title: String,
-        display_label: String,
+        ModuleSettingMetadata {
+            group_title,
+            field_title,
+            display_label,
+        }: ModuleSettingMetadata,
         qsid: u16,
         width: u8,
         old_value: u16,
@@ -723,7 +759,12 @@ impl EntropyApp {
         requested: u16,
     ) {
         #[cfg(not(target_arch = "wasm32"))]
-        if qsid == 22 && self.hid_device.as_ref().is_some_and(|hid| hid.is_ak820_session()) {
+        if qsid == 22
+            && self
+                .hid_device
+                .as_ref()
+                .is_some_and(|hid| hid.is_ak820_session())
+        {
             return;
         }
         self.queue_settings_write(SettingsWriteRequest {
@@ -953,20 +994,32 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn record_superseded_sm62_readback(&mut self, request: &SettingsWriteRequest, readback: u16) {
-        if !request.target.is_display() || !(230..=249).contains(&request.qsid) { return; }
+        if !request.target.is_display() || !(230..=249).contains(&request.qsid) {
+            return;
+        }
         // Readback is still confirmed even if superseded by another edit.
         // Use the one protocol decoder, but retain all newer desired values.
         let mut observed = self.display_settings.clone();
         request.target.reconcile_readback(
-            &mut self.module_settings, &mut self.touchpad_settings,
-            &mut self.tap_hold_settings, &mut self.one_shot_settings,
-            &mut self.layer_led_settings, &mut observed, request.qsid, readback);
+            SettingsReadbackState {
+                module_settings: &mut self.module_settings,
+                touchpad_settings: &mut self.touchpad_settings,
+                tap_hold_settings: &mut self.tap_hold_settings,
+                one_shot_settings: &mut self.one_shot_settings,
+                layer_led_settings: &mut self.layer_led_settings,
+                display_settings: &mut observed,
+            },
+            request.qsid,
+            readback,
+        );
         self.display_settings.confirmed_sm62_values = observed.confirmed_sm62_values;
         self.display_settings.confirmed_sm62_date_values = observed.confirmed_sm62_date_values;
         self.display_settings.confirmed_sm62_hold_ms = observed.confirmed_sm62_hold_ms;
-        self.display_settings.confirmed_sm62_language_values = observed.confirmed_sm62_language_values;
+        self.display_settings.confirmed_sm62_language_values =
+            observed.confirmed_sm62_language_values;
         self.display_settings.confirmed_sm62_stars_values = observed.confirmed_sm62_stars_values;
-        self.display_settings.confirmed_sm62_screens_off_values = observed.confirmed_sm62_screens_off_values;
+        self.display_settings.confirmed_sm62_screens_off_values =
+            observed.confirmed_sm62_screens_off_values;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1003,12 +1056,14 @@ impl EntropyApp {
                 }
                 if current && newer_debounced_value.is_none() {
                     request.target.reconcile_readback(
-                        &mut self.module_settings,
-                        &mut self.touchpad_settings,
-                        &mut self.tap_hold_settings,
-                        &mut self.one_shot_settings,
-                        &mut self.layer_led_settings,
-                        &mut self.display_settings,
+                        SettingsReadbackState {
+                            module_settings: &mut self.module_settings,
+                            touchpad_settings: &mut self.touchpad_settings,
+                            tap_hold_settings: &mut self.tap_hold_settings,
+                            one_shot_settings: &mut self.one_shot_settings,
+                            layer_led_settings: &mut self.layer_led_settings,
+                            display_settings: &mut self.display_settings,
+                        },
                         request.qsid,
                         readback,
                     );
@@ -1049,12 +1104,14 @@ impl EntropyApp {
                 if current && newer_debounced_value.is_none() {
                     if let ModuleSettingWritebackError::ReadbackMismatch { actual, .. } = &error {
                         request.target.reconcile_readback(
-                            &mut self.module_settings,
-                            &mut self.touchpad_settings,
-                            &mut self.tap_hold_settings,
-                            &mut self.one_shot_settings,
-                            &mut self.layer_led_settings,
-                            &mut self.display_settings,
+                            SettingsReadbackState {
+                                module_settings: &mut self.module_settings,
+                                touchpad_settings: &mut self.touchpad_settings,
+                                tap_hold_settings: &mut self.tap_hold_settings,
+                                one_shot_settings: &mut self.one_shot_settings,
+                                layer_led_settings: &mut self.layer_led_settings,
+                                display_settings: &mut self.display_settings,
+                            },
                             request.qsid,
                             *actual,
                         );
@@ -1194,17 +1251,29 @@ mod tests {
 
     #[test]
     fn v7_superseded_display_readback_confirms_without_overwriting_pending() {
-        for result in [Ok(0),Err(ModuleSettingWritebackError::ReadbackMismatch {expected:1,actual:0})] {
-        let mut app=test_app(); app.display_settings.sm62_stars_supported=true;
-        app.display_settings.sm62_stars_values=[1,0];
-        app.display_settings.confirmed_sm62_stars_values=[1,0];
-        app.settings_write_queue.enqueue(display_request(246,1,0));
-        let old=app.settings_write_queue.pop_front().unwrap();
-        app.settings_write_queue.enqueue(display_request(246,1,1));
-        app.finish_settings_write(SettingsWriteResult {hid_device:None,request:old,result,disconnected:false});
-        assert_eq!(app.display_settings.sm62_stars_values,[1,0]);
-        assert_eq!(app.display_settings.confirmed_sm62_stars_values,[0,0]);
-        assert_eq!(app.pending_settings_write_value(246),Some(1));
+        for result in [
+            Ok(0),
+            Err(ModuleSettingWritebackError::ReadbackMismatch {
+                expected: 1,
+                actual: 0,
+            }),
+        ] {
+            let mut app = test_app();
+            app.display_settings.sm62_stars_supported = true;
+            app.display_settings.sm62_stars_values = [1, 0];
+            app.display_settings.confirmed_sm62_stars_values = [1, 0];
+            app.settings_write_queue.enqueue(display_request(246, 1, 0));
+            let old = app.settings_write_queue.pop_front().unwrap();
+            app.settings_write_queue.enqueue(display_request(246, 1, 1));
+            app.finish_settings_write(SettingsWriteResult {
+                hid_device: None,
+                request: old,
+                result,
+                disconnected: false,
+            });
+            assert_eq!(app.display_settings.sm62_stars_values, [1, 0]);
+            assert_eq!(app.display_settings.confirmed_sm62_stars_values, [0, 0]);
+            assert_eq!(app.pending_settings_write_value(246), Some(1));
         }
     }
 
@@ -1240,7 +1309,10 @@ mod tests {
         queue.enqueue(display_request(232, 47, 10));
         let enabling = queue.enqueue(display_request(231, 0, 1));
         let in_flight_timeout = queue.pop_front().unwrap();
-        assert_eq!((in_flight_timeout.qsid, in_flight_timeout.requested), (232, 10));
+        assert_eq!(
+            (in_flight_timeout.qsid, in_flight_timeout.requested),
+            (232, 10)
+        );
         let disabling = queue.enqueue(display_request(231, 0, 0));
         queue.enqueue(display_request(237, 83, 120));
         assert!(!queue.complete(enabling, 231, SettingsWriteStatus::Saved));
@@ -1250,7 +1322,10 @@ mod tests {
         assert!(queue.complete(disabling, 231, SettingsWriteStatus::Saved));
         assert!(queue.complete(in_flight_timeout.id, 232, SettingsWriteStatus::Saved));
         let right = queue.pop_front().unwrap();
-        assert_eq!((right.qsid, right.old_value, right.requested), (237, 83, 120));
+        assert_eq!(
+            (right.qsid, right.old_value, right.requested),
+            (237, 83, 120)
+        );
         assert!(queue.pop_front().is_none());
     }
 
@@ -1316,12 +1391,14 @@ mod tests {
             display_label: "Mode".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             7,
             3,
         );
@@ -1329,12 +1406,14 @@ mod tests {
             display_label: "Scroll sensitivity".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             122,
             9,
         );
@@ -1342,12 +1421,14 @@ mod tests {
             display_label: "Tap-hold timeout".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             7,
             175,
         );
@@ -1355,12 +1436,14 @@ mod tests {
             display_label: "One-shot timeout".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             6,
             800,
         );
@@ -1368,12 +1451,14 @@ mod tests {
             display_label: "Layer LED brightness".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             316,
             128,
         );
@@ -1381,12 +1466,14 @@ mod tests {
             display_label: "Display color".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             321,
             72,
         );
@@ -1394,12 +1481,14 @@ mod tests {
             display_label: "Background color".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             DISPLAY_BACKGROUND_COLOR_QSIDS[0],
             24,
         );
@@ -1407,12 +1496,14 @@ mod tests {
             display_label: "Brightness".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             DISPLAY_BRIGHTNESS_QSID,
             140,
         );
@@ -1420,12 +1511,14 @@ mod tests {
             display_label: "Button style".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             DISPLAY_BUTTON_STYLE_QSID,
             42,
         );
@@ -1433,12 +1526,14 @@ mod tests {
             display_label: "Clock style".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             CLOCK_STYLE_QSID,
             99,
         );
@@ -1446,12 +1541,14 @@ mod tests {
             display_label: "Clock text color".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             CLOCK_TEXT_COLOR_QSIDS[2],
             73,
         );
@@ -1459,12 +1556,14 @@ mod tests {
             display_label: "Display timeout".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             DISPLAY_TIMEOUT_QSID,
             99,
         );
@@ -1472,12 +1571,14 @@ mod tests {
             display_label: "Labels color".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             CLOCK_INFO_COLOR_QSIDS[1],
             91,
         );
@@ -1485,12 +1586,14 @@ mod tests {
             display_label: "Blinking separator".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             CLOCK_COLON_BLINK_QSID,
             1,
         );
@@ -1545,12 +1648,14 @@ mod tests {
             display_label: "Right ship timeout".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             237,
             45,
         );
@@ -1562,55 +1667,107 @@ mod tests {
             display_label: "Right date".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             241,
             0,
         );
         assert_eq!(display_settings.sm62_date_values, [1, 0]);
         assert_eq!(display_settings.confirmed_sm62_date_values, [1, 0]);
-        assert_eq!(qmk_setting_write_policy(241), QmkSettingWritePolicy::VerifiedReadback);
+        assert_eq!(
+            qmk_setting_write_policy(241),
+            QmkSettingWritePolicy::VerifiedReadback
+        );
         display_settings.sm62_hold_supported = true;
         SettingsWriteTarget::Display {
             display_label: "Right layout hold".to_owned(),
         }
         .reconcile_readback(
-            &mut module_settings,
-            &mut touchpad_settings,
-            &mut tap_hold_settings,
-            &mut one_shot_settings,
-            &mut layer_led_settings,
-            &mut display_settings,
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
             243,
             2_500,
         );
         assert_eq!(display_settings.sm62_hold_ms, [112, 2_500]);
         assert_eq!(display_settings.confirmed_sm62_hold_ms, [112, 2_500]);
-        assert_eq!(qmk_setting_write_policy(243), QmkSettingWritePolicy::VerifiedReadback);
+        assert_eq!(
+            qmk_setting_write_policy(243),
+            QmkSettingWritePolicy::VerifiedReadback
+        );
         display_settings.sm62_language_supported = true;
-        SettingsWriteTarget::Display { display_label: "Right language".to_owned() }
-            .reconcile_readback(&mut module_settings, &mut touchpad_settings, &mut tap_hold_settings,
-                &mut one_shot_settings, &mut layer_led_settings, &mut display_settings, 245, 0);
+        SettingsWriteTarget::Display {
+            display_label: "Right language".to_owned(),
+        }
+        .reconcile_readback(
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
+            245,
+            0,
+        );
         assert_eq!(display_settings.sm62_language_values, [1, 0]);
         assert_eq!(display_settings.confirmed_sm62_language_values, [1, 0]);
-        assert_eq!(qmk_setting_write_policy(245), QmkSettingWritePolicy::VerifiedReadback);
-        display_settings.sm62_stars_supported=true;
-        display_settings.sm62_screens_off_supported=true;
-        SettingsWriteTarget::Display {display_label:"Right stars".to_owned()}
-            .reconcile_readback(&mut module_settings,&mut touchpad_settings,&mut tap_hold_settings,
-                &mut one_shot_settings,&mut layer_led_settings,&mut display_settings,247,0);
-        assert_eq!(display_settings.sm62_stars_values,[1,0]);assert_eq!(display_settings.confirmed_sm62_stars_values,[1,0]);
-        SettingsWriteTarget::Display {display_label:"Left screen off".to_owned()}
-            .reconcile_readback(&mut module_settings,&mut touchpad_settings,&mut tap_hold_settings,
-                &mut one_shot_settings,&mut layer_led_settings,&mut display_settings,248,1);
-        assert_eq!(display_settings.sm62_screens_off_values,[1,0]);assert_eq!(display_settings.confirmed_sm62_screens_off_values,[1,0]);
-        assert_eq!(qmk_setting_write_policy(249),QmkSettingWritePolicy::VerifiedReadback);
-
-
+        assert_eq!(
+            qmk_setting_write_policy(245),
+            QmkSettingWritePolicy::VerifiedReadback
+        );
+        display_settings.sm62_stars_supported = true;
+        display_settings.sm62_screens_off_supported = true;
+        SettingsWriteTarget::Display {
+            display_label: "Right stars".to_owned(),
+        }
+        .reconcile_readback(
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
+            247,
+            0,
+        );
+        assert_eq!(display_settings.sm62_stars_values, [1, 0]);
+        assert_eq!(display_settings.confirmed_sm62_stars_values, [1, 0]);
+        SettingsWriteTarget::Display {
+            display_label: "Left screen off".to_owned(),
+        }
+        .reconcile_readback(
+            SettingsReadbackState {
+                module_settings: &mut module_settings,
+                touchpad_settings: &mut touchpad_settings,
+                tap_hold_settings: &mut tap_hold_settings,
+                one_shot_settings: &mut one_shot_settings,
+                layer_led_settings: &mut layer_led_settings,
+                display_settings: &mut display_settings,
+            },
+            248,
+            1,
+        );
+        assert_eq!(display_settings.sm62_screens_off_values, [1, 0]);
+        assert_eq!(display_settings.confirmed_sm62_screens_off_values, [1, 0]);
+        assert_eq!(
+            qmk_setting_write_policy(249),
+            QmkSettingWritePolicy::VerifiedReadback
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1638,7 +1795,10 @@ mod tests {
         for ready in [false, true] {
             let (ak820, recorder) = crate::hid::HidDevice::test_ak820_device(ready);
             let (result, disconnected) = run_settings_write(&ak820, &request);
-            assert!(matches!(result, Err(ModuleSettingWritebackError::SetFailed(_))));
+            assert!(matches!(
+                result,
+                Err(ModuleSettingWritebackError::SetFailed(_))
+            ));
             assert!(!disconnected);
             assert!(recorder.requests().is_empty());
         }

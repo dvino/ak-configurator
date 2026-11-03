@@ -42,8 +42,11 @@ pub(crate) struct VerifiedDownload {
     pub path: PathBuf,
 }
 impl VerifiedDownload {
-    pub(crate) fn installer_instructions(&self) -> &'static str {
-        "Close AK Configurator, extract the verified archive, and follow its INSTALL guide to install for the current user. Keep the application settings directory. No installer is started automatically."
+    pub(crate) fn installer_instructions(&self, lang: crate::i18n::Language) -> &'static str {
+        match lang {
+            crate::i18n::Language::Russian => "Полностью завершите AK Configurator, включая помощник, через «Выход». Распакуйте архив и выполните инструкцию INSTALL.ru.md: установщик для текущего пользователя обновит приложение и сохранит его настройки.",
+            crate::i18n::Language::English => "Quit AK Configurator completely, including the helper, using Quit. Extract the archive and follow INSTALL.en.md: the per-user installer updates the application and preserves its settings.",
+        }
     }
 }
 #[derive(Debug)]
@@ -88,13 +91,17 @@ fn spawn<T: Send + 'static>(
 }
 pub(crate) fn start_check(channel: Channel) -> Job<Offer> {
     spawn(move |cancel| {
-        if crate::isolated_runtime() { return Err("Network updates are disabled in isolated mode".into()); }
+        if crate::isolated_runtime() {
+            return Err("Network updates are disabled in isolated mode".into());
+        }
         check(channel, &cancel)
     })
 }
 pub(crate) fn start_download(offer: Offer) -> Job<VerifiedDownload> {
     spawn(move |cancel| {
-        if crate::isolated_runtime() { return Err("Network updates are disabled in isolated mode".into()); }
+        if crate::isolated_runtime() {
+            return Err("Network updates are disabled in isolated mode".into());
+        }
         let root = crate::cache_dir()
             .ok_or("No application cache directory")?
             .join("ak-configurator")
@@ -511,6 +518,16 @@ use std::io::Seek;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verified_download_installer_instructions_match_ui_guides() {
+        let download = VerifiedDownload {
+            path: PathBuf::from("inert-archive"),
+        };
+        assert_eq!(download.installer_instructions(crate::i18n::Language::Russian), "Полностью завершите AK Configurator, включая помощник, через «Выход». Распакуйте архив и выполните инструкцию INSTALL.ru.md: установщик для текущего пользователя обновит приложение и сохранит его настройки.");
+        assert_eq!(download.installer_instructions(crate::i18n::Language::English), "Quit AK Configurator completely, including the helper, using Quit. Extract the archive and follow INSTALL.en.md: the per-user installer updates the application and preserves its settings.");
+    }
+
     fn fixture() -> (Release, Vec<u8>) {
         let tag = "v99.0.0";
         let version = "99.0.0";

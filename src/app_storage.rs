@@ -518,11 +518,11 @@ pub(super) fn open_path_in_system_editor(path: &std::path::Path) -> bool {
     }
     #[cfg(target_os = "linux")]
     {
-        return std::process::Command::new("xdg-open")
+        std::process::Command::new("xdg-open")
             .arg(path)
             .status()
             .map(|status| status.success())
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
@@ -969,6 +969,7 @@ pub(super) fn save_combo_colors(colors: &[u32], device_name: &str) {
     }
 }
 
+#[cfg(test)]
 pub(super) fn combo_display_name(combo_names: &[String], idx: usize) -> String {
     match combo_names.get(idx) {
         Some(name) if !name.trim().is_empty() => name.clone(),
@@ -1006,6 +1007,7 @@ pub(super) fn save_key_override_names(names: &[String], device_name: &str) {
     }
 }
 
+#[cfg(test)]
 pub(super) fn key_override_display_name(key_override_names: &[String], idx: usize) -> String {
     match key_override_names.get(idx) {
         Some(name) if !name.trim().is_empty() => name.clone(),
@@ -1133,6 +1135,24 @@ pub(super) fn tap_dance_display_name(tap_dance_names: &[String], idx: usize) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_assignment_display_names_preserve_whitespace_and_zero_based_fallbacks() {
+        let names = ["", " \t\n", "  Имя  ", "\u{a0}", "C7"].map(String::from);
+        for (index, combo, key_override) in [
+            (0, "C0", "KO0"),
+            (1, "C1", "KO1"),
+            (2, "  Имя  ", "  Имя  "),
+            (3, "C3", "KO3"),
+            (4, "C7", "C7"),
+            (99, "C99", "KO99"),
+        ] {
+            assert_eq!(combo_display_name(&names, index), combo);
+            assert_eq!(key_override_display_name(&names, index), key_override);
+        }
+        assert_eq!(combo_display_name(&[], 0), "C0");
+        assert_eq!(key_override_display_name(&[], 0), "KO0");
+    }
 
     fn temp_macro_metadata_path(test_name: &str) -> std::path::PathBuf {
         let nonce = std::time::SystemTime::now()
@@ -1399,7 +1419,7 @@ mod pictogram_portability_tests {
             color: [1, 2, 3],
             bitmap: vec![0xA5; PICTOGRAM_BYTES],
         };
-        write_pictogram_file(&path, &[icon.clone()]).unwrap();
+        write_pictogram_file(&path, std::slice::from_ref(&icon)).unwrap();
         let read = read_pictogram_file(&path).unwrap();
         assert_eq!(read.len(), 1);
         assert_eq!(read[0].bitmap, icon.bitmap);

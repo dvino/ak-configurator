@@ -13,7 +13,7 @@ type QmkBridgeFactory<'a> = dyn FnMut(
     ) -> crate::qmk_hid_host::QmkHidHostBridge
     + 'a;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 fn qmk_bridge_device_still_connected(devices: &[Device], path: &str) -> bool {
     devices.iter().any(|device| device.path == path)
 }
@@ -481,7 +481,8 @@ impl EntropyApp {
         }
 
         let name = device.name.to_ascii_lowercase();
-        let ergohaven_macropad_display = device.is_ergohaven_display_macropad() || device.is_ergohaven_sm62();
+        let ergohaven_macropad_display =
+            device.is_ergohaven_display_macropad() || device.is_ergohaven_sm62();
 
         ergohaven_macropad_display || name.contains("m4cr0pad v2") || name.contains("m4cr0pad v3")
     }
@@ -634,9 +635,8 @@ impl EntropyApp {
         let tap_hold = {
             // AK820 uses QSID 22 for Caps Word language, not permissive hold.
             // Keep the upstream QSID meaning for other keyboard sessions.
-            let has_tap_hold_setting = |qsid: u16| {
-                has_qmk_setting(qsid) && !(qsid == 22 && dev_conn.is_ak820_session())
-            };
+            let has_tap_hold_setting =
+                |qsid: u16| has_qmk_setting(qsid) && !(qsid == 22 && dev_conn.is_ak820_session());
             let mut settings = TapHoldSettingsState::default();
             match has_qmk_setting(7).then(|| dev_conn.get_qmk_setting_u16(7)) {
                 Some(Ok(value)) => {
@@ -1906,7 +1906,7 @@ impl EntropyApp {
         // cancelled connector still owns its endpoint. Reserve the actual
         // connector, not the next UI selection, until that handoff begins.
         let selected_device = match &self.connect_state {
-            ConnectState::Loading { device, .. } => Some(device),
+            ConnectState::Loading { device, .. } => Some(device.as_ref()),
             _ => self
                 .selected_device
                 .and_then(|idx| self.device_manager.devices().get(idx)),
@@ -2132,7 +2132,7 @@ impl EntropyApp {
     pub(super) fn retire_selected_qmk_hid_host_bridges(&mut self) {
         self.retain_connected_qmk_hid_host_bridges();
         let selected = match &self.connect_state {
-            ConnectState::Loading { device, .. } => Some(device),
+            ConnectState::Loading { device, .. } => Some(device.as_ref()),
             _ => self
                 .selected_device
                 .and_then(|index| self.device_manager.devices().get(index)),
@@ -2234,6 +2234,19 @@ mod tests {
         assert!(!qmk_bridge_device_still_connected(
             std::slice::from_ref(&remaining),
             "disconnected-first-path"
+        ));
+        assert!(!qmk_bridge_device_still_connected(&[], "second-path"));
+        assert!(!qmk_bridge_device_still_connected(
+            std::slice::from_ref(&remaining),
+            "SECOND-PATH"
+        ));
+        let mut replacement = remaining.clone();
+        replacement.instance_token = "replacement-instance".into();
+        replacement.serial_number = "replacement-serial".into();
+        // This reference predicate is path-only, not device identity admission.
+        assert!(qmk_bridge_device_still_connected(
+            std::slice::from_ref(&replacement),
+            "second-path"
         ));
     }
 
@@ -2403,9 +2416,10 @@ mod tests {
             assert!(!settings.tap_hold.supports_qsid(22));
             assert!(!settings.tap_hold.qsid_loaded(22));
             assert!(!settings.tap_hold.permissive_hold);
-            assert!(recorder.requests().iter().all(|request| {
-                request[0..2] == [0xfe, 10] && request[2..4] == [7, 0]
-            }));
+            assert!(recorder
+                .requests()
+                .iter()
+                .all(|request| { request[0..2] == [0xfe, 10] && request[2..4] == [7, 0] }));
         }
     }
 

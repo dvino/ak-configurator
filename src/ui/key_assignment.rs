@@ -224,13 +224,12 @@ impl EntropyApp {
         self.selected_key = key_target.map(|ki| (self.selected_layer, ki));
         self.selected_encoder = encoder_target.map(|ei| (self.selected_layer, ei));
         self.keycode_picker.open = true;
-        self.keycode_picker.set_ak820_beta1_source(
-            if encoder_target.is_some() {
+        self.keycode_picker
+            .set_ak820_beta1_source(if encoder_target.is_some() {
                 crate::keycode_picker::Ak820Beta1KeycodeSource::Encoder
             } else {
                 crate::keycode_picker::Ak820Beta1KeycodeSource::Matrix
-            },
-        );
+            });
         self.keycode_picker.result = None;
         self.keycode_picker
             .rmk_native_key_actions_allowed_for_target = key_target.is_some();
@@ -385,6 +384,7 @@ impl EntropyApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(test)]
     pub(super) fn assign_keycode(
         &mut self,
         ctx: &egui::Context,
@@ -661,14 +661,6 @@ impl EntropyApp {
         }
     }
 
-    /// Reload all keycodes from device in background.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn load_from_device(&mut self) {
-        if let Some(idx) = self.selected_device {
-            self.start_connect(idx);
-        }
-    }
-
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn undo(&mut self, ctx: &egui::Context) {
         if self.vial_hid_background_layer_active() {
@@ -942,7 +934,9 @@ mod tests {
 
         assert_eq!(app.key_override_entries[0], KeyOverrideEntry::default());
         let requests = recorder.requests();
-        let request = requests.iter().find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
+        let request = requests
+            .iter()
+            .find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
             .expect("intentional clear should send the empty record");
         assert_eq!(&request[4..14], &[0; 10]);
     }
@@ -973,7 +967,9 @@ mod tests {
         app.keycode_picker.result = Some(4u16.into());
         app.apply_picker_results(&ctx);
         let requests = recorder.requests();
-        let request = requests.iter().find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
+        let request = requests
+            .iter()
+            .find(|r| r[..4] == [0xfe, 0x0d, 0x06, 0])
             .expect("complete draft should send one typed-compatible record");
         assert_eq!(&request[4..10], &[4, 0, 4, 1, 0x3f, 0]);
     }

@@ -4,7 +4,9 @@ use super::*;
 use crate::ak820_install_executor::{
     self as engine, InstallRequest, InstallationResult, PreparedInstallation,
 };
-use crate::ak820_loader::{self as loader, Command};
+#[cfg(not(test))]
+use crate::ak820_loader as loader;
+use crate::ak820_loader::Command;
 use crate::ak820_settings_backup::BackupResult;
 use std::sync::atomic::AtomicU32;
 
@@ -21,7 +23,7 @@ impl HidDevice {
         );
         #[cfg(test)]
         {
-            return Ok(Vec::new());
+            Ok(Vec::new())
         }
         #[cfg(not(test))]
         {
@@ -46,7 +48,10 @@ impl HidDevice {
         }
     }
     pub(crate) fn open_for_install(device: &crate::device::Device) -> Result<Self> {
-        ensure!(!crate::isolated_runtime(), "Installation is disabled in isolated application modes");
+        ensure!(
+            !crate::isolated_runtime(),
+            "Installation is disabled in isolated application modes"
+        );
         ensure!(
             !std::env::args().any(|a| a == "--demo-ak820"),
             "Physical installation is disabled in demo mode"
@@ -154,7 +159,7 @@ impl HidDevice {
         #[cfg(test)]
         {
             let _ = command;
-            return Err("Physical installation is disabled in test builds".into());
+            Err("Physical installation is disabled in test builds".into())
         }
         #[cfg(not(test))]
         match &self.backend {
@@ -178,7 +183,9 @@ mod install_session_tests {
             .ak820_prepare_install(
                 InstallRequest::BundledFirmware {
                     profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
-                    image: crate::ak820::ImageContract::Beta3(crate::app::ak820_beta1_profiles::ProfileId::Main),
+                    image: crate::ak820::ImageContract::Beta3(
+                        crate::app::ak820_beta1_profiles::ProfileId::Main,
+                    ),
                     recovery: None,
                     settings: engine::InstallSettingsChoice::Defaults,
                 },
@@ -273,6 +280,7 @@ pub(crate) enum WireCommand {
     Reconnect,
 }
 /// Helper-only state. An error ends the helper; no failed command is replayed.
+#[cfg(not(test))]
 pub(crate) struct InstallUsb {
     port: std::path::PathBuf,
     binding: [u8; 32],
@@ -282,9 +290,13 @@ pub(crate) struct InstallUsb {
     phase: u8,
     blocks: usize,
 }
+#[cfg(not(test))]
 impl InstallUsb {
     pub(crate) fn open(device: &crate::device::Device) -> Result<Self> {
-        ensure!(!crate::isolated_runtime(), "Installation is disabled in isolated application modes");
+        ensure!(
+            !crate::isolated_runtime(),
+            "Installation is disabled in isolated application modes"
+        );
         ensure!(device.is_ak820(), "Not an AK820 USB device");
         let api = hidapi::HidApi::new()?;
         let mut matches = api
@@ -577,6 +589,27 @@ pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
     }
     bail!("Physical USB port unavailable")
 }
+#[cfg(all(test, target_os = "linux"))]
+mod linux_port_tests {
+    use super::usb_port;
+
+    #[test]
+    fn malformed_usb_paths_fail_before_sysfs_lookup() {
+        for bytes in [b"\0".as_slice(), b"/\0".as_slice()] {
+            let path = std::ffi::CStr::from_bytes_with_nul(bytes).unwrap();
+            assert_eq!(
+                usb_port(path).unwrap_err().to_string(),
+                "Invalid hidraw path"
+            );
+        }
+        let invalid_utf8 = c"\xff";
+        assert!(usb_port(invalid_utf8)
+            .unwrap_err()
+            .root_cause()
+            .is::<std::str::Utf8Error>());
+    }
+}
+
 #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub(crate) fn usb_port(_path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
     bail!(
@@ -675,7 +708,7 @@ pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
         fn IOObjectRelease(object: u32) -> i32;
         fn IOObjectConformsTo(object: u32, name: *const c_char) -> u32;
         fn IORegistryEntryGetParentEntry(entry: u32, plane: *const c_char, parent: *mut u32)
-        -> i32;
+            -> i32;
     }
     #[link(name = "CoreFoundation", kind = "framework")]
     extern "C" {

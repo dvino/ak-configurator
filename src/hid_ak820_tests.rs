@@ -4,7 +4,9 @@ use super::*;
 #[test]
 fn diagnostic_bootstrap_cancelled_before_open_sends_no_packets() {
     let (hid, recorder) = HidDevice::test_ak820_device(false);
-    assert!(hid.ak820_diagnostic_bootstrap(&AtomicBool::new(true)).is_err());
+    assert!(hid
+        .ak820_diagnostic_bootstrap(&AtomicBool::new(true))
+        .is_err());
     assert!(recorder.requests().is_empty());
     assert!(hid.ak820_failure().is_some());
     assert!(!hid.ak820_editing_ready());
@@ -33,7 +35,9 @@ fn diagnostic_status_requires_exact_beta3_and_latches_transport_failure() {
     assert!(unknown.ak820_diagnostic_status().is_err());
     assert!(record.requests().is_empty());
     let (hid, recorder) = HidDevice::test_beta3_ak820_device(
-        crate::app::ak820_beta1_profiles::ProfileId::Main, false);
+        crate::app::ak820_beta1_profiles::ProfileId::Main,
+        false,
+    );
     recorder.respond_by(|_| Some(Err("synthetic timeout".into())));
     assert!(hid.ak820_diagnostic_status().is_err());
     assert_eq!(recorder.requests().len(), 1);
@@ -45,7 +49,9 @@ fn diagnostic_status_requires_exact_beta3_and_latches_transport_failure() {
 fn diagnostic_status_reports_faults_without_getters_or_retry() {
     for offset in [4, 6, 7, 10, 18] {
         let (hid, recorder) = HidDevice::test_beta3_ak820_device(
-            crate::app::ak820_beta1_profiles::ProfileId::Main, false);
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+            false,
+        );
         recorder.respond_by(move |_| {
             let mut reply = [0; 32];
             reply[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]);
@@ -97,6 +103,103 @@ fn atomic_palette_device_cancellable(
         Some(Ok(r))
     });
     (hid, log)
+}
+
+#[test]
+fn direct_reference_import_uses_fresh_generation_without_mode_or_persistence_writes() {
+    let imported = crate::ak820_rgb::direct::Snapshot {
+        generation: 42,
+        flags: 0,
+        hsv: [[5, 70, 100]; 82],
+    };
+    for initial_mode in [0, 1, 2] {
+        let (hid, log) = atomic_palette_device(initial_mode, None);
+        hid.ak820_restore_direct_palette(&imported).unwrap();
+        let actual = hid.ak820_direct_snapshot().unwrap();
+        assert_eq!(actual.hsv, [[5, 70, 100]; 82]);
+        assert_eq!(actual.generation, 0); // Scripted fresh u32::MAX wraps; imported 42 is not used.
+        let sent = log.requests();
+        let mut begin = [0; 32];
+        begin[..10].copy_from_slice(&[7, 0x43, 1, 82, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF]);
+        let begins: Vec<_> = sent.iter().filter(|p| p[..2] == [7, 0x43]).collect();
+        assert_eq!(begins, vec![&begin]);
+        let chunks: Vec<_> = sent.iter().filter(|p| p[..2] == [7, 0x44]).collect();
+        assert_eq!(chunks.len(), 11);
+        let mut first = [0; 32];
+        first[..6].copy_from_slice(&[7, 0x44, 1, 0, 0, 8]);
+        first[6..30].copy_from_slice(&[5, 70, 100].repeat(8));
+        assert_eq!(*chunks[0], first);
+        let mut last = [0; 32];
+        last[..12].copy_from_slice(&[7, 0x44, 1, 0, 80, 2, 5, 70, 100, 5, 70, 100]);
+        assert_eq!(*chunks[10], last);
+        let mut commit = [0; 32];
+        commit[..4].copy_from_slice(&[7, 0x45, 1, 0]);
+        let commits: Vec<_> = sent.iter().filter(|p| p[..2] == [7, 0x45]).collect();
+        assert_eq!(commits, vec![&commit]);
+        assert!(!sent.iter().any(|p| {
+            p[..2] == [7, 0x41] || p[..2] == [7, 0x42] || p[..2] == [7, 0x46] || p[0] == 9
+        }));
+        assert!(hid.ak820_failure().is_none());
+    }
+}
+
+#[test]
+fn direct_reference_import_refuses_invalid_read_only_and_unknown_sessions_before_io() {
+    let mut imported = crate::ak820_rgb::direct::Snapshot {
+        generation: 42,
+        flags: 0,
+        hsv: [[5, 70, 100]; 82],
+    };
+    let (hid, log) = atomic_palette_device(1, None);
+    imported.hsv[81][2] = 161;
+    assert_eq!(
+        hid.ak820_restore_direct_palette(&imported)
+            .unwrap_err()
+            .to_string(),
+        "Direct RAM brightness exceeds contract"
+    );
+    assert!(log.requests().is_empty());
+    assert!(hid.ak820_failure().is_none());
+    imported.hsv[81][2] = 100;
+    let session = super::super::ReadOnlyHidSession::default();
+    let (hid, log) = HidDevice::test_read_only_device(session.clone());
+    assert!(hid.ak820_restore_direct_palette(&imported).is_err());
+    assert!(log.requests().is_empty());
+    assert_eq!(session.refused_requests().len(), 1);
+    let (hid, log) = HidDevice::test_device();
+    assert_eq!(
+        hid.ak820_restore_direct_palette(&imported)
+            .unwrap_err()
+            .to_string(),
+        "Not an AK820 session"
+    );
+    assert!(log.requests().is_empty());
+}
+
+#[test]
+fn direct_reference_import_latches_chunk_failure_without_retry_commit_or_restore() {
+    let imported = crate::ak820_rgb::direct::Snapshot {
+        generation: 42,
+        flags: 0,
+        hsv: [[5, 70, 100]; 82],
+    };
+    let (hid, log) = atomic_palette_device(1, Some(24));
+    assert!(hid.ak820_restore_direct_palette(&imported).is_err());
+    let sent = log.requests();
+    assert_eq!(&sent.last().unwrap()[..6], &[7, 0x44, 1, 0, 24, 8]);
+    assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x43]).count(), 1);
+    assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x44]).count(), 4);
+    assert!(!sent.iter().any(|p| {
+        p[..2] == [7, 0x41]
+            || p[..2] == [7, 0x42]
+            || p[..2] == [7, 0x45]
+            || p[..2] == [7, 0x46]
+            || p[0] == 9
+    }));
+    assert!(hid.ak820_failure().is_some());
+    assert!(!hid.ak820_editing_ready());
+    assert!(hid.ak820_restore_direct_palette(&imported).is_err());
+    assert_eq!(log.requests(), sent);
 }
 
 #[test]
@@ -171,16 +274,44 @@ fn direct_v1_restores_original_palette_including_when_started_in_direct() {
 }
 
 #[test]
+fn direct_v1_restore_keeps_original_palette_after_older_streams_are_dropped() {
+    for initial_mode in [0, 1, 2] {
+        let (hid, log) = atomic_palette_device(initial_mode, None);
+        let original = hid.ak820_direct_snapshot().unwrap();
+        let first = start_rgb(&hid);
+        let Ak820RgbStreamResult::Applied(next) = hid
+            .ak820_stream_rgb_frame(&[[20, 40, 80]; 82], Some(&first), &AtomicBool::new(false))
+            .unwrap()
+        else {
+            panic!("next frame");
+        };
+        let survivor = next.clone();
+        let before_drop = log.requests().len();
+        drop(first);
+        drop(next);
+        assert_eq!(log.requests().len(), before_drop);
+        assert!(survivor.can_restore_builtin());
+        assert_eq!(
+            hid.ak820_restore_rgb_stream(&survivor, &AtomicBool::new(false))
+                .unwrap(),
+            Ak820RgbRestoreResult::Restored([initial_mode, 0, 42, 80, 200, 100])
+        );
+        assert_eq!(hid.ak820_direct_snapshot().unwrap().hsv, original.hsv);
+        let requests = log.requests();
+        assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x45]).count(), 3);
+        assert!(!requests.iter().any(|p| p[..2] == [7, 0x42] || p[0] == 9));
+    }
+}
+
+#[test]
 fn direct_v1_frame_failure_latches_without_restore_or_fallback() {
     let (hid, log) = atomic_palette_device(1, Some(24));
     assert!(hid.ak820_apply_palette(&[[80; 3]; 82]).is_err());
     let sent = log.requests();
     assert_eq!(sent.iter().filter(|p| p[..2] == [7, 0x44]).count(), 4);
-    assert!(
-        !sent
-            .iter()
-            .any(|p| p[..2] == [7, 0x42] || p[..2] == [7, 0x45] || p[..2] == [7, 0x46])
-    );
+    assert!(!sent
+        .iter()
+        .any(|p| p[..2] == [7, 0x42] || p[..2] == [7, 0x45] || p[..2] == [7, 0x46]));
     assert!(hid.ak820_apply_palette(&[[0; 3]; 82]).is_err());
     assert_eq!(log.requests().len(), sent.len());
     assert!(!hid.ak820_editing_ready());
@@ -236,16 +367,14 @@ fn static_palette_is_bounded_and_never_saves_nvm() {
     assert_eq!(packets.iter().map(|p| p[4] as usize).sum::<usize>(), 82);
     for (index, p) in packets.iter().enumerate() {
         assert_eq!(p[2] as usize, index * 9);
-        for hsv in p[5..5 + p[4] as usize * 3].chunks_exact(3) {
-            assert_eq!(hsv, [0, 255, 160]);
+        for hsv in p[5..5 + p[4] as usize * 3].as_chunks::<3>().0 {
+            assert_eq!(*hsv, [0, 255, 160]);
         }
     }
     assert_eq!(requests.iter().filter(|p| p[..2] == [7, 0x41]).count(), 1);
-    assert!(
-        !requests
-            .iter()
-            .any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F)
-    );
+    assert!(!requests
+        .iter()
+        .any(|p| p[0] == 9 || p[0] == 0xFE || p[0] == 0x0F));
     assert!(hid.ak820_editing_ready());
 }
 
@@ -305,10 +434,9 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
     for packet in 0..10 {
         let (hid, log) = palette_device(Some(packet * 9));
         let cancel = AtomicBool::new(false);
-        assert!(
-            hid.ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
-                .is_err()
-        );
+        assert!(hid
+            .ak820_stream_rgb_frame(&[[80; 3]; 82], None, &cancel)
+            .is_err());
         let sent = log.requests();
         assert_eq!(
             sent.iter().filter(|p| p[..2] == [7, 0x42]).count(),
@@ -316,10 +444,9 @@ fn rgb_stream_failure_at_each_packet_boundary_stops_without_retry_or_restore() {
         );
         assert!(!sent.iter().any(|p| p[..2] == [7, 0x41] || p[0] == 9));
         assert!(!hid.ak820_editing_ready());
-        assert!(
-            hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel)
-                .is_err()
-        );
+        assert!(hid
+            .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &cancel)
+            .is_err());
         assert_eq!(sent.len(), log.requests().len());
     }
 }
@@ -401,10 +528,9 @@ fn rgb_stream_yields_to_physical_mode_and_color_controls_without_poisoning_setti
 fn rgb_stream_rejects_read_only_sessions_before_transport() {
     let (mut hid, log) = palette_device(None);
     hid.read_only = Some(super::super::ReadOnlyHidSession::default());
-    assert!(
-        hid.ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false))
-            .is_err()
-    );
+    assert!(hid
+        .ak820_stream_rgb_frame(&[[0; 3]; 82], None, &AtomicBool::new(false))
+        .is_err());
     assert!(log.requests().is_empty());
 }
 
@@ -607,10 +733,9 @@ fn rgb_restore_storage_timeout_or_unknown_mode_stops_and_latches() {
             Some(Ok(r))
         });
         let before = log.requests().len();
-        assert!(
-            hid.ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
-                .is_err()
-        );
+        assert!(hid
+            .ak820_restore_rgb_stream(&token, &AtomicBool::new(false))
+            .is_err());
         assert!(!hid.ak820_editing_ready());
         let sent = log.requests();
         assert!(!sent[before..].iter().any(|p| p[0] == 7 || p[0] == 9));
@@ -800,11 +925,10 @@ fn rgb_save_checks_scripted_persistent_bytes_and_latches_mismatch() {
             Some(Ok(r))
         });
         assert_eq!(hid.usb_send(&[9]).is_err(), bad_saved_value);
-        assert!(
-            log.requests()
-                .iter()
-                .any(|p| p[..5] == [0xFD, 0, 0xC7, 0x18, 8])
-        );
+        assert!(log
+            .requests()
+            .iter()
+            .any(|p| p[..5] == [0xFD, 0, 0xC7, 0x18, 8]));
         assert_eq!(hid.ak820_failure().is_some(), bad_saved_value);
         if bad_saved_value {
             let before = log.requests().len();
@@ -827,7 +951,9 @@ fn full_verification_rejects_zero_code_trial_and_unknown_manifest_hash() {
         manifest[12..16].copy_from_slice(&0x082002u32.to_le_bytes());
         for (i, pair) in crate::ak820::CODE_SHA256
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .enumerate()
         {
             manifest[16 + i] = u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap();

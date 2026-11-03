@@ -39,8 +39,7 @@ pub(super) fn show_text_expander_emoji_popup(
                 ui,
                 popup_id.with("search"),
                 search,
-                popup_width,
-                32.0 * scale,
+                egui::vec2(popup_width, 32.0 * scale),
                 crate::i18n::tr_catalog(lang, "text_expander.emoji_search_hint"),
                 64,
                 egui::Align::Min,
@@ -212,6 +211,7 @@ fn emoji_image_rect(glyph_rect: egui::Rect, field_height: f32) -> egui::Rect {
     egui::Rect::from_center_size(glyph_rect.center(), egui::Vec2::splat(image_side))
 }
 
+#[cfg(test)]
 pub(super) fn color_emoji_text_field(
     ui: &mut egui::Ui,
     id: egui::Id,
@@ -221,7 +221,15 @@ pub(super) fn color_emoji_text_field(
     hint: &str,
     char_limit: usize,
 ) -> egui::Response {
-    color_emoji_field(ui, id, text, width, height, hint, char_limit, true)
+    color_emoji_field(
+        ui,
+        id,
+        text,
+        egui::vec2(width, height),
+        hint,
+        char_limit,
+        true,
+    )
 }
 
 pub(super) fn color_emoji_preview_field(
@@ -233,20 +241,31 @@ pub(super) fn color_emoji_preview_field(
     hint: &str,
 ) -> egui::Response {
     let mut display = text.replace(['\r', '\n'], " ");
-    color_emoji_field(ui, id, &mut display, width, height, hint, 480, false)
+    color_emoji_field(
+        ui,
+        id,
+        &mut display,
+        egui::vec2(width, height),
+        hint,
+        480,
+        false,
+    )
 }
 
 fn color_emoji_field(
     ui: &mut egui::Ui,
     id: egui::Id,
     text: &mut String,
-    width: f32,
-    height: f32,
+    size: egui::Vec2,
     hint: &str,
     char_limit: usize,
     interactive: bool,
 ) -> egui::Response {
-    let field_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, height));
+    let egui::Vec2 {
+        x: width,
+        y: height,
+    } = size;
+    let field_rect = egui::Rect::from_min_size(ui.cursor().min, size);
     let font_size = 12.5 * (height / 32.0).clamp(1.0, 1.3);
     let text_color = ui.visuals().text_color();
     let mut layouter = |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {

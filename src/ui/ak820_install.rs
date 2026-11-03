@@ -38,7 +38,7 @@ enum Owner {
         cancel: std::sync::Arc<AtomicBool>,
         progress: std::sync::Arc<AtomicU32>,
     },
-    Prepared(Preview),
+    Prepared(Box<Preview>),
     Executing {
         rx: mpsc::Receiver<ExecutionReport>,
         cancel: std::sync::Arc<AtomicBool>,
@@ -114,7 +114,11 @@ struct Dialog {
 
 enum PickedInput {
     File(SelectedFile),
-    Oem(Vec<u8>, crate::ak820_install_executor::RecoveryProvenance, String),
+    Oem(
+        Vec<u8>,
+        crate::ak820_install_executor::RecoveryProvenance,
+        String,
+    ),
 }
 
 static INPUT_READER_BUSY: AtomicBool = AtomicBool::new(false);
@@ -139,7 +143,11 @@ fn recovery_directory(path: &std::path::Path) -> Option<&std::path::Path> {
         return None;
     }
     path.parent().map(|parent| {
-        if parent.as_os_str().is_empty() { std::path::Path::new(".") } else { parent }
+        if parent.as_os_str().is_empty() {
+            std::path::Path::new(".")
+        } else {
+            parent
+        }
     })
 }
 
@@ -203,7 +211,11 @@ impl Runtime {
         )
     }
     pub(super) fn blocks_exit(&self) -> bool {
-        self.owns_hid() || self.dialog.as_ref().is_some_and(|dialog| dialog.pending.is_some())
+        self.owns_hid()
+            || self
+                .dialog
+                .as_ref()
+                .is_some_and(|dialog| dialog.pending.is_some())
     }
     pub(super) fn has_path_entry(&self) -> bool {
         self.dialog.is_some()
@@ -211,7 +223,11 @@ impl Runtime {
 }
 
 fn tr<'a>(ru: bool, en: &'a str, russian: &'a str) -> &'a str {
-    if ru { russian } else { en }
+    if ru {
+        russian
+    } else {
+        en
+    }
 }
 
 fn firmware_outcome_text(
@@ -385,9 +401,14 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
     }
     if app.ak820_install_runtime.mode == Mode::Firmware && !app.ak820_install_runtime.beta4_1 {
         if let Some(error) = beta3_admission_error(app.ak820_install_runtime.profile) {
-            app.status_msg = format!("{}: {error}", tr(
-                app.app_settings.language == crate::i18n::Language::Russian,
-                "Release admission denied", "Допуск выпуска отклонён"));
+            app.status_msg = format!(
+                "{}: {error}",
+                tr(
+                    app.app_settings.language == crate::i18n::Language::Russian,
+                    "Release admission denied",
+                    "Допуск выпуска отклонён"
+                )
+            );
             return;
         }
     }
@@ -597,7 +618,11 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                     );
                 }
             }
-            let provenance = if without_oem_archive { None } else { plan.recovery_provenance().cloned() };
+            let provenance = if without_oem_archive {
+                None
+            } else {
+                plan.recovery_provenance().cloned()
+            };
             Ok(Preview {
                 hid,
                 plan,
@@ -667,7 +692,7 @@ impl EntropyApp {
         }
         let completed = match &self.ak820_install_runtime.owner {
             Owner::Preparing { rx, .. } => match rx.try_recv() {
-                Ok(result) => Some(Completion::Prepared(result)),
+                Ok(result) => Some(Completion::Prepared(result.map(Box::new))),
                 Err(mpsc::TryRecvError::Empty) => None,
                 Err(mpsc::TryRecvError::Disconnected) => Some(Completion::Prepared(Err(
                     "Installation preparation worker stopped unexpectedly".into(),
@@ -717,8 +742,12 @@ impl EntropyApp {
         let runtime = &mut self.ak820_install_runtime;
         if runtime.dialog.as_ref().is_some_and(|dialog| {
             dialog.generation != runtime.picker_generation
-                || dialog.mode != runtime.mode || dialog.source != runtime.source
-                || dialog.recovery_pins.as_ref().is_some_and(|pins| *pins != self.app_settings.ak820_recovery_manifests)
+                || dialog.mode != runtime.mode
+                || dialog.source != runtime.source
+                || dialog
+                    .recovery_pins
+                    .as_ref()
+                    .is_some_and(|pins| *pins != self.app_settings.ak820_recovery_manifests)
         }) {
             runtime.dialog = None;
         }
@@ -728,10 +757,16 @@ impl EntropyApp {
         if let Some(dialog) = &mut runtime.dialog {
             if let Some(rx) = &dialog.pending {
                 match rx.try_recv() {
-                    Ok(result) => { completed_input = Some((dialog.pick, result)); close_dialog = true; }
-                    Err(mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(80)),
+                    Ok(result) => {
+                        completed_input = Some((dialog.pick, result));
+                        close_dialog = true;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => {
+                        ctx.request_repaint_after(std::time::Duration::from_millis(80))
+                    }
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        completed_input = Some((dialog.pick, Err("File reader stopped unexpectedly".into())));
+                        completed_input =
+                            Some((dialog.pick, Err("File reader stopped unexpectedly".into())));
                         close_dialog = true;
                     }
                 }
@@ -743,14 +778,24 @@ impl EntropyApp {
                 }
             }
         }
-        if close_dialog { runtime.dialog = None; }
+        if close_dialog {
+            runtime.dialog = None;
+        }
         if let Some((pick, path)) = chosen {
             if pick == Pick::BackupRoot {
                 runtime.backup_root = Some(path);
                 runtime.dialog = None;
-            } else if INPUT_READER_BUSY.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+            } else if INPUT_READER_BUSY
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .is_err()
+            {
                 runtime.dialog = None;
-                self.status_msg = tr(ru, "A previous file read is still running; try again later", "Предыдущее чтение файла ещё выполняется; повторите позже").into();
+                self.status_msg = tr(
+                    ru,
+                    "A previous file read is still running; try again later",
+                    "Предыдущее чтение файла ещё выполняется; повторите позже",
+                )
+                .into();
             } else {
                 let permit = InputReaderPermit;
                 let pins = self.app_settings.ak820_recovery_manifests.clone();
@@ -764,17 +809,37 @@ impl EntropyApp {
                     let result = if pick == Pick::OemRecovery {
                         recovery_directory(&path)
                             .ok_or_else(|| "Select the archive's manifest.json file".to_owned())
-                            .and_then(|directory| crate::ak820_backup_files::read_install_recovery(directory, &pins))
-                            .map(|(rom, provenance)| PickedInput::Oem(rom, provenance,
-                                path.parent().and_then(|p| p.file_name()).unwrap_or_default().to_string_lossy().into_owned()))
+                            .and_then(|directory| {
+                                crate::ak820_backup_files::read_install_recovery(directory, &pins)
+                            })
+                            .map(|(rom, provenance)| {
+                                PickedInput::Oem(
+                                    rom,
+                                    provenance,
+                                    path.parent()
+                                        .and_then(|p| p.file_name())
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .into_owned(),
+                                )
+                            })
                     } else {
                         let expected = if pick == Pick::Payload { 51136 } else { 65536 };
-                        super::ak820_install_files::read_input_bytes(&path, expected, ru).map(|bytes| {
-                            PickedInput::File(SelectedFile {
-                                name: path.file_name().unwrap_or_default().to_string_lossy().chars().filter(|c| !c.is_control()).take(72).collect(),
-                                bytes,
-                            })
-                        })
+                        super::ak820_install_files::read_input_bytes(&path, expected, ru).map(
+                            |bytes| {
+                                PickedInput::File(SelectedFile {
+                                    name: path
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .chars()
+                                        .filter(|c| !c.is_control())
+                                        .take(72)
+                                        .collect(),
+                                    bytes,
+                                })
+                            },
+                        )
                     };
                     let _ = tx.send(result);
                     worker_ctx.request_repaint();
@@ -783,7 +848,12 @@ impl EntropyApp {
                     Ok(_) => runtime.dialog.as_mut().unwrap().pending = Some(rx),
                     Err(_) => {
                         runtime.dialog = None;
-                        self.status_msg = tr(ru, "Could not start file reader", "Не удалось запустить чтение файла").into();
+                        self.status_msg = tr(
+                            ru,
+                            "Could not start file reader",
+                            "Не удалось запустить чтение файла",
+                        )
+                        .into();
                     }
                 }
             }
@@ -802,7 +872,16 @@ impl EntropyApp {
                     self.ak820_install_runtime.rollback_recovery = Some((rom, provenance, label));
                     self.retire_install_preview();
                 }
-                Err(error) => self.status_msg = format!("{}: {error}", tr(ru, "Could not read the selected input", "Не удалось прочитать выбранные данные")),
+                Err(error) => {
+                    self.status_msg = format!(
+                        "{}: {error}",
+                        tr(
+                            ru,
+                            "Could not read the selected input",
+                            "Не удалось прочитать выбранные данные"
+                        )
+                    )
+                }
             }
         }
         if let Some(rx) = self.ak820_install_runtime.release_check.take() {
@@ -907,7 +986,7 @@ impl EntropyApp {
 }
 
 enum Completion {
-    Prepared(Result<Preview, String>),
+    Prepared(Result<Box<Preview>, String>),
     Executed(ExecutionReport),
     Lost(SafetyPaths),
 }
@@ -938,8 +1017,7 @@ fn launch_execute(app: &mut EntropyApp, confirmed_pin: String) {
             )
             .and_then(|admission| admission.with_observation(observation))
         };
-        match admission
-        {
+        match admission {
             Ok(admission) => Some(admission),
             Err(error) => {
                 app.retire_install_preview();
@@ -1079,9 +1157,16 @@ fn pick(runtime: &mut Runtime, kind: Pick) {
     let (tx, rx) = mpsc::channel();
     runtime.picker_generation = runtime.picker_generation.wrapping_add(1);
     runtime.dialog = Some(Dialog {
-        rx, tx, path: String::new(), pick: kind, browser: None,
-        generation: runtime.picker_generation, mode: runtime.mode, source: runtime.source,
-        pending: None, recovery_pins: None,
+        rx,
+        tx,
+        path: String::new(),
+        pick: kind,
+        browser: None,
+        generation: runtime.picker_generation,
+        mode: runtime.mode,
+        source: runtime.source,
+        pending: None,
+        recovery_pins: None,
     });
 }
 
@@ -1109,42 +1194,61 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
         if let Some(dialog) = &mut runtime.dialog {
             if dialog.pending.is_some() {
                 ui.spinner();
-                ui.label(tr(ru, "Reading selected input…", "Чтение выбранных данных…"));
+                ui.label(tr(
+                    ru,
+                    "Reading selected input…",
+                    "Чтение выбранных данных…",
+                ));
                 if ui.button(tr(ru, "Cancel", "Отмена")).clicked() {
                     cancel_picker = true;
                 }
             } else {
-            ui.label(match dialog.pick {
-                Pick::BackupRoot => tr(ru, "Enter directory path", "Введите путь к папке"),
-                Pick::OemRecovery => tr(ru, "Select manifest.json from the OEM recovery archive", "Выберите manifest.json из архива восстановления OEM"),
-                _ => tr(ru, "Enter file path", "Введите путь к файлу"),
-            });
-            ui.text_edit_singleline(&mut dialog.path);
-            if dialog.browser.is_none() && ui.button(tr(ru, "Browse…", "Обзор…")).clicked() {
-                dialog.browser = Some(super::file_browser::FileBrowser::new(
-                    PathBuf::from("."), dialog.pick.browser_mode(), ui.ctx(),
-                ));
-            }
-            if let Some(browser) = &mut dialog.browser {
-                if let Some(result) = browser.show(ui, ru) {
-                    match result {
-                        super::file_browser::BrowserResult::Selected(path)
-                        | super::file_browser::BrowserResult::Directory(path) => {
-                            let _ = dialog.tx.send(Some(path));
+                ui.label(match dialog.pick {
+                    Pick::BackupRoot => tr(ru, "Enter directory path", "Введите путь к папке"),
+                    Pick::OemRecovery => tr(
+                        ru,
+                        "Select manifest.json from the OEM recovery archive",
+                        "Выберите manifest.json из архива восстановления OEM",
+                    ),
+                    _ => tr(ru, "Enter file path", "Введите путь к файлу"),
+                });
+                ui.text_edit_singleline(&mut dialog.path);
+                if dialog.browser.is_none() && ui.button(tr(ru, "Browse…", "Обзор…")).clicked()
+                {
+                    dialog.browser = Some(super::file_browser::FileBrowser::new(
+                        PathBuf::from("."),
+                        dialog.pick.browser_mode(),
+                        ui.ctx(),
+                    ));
+                }
+                if let Some(browser) = &mut dialog.browser {
+                    if let Some(result) = browser.show(ui, ru) {
+                        match result {
+                            super::file_browser::BrowserResult::Selected(path)
+                            | super::file_browser::BrowserResult::Directory(path) => {
+                                let _ = dialog.tx.send(Some(path));
+                            }
+                            super::file_browser::BrowserResult::Cancelled => {}
                         }
-                        super::file_browser::BrowserResult::Cancelled => {}
+                        dialog.browser = None;
                     }
-                    dialog.browser = None;
                 }
-            }
-            ui.horizontal_wrapped(|ui| {
-                if crate::ui_style::action_button(ui, tr(ru, "Select", "Выбрать"), !dialog.path.trim().is_empty()).clicked() {
-                    let _ = dialog.tx.send(Some(PathBuf::from(&dialog.path)));
-                }
-                if crate::ui_style::action_button(ui, tr(ru, "Cancel", "Отмена"), true).clicked() {
-                    let _ = dialog.tx.send(None);
-                }
-            });
+                ui.horizontal_wrapped(|ui| {
+                    if crate::ui_style::action_button(
+                        ui,
+                        tr(ru, "Select", "Выбрать"),
+                        !dialog.path.trim().is_empty(),
+                    )
+                    .clicked()
+                    {
+                        let _ = dialog.tx.send(Some(PathBuf::from(&dialog.path)));
+                    }
+                    if crate::ui_style::action_button(ui, tr(ru, "Cancel", "Отмена"), true)
+                        .clicked()
+                    {
+                        let _ = dialog.tx.send(None);
+                    }
+                });
             }
         }
         if cancel_picker {
@@ -1431,8 +1535,11 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 if crate::ui_style::action_button(
                     ui,
                     tr(ru, "Prepare preview", "Подготовить план"),
-                    matches!(app.connect_state, ConnectState::Idle) && runtime.dialog.is_none()
-                        && (runtime.mode != Mode::Firmware || runtime.beta4_1 || beta3_admission_error(runtime.profile).is_none()),
+                    matches!(app.connect_state, ConnectState::Idle)
+                        && runtime.dialog.is_none()
+                        && (runtime.mode != Mode::Firmware
+                            || runtime.beta4_1
+                            || beta3_admission_error(runtime.profile).is_none()),
                 )
                 .clicked()
                 {
@@ -1599,11 +1706,18 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
         }
     }
-    if app.ak820_install_runtime.dialog.as_ref().is_some_and(|dialog| {
-        dialog.mode != app.ak820_install_runtime.mode || dialog.source != app.ak820_install_runtime.source
-    }) {
+    if app
+        .ak820_install_runtime
+        .dialog
+        .as_ref()
+        .is_some_and(|dialog| {
+            dialog.mode != app.ak820_install_runtime.mode
+                || dialog.source != app.ak820_install_runtime.source
+        })
+    {
         app.ak820_install_runtime.dialog = None;
-        app.ak820_install_runtime.picker_generation = app.ak820_install_runtime.picker_generation.wrapping_add(1);
+        app.ak820_install_runtime.picker_generation =
+            app.ak820_install_runtime.picker_generation.wrapping_add(1);
     }
     if close_result {
         app.ak820_install_runtime.owner = Owner::Idle;
@@ -1643,18 +1757,31 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
     app.poll_ak820_install(&ctx);
     let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let active = app.ak820_install_runtime.owns_hid();
-    egui::ScrollArea::vertical().id_salt("ak820_install_page").show(ui, |ui| {
-        ui.heading(tr(ru, "AK820 firmware installation", "Установка прошивки AK820"));
-        ui.horizontal_wrapped(|ui| {
-            if crate::ui_style::action_button(ui, tr(ru, "Back", "Назад"), !active && !app.ak820_install_runtime.has_path_entry()).clicked() {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
-            }
-            if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked() {
-                super::ak820_help_ui::open_section(&ctx, "firmware-install-recovery");
-            }
+    egui::ScrollArea::vertical()
+        .id_salt("ak820_install_page")
+        .show(ui, |ui| {
+            ui.heading(tr(
+                ru,
+                "AK820 firmware installation",
+                "Установка прошивки AK820",
+            ));
+            ui.horizontal_wrapped(|ui| {
+                if crate::ui_style::action_button(
+                    ui,
+                    tr(ru, "Back", "Назад"),
+                    !active && !app.ak820_install_runtime.has_path_entry(),
+                )
+                .clicked()
+                {
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), false));
+                }
+                if crate::ui_style::action_button(ui, tr(ru, "Help", "Справка"), true).clicked()
+                {
+                    super::ak820_help_ui::open_section(&ctx, "firmware-install-recovery");
+                }
+            });
+            draw(app, ui);
         });
-        draw(app, ui);
-    });
 }
 
 #[cfg(test)]
@@ -1664,15 +1791,27 @@ mod tests {
     #[test]
     fn preview_settings_text_uses_prepared_outcome() {
         use crate::ak820_install_executor::InstallSettingsOutcome::*;
-        assert_eq!(settings_outcome_text(&DefaultsRequested, false), "defaults requested");
-        assert_eq!(settings_outcome_text(&DefaultsRequested, true), "запрошены настройки по умолчанию");
-        assert_ne!(settings_outcome_text(&DefaultsRequested, false), settings_outcome_text(&PreparedImageSettingsVerified, false));
+        assert_eq!(
+            settings_outcome_text(&DefaultsRequested, false),
+            "defaults requested"
+        );
+        assert_eq!(
+            settings_outcome_text(&DefaultsRequested, true),
+            "запрошены настройки по умолчанию"
+        );
+        assert_ne!(
+            settings_outcome_text(&DefaultsRequested, false),
+            settings_outcome_text(&PreparedImageSettingsVerified, false)
+        );
     }
 
     #[test]
     fn beta3_selection_reports_catalog_denial_for_every_profile() {
         for row in crate::app::ak820_beta1_profiles::profiles() {
-            assert_eq!(beta3_admission_error(row.profile).as_deref(), Some("Beta.3 release catalog does not authorize flashing"));
+            assert_eq!(
+                beta3_admission_error(row.profile).as_deref(),
+                Some("Beta.3 release catalog does not authorize flashing")
+            );
         }
     }
 
@@ -1683,16 +1822,24 @@ mod tests {
         for pick in [Pick::Payload, Pick::Recovery, Pick::OemRecovery] {
             assert_eq!(pick.browser_mode(), BrowserMode::File);
         }
-        assert_eq!(recovery_directory(std::path::Path::new("archive/manifest.json")), Some(std::path::Path::new("archive")));
+        assert_eq!(
+            recovery_directory(std::path::Path::new("archive/manifest.json")),
+            Some(std::path::Path::new("archive"))
+        );
         assert!(recovery_directory(std::path::Path::new("archive/other.json")).is_none());
         assert!(recovery_directory(std::path::Path::new("archive")).is_none());
-        assert_eq!(recovery_directory(std::path::Path::new("manifest.json")), Some(std::path::Path::new(".")));
+        assert_eq!(
+            recovery_directory(std::path::Path::new("manifest.json")),
+            Some(std::path::Path::new("."))
+        );
     }
 
     #[test]
     fn cancelling_path_selection_preserves_installer_inputs() {
-        let mut runtime = Runtime::default();
-        runtime.backup_root = Some(PathBuf::from("original"));
+        let mut runtime = Runtime {
+            backup_root: Some(PathBuf::from("original")),
+            ..Default::default()
+        };
         pick(&mut runtime, Pick::OemRecovery);
         assert!(runtime.has_path_entry());
         assert_eq!(runtime.dialog.as_ref().unwrap().pick, Pick::OemRecovery);
@@ -1714,7 +1861,11 @@ mod tests {
         app.ak820_install_runtime.dialog.as_mut().unwrap().pending = Some(rx);
         assert!(app.ak820_install_runtime.blocks_exit());
         app.ak820_install_runtime.source = Source::Bundled;
-        tx.send(Ok(PickedInput::File(SelectedFile { name: "late".into(), bytes: vec![1] }))).unwrap();
+        tx.send(Ok(PickedInput::File(SelectedFile {
+            name: "late".into(),
+            bytes: vec![1],
+        })))
+        .unwrap();
         app.poll_ak820_install(&ctx);
         assert!(app.ak820_install_runtime.dialog.is_none());
         assert_eq!(app.ak820_install_runtime.source, Source::Bundled);
@@ -1727,22 +1878,36 @@ mod tests {
         pick(&mut app.ak820_install_runtime, Pick::Recovery);
         assert!(tx.send(Err("late".into())).is_err());
         app.poll_ak820_install(&ctx);
-        assert_eq!(app.ak820_install_runtime.dialog.as_ref().unwrap().pick, Pick::Recovery);
+        assert_eq!(
+            app.ak820_install_runtime.dialog.as_ref().unwrap().pick,
+            Pick::Recovery
+        );
         assert!(app.ak820_install_runtime.rollback_recovery.is_none());
     }
 
     #[test]
     fn picker_renders_on_narrow_viewport_in_both_languages() {
-        for language in [crate::i18n::Language::English, crate::i18n::Language::Russian] {
+        for language in [
+            crate::i18n::Language::English,
+            crate::i18n::Language::Russian,
+        ] {
             let ctx = egui::Context::default();
             let cc = eframe::CreationContext::_new_kittest(ctx.clone());
             let mut app = EntropyApp::new_ak820_demo(&cc);
             app.app_settings.language = language;
             pick(&mut app.ak820_install_runtime, Pick::OemRecovery);
-            let _ = ctx.run(egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 500.0))),
-                ..Default::default()
-            }, |ctx| { egui::CentralPanel::default().show(ctx, |ui| show(&mut app, ui)); });
+            let _ = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(320.0, 500.0),
+                    )),
+                    ..Default::default()
+                },
+                |root_ui| {
+                    egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut app, ui));
+                },
+            );
             assert!(app.ak820_install_runtime.has_path_entry());
             assert!(app.hid_device.is_none());
         }
@@ -1865,7 +2030,7 @@ mod tests {
             app.app_settings.language = language;
             ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_ID), true));
             for _ in 0..3 {
-                ctx.run(
+                let _ = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(egui::Rect::from_min_size(
                             egui::Pos2::ZERO,
@@ -1873,7 +2038,9 @@ mod tests {
                         )),
                         ..Default::default()
                     },
-                    |ctx| { egui::CentralPanel::default().show(ctx, |ui| show(&mut app, ui)); },
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| show(&mut app, ui));
+                    },
                 );
             }
             assert!(app.hid_device.is_none());

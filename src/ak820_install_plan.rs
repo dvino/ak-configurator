@@ -71,6 +71,13 @@ pub(crate) const UNMET_HARDWARE_GATES: [HardwareGate; 9] = [
     HardwareGate::OptionalSettingsRestoreQualification,
 ];
 
+pub(crate) struct PreparationContext<'a> {
+    pub(crate) source: &'a [u8],
+    pub(crate) fresh_backup: &'a [u8],
+    pub(crate) generation: u64,
+    pub(crate) now: u64,
+}
+
 /// Immutable inputs, including complete expected ROM. Hash pins identify bytes,
 /// never ownership of a physical keyboard. No public constructor bypasses checks.
 #[derive(Clone, Debug)]
@@ -92,12 +99,9 @@ impl PreparedInstall {
         candidate: &OfflineCandidate,
         profile: ProfileId,
         origin: InputOrigin,
-        source: &[u8],
-        fresh_backup: &[u8],
         release: ReleaseSelection,
         settings: SettingsChoice,
-        generation: u64,
-        now: u64,
+        context: PreparationContext<'_>,
     ) -> BackupResult<Self> {
         // Catalog presence or a linked fingerprint is insufficient.
         if matrix_profile(profile).settings_identity.is_none() {
@@ -108,12 +112,9 @@ impl PreparedInstall {
             Action::Firmware(profile),
             candidate.bytes(),
             origin,
-            source,
-            fresh_backup,
             release,
             settings,
-            generation,
-            now,
+            context,
         )
     }
     pub(crate) fn oem_rollback(
@@ -135,25 +136,30 @@ impl PreparedInstall {
             Action::OemRollback,
             &dump[APP_START..APP_END],
             InputOrigin::Local,
-            source,
-            fresh_backup,
             release,
             SettingsChoice::Defaults,
-            generation,
-            now,
+            PreparationContext {
+                source,
+                fresh_backup,
+                generation,
+                now,
+            },
         )
     }
     fn prepare(
         action: Action,
         payload: &[u8],
         origin: InputOrigin,
-        source: &[u8],
-        fresh_backup: &[u8],
         release: ReleaseSelection,
         settings: SettingsChoice,
-        generation: u64,
-        now: u64,
+        context: PreparationContext<'_>,
     ) -> BackupResult<Self> {
+        let PreparationContext {
+            source,
+            fresh_backup,
+            generation,
+            now,
+        } = context;
         if source.len() != 65536 || fresh_backup != source || payload.len() != APP_END - APP_START {
             return Err(
                 "Missing complete source, matching fresh backup, or application payload".into(),
@@ -489,15 +495,100 @@ mod tests {
             Action::Firmware(ProfileId::Main),
             &vec![1; APP_END - APP_START],
             InputOrigin::Bundled,
-            &source,
-            &source,
             release(),
             settings,
-            7,
-            10,
+            PreparationContext {
+                source: &source,
+                fresh_backup: &source,
+                generation: 7,
+                now: 10,
+            },
         )
         .unwrap()
     }
+    #[test]
+    fn prepared_snapshots_and_accessors_remain_bound_after_caller_mutations() {
+        // Kernel-only synthetic preparation bypasses public image qualification.
+        let mut source = vec![0; 65536];
+        let mut backup = source.clone();
+        let mut payload = vec![1; APP_END - APP_START];
+        let p = PreparedInstall::prepare(
+            Action::Firmware(ProfileId::Main),
+            &payload,
+            InputOrigin::Bundled,
+            release(),
+            SettingsChoice::Defaults,
+            PreparationContext {
+                source: &source,
+                fresh_backup: &backup,
+                generation: 7,
+                now: 10,
+            },
+        )
+        .unwrap();
+        let pin = p.confirmation_pin().to_owned();
+        source.fill(2);
+        backup.fill(3);
+        payload.fill(4);
+        // Independent SHA256 vector for 65536 zero bytes, not the helper under test.
+        const ZERO_ROM_SHA: &str =
+            "de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31";
+        assert_eq!(p.source_pin(), ZERO_ROM_SHA);
+        assert_eq!(p.backup_pin(), ZERO_ROM_SHA);
+        assert_eq!(p.write_window(), 0x2800..0xefc0);
+        assert_eq!(p.expected.len(), 65536);
+        assert!(p.expected[..0x2800].iter().all(|&byte| byte == 0));
+        assert!(p.expected[0x2800..0xefc0].iter().all(|&byte| byte == 1));
+        assert!(p.expected[0xefc0..].iter().all(|&byte| byte == 0));
+        assert_eq!(p.confirmation_pin(), pin);
+        assert_eq!(p.release().version, "fixture-only");
+        assert_eq!(p.release().metadata_sha256, "a".repeat(64));
+        assert_eq!(
+            p.release().freshness,
+            MetadataFreshness::Known {
+                checked_at: 1,
+                expires_at: 100
+            }
+        );
+        assert!(!p.release().prerelease);
+        assert!(!p.release().prerelease_opt_in);
+        assert!(p.release().revoked_images.is_empty());
+    }
+
+    #[test]
+    fn confirmation_distinguishes_origin_profile_and_action_in_the_model() {
+        // Private model kernel only: these bytes are not qualified firmware/OEM ROMs.
+        let source = vec![0; 65536];
+        let payload = vec![1; APP_END - APP_START];
+        let cases = [
+            (Action::Firmware(ProfileId::Main), InputOrigin::Bundled),
+            (Action::Firmware(ProfileId::Main), InputOrigin::Local),
+            (Action::Firmware(ProfileId::Game), InputOrigin::Local),
+            (Action::OemRollback, InputOrigin::Local),
+        ];
+        let mut pins = std::collections::BTreeSet::new();
+        for (action, origin) in cases {
+            let p = PreparedInstall::prepare(
+                action.clone(),
+                &payload,
+                origin,
+                release(),
+                SettingsChoice::Defaults,
+                PreparationContext {
+                    source: &source,
+                    fresh_backup: &source,
+                    generation: 7,
+                    now: 10,
+                },
+            )
+            .unwrap();
+            assert_eq!(p.action(), &action);
+            assert_eq!(p.origin(), origin);
+            assert!(pins.insert(p.confirmation_pin().to_owned()));
+        }
+        assert_eq!(pins.len(), 4);
+    }
+
     fn trace(p: &PreparedInstall) -> Vec<SimulationEvent> {
         vec![
             SimulationEvent::InputsRechecked {
@@ -531,6 +622,59 @@ mod tests {
             SimulationEvent::FullReadback(p.expected.clone()),
         ]
     }
+    #[test]
+    fn begin_full_readback_does_not_verify_or_complete_the_simulation() {
+        let p = fixture(SettingsChoice::Defaults);
+        let events = trace(&p);
+        let mut simulation = InstallSimulation::new(p);
+        for event in events[..events.len() - 1].iter().cloned() {
+            simulation.step(event).unwrap();
+        }
+        assert_eq!(simulation.stage(), Stage::Verifying);
+        assert_eq!(simulation.outcomes().0, FirmwareOutcome::Unknown);
+        assert_eq!(
+            simulation.step(SimulationEvent::BeginFullReadback),
+            Ok(Stage::Verifying)
+        );
+        assert_eq!(simulation.outcomes().0, FirmwareOutcome::Unknown);
+        assert_eq!(simulation.unmet_hardware_gates(), &UNMET_HARDWARE_GATES);
+        assert_eq!(
+            simulation.step(events.last().unwrap().clone()),
+            Ok(Stage::Complete)
+        );
+        assert_eq!(simulation.outcomes().0, FirmwareOutcome::SimulatedVerified);
+    }
+
+    #[test]
+    fn full_readback_begin_rejects_early_order_and_mismatch_is_terminal() {
+        let p = fixture(SettingsChoice::Defaults);
+        let mut early = InstallSimulation::new(p.clone());
+        assert_eq!(
+            early.step(SimulationEvent::BeginFullReadback),
+            Err(Fault::InvalidOrder)
+        );
+        assert_eq!(early.stage(), Stage::Failed);
+
+        let events = trace(&p);
+        let mut simulation = InstallSimulation::new(p);
+        for event in events[..events.len() - 1].iter().cloned() {
+            simulation.step(event).unwrap();
+        }
+        simulation.step(SimulationEvent::BeginFullReadback).unwrap();
+        assert_eq!(
+            simulation.step(SimulationEvent::FullReadback(vec![])),
+            Err(Fault::BadReadback)
+        );
+        assert_eq!(simulation.stage(), Stage::Failed);
+        assert_eq!(simulation.fault(), Some(Fault::BadReadback));
+        assert_eq!(simulation.outcomes().0, FirmwareOutcome::Unknown);
+        assert_eq!(
+            simulation.step(events.last().unwrap().clone()),
+            Err(Fault::InvalidOrder)
+        );
+        assert_eq!(simulation.fault(), Some(Fault::BadReadback));
+    }
+
     #[test]
     fn complete_trace_and_separate_settings_failure() {
         for settings in [
@@ -767,12 +911,14 @@ mod tests {
                 Action::Firmware(ProfileId::Main),
                 image,
                 InputOrigin::Local,
-                src,
-                backup,
                 release(),
                 SettingsChoice::Defaults,
-                1,
-                10
+                PreparationContext {
+                    source: src,
+                    fresh_backup: backup,
+                    generation: 1,
+                    now: 10
+                }
             )
             .is_err());
         }
@@ -802,12 +948,14 @@ mod tests {
                 Action::Firmware(ProfileId::Main),
                 &payload,
                 InputOrigin::Local,
-                &source,
-                &source,
                 r,
                 SettingsChoice::Defaults,
-                1,
-                10
+                PreparationContext {
+                    source: &source,
+                    fresh_backup: &source,
+                    generation: 1,
+                    now: 10
+                }
             )
             .is_err());
         }
@@ -838,12 +986,14 @@ mod tests {
             Action::Firmware(ProfileId::Main),
             &payload,
             InputOrigin::Local,
-            &source,
-            &source,
             r,
             SettingsChoice::Defaults,
-            1,
-            10
+            PreparationContext {
+                source: &source,
+                fresh_backup: &source,
+                generation: 1,
+                now: 10
+            }
         )
         .is_err());
         for row in crate::app::ak820_beta1_profiles::profiles() {
@@ -868,12 +1018,14 @@ mod tests {
             Action::OemRollback,
             &p.expected[APP_START..APP_END],
             InputOrigin::Local,
-            &p.source,
-            &p.fresh_backup,
             release(),
             SettingsChoice::Defaults,
-            7,
-            10,
+            PreparationContext {
+                source: &p.source,
+                fresh_backup: &p.fresh_backup,
+                generation: 7,
+                now: 10,
+            },
         )
         .unwrap();
         assert_eq!(p.confirmation, ConfirmationKind::ExplicitStartFlashing);

@@ -49,6 +49,7 @@ impl EntropyApp {
                 self.draw_app_settings_page(ui, content_rect);
                 false
             }
+            #[cfg(test)]
             SettingsTab::OsIndicator => {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.draw_ak820_os_indicator_page(ui, content_rect);
@@ -62,6 +63,7 @@ impl EntropyApp {
                 self.draw_matrix_tester_settings(ui, layout, content_rect, dark);
                 false
             }
+            #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
             SettingsTab::TextExpanderSetup => {
                 self.draw_text_expander_setup_page(ui, content_rect);
                 false
@@ -110,6 +112,7 @@ impl EntropyApp {
                 self.draw_magic_settings_page(ui, content_rect);
                 false
             }
+            #[cfg(test)]
             SettingsTab::GraveEscape => {
                 self.draw_grave_escape_settings_page(ui, content_rect);
                 false
@@ -226,6 +229,7 @@ impl EntropyApp {
         self.main_menu_tab = MainMenuTab::Advanced;
     }
 
+    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
     pub(super) fn open_text_expander_setup_page(&mut self) {
         self.settings_tab = SettingsTab::TextExpanderSetup;
         self.main_menu_tab = MainMenuTab::Advanced;
@@ -323,6 +327,7 @@ impl EntropyApp {
         self.main_menu_tab = MainMenuTab::Settings;
     }
 
+    #[cfg(test)]
     pub(super) fn open_grave_escape_settings_page(&mut self) {
         self.settings_tab = SettingsTab::GraveEscape;
         self.main_menu_tab = MainMenuTab::Settings;
@@ -357,6 +362,87 @@ impl EntropyApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn historical_linux_setup_navigation_renders_without_starting_installation() {
+        let ctx = egui::Context::default();
+        let mut app = EntropyApp::new_inert_for_test();
+        app.open_text_expander_setup_page();
+        assert!(app.settings_tab == SettingsTab::TextExpanderSetup);
+        assert!(app.main_menu_tab == MainMenuTab::Advanced);
+        let title = crate::i18n::tr_catalog(app.app_settings.language, "text_expander.setup_title");
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            app.draw_text_expander_setup_page(ui, ui.max_rect());
+        });
+        assert!(output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == title)
+        }));
+        assert!(app.linux_setup_task.is_none());
+        assert!(app.hid_device.is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn historical_indicator_page_explains_relocated_preferences_without_starting_helper() {
+        let ctx = egui::Context::default();
+        let mut app = EntropyApp::new_inert_for_test();
+        app.app_settings.language = crate::i18n::Language::English;
+        app.app_settings.ak820_os_indicator.enabled = false;
+        app.settings_tab = SettingsTab::OsIndicator;
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            app.draw_ak820_os_indicator_page(ui, ui.max_rect());
+        });
+        let labels = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.text()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            labels.contains(&"Helper preferences are now part of general application settings.")
+        );
+        assert!(labels.contains(&"Open application settings"));
+        assert!(!app.app_settings.ak820_os_indicator.enabled);
+        assert!(app.hid_device.is_none());
+    }
+
+    #[test]
+    fn historical_grave_escape_page_preserves_offline_guards() {
+        let mut mask = GraveEscapeSettingsState {
+            bits: 0xf0,
+            supported: true,
+        };
+        for bit in 0..4 {
+            mask.set_bit(bit, true);
+            assert!(mask.bit(bit));
+            assert_eq!(mask.bits, 0xf0 | (1 << bit));
+            mask.set_bit(bit, false);
+            assert!(!mask.bit(bit));
+            assert_eq!(mask.bits, 0xf0);
+        }
+        for (supported, message_key) in [
+            (false, crate::i18n::Key::GraveEscapeUnavailable),
+            (true, crate::i18n::Key::GraveEscapeConnect),
+        ] {
+            let ctx = egui::Context::default();
+            let mut app = EntropyApp::new_inert_for_test();
+            app.grave_escape_settings.supported = supported;
+            app.open_grave_escape_settings_page();
+            assert!(app.settings_tab == SettingsTab::GraveEscape);
+            assert!(app.main_menu_tab == MainMenuTab::Settings);
+            let expected = crate::i18n::tr(app.app_settings.language, message_key);
+            let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                app.draw_grave_escape_settings_page(ui, ui.max_rect());
+            });
+            assert!(output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == expected)
+            }), "missing offline guard: {expected}");
+            assert!(app.hid_device.is_none());
+        }
+    }
 
     #[test]
     fn leaving_autolayer_closes_dialogs_and_discards_drafts() {

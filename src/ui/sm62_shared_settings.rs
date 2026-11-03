@@ -70,11 +70,19 @@ impl EntropyApp {
     }
 }
 
+struct Sm62OptionalFields<'a> {
+    date: Option<&'a mut [u8; 2]>,
+    hold: Option<&'a mut [u16; 2]>,
+    language: Option<&'a mut [u8; 2]>,
+    stars: Option<&'a mut [u8; 2]>,
+    screens_off: Option<&'a mut [u8; 2]>,
+}
+
 fn sm62_shared_controls(
     ui: &mut egui::Ui, values: &mut [u8; 10], changed: &mut Vec<usize>, russian: bool,
-    date: Option<&mut [u8; 2]>, hold: Option<&mut [u16; 2]>, language: Option<&mut [u8; 2]>,
-    stars: Option<&mut [u8; 2]>, screens_off: Option<&mut [u8; 2]>,
+    optional: Sm62OptionalFields<'_>,
 ) {
+    let Sm62OptionalFields { date, hold, language, stars, screens_off } = optional;
     ui.heading(if russian { "Общие настройки экранов" } else { "Shared display settings" });
     ui.label(if russian { "Изменения применяются к обоим экранам." } else { "Changes apply to both displays." });
     ui.add_space(8.0);

@@ -59,20 +59,11 @@ pub(crate) struct QuietHours {
     pub brightness: u8,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub(crate) struct Scene {
     pub base: Palette,
     pub layers: Vec<Layer>,
     pub quiet_hours: Option<QuietHours>,
-}
-impl Default for Scene {
-    fn default() -> Self {
-        Self {
-            base: Palette::default(),
-            layers: Vec::new(),
-            quiet_hours: None,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -385,12 +376,16 @@ mod tests {
         let mut s = Scene::default();
         s.base.colors[0] = Rgb([20, 0, 0]);
         s.base.brightness = 160;
-        let mut a = Layer::default();
-        a.color = Rgb([255, 0, 0]);
-        a.mask = vec![0];
-        let mut b = Layer::default();
-        b.color = Rgb([0, 0, 255]);
-        b.mask = vec![0];
+        let a = Layer {
+            color: Rgb([255, 0, 0]),
+            mask: vec![0],
+            ..Default::default()
+        };
+        let b = Layer {
+            color: Rgb([0, 0, 255]),
+            mask: vec![0],
+            ..Default::default()
+        };
         s.layers = vec![a, b];
         let f = s.render(0, 0).unwrap();
         assert_eq!(f[0], [0, 0, 160]);
@@ -412,9 +407,11 @@ mod tests {
     #[test]
     fn effects_progress_and_u64_extreme_is_safe() {
         let mut s = Scene::default();
-        let mut l = Layer::default();
-        l.effect = Effect::Breathing;
-        l.color = Rgb([255; 3]);
+        let l = Layer {
+            effect: Effect::Breathing,
+            color: Rgb([255; 3]),
+            ..Default::default()
+        };
         s.layers.push(l);
         assert_ne!(s.render(0, 0).unwrap(), s.render(500, 0).unwrap());
         let _ = s.render(u64::MAX, 1439).unwrap();
@@ -422,11 +419,13 @@ mod tests {
     #[test]
     fn spatial_gradient_uses_physical_led_coordinates() {
         let mut s = Scene::default();
-        let mut l = Layer::default();
-        l.effect = Effect::Gradient;
-        l.color = Rgb([0; 3]);
-        l.color2 = Rgb([255; 3]);
-        l.mask = vec![1, 13];
+        let l = Layer {
+            effect: Effect::Gradient,
+            color: Rgb([0; 3]),
+            color2: Rgb([255; 3]),
+            mask: vec![1, 13],
+            ..Default::default()
+        };
         s.layers.push(l);
         let f = s.render(0, 0).unwrap();
         assert!(f[1][0] < f[13][0]);
@@ -436,10 +435,12 @@ mod tests {
     #[test]
     fn wave_is_a_smooth_spatial_phase_and_closes_its_period() {
         let mut s = Scene::default();
-        let mut l = Layer::default();
-        l.effect = Effect::Wave;
-        l.color = Rgb([0; 3]);
-        l.color2 = Rgb([255; 3]);
+        let l = Layer {
+            effect: Effect::Wave,
+            color: Rgb([0; 3]),
+            color2: Rgb([255; 3]),
+            ..Default::default()
+        };
         s.layers.push(l);
         let start = s.render(0, 0).unwrap();
         let end = s.render(1000, 0).unwrap();
@@ -454,11 +455,13 @@ mod tests {
     #[test]
     fn rain_has_staggered_orthogonal_lanes_and_repeats_deterministically() {
         let mut s = Scene::default();
-        let mut l = Layer::default();
-        l.effect = Effect::Rain;
-        l.color = Rgb([255, 0, 0]);
-        l.color2 = Rgb([0, 0, 0]);
-        l.axis = Axis::Horizontal;
+        let l = Layer {
+            effect: Effect::Rain,
+            color: Rgb([255, 0, 0]),
+            color2: Rgb([0, 0, 0]),
+            axis: Axis::Horizontal,
+            ..Default::default()
+        };
         s.layers.push(l);
         let start = s.render(0, 0).unwrap();
         assert_ne!(start[0], start[14]); // both x=7; y selects a different lane phase

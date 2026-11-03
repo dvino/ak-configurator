@@ -54,7 +54,7 @@ pub(crate) fn normalize_pictogram_bitmap(bitmap: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn backup_pictogram_package(directory: &Path, package: &[u8]) -> Result<()> {
-    std::fs::create_dir_all(&directory)?;
+    std::fs::create_dir_all(directory)?;
     let path = directory.join(format!("device-{:08x}.ehp", crc32(package)));
     if path.exists() && std::fs::read(&path)? == package {
         return Ok(());
@@ -213,6 +213,7 @@ impl PictogramLibrary {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn set(&mut self, kind: PictogramKind, slot: usize, bitmap: &[u8]) {
         self.set_colored(kind, slot, bitmap, [84, 189, 191]);
     }
@@ -467,7 +468,7 @@ impl PictogramCanvas {
     }
 
     fn pixel(&mut self, x: i32, y: i32) {
-        if (0..32 as i32).contains(&x) && (0..32 as i32).contains(&y) {
+        if (0..32_i32).contains(&x) && (0..32_i32).contains(&y) {
             self.pixels[y as usize * 32 + x as usize] = true;
         }
     }
@@ -481,7 +482,7 @@ impl PictogramCanvas {
     }
 
     fn clear_pixel(&mut self, x: i32, y: i32) {
-        if (0..32 as i32).contains(&x) && (0..32 as i32).contains(&y) {
+        if (0..32_i32).contains(&x) && (0..32_i32).contains(&y) {
             self.pixels[y as usize * 32 + x as usize] = false;
         }
     }
@@ -519,7 +520,7 @@ impl PictogramCanvas {
     }
 
     fn design_coordinate(value: i32) -> i32 {
-        (value * (32 as i32 - 1) + 11) / 23
+        (value * (32_i32 - 1) + 11) / 23
     }
 
     fn line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, thickness: i32) {
@@ -1130,6 +1131,7 @@ fn render_builtin_pictogram_bitmap(index: usize) -> [u8; PICTOGRAM_BYTES] {
 }
 
 // Recognize the stock gear exported by v072–v074 without importing it as a user copy.
+#[cfg(test)]
 fn legacy_35px_gear_bitmap() -> &'static [u8; PICTOGRAM_BYTES] {
     static GEAR: std::sync::OnceLock<[u8; PICTOGRAM_BYTES]> = std::sync::OnceLock::new();
     GEAR.get_or_init(|| {
@@ -1150,6 +1152,7 @@ fn legacy_35px_gear_bitmap() -> &'static [u8; PICTOGRAM_BYTES] {
     })
 }
 
+#[cfg(test)]
 pub(crate) fn legacy_builtin_pictogram_index(bitmap: &[u8]) -> Option<usize> {
     static ICONS: std::sync::OnceLock<[[u8; PICTOGRAM_BYTES]; 38]> = std::sync::OnceLock::new();
     ICONS
@@ -1291,7 +1294,7 @@ pub(crate) fn legacy_builtin_pictogram_bitmap(index: usize) -> [u8; PICTOGRAM_BY
             icon.line(13, 15, 16, 12, 2);
             icon.line(16, 12, 20, 17, 2);
         }
-        24 | 25 | 26 => {
+        24..=26 => {
             let highlight = match index {
                 24 => MouseButtonHighlight::Left,
                 25 => MouseButtonHighlight::Right,
@@ -1299,7 +1302,7 @@ pub(crate) fn legacy_builtin_pictogram_bitmap(index: usize) -> [u8; PICTOGRAM_BY
             };
             icon.mouse_body_pixels(8, 4, highlight);
         }
-        27 | 28 | 29 | 30 => match index {
+        27..=30 => match index {
             27 => {
                 icon.mouse_body_pixels(8, 7, MouseButtonHighlight::None);
                 icon.arrow_up_pixels();
@@ -1891,6 +1894,90 @@ impl crate::hid::HidDevice {
 }
 
 #[cfg(test)]
+pub(crate) fn test_pictogram_upload_responses(
+    slot_upload: bool,
+    commit_status: u8,
+) -> Vec<[u8; 32]> {
+    let mut query = [0u8; 32];
+    query[0] = CMD_QUERY;
+    query[2] = FORMAT_VERSION;
+    query[16] = 2;
+    query[17] = FORMAT_VERSION;
+    let mut responses = vec![query];
+    let mut begin = [0; 32];
+    begin[0] = if slot_upload {
+        CMD_SLOT_BEGIN
+    } else {
+        CMD_BEGIN
+    };
+    responses.push(begin);
+    let bytes = if slot_upload {
+        RECORD_BYTES
+    } else {
+        PACKAGE_SIZE
+    };
+    let packets = bytes.div_ceil(29);
+    for sequence in 0..packets {
+        if slot_upload || (sequence + 1) % STREAM_ACK_INTERVAL == 0 || sequence + 1 == packets {
+            let mut reply = [0; 32];
+            reply[0] = if slot_upload { CMD_SLOT_DATA } else { CMD_DATA };
+            reply[2..4].copy_from_slice(&((sequence + 1) as u16).to_le_bytes());
+            responses.push(reply);
+        }
+    }
+    let mut commit = [0; 32];
+    commit[0] = if slot_upload {
+        CMD_SLOT_COMMIT
+    } else {
+        CMD_COMMIT
+    };
+    commit[1] = commit_status;
+    responses.push(commit);
+    responses
+}
+
+#[cfg(test)]
+pub(crate) fn test_pictogram_read_responses(library: &PictogramLibrary) -> Vec<[u8; 32]> {
+    let mut query = [0; 32];
+    query[0] = CMD_QUERY;
+    query[2] = FORMAT_VERSION;
+    query[3] = 1;
+    query[4] = PICTOGRAM_WIDTH as u8;
+    query[5] = PICTOGRAM_HEIGHT as u8;
+    query[6..8].copy_from_slice(&(PICTOGRAM_BYTES as u16).to_le_bytes());
+    query[8..12].copy_from_slice(&(PACKAGE_SIZE as u32).to_le_bytes());
+    query[16] = 2;
+    let mut responses = vec![query];
+    for kind in [PictogramKind::Macro, PictogramKind::TapDance] {
+        for offset in (0..VALID_BYTES).step_by(30) {
+            let mut response = [0; 32];
+            response[0] = CMD_VALID_READ;
+            let amount = (VALID_BYTES - offset).min(30);
+            let start = kind.valid_offset() + offset;
+            response[2..2 + amount].copy_from_slice(&library.package[start..start + amount]);
+            responses.push(response);
+        }
+    }
+    for kind in [PictogramKind::Macro, PictogramKind::TapDance] {
+        for slot in 0..SLOTS_PER_KIND {
+            if !library.has(kind, slot) {
+                continue;
+            }
+            let start = HEADER_SIZE + kind.payload_slot(slot) * RECORD_BYTES;
+            for offset in (0..RECORD_BYTES).step_by(30) {
+                let mut response = [0; 32];
+                response[0] = CMD_SLOT_READ;
+                let amount = (RECORD_BYTES - offset).min(30);
+                response[2..2 + amount]
+                    .copy_from_slice(&library.package[start + offset..start + offset + amount]);
+                responses.push(response);
+            }
+        }
+    }
+    responses
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1905,9 +1992,11 @@ mod tests {
 
     #[test]
     fn repeat_read_failure_is_terminal_only_for_its_connection_generation() {
-        let mut state = PictogramSettingsState::default();
-        state.supported = Some(true);
-        state.load_failure = Some((7, "firmware read error".into()));
+        let mut state = PictogramSettingsState {
+            supported: Some(true),
+            load_failure: Some((7, "firmware read error".into())),
+            ..Default::default()
+        };
         assert!(!state.needs_automatic_load(7));
         assert!(state.needs_automatic_load(8));
         state.loading = true;
@@ -2274,6 +2363,21 @@ mod tests {
     }
 
     #[test]
+    fn legacy_gear_fallback_is_distinct_and_requires_exact_length() {
+        let gear = legacy_35px_gear_bitmap();
+        assert!((0..38).all(|index| legacy_builtin_pictogram_bitmap(index).as_slice() != gear));
+        assert_eq!(legacy_builtin_pictogram_index(gear), Some(18));
+        assert_eq!(legacy_builtin_pictogram_index(&[]), None);
+        assert_eq!(
+            legacy_builtin_pictogram_index(&gear[..gear.len() - 1]),
+            None
+        );
+        let mut oversized = gear.to_vec();
+        oversized.push(0);
+        assert_eq!(legacy_builtin_pictogram_index(&oversized), None);
+    }
+
+    #[test]
     fn previous_stock_library_is_recognized_without_becoming_user_copies() {
         for index in 0..38 {
             assert!(
@@ -2301,88 +2405,4 @@ mod tests {
         assert!(bitmap_pixel(&move_left, 1, 17));
         assert!(bitmap_pixel(&move_right, 33, 17));
     }
-}
-
-#[cfg(test)]
-pub(crate) fn test_pictogram_upload_responses(
-    slot_upload: bool,
-    commit_status: u8,
-) -> Vec<[u8; 32]> {
-    let mut query = [0u8; 32];
-    query[0] = CMD_QUERY;
-    query[2] = FORMAT_VERSION;
-    query[16] = 2;
-    query[17] = FORMAT_VERSION;
-    let mut responses = vec![query];
-    let mut begin = [0; 32];
-    begin[0] = if slot_upload {
-        CMD_SLOT_BEGIN
-    } else {
-        CMD_BEGIN
-    };
-    responses.push(begin);
-    let bytes = if slot_upload {
-        RECORD_BYTES
-    } else {
-        PACKAGE_SIZE
-    };
-    let packets = bytes.div_ceil(29);
-    for sequence in 0..packets {
-        if slot_upload || (sequence + 1) % STREAM_ACK_INTERVAL == 0 || sequence + 1 == packets {
-            let mut reply = [0; 32];
-            reply[0] = if slot_upload { CMD_SLOT_DATA } else { CMD_DATA };
-            reply[2..4].copy_from_slice(&((sequence + 1) as u16).to_le_bytes());
-            responses.push(reply);
-        }
-    }
-    let mut commit = [0; 32];
-    commit[0] = if slot_upload {
-        CMD_SLOT_COMMIT
-    } else {
-        CMD_COMMIT
-    };
-    commit[1] = commit_status;
-    responses.push(commit);
-    responses
-}
-
-#[cfg(test)]
-pub(crate) fn test_pictogram_read_responses(library: &PictogramLibrary) -> Vec<[u8; 32]> {
-    let mut query = [0; 32];
-    query[0] = CMD_QUERY;
-    query[2] = FORMAT_VERSION;
-    query[3] = 1;
-    query[4] = PICTOGRAM_WIDTH as u8;
-    query[5] = PICTOGRAM_HEIGHT as u8;
-    query[6..8].copy_from_slice(&(PICTOGRAM_BYTES as u16).to_le_bytes());
-    query[8..12].copy_from_slice(&(PACKAGE_SIZE as u32).to_le_bytes());
-    query[16] = 2;
-    let mut responses = vec![query];
-    for kind in [PictogramKind::Macro, PictogramKind::TapDance] {
-        for offset in (0..VALID_BYTES).step_by(30) {
-            let mut response = [0; 32];
-            response[0] = CMD_VALID_READ;
-            let amount = (VALID_BYTES - offset).min(30);
-            let start = kind.valid_offset() + offset;
-            response[2..2 + amount].copy_from_slice(&library.package[start..start + amount]);
-            responses.push(response);
-        }
-    }
-    for kind in [PictogramKind::Macro, PictogramKind::TapDance] {
-        for slot in 0..SLOTS_PER_KIND {
-            if !library.has(kind, slot) {
-                continue;
-            }
-            let start = HEADER_SIZE + kind.payload_slot(slot) * RECORD_BYTES;
-            for offset in (0..RECORD_BYTES).step_by(30) {
-                let mut response = [0; 32];
-                response[0] = CMD_SLOT_READ;
-                let amount = (RECORD_BYTES - offset).min(30);
-                response[2..2 + amount]
-                    .copy_from_slice(&library.package[start + offset..start + offset + amount]);
-                responses.push(response);
-            }
-        }
-    }
-    responses
 }

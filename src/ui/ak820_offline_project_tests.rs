@@ -6,8 +6,16 @@ use crate::app::ak820_offline_extensions::OfflineExtensions;
 use crate::keycode_picker::{Ak820Beta1KeycodeSource, MacroAction};
 
 const PROFILES: [ProfileId; 10] = [
-    ProfileId::Main, ProfileId::Game, ProfileId::Mmo, ProfileId::Typing, ProfileId::Code,
-    ProfileId::Pointer, ProfileId::Onehand, ProfileId::Creative, ProfileId::Shortcuts, ProfileId::Multios,
+    ProfileId::Main,
+    ProfileId::Game,
+    ProfileId::Mmo,
+    ProfileId::Typing,
+    ProfileId::Code,
+    ProfileId::Pointer,
+    ProfileId::Onehand,
+    ProfileId::Creative,
+    ProfileId::Shortcuts,
+    ProfileId::Multios,
 ];
 fn app() -> (EntropyApp, egui::Context) {
     let ctx = egui::Context::default();
@@ -31,10 +39,21 @@ fn mark_extensions(app: &mut EntropyApp, profile: ProfileId) -> Option<Vec<u8>> 
     let mut model = Extensions::decode_nvm(old.nvm()).unwrap();
     let matrix = beta1::matrix_profile(profile);
     if matrix.capabilities.dynamic_entries.tap_dance > 0 {
-        model.tap_dance[7] = TapDance { outputs: [4, 5, 6, 7], term: 123 };
+        model.tap_dance[7] = TapDance {
+            outputs: [4, 5, 6, 7],
+            term: 123,
+        };
     }
     if matrix.capabilities.dynamic_entries.key_overrides > 0 {
-        model.key_overrides[7] = KeyOverride { trigger: 4, replacement: 5, layers: 1, mods: 2, negative: 4, suppressed: 8, options: 0x81 };
+        model.key_overrides[7] = KeyOverride {
+            trigger: 4,
+            replacement: 5,
+            layers: 1,
+            mods: 2,
+            negative: 4,
+            suppressed: 8,
+            options: 0x81,
+        };
     }
     if matrix.capabilities.runtime_qmk_settings_ids.contains(&2) {
         model.settings.set(2, 73).unwrap();
@@ -180,7 +199,16 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
         app.keycode_picker
             .set_ak820_beta1_source(Ak820Beta1KeycodeSource::Matrix);
     }
-    let td_profile = PROFILES.into_iter().find(|p| beta1::matrix_profile(*p).capabilities.dynamic_entries.tap_dance > 0).unwrap();
+    let td_profile = PROFILES
+        .into_iter()
+        .find(|p| {
+            beta1::matrix_profile(*p)
+                .capabilities
+                .dynamic_entries
+                .tap_dance
+                > 0
+        })
+        .unwrap();
     app.configure_ak820_offline_profile(td_profile);
     app.selected_key = Some((0, 0));
     app.keycode_picker.result = Some(0x5707u16.into());
@@ -206,7 +234,16 @@ fn tap_dance_assignments_follow_actual_profile_and_source_without_generic_editor
 fn tap_dance_button_seam_checks_profile_slot_and_target_bounds() {
     let (mut app, _) = app();
     assert!(!app.assign_offline_tap_dance(0, 0, 0));
-    let td_profile = PROFILES.into_iter().find(|p| beta1::matrix_profile(*p).capabilities.dynamic_entries.tap_dance > 0).unwrap();
+    let td_profile = PROFILES
+        .into_iter()
+        .find(|p| {
+            beta1::matrix_profile(*p)
+                .capabilities
+                .dynamic_entries
+                .tap_dance
+                > 0
+        })
+        .unwrap();
     app.configure_ak820_offline_profile(td_profile);
     let before = app.layout.as_ref().unwrap().layers.clone();
     for (layer, key, slot) in [

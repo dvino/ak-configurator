@@ -584,24 +584,24 @@ pub fn modern_text_field_sized(
     ui: &mut Ui,
     id: egui::Id,
     text: &mut String,
-    width: f32,
-    height: f32,
+    size: Vec2,
     hint: &str,
     char_limit: usize,
     horizontal_align: egui::Align,
 ) -> egui::Response {
-    let font_size = 12.5 * (height / 32.0).clamp(1.0, 1.3);
+    let font_size = 12.5 * (size.y / 32.0).clamp(1.0, 1.3);
     modern_text_field_impl(
         ui,
         id,
         text,
-        width,
-        height,
-        font_size,
+        TextFieldMetrics {
+            size,
+            font_size,
+            horizontal_align,
+            interactive: true,
+        },
         hint,
         char_limit,
-        horizontal_align,
-        true,
     )
 }
 
@@ -681,6 +681,11 @@ pub fn modern_multiline_text_field_sized(
     response
 }
 
+pub struct TextFieldInteraction {
+    pub alignment: egui::Align,
+    pub enabled: bool,
+}
+
 pub fn modern_text_field_interactive(
     ui: &mut Ui,
     id: egui::Id,
@@ -688,35 +693,48 @@ pub fn modern_text_field_interactive(
     width: f32,
     hint: &str,
     char_limit: usize,
-    horizontal_align: egui::Align,
-    interactive: bool,
+    interaction: TextFieldInteraction,
 ) -> egui::Response {
     modern_text_field_impl(
         ui,
         id,
         text,
-        width,
-        32.0,
-        12.5,
+        TextFieldMetrics {
+            size: Vec2::new(width, 32.0),
+            font_size: 12.5,
+            horizontal_align: interaction.alignment,
+            interactive: interaction.enabled,
+        },
         hint,
         char_limit,
-        horizontal_align,
-        interactive,
     )
+}
+
+struct TextFieldMetrics {
+    size: Vec2,
+    font_size: f32,
+    horizontal_align: egui::Align,
+    interactive: bool,
 }
 
 fn modern_text_field_impl(
     ui: &mut Ui,
     id: egui::Id,
     text: &mut String,
-    width: f32,
-    height: f32,
-    font_size: f32,
+    metrics: TextFieldMetrics,
     hint: &str,
     char_limit: usize,
-    horizontal_align: egui::Align,
-    interactive: bool,
 ) -> egui::Response {
+    let TextFieldMetrics {
+        size,
+        font_size,
+        horizontal_align,
+        interactive,
+    } = metrics;
+    let Vec2 {
+        x: width,
+        y: height,
+    } = size;
     let field_rect = paint_modern_text_field_frame(ui, id, width, height, interactive);
 
     let resp = allocate_ui_at_rect(ui, field_rect.shrink2(Vec2::new(10.0, 0.0)), |ui| {
@@ -947,21 +965,39 @@ pub fn modern_dropdown_popup_options(
     font_size: f32,
 ) -> Option<usize> {
     modern_dropdown_popup_options_with_max_height(
-        ui, id, trigger, labels, selected, min_width, font_size, 142.0,
+        ui,
+        id,
+        trigger,
+        labels,
+        selected,
+        DropdownPopupMetrics {
+            min_width,
+            font_size,
+            viewport_max_height: 142.0,
+        },
     )
 }
 
+struct DropdownPopupMetrics {
+    min_width: f32,
+    font_size: f32,
+    viewport_max_height: f32,
+}
+
 /// Render the compact dropdown list with a caller-specific scroll viewport height.
-pub fn modern_dropdown_popup_options_with_max_height(
+fn modern_dropdown_popup_options_with_max_height(
     ui: &mut Ui,
     id: egui::Id,
     trigger: &egui::Response,
     labels: &[String],
     selected: usize,
-    min_width: f32,
-    font_size: f32,
-    viewport_max_height: f32,
+    metrics: DropdownPopupMetrics,
 ) -> Option<usize> {
+    let DropdownPopupMetrics {
+        min_width,
+        font_size,
+        viewport_max_height,
+    } = metrics;
     let option_font = FontId::proportional(font_size);
     let longest_label_width = labels
         .iter()
@@ -1073,27 +1109,24 @@ fn modern_dropdown_option_row(
     response
 }
 
+/// Borrowed contents and selection of a grouped menu; no widget state is stored here.
+pub struct GroupedDropdownOptions<'a> {
+    pub default: &'a (String, String),
+    pub groups: &'a [(String, Vec<(String, String)>)],
+    pub selected_id: &'a str,
+}
+
 /// Compact category menu with hover submenus, using the same rows as flat dropdowns.
 pub fn modern_dropdown_grouped_options(
     ui: &mut Ui,
     id: egui::Id,
     trigger: &egui::Response,
-    default: &(String, String),
-    groups: &[(String, Vec<(String, String)>)],
-    selected_id: &str,
+    options: GroupedDropdownOptions<'_>,
     min_width: f32,
     font_size: f32,
 ) -> Option<String> {
     modern_dropdown_grouped_options_with_action(
-        ui,
-        id,
-        trigger,
-        default,
-        groups,
-        selected_id,
-        min_width,
-        font_size,
-        None,
+        ui, id, trigger, options, min_width, font_size, None,
     )
     .and_then(|choice| match choice {
         GroupedDropdownChoice::Item(id) => Some(id),
@@ -1111,13 +1144,16 @@ pub fn modern_dropdown_grouped_options_with_action(
     ui: &mut Ui,
     id: egui::Id,
     trigger: &egui::Response,
-    default: &(String, String),
-    groups: &[(String, Vec<(String, String)>)],
-    selected_id: &str,
+    options: GroupedDropdownOptions<'_>,
     min_width: f32,
     font_size: f32,
     action_label: Option<&str>,
 ) -> Option<GroupedDropdownChoice> {
+    let GroupedDropdownOptions {
+        default,
+        groups,
+        selected_id,
+    } = options;
     let font = FontId::proportional(font_size);
     let max_label = std::iter::once(default.1.as_str())
         .chain(groups.iter().map(|group| group.0.as_str()))
@@ -1554,8 +1590,7 @@ pub fn settings_list_row(
 ) {
     settings_list_row_with_tooltip(
         ui,
-        content_width,
-        row_height,
+        egui::vec2(content_width, row_height),
         label,
         label_enabled,
         None,
@@ -1566,17 +1601,17 @@ pub fn settings_list_row(
 
 pub fn settings_list_row_with_tooltip(
     ui: &mut Ui,
-    content_width: f32,
-    row_height: f32,
+    size: Vec2,
     label: &str,
     label_enabled: bool,
     tooltip: Option<&str>,
     control_width: f32,
     add_control: impl FnOnce(&mut Ui),
 ) {
+    let content_width = size.x;
+    let row_height = size.y;
     let dark = ui.visuals().dark_mode;
-    let (row_rect, _) =
-        ui.allocate_exact_size(egui::vec2(content_width, row_height), egui::Sense::hover());
+    let (row_rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let separator = border_color(dark).gamma_multiply(if dark { 0.72 } else { 0.9 });
     ui.painter().line_segment(
         [row_rect.left_bottom(), row_rect.right_bottom()],

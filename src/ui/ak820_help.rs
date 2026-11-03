@@ -21,6 +21,7 @@ pub(super) fn open(ctx: &egui::Context) {
     });
 }
 
+#[cfg(test)]
 pub(super) fn close(ctx: &egui::Context) {
     ctx.data_mut(|data| {
         let mut state = data.get_temp::<HelpState>(state_id()).unwrap_or_default();
@@ -293,7 +294,14 @@ fn render_article(
             ui.add_space(8.0);
         }
         if topic.id == "firmware-install-recovery" {
-            super::ak820_beta1_profiles_ui::profile_help(ui, if ru { Language::Russian } else { Language::English });
+            super::ak820_beta1_profiles_ui::profile_help(
+                ui,
+                if ru {
+                    Language::Russian
+                } else {
+                    Language::English
+                },
+            );
         }
     });
 }
@@ -301,6 +309,68 @@ fn render_article(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn firmware_article_renders_historical_profile_help_in_both_languages() {
+        use egui_kittest::kittest::Queryable;
+        for language in Language::ALL {
+            let ru = language == Language::Russian;
+            let content = topics(language);
+            let selected = content
+                .iter()
+                .position(|topic| topic.id == "firmware-install-recovery")
+                .unwrap();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(1000.0, 10000.0))
+                .build_ui_state(
+                    move |ui, state: &mut HelpState| {
+                        render_article(ui, content, state, 10000.0, false, ru);
+                    },
+                    HelpState {
+                        selected,
+                        ..Default::default()
+                    },
+                );
+            harness.run();
+            let heading = format!(
+                "{} — {}",
+                if ru {
+                    "Исторический каталог профилей"
+                } else {
+                    "Historical profile catalog"
+                },
+                super::super::ak820_beta1_profiles::BETA_RELEASE
+            );
+            assert!(harness.query_by_label(&heading).is_some());
+        }
+    }
+
+    #[test]
+    fn reference_close_and_reopen_preserve_topic_query_and_scroll_state() {
+        let ctx = egui::Context::default();
+        assert!(!is_open(&ctx));
+        close(&ctx);
+        assert!(!is_open(&ctx));
+        open_section(&ctx, "rgb");
+        ctx.data_mut(|data| {
+            let mut state = data.get_temp::<HelpState>(state_id()).unwrap();
+            state.query = " Direct поиск ".into();
+            state.reset_scroll = false;
+            data.insert_temp(state_id(), state);
+        });
+        for expected_open in [false, true, false, true] {
+            if expected_open {
+                open(&ctx);
+            } else {
+                close(&ctx);
+            }
+            assert_eq!(is_open(&ctx), expected_open);
+            let state = ctx.data(|data| data.get_temp::<HelpState>(state_id()).unwrap());
+            assert_eq!(content_id(&state), "lighting-palettes");
+            assert_eq!(state.query, " Direct поиск ");
+            assert!(!state.reset_scroll);
+        }
+    }
 
     #[test]
     fn contextual_topic_open_clears_search_and_resets_article() {

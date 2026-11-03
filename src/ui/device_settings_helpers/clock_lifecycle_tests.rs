@@ -227,7 +227,7 @@ fn loading(app: &mut EntropyApp, index: usize) {
     let (_tx, rx) = std::sync::mpsc::channel();
     let now = Instant::now();
     app.connect_state = ConnectState::Loading {
-        device: app.device_manager.devices()[index].clone(),
+        device: Box::new(app.device_manager.devices()[index].clone()),
         rx,
         started_at: now,
         last_progress_at: now,

@@ -179,7 +179,10 @@ fn endpoints(root: &Path) -> Result<Vec<Device>, String> {
             match fs::read_to_string(&path) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(absent.to_owned()),
                 Err(e) => Err(format!("USB metadata {}: {e}", path.display())),
-                Ok(_) => Err(format!("USB metadata {} contradicts string index zero", path.display())),
+                Ok(_) => Err(format!(
+                    "USB metadata {} contradicts string index zero",
+                    path.display()
+                )),
             }
         };
         let mut device = Device {
@@ -200,6 +203,24 @@ fn endpoints(root: &Path) -> Result<Vec<Device>, String> {
         };
         device.normalize_discovered_identity();
         devices.push(device);
+    }
+    Ok(devices)
+}
+
+pub(super) fn validate(root: &Path, devices: Vec<Device>) -> Result<Vec<Device>, String> {
+    let expected = endpoints(root)?;
+    if expected.len() != devices.len()
+        || expected.iter().any(|expected| {
+            !devices.iter().any(|actual| {
+                actual.path == expected.path
+                    && actual.instance_token == expected.instance_token
+                    && actual.stable_identity() == expected.stable_identity()
+            })
+        })
+    {
+        return Err(
+            "USB metadata snapshot incomplete or identity changed; retaining inventory".into(),
+        );
     }
     Ok(devices)
 }
@@ -225,12 +246,10 @@ mod tests {
         assert!(vial_descriptor(&vial).unwrap());
         assert!(vial_descriptor(&[0x0b, 0x61, 0x00, 0x60, 0xff, 0xa1, 0x01, 0xc0]).unwrap());
         // Push/Pop restores the page used by the collection-local usage.
-        assert!(
-            vial_descriptor(&[
-                0x06, 0x60, 0xff, 0xa4, 0x05, 0x01, 0xb4, 0x09, 0x61, 0xa1, 0x01, 0xc0
-            ])
-            .unwrap()
-        );
+        assert!(vial_descriptor(&[
+            0x06, 0x60, 0xff, 0xa4, 0x05, 0x01, 0xb4, 0x09, 0x61, 0xa1, 0x01, 0xc0
+        ])
+        .unwrap());
         assert!(!vial_descriptor(&[0x05, 0x01, 0x09, 0x06, 0xa1, 0x01, 0xc0]).unwrap());
         for end in 0..vial.len() {
             assert!(vial_descriptor(&vial[..end]).is_err());
@@ -249,22 +268,4 @@ mod tests {
             );
         }
     }
-}
-
-pub(super) fn validate(root: &Path, devices: Vec<Device>) -> Result<Vec<Device>, String> {
-    let expected = endpoints(root)?;
-    if expected.len() != devices.len()
-        || expected.iter().any(|expected| {
-            !devices.iter().any(|actual| {
-                actual.path == expected.path
-                    && actual.instance_token == expected.instance_token
-                    && actual.stable_identity() == expected.stable_identity()
-            })
-        })
-    {
-        return Err(
-            "USB metadata snapshot incomplete or identity changed; retaining inventory".into(),
-        );
-    }
-    Ok(devices)
 }

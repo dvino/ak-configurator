@@ -78,8 +78,9 @@ fn windows_user_locale_tag() -> Option<String> {
     String::from_utf16(&buffer[..len as usize - 1]).ok()
 }
 
-const EN_CATALOG: &str = include_str!("../i18n/en.toml");
-const RU_CATALOG: &str = include_str!("../i18n/ru.toml");
+// Stable references identify the only two catalogs eligible for indexing.
+static EN_CATALOG: &str = include_str!("../i18n/en.toml");
+static RU_CATALOG: &str = include_str!("../i18n/ru.toml");
 
 pub fn tr_catalog(language: Language, key: &'static str) -> &'static str {
     let lookup_key = static_catalog_key(key).unwrap_or(key);
@@ -125,7 +126,65 @@ fn tr_catalog_string(language: Language, key: &'static str) -> String {
         .unwrap_or_else(|| key.to_owned())
 }
 
+type CatalogIndex = std::collections::BTreeMap<
+    &'static str,
+    std::collections::BTreeMap<&'static str, &'static str>,
+>;
+
+fn build_catalog_index(catalog: &'static str) -> CatalogIndex {
+    let mut index = CatalogIndex::new();
+    let mut section = "";
+    for raw_line in catalog.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line[1..line.len() - 1].trim();
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.len() >= 2
+            && ((value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\'')))
+        {
+            // The original scanner returns the first quoted match, without
+            // unescaping its contents. Preserve both details, including when
+            // a section or key occurs more than once.
+            index
+                .entry(section)
+                .or_default()
+                .entry(name.trim())
+                .or_insert(&value[1..value.len() - 1]);
+        }
+    }
+    index
+}
+
+fn catalog_lookup_indexed(index: &CatalogIndex, key: &str) -> Option<&'static str> {
+    let (section, name) = key.rsplit_once('.')?;
+    index.get(section)?.get(name).copied()
+}
+
 fn catalog_lookup(catalog: &'static str, key: &str) -> Option<&'static str> {
+    // Exactly two immutable built-in catalogs, never an unbounded cache of
+    // caller-provided strings. Other catalogs retain the original scanner.
+    static EN_INDEX: std::sync::OnceLock<CatalogIndex> = std::sync::OnceLock::new();
+    static RU_INDEX: std::sync::OnceLock<CatalogIndex> = std::sync::OnceLock::new();
+    let index = if std::ptr::eq(catalog, EN_CATALOG) {
+        EN_INDEX.get_or_init(|| build_catalog_index(EN_CATALOG))
+    } else if std::ptr::eq(catalog, RU_CATALOG) {
+        RU_INDEX.get_or_init(|| build_catalog_index(RU_CATALOG))
+    } else {
+        return catalog_lookup_linear(catalog, key);
+    };
+    catalog_lookup_indexed(index, key)
+}
+
+fn catalog_lookup_linear(catalog: &'static str, key: &str) -> Option<&'static str> {
     let (wanted_section, wanted_name) = key.rsplit_once('.')?;
     let mut section = "";
 
@@ -241,7 +300,7 @@ pub enum Key {
     NoDevicesFound,
     ComboTitle,
     AutoShiftTitle,
-    KeyOverridesTitle,
+    OverridesTitle,
     MouseKeysTitle,
     MatrixTesterTitle,
     MatrixTesterDescription,
@@ -256,13 +315,16 @@ pub enum Key {
     AltRepeatTitle,
     AltRepeatDescription,
     AltRepeatUnavailable,
+    #[cfg(test)]
     GraveEscapeTitle,
     RgbUnavailableTooltip,
     AppSettingsTitle,
     AppSettingsDescription,
     LanguageLabel,
     LanguageTooltip,
+    #[cfg(not(target_os = "linux"))]
     CloseToTrayLabel,
+    #[cfg(not(target_os = "linux"))]
     CloseToTrayTooltip,
     RunInBackgroundLabel,
     RunInBackgroundTooltip,
@@ -270,7 +332,9 @@ pub enum Key {
     LaunchAtStartupTooltip,
     LaunchMinimizedLabel,
     LaunchMinimizedTooltip,
+    #[cfg(target_os = "windows")]
     LaunchInTrayLabel,
+    #[cfg(target_os = "windows")]
     LaunchInTrayTooltip,
     ShiftedNumberSymbolsLabel,
     ShiftedNumberSymbolsTooltip,
@@ -285,7 +349,7 @@ pub enum Key {
     MouseKeysEnableHint,
     RgbDescription,
     RgbConnect,
-    KeyOverridesDescription,
+    OverridesDescription,
     ComboDescription,
     EncodersDescription,
     EncodersUnavailable,
@@ -301,9 +365,13 @@ pub enum Key {
     LayerLedsUnavailable,
     LayerLedsEnableHint,
     LayerLedsConnect,
+    #[cfg(test)]
     GraveEscapeDescription,
+    #[cfg(test)]
     GraveEscapeUnavailable,
+    #[cfg(test)]
     GraveEscapeEnableHint,
+    #[cfg(test)]
     GraveEscapeConnect,
     MagicDescription,
     MagicUnavailable,
@@ -331,7 +399,7 @@ impl Key {
             Key::NoDevicesFound => "ui.no_devices_found",
             Key::ComboTitle => "ui.combo_title",
             Key::AutoShiftTitle => "ui.auto_shift_title",
-            Key::KeyOverridesTitle => "ui.key_overrides_title",
+            Key::OverridesTitle => "ui.key_overrides_title",
             Key::MouseKeysTitle => "ui.mouse_keys_title",
             Key::MatrixTesterTitle => "ui.matrix_tester_title",
             Key::MatrixTesterDescription => "ui.matrix_tester_description",
@@ -346,13 +414,16 @@ impl Key {
             Key::AltRepeatTitle => "ui.alt_repeat_title",
             Key::AltRepeatDescription => "ui.alt_repeat_description",
             Key::AltRepeatUnavailable => "ui.alt_repeat_unavailable",
+            #[cfg(test)]
             Key::GraveEscapeTitle => "ui.grave_escape_title",
             Key::RgbUnavailableTooltip => "ui.rgb_unavailable_tooltip",
             Key::AppSettingsTitle => "ui.app_settings_title",
             Key::AppSettingsDescription => "ui.app_settings_description",
             Key::LanguageLabel => "ui.language_label",
             Key::LanguageTooltip => "ui.language_tooltip",
+            #[cfg(not(target_os = "linux"))]
             Key::CloseToTrayLabel => "ui.close_to_tray_label",
+            #[cfg(not(target_os = "linux"))]
             Key::CloseToTrayTooltip => "ui.close_to_tray_tooltip",
             Key::RunInBackgroundLabel => "ui.run_in_background_label",
             Key::RunInBackgroundTooltip => "ui.run_in_background_tooltip",
@@ -360,7 +431,9 @@ impl Key {
             Key::LaunchAtStartupTooltip => "ui.launch_at_startup_tooltip",
             Key::LaunchMinimizedLabel => "ui.launch_minimized_label",
             Key::LaunchMinimizedTooltip => "ui.launch_minimized_tooltip",
+            #[cfg(target_os = "windows")]
             Key::LaunchInTrayLabel => "ui.launch_in_tray_label",
+            #[cfg(target_os = "windows")]
             Key::LaunchInTrayTooltip => "ui.launch_in_tray_tooltip",
             Key::ShiftedNumberSymbolsLabel => "ui.shifted_number_symbols_label",
             Key::ShiftedNumberSymbolsTooltip => "ui.shifted_number_symbols_tooltip",
@@ -375,7 +448,7 @@ impl Key {
             Key::MouseKeysEnableHint => "ui.mouse_keys_enable_hint",
             Key::RgbDescription => "ui.rgb_description",
             Key::RgbConnect => "ui.rgb_connect",
-            Key::KeyOverridesDescription => "ui.key_overrides_description",
+            Key::OverridesDescription => "ui.key_overrides_description",
             Key::ComboDescription => "ui.combo_description",
             Key::EncodersDescription => "ui.encoders_description",
             Key::EncodersUnavailable => "ui.encoders_unavailable",
@@ -391,9 +464,13 @@ impl Key {
             Key::LayerLedsUnavailable => "ui.layer_leds_unavailable",
             Key::LayerLedsEnableHint => "ui.layer_leds_enable_hint",
             Key::LayerLedsConnect => "ui.layer_leds_connect",
+            #[cfg(test)]
             Key::GraveEscapeDescription => "ui.grave_escape_description",
+            #[cfg(test)]
             Key::GraveEscapeUnavailable => "ui.grave_escape_unavailable",
+            #[cfg(test)]
             Key::GraveEscapeEnableHint => "ui.grave_escape_enable_hint",
+            #[cfg(test)]
             Key::GraveEscapeConnect => "ui.grave_escape_connect",
             Key::MagicDescription => "ui.magic_description",
             Key::MagicUnavailable => "ui.magic_unavailable",
@@ -1978,5 +2055,132 @@ pub fn tr_text(language: Language, text: &str) -> String {
                 )
         }
         other => other.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod catalog_index_tests {
+    use super::*;
+
+    fn declared_keys(catalog: &str) -> std::collections::BTreeSet<String> {
+        let mut keys = std::collections::BTreeSet::new();
+        let mut section = "";
+        for raw in catalog.lines() {
+            let line = raw.trim();
+            if line.starts_with('[') && line.ends_with(']') {
+                section = line[1..line.len() - 1].trim();
+            } else if !line.starts_with('#') {
+                if let Some((name, _)) = line.split_once('=') {
+                    keys.insert(format!("{section}.{}", name.trim()));
+                }
+            }
+        }
+        keys
+    }
+
+    #[test]
+    fn builtin_indexes_match_the_original_scanner_for_every_declared_key() {
+        for catalog in [EN_CATALOG, RU_CATALOG] {
+            let index = build_catalog_index(catalog);
+            let keys = declared_keys(catalog);
+            assert!(keys.len() > 1000, "full built-in catalog must be exercised");
+            for key in keys {
+                let expected = catalog_lookup_linear(catalog, &key);
+                assert_eq!(catalog_lookup_indexed(&index, &key), expected, "{key}");
+                assert_eq!(catalog_lookup(catalog, &key), expected, "{key}");
+            }
+            for key in [
+                "",
+                "no-dot",
+                ".unknown",
+                "unknown.field",
+                "display_settings.unknown",
+                "display_settings.",
+            ] {
+                assert_eq!(
+                    catalog_lookup_indexed(&index, key),
+                    catalog_lookup_linear(catalog, key)
+                );
+                assert_eq!(
+                    catalog_lookup(catalog, key),
+                    catalog_lookup_linear(catalog, key)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn index_preserves_first_quoted_match_and_literal_contents() {
+        const CATALOG: &str = r#"
+root = ' global '
+[ section ]
+first = "one"
+first = 'two'
+later = not-quoted
+later = 'usable'
+escaped = "a\nb"
+empty = ""
+invalid = 'mismatched"
+[other]
+first = "elsewhere"
+[section]
+first = "three"
+invalid = 'valid later'
+"#;
+        let index = build_catalog_index(CATALOG);
+        for key in declared_keys(CATALOG) {
+            assert_eq!(
+                catalog_lookup_indexed(&index, &key),
+                catalog_lookup_linear(CATALOG, &key),
+                "{key}"
+            );
+            // An arbitrary static catalog must still take the linear fallback.
+            assert_eq!(
+                catalog_lookup(CATALOG, &key),
+                catalog_lookup_linear(CATALOG, &key)
+            );
+        }
+        assert_eq!(catalog_lookup_indexed(&index, ".root"), Some(" global "));
+        assert_eq!(catalog_lookup_indexed(&index, "section.first"), Some("one"));
+        assert_eq!(
+            catalog_lookup_indexed(&index, "section.later"),
+            Some("usable")
+        );
+        assert_eq!(
+            catalog_lookup_indexed(&index, "section.escaped"),
+            Some(r"a\nb")
+        );
+        assert_eq!(catalog_lookup_indexed(&index, "section.empty"), Some(""));
+        assert_eq!(
+            catalog_lookup_indexed(&index, "section.invalid"),
+            Some("valid later")
+        );
+    }
+
+    #[test]
+    fn immutable_builtin_indexes_support_concurrent_readers() {
+        let expected = [
+            catalog_lookup_linear(EN_CATALOG, "display_settings.display_timeout"),
+            catalog_lookup_linear(RU_CATALOG, "display_settings.display_timeout"),
+        ];
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                std::thread::spawn(move || {
+                    for _ in 0..64 {
+                        assert_eq!(
+                            catalog_lookup(EN_CATALOG, "display_settings.display_timeout"),
+                            expected[0]
+                        );
+                        assert_eq!(
+                            catalog_lookup(RU_CATALOG, "display_settings.display_timeout"),
+                            expected[1]
+                        );
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
     }
 }

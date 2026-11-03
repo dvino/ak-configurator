@@ -221,8 +221,7 @@ impl EntropyApp {
                             0 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         self.app_settings.language,
                                         "alt_repeat_editor.entry",
@@ -364,8 +363,7 @@ impl EntropyApp {
                                 let mut name_changed = false;
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         self.app_settings.language,
                                         "alt_repeat_editor.name",
@@ -382,8 +380,10 @@ impl EntropyApp {
                                                 ui,
                                                 egui::Id::new(("alt_repeat_name", idx)),
                                                 name,
-                                                control_width,
-                                                metrics.settings_control_height(),
+                                                egui::vec2(
+                                                    control_width,
+                                                    metrics.settings_control_height(),
+                                                ),
                                                 crate::i18n::tr_catalog(
                                                     self.app_settings.language,
                                                     "alt_repeat_editor.name",
@@ -410,8 +410,7 @@ impl EntropyApp {
                             2 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.last_key"),
                                     true,
                                     Some(crate::i18n::tr_catalog(
@@ -442,8 +441,7 @@ impl EntropyApp {
                             3 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.alt_key"),
                                     true,
                                     Some(crate::i18n::tr_catalog(
@@ -513,8 +511,7 @@ impl EntropyApp {
                                 };
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     row_label.as_str(),
                                     true,
                                     Some(match row_idx {
@@ -613,8 +610,7 @@ impl EntropyApp {
                             8 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         self.app_settings.language,
                                         "alt_repeat_editor.default_alt_key",
@@ -637,8 +633,7 @@ impl EntropyApp {
                             9 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(
                                         self.app_settings.language,
                                         "alt_repeat_editor.bidirectional",
@@ -661,8 +656,7 @@ impl EntropyApp {
                             10 => {
                                 crate::ui_style::settings_list_row_with_tooltip(
                                     ui,
-                                    row_content_width,
-                                    row_height,
+                                    egui::vec2(row_content_width, row_height),
                                     crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.ignore_handedness"),
                                     true,
                                     Some(crate::i18n::tr_catalog(self.app_settings.language, "alt_repeat_editor.treat_left_and_right_modifiers_as_equivalent")),
