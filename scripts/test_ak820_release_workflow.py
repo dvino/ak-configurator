@@ -89,6 +89,36 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_full_normal_suite_covers_windows_and_macos_keeps_focused_tests(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        full = steps["Test all targets (Linux and Windows)"]
+        self.assertIn("if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')", full)
+        self.assertIn("cargo test --locked --all-targets -- --test-threads=1", full)
+        for name in ("Test AK820 filesystem and ownership (macOS)", "Test AK820 device ownership (macOS)"):
+            self.assertIn("if: startsWith(matrix.platform, 'macos-')", steps[name])
+            self.assertNotIn("windows-", steps[name])
+
+    def test_native_mcp_contracts_include_both_linux_and_windows_architectures(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        for name in ("Test optional MCP contracts (Linux and Windows)",
+                     "Build optional MCP mock binary (Linux and Windows)",
+                     "Exercise MCP stdio with mock backend (Linux and Windows)"):
+            step = steps[name]
+            self.assertIn("if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')", step)
+            self.assertNotIn("linux-x86_64", step)
+            self.assertNotIn("windows-x86_64", step)
+        self.assertIn("platform: windows-arm64", workflow)
+        self.assertIn("platform: linux-arm64", workflow)
+
+    def test_checkout_uses_validated_candidate_or_immutable_event_commit(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        self.assertIn("ref: ${{ inputs.candidate_ref || github.sha }}", workflow)
+        self.assertNotIn("inputs.candidate_ref || github.ref", workflow)
+        release = (ROOT / ".github/workflows/ak820-release.yml").read_text(encoding="utf-8")
+        self.assertIn("candidate_ref: ${{ needs.validate.outputs.commit }}", release)
+
     def test_windows_uses_isolated_graphics_fixture_without_packaging_driver(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}

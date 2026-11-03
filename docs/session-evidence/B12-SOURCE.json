@@ -1,10 +1,10 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "af1935a514788c7f863306b8173d3616f2ac8071",
+  "base_commit": "145fd9fe360ccf3abbc4bb4faf1a973a7c804430",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
   "file_count": 709,
-  "aggregate_sha256": "13211cd585600c13dcb4e9ef75a6438a4b9acd8a02a265248c7312f7275bcf7f",
+  "aggregate_sha256": "e2b358b52eede5c19a82f7b0de5dede66c0841b14a7ff7bb72f4c5a88d374bc2",
   "files": [
     {
       "path": ".gitattributes",
@@ -53,8 +53,8 @@
     },
     {
       "path": ".github/workflows/desktop-dev.yml",
-      "bytes": 15780,
-      "sha256": "19160ac393f99093a669e22ee0c98986110d858246c9ab0fa7e97ec0a454455c"
+      "bytes": 15713,
+      "sha256": "4e42c37d53c04bb1b32caf76a840bf7f76c0fe7a92e8199b38665a914ca8d45c"
     },
     {
       "path": ".github/workflows/nix.yml",
@@ -1203,8 +1203,8 @@
     },
     {
       "path": "scripts/test_ak820_release_workflow.py",
-      "bytes": 29879,
-      "sha256": "702fd4b6e4e6eed7c35699b790c73685b2012f98cd05c151361517d31ac047be"
+      "bytes": 32073,
+      "sha256": "102e3c0f787ae7fbdda8af48e84664c03266bda1745d0998ae9afad2e5886979"
     },
     {
       "path": "scripts/test_ak820_runtime_smoke.py",
@@ -2123,8 +2123,8 @@
     },
     {
       "path": "src/ui/application_layouts_settings.rs",
-      "bytes": 136767,
-      "sha256": "c704675a1eb25a9f61ced5f81f79100c496d1b3bb981df40c3351cc2fcd1f366"
+      "bytes": 136735,
+      "sha256": "2e5d96a21b70f21c79e25da2f421aecbbcc419a9823d847423db558c46dca1da"
     },
     {
       "path": "src/ui/auto_shift_settings.rs",

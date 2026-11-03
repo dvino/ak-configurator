@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.candidate_ref || github.ref }}
+          ref: ${{ inputs.candidate_ref || github.sha }}
 
       - name: Install Rust 1.94.1
         uses: dtolnay/rust-toolchain@stable
@@ -148,16 +148,16 @@ jobs:
         shell: bash
         run: python scripts/test_cava_helper.py --binary target/audio-helper/cava
 
-      - name: Test all targets (Linux)
-        if: startsWith(matrix.platform, 'linux-')
+      - name: Test all targets (Linux and Windows)
+        if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         run: cargo test --locked --all-targets -- --test-threads=1
 
-      - name: Test AK820 filesystem and ownership (Windows and macOS)
-        if: startsWith(matrix.platform, 'windows-') || startsWith(matrix.platform, 'macos-')
+      - name: Test AK820 filesystem and ownership (macOS)
+        if: startsWith(matrix.platform, 'macos-')
         run: cargo test --locked --bin ak-configurator ak820_backup_files -- --test-threads=1
 
-      - name: Test AK820 device ownership (Windows and macOS)
-        if: startsWith(matrix.platform, 'windows-') || startsWith(matrix.platform, 'macos-')
+      - name: Test AK820 device ownership (macOS)
+        if: startsWith(matrix.platform, 'macos-')
         run: cargo test --locked --bin ak-configurator 'hid_ownership::' -- --test-threads=1
 
       - name: Test macOS USB metadata validation
@@ -172,16 +172,16 @@ jobs:
         if: matrix.platform == 'macos-arm64' || matrix.platform == 'macos-x86_64'
         run: cargo build --locked --release --features mcp --target ${{ matrix.target }}
 
-      - name: Test optional MCP contracts (x86_64 Linux and Windows only)
-        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+      - name: Test optional MCP contracts (Linux and Windows)
+        if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         run: cargo test --locked --features mcp-mock --bin ak-configurator 'mcp::' -- --test-threads=1
 
-      - name: Build optional MCP mock binary (x86_64 Linux and Windows only)
-        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+      - name: Build optional MCP mock binary (Linux and Windows)
+        if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         run: cargo build --locked --bin ak-configurator --features mcp-mock
 
-      - name: Exercise MCP stdio with mock backend (x86_64 Linux and Windows only)
-        if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
+      - name: Exercise MCP stdio with mock backend (Linux and Windows)
+        if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then binary=target/debug/ak-configurator.exe; else binary=target/debug/ak-configurator; fi

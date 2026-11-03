@@ -913,6 +913,8 @@ impl EntropyApp {
         control_font: f32,
         visible_rows: &std::ops::Range<usize>,
     ) -> usize {
+        #[cfg(target_os = "linux")]
+        let control_height = _control_height;
         let mut row = 2;
         let detector = self.application_discovery.foreground_status.clone();
         let (detector_text, detector_details, detector_ok) =
@@ -963,8 +965,6 @@ impl EntropyApp {
                     |_ui| {
                         #[cfg(target_os = "linux")]
                         let ui = _ui;
-                        #[cfg(target_os = "linux")]
-                        let control_height = _control_height;
                         #[cfg(target_os = "linux")]
                         if self.gnome_integration_install_task.is_some() {
                             ui.allocate_ui_with_layout(
