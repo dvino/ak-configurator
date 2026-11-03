@@ -3,25 +3,14 @@
 AK Configurator changes are recorded here. The inherited Entropy release history
 is retained below. Russian candidate notes: [Изменения](docs/ru/CHANGELOG.md).
 
-## v0.1.0-alpha.1 — Unpublished source candidate
+## v0.1.0-alpha.1 — Windows local candidate (unpublished)
 
-The first application prerelease naming follows an unpublished `0.1.0-beta.2` development version. No application release or tag for beta.2 exists. Since alpha.1 sorts below beta.2 under SemVer, transitioning from the unpublished development version requires an explicit version change. This alpha records current source work; it is not a qualified or published release.
+The first alpha candidate is prepared for Windows x86_64 and ARM64. The application release is unpublished; the ARM64 package/CI path is configured, but runtime execution has not been qualified. Linux and macOS remain outside this milestone.
 
-- Prevent recurring device-page flicker: layout sampling no longer borrows HID, and actual indicator writes preserve the cached editor and exact RGB capabilities. Preserve the RGB subpage while the OS indicator temporarily borrows HID. Sample layout at a 100 ms target cadence, renew active overrides at one second, and continue scheduling while hidden. Release the Windows tray relay lock before native window calls.
-- Show the application logo during visible startup before full editor initialization; move cold HID discovery to the background. Add the same logo to English and Russian README.
-- Hide unsupported Auto Shift switches on beta.3 Main/Typing and keep the supported timeout editable. Explain its assigned on/off actions; verify flag changes on firmware that actually advertises them.
-- Put OS indicator controls in application settings; remove the redundant close-interface button. Normal close follows the tray preference, while explicit menu/tray Quit and Ctrl+Q (also Cmd+Q) request full guarded exit.
-- Add Linux StatusNotifier tray and Show/Quit menu with visible fallback and recovery after host loss; guard macOS hiding when tray creation fails. Require actual native GUI/tray smoke reports for all six candidate targets, bound to the executable hash.
-- Add optional read-only MCP stdio diagnostic preview with pinned official SDK, FD00-first identity, typed FD01, closed tools, synthetic faults and bounded metadata traces. P0 is partial, default-off, and does not expose settings writes or firmware operations. See [MCP guide](docs/MCP.md).
-- Isolate offline GUI settings and reviewed native device/system entry points. Retain explicit limits on inherited tests and distinguish host-model, native-platform and physical evidence.
-- Target AK820 firmware source `v0.6.0-beta.3` (tag object `4cabae9af9bb68492a8cf079c59f8b388c5cf788`, peeled commit `88d190abb156960915a0f1f8ac7f602bb401eab3`); firmware CI run `40461867751` passed the shared-host job and “Revalidate and assemble all ten profiles”; the profile qualification matrix and publishing jobs were skipped. The [AK820 `v0.6.0-beta.3` release](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.3) was published on 2026-10-27 at 06:50:35 UTC. The release catalog, firmware bundle, five JSON assets and `SHA256SUMS` have been downloaded and their SHA256 values match the GitHub API digests. All ten published IHX/settings identities match reviewed candidates, and all ten map hashes match the published release matrix. Approved release metadata pins every installable image to the exact installer release. This confirms release-input identity, not physical device behavior.
-- Add Direct palette readback, full-frame atomic RAM commit, explicit previous Direct restore and `direct-ram.json` save/restore. This sidecar is volatile RAM data, not durable settings. Retain CAVA 1.0.0 and OpenRGB SDK 0/1.
-- Add beta.3 Combo with CapsWord result and `LT(layer0..5, MC0..15)` profile capabilities; expose AutoShift QSID 4 in Main and Typing while keeping beta.2 Main separate.
-- Make the LT macro action reachable through **Special → Macro → Hold layer / tap macro** and show its macro operand on the assigned key. Keep key-picker windows and edge keys accessible at 800×500 while preserving the original large-window geometry. Correct AK820's two-input Combo description and display its loaded timing setting. Make the Combo page scrollable and keep the compact profile status clear of key hints.
-- Apply base palettes asynchronously through the existing RGB owner; check cancellation before every Direct read/write packet. Keep saved release observations bound to the exact firmware release and catalog, and preserve beta.2 restore/reset rules.
-- Stop preparation on any attempted capture failure, even when defaults or rollback were selected; a fresh install-only/OEM owner without project settings may skip unsupported capture but must pass full-ROM/safety checks. Keep a failed owner blocked until reread; allow exact fresh OEM capture for install-only preparation. Restrict the no-serial warning to the first OEM source path.
-- Localize installer result/status and include localized Desktop/Changelog/Status/Review guides with working package links. Update the native screenshot and exact RU/EN help paths. Preserve the desktop UI and navigation from baseline `5d56538`.
-- Configure six unsigned native candidates. Final six-platform native/runtime/signing checks, physical behavior and publication remain pending. No hardware qualification is claimed.
+- The installer selects AK820 firmware `v0.6.0-beta.5` by default and requires explicit prerelease opt-in. Its catalog describes ten exact profiles. Beta3 compatibility checks remain, but Beta3 installation is denied.
+- An optional MCP interface provides read-only metadata and a local installation preview. It does not provide settings writes, restore execution or firmware flashing.
+- A per-user GUI setup is the intended primary installation path, with a portable ZIP alternative. Final signing and publication remain pending.
+- This candidate is not qualified for complete keyboard configuration or physical-device behavior. The application release and package are not yet published.
 
 ## v0.1.0-beta.2 — Historical unpublished desktop development baseline
 

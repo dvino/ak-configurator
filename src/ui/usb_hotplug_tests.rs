@@ -197,7 +197,7 @@ mod usb_hotplug_tests {
                                 assert_eq!(app.device_manager.devices()[app.selected_device.unwrap()].path, b.path);
                             } else {
                                 assert!(app.hid_device.is_none()); assert!(app.layout.is_none());
-                                assert!(!app.selected_device.is_some_and(|i| app.device_manager.devices()[i].path == a.path), "never substitute indistinguishable background endpoint");
+                                assert!(app.selected_device.is_none_or(|i| app.device_manager.devices()[i].path != a.path), "never substitute indistinguishable background endpoint");
                             }
                             assert!(connects.try_recv().is_err()); assert!(recorder.requests().is_empty());
                         }

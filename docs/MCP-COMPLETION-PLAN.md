@@ -77,7 +77,7 @@ Session boundaries and ready assignments are in [SESSION-EXECUTION-PLAN.md](SESS
 
 Files: existing `src/mcp/{mod,backend,dto,mock,trace}.rs`, `src/hid.rs`, `src/hid_ak820.rs`, `scripts/test_mcp_stdio.py`, MCP docs. Extend existing inline unit tests and the subprocess script; do not invent library/integration targets. Commands run in the owned checkout with an isolated target directory; replace `$CARGO_TARGET_DIR/debug/ak-configurator` by its `.exe` form on Windows.
 
-1. Add a positive beta.5 full packed bootstrap fixture from final pinned inputs after beta.5 stage 0. Synthetic fixtures do not establish production trust.
+1. **Completed in C01 for the limited offline scope:** an official-recipe positive beta.5 full packed bootstrap fixture is host-qualified. C01 records exact input/fixture identities. This does not establish an installed image or physical-device behavior; synthetic FD01 fixtures alone do not establish production trust.
 2. Test FD00→FD01, no probing unrelated VID/PID, ambiguous denial and exact CODE admission.
 3. Fix only reproduced live ownership/helper/cancel/disconnect gaps; prove no concurrent read/write and bounded termination.
 4. Add safe stage/timing/error reports; leave payload trace disabled.
@@ -85,9 +85,13 @@ Files: existing `src/mcp/{mod,backend,dto,mock,trace}.rs`, `src/hid.rs`, `src/hi
 6. CLI matrix: `--mcp-stdio` alone defaults to read-only HID but must not discover devices before a request; explicit access/backend gives the same admission. Reject unknown flags/access modes and duplicate/conflicting backend/access arguments. A build with feature `mcp` but without `mcp-mock` rejects mock; feature-enabled development builds test mock without touching HID. Preserve irreversible real→mock guard. Test denied write calls without sending setters. No-flags GUI startup is not an offline acceptance test.
 7. Run `cargo test --locked --features mcp-mock --bin ak-configurator mcp:: -- --test-threads=1`, `cargo build --locked --features mcp-mock`, `python3 scripts/test_mcp_stdio.py --binary "$CARGO_TARGET_DIR/debug/ak-configurator"`, `python3 .github/scripts/test_beta5_catalog.py` and `cargo clippy --locked --all-targets --features mcp-mock -- -D warnings`. Use a separately isolated feature-`mcp` binary with the script's `--production-binary` option to verify mock denial. Set `CARGO_TARGET_DIR` explicitly per session; reject zero-match filtered test runs.
 
-Gate: P0 requires positive exact fixture and Linux/Windows/macOS stdio evidence. Record unavailable platforms as pending; offline M1 may continue.
+Gate: The positive exact host fixture was accepted in C01. P0 as a whole remains partial until required Linux/Windows/macOS STDIO and remaining live/platform checks pass; record unavailable platforms as pending. Offline M1 may continue.
 
 ## M1 — shared beta.5 snapshot/backup
+
+**C03 checkpoint (2026-11-03):** `ak820_backup` is implemented as the seventh MCP tool and reuses the native reconciler and C02 store. Focused mock tests, mock STDIO for both protocol generations and the official SDK/Inspector mock check are reported passing; see [C03 evidence](session-evidence/C03.md). The production-feature build and combined production STDIO passed for both protocol generations; metadata tools passed and the mock backend was rejected in production. Independent review `c03_backup_review` accepted the limited offline C03 scope after checking documentation/source and 71 file hashes; reported tests/builds/stdio/SDK results were not rerun. Device behavior and source-to-binary linkage remain unqualified.
+
+**C04 checkpoint (2026-11-03):** `ak820_prepare` is implemented as the eighth tool and reuses the native install-prepare builder and C03 archive for a fixed install preview only. Settings-restore plans are unsupported; `settings_writes_authorized` remains false. The current full Windows mock-feature suite passed 2,015 tests with 18 ignored in 288.93 s; three ignored C04 fixtures passed in separate runs and the remaining ignored cases are unqualified. Focused `mcp_prepare`, strict Clippy/format, mock/production builds, combined STDIO and official SDK/Inspector checks passed. Reviewer `c04_final_review` verified the 103-file inventory and source/patch/report/binary hashes, closed four documentation findings and accepted the limited offline Windows C04 scope. The inventory is sparse; no source-to-binary attestation or three-platform/GUI/device qualification is claimed. See [C04 evidence](session-evidence/C04.md). This is limited Windows acceptance, not full MCP completion.
 
 Dependencies: beta.5 stage 2. Files: shared backup engine, MCP backend/DTO, artifact-store module/tests.
 

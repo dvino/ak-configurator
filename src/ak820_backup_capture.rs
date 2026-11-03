@@ -29,6 +29,25 @@ pub(crate) struct CapturedBackup {
     files: BTreeMap<String, Vec<u8>>,
 }
 impl CapturedBackup {
+    /// Synthetic UI state only; no ROM validation or trust is represented.
+    #[cfg(test)]
+    pub(crate) fn untrusted_ui_fixture() -> Self {
+        let profile = ProfileId::Main;
+        let identity = ImageIdentity {
+            ihx_sha256: "fixture".into(),
+            code_sha256: "fixture".into(),
+            definition_sha256: "fixture".into(),
+            schema: 0,
+        };
+        let mut files = BTreeMap::new();
+        files.insert("saved-nvm.bin".into(), vec![0; 0x2800]);
+        Self {
+            profile,
+            image: crate::ak820::ImageContract::Beta4(profile),
+            identity,
+            files,
+        }
+    }
     pub(crate) fn profile(&self) -> ProfileId {
         self.profile
     }

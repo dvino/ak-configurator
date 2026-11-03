@@ -909,7 +909,7 @@ impl EntropyApp {
         row_width: f32,
         row_height: f32,
         control_width: f32,
-        control_height: f32,
+        _control_height: f32,
         control_font: f32,
         visible_rows: &std::ops::Range<usize>,
     ) -> usize {
@@ -960,7 +960,11 @@ impl EntropyApp {
                     true,
                     Some(integration_tooltip),
                     control_width,
-                    |ui| {
+                    |_ui| {
+                        #[cfg(target_os = "linux")]
+                        let ui = _ui;
+                        #[cfg(target_os = "linux")]
+                        let control_height = _control_height;
                         #[cfg(target_os = "linux")]
                         if self.gnome_integration_install_task.is_some() {
                             ui.allocate_ui_with_layout(

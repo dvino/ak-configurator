@@ -6,17 +6,19 @@ use super::*;
 // replaced or cleared. Their process-lifetime closures therefore own no GUI.
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 struct TrayGui {
+    #[cfg(any(target_os = "linux", not(test)))]
     context: egui::Context,
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", not(test)))]
     windows_hwnd: Option<isize>,
 }
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 static TRAY_GUI: std::sync::Mutex<Option<TrayGui>> = std::sync::Mutex::new(None);
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(all(any(target_os = "windows", target_os = "macos"), not(test)))]
 static TRAY_HANDLERS: std::sync::Once = std::sync::Once::new();
 
 #[cfg(any(target_os = "windows", test))]
 const AUTOSTART_WINDOWS_VALUE: &str = "AK Configurator";
+#[cfg(any(target_os = "linux", test))]
 const AUTOSTART_LINUX_FILE: &str = "ak-configurator.desktop";
 #[cfg(any(target_os = "macos", test))]
 const AUTOSTART_MACOS_FILE: &str = "com.dvino.ak-configurator.plist";
@@ -98,6 +100,9 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn defer_exit_until_hid_write_returns(&mut self, ctx: &egui::Context) -> bool {
+        if self.rgb_exit_pending && self.rgb_exit_ready {
+            return false;
+        }
         if self.ak820_install_runtime.blocks_exit() {
             self.exit_after_hid_write = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -109,7 +114,13 @@ impl EntropyApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(40));
             return true;
         }
-        if !self.hid_write_lifecycle_busy() && !self.deferred_exit_has_pending_hid_writes() {
+        if !self.begin_rgb_exit() {
+            self.flush_pending_qmk_setting_writes();
+        }
+        if !self.rgb_exit_pending
+            && !self.hid_write_lifecycle_busy()
+            && !self.deferred_exit_has_pending_hid_writes()
+        {
             return false;
         }
 
@@ -122,6 +133,19 @@ impl EntropyApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn finish_deferred_exit_after_hid_write(&mut self, ctx: &egui::Context) {
         if !self.exit_after_hid_write {
+            return;
+        }
+
+        if self.rgb_exit_pending {
+            if self.vial_hid_task_active() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                return;
+            }
+            // Keep the exit-only gate set until the process closes. The next
+            // viewport Close event must pass through without starting work.
+            self.exit_after_hid_write = false;
+            self.rgb_exit_ready = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
 
@@ -298,7 +322,6 @@ impl EntropyApp {
         self.force_close_requested = true;
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.flush_pending_qmk_setting_writes();
             if self.defer_exit_until_hid_write_returns(ctx) {
                 return;
             }
@@ -315,6 +338,10 @@ impl EntropyApp {
         if !ctx.input(|i| i.viewport().close_requested()) {
             return;
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.rgb_exit_pending && self.rgb_exit_ready {
+            return;
+        }
         if super::ak820_offline_files::is_busy(ctx) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
@@ -325,9 +352,6 @@ impl EntropyApp {
             .into();
             return;
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        self.flush_pending_qmk_setting_writes();
 
         if should_keep_vial_unlock_visible(self.unlock_open, self.vial_unlock_polling) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -427,7 +451,6 @@ impl EntropyApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                 self.windows_window_hidden_to_tray = true;
                 self.status_msg = background_status.into();
-                return;
             }
         }
         #[cfg(target_os = "linux")]
@@ -724,9 +747,7 @@ impl EntropyApp {
                 self.persist_close_to_tray_behavior(CloseToTrayBehavior::Close);
             }
             self.close_to_tray_prompt_open = false;
-            self.force_close_requested = true;
-            save_app_settings(&self.app_settings);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.request_explicit_quit(ctx);
         } else if minimize_to_tray {
             if self.close_to_tray_prompt_remember {
                 self.persist_close_to_tray_behavior(CloseToTrayBehavior::Tray);
@@ -786,7 +807,7 @@ impl EntropyApp {
                     ])
                     .status()
             };
-            return status.map(|status| status.success()).unwrap_or(false);
+            status.map(|status| status.success()).unwrap_or(false)
         }
         #[cfg(target_os = "linux")]
         {

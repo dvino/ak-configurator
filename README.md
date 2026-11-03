@@ -4,28 +4,21 @@
 
 <img src="assets/ak-configurator-logo.png" alt="AK Configurator logo" width="240">
 
-AK Configurator adapts [Entropy](https://github.com/ergohaven/entropy) for the wired AK820. The native desktop application is being prepared for its first public alpha, `0.1.0-alpha.1`. Its installer selects the published AK820 firmware `v0.6.0-beta.4.1` by default, with ten exact beta.4 profiles: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. Beta.3 remains selectable. Browser support is a later stage.
+AK Configurator adapts [Entropy](https://github.com/ergohaven/entropy) for the wired AK820. The current work prepares the first Windows alpha, `0.1.0-alpha.1`, with x86_64 and ARM64 package/CI paths. Runtime checks cover the x86_64 executable; actual ARM64 execution remains unverified. This is a local candidate: no application release or download has been published. Linux and macOS builds are outside this milestone; the broader six-target release requirement remains open.
 
-An additional read-only path recognizes official beta.4 images and reconciles QS v2 settings. The separately published beta.4.1 release authorizes flashing its exact beta.4 images; the installer pins its catalog and image hashes. This does not claim hardware validation or authorize saved-settings writes and restore.
+The candidate pins the published AK820 firmware `v0.6.0-beta.5` and its ten exact profiles: Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts and Multios. The installer keeps Beta3 compatibility checks, but Beta3 is not an installation target. Beta5 is the default and requires explicit prerelease opt-in. Hardware validation and saved-settings writes remain disabled.
 
-The editor provides profile-aware key and encoder mappings, six layers, macros, Combo, typed settings and Russian/English help. It retains Entropy's menus and key picker. Offline projects let users explore and edit all ten profile examples without connecting a keyboard.
+The native application includes an optional read-only MCP diagnostic interface. It can inspect bounded metadata and prepare a local installation preview; it does not expose a settings writer, restore executor or firmware flash operation. MCP use is separately enabled by the user. The x86_64 release executable passed isolated GUI and metadata-only MCP checks. The integrated Windows suite, strict lint and formatting passed. An unsigned native GUI setup passed isolated install, same-version reinstall and uninstall checks; the final signed setup and release package remain pending.
 
-Lighting controls include built-in effects, individual-key palettes, local scenes, music visualization through bundled CAVA 1.0.0 and optional local OpenRGB SDK 0/1 input. Main, Game, Mmo and Creative support Direct. Beta.3 adds palette readback, atomic full-frame RAM commit and explicit restoration of the prior Direct palette. A separate `direct-ram.json` file saves and restores volatile colors; it is not a backup of persistent keyboard settings.
-
-Native workflows also cover complete settings backups, guarded restore/reset, firmware installation, local OEM recovery and an optional OS layout helper. Public firmware inputs are bundled for offline preparation. OEM ROM and recovery data stay local. Editing and installation depend on the exact verified image and settings contract, not a profile name alone.
-
-![AK820 Main offline example in the native desktop interface; no keyboard connected.](docs/images/ak820-desktop-demo.png)
+The application can display and edit offline profile examples without connecting a keyboard. This does not establish complete keyboard configuration or physical support. The current alpha has not passed the full integrated regression and independent review gates. No physical keyboard operation was performed.
 
 ## Documentation
 
-- [Installation and updating](docs/INSTALL.md): download, checksums, launch, per-user installation and replacement of earlier development builds.
-- [Desktop guide](docs/DESKTOP.md): controls, backups, restoration, installation and platform limits.
-- [MCP diagnostic preview](docs/MCP.md): optional agent diagnostics, synthetic checks and native offline GUI testing.
-- [Current status](docs/STATUS.md) and [verification report](docs/REVIEW.md): completed checks and remaining qualification.
-- [Requirements](docs/REQUIREMENTS.md) and [implementation plan](docs/PLAN.md): supported scope and delivery gates.
-- [RGB plan](docs/RGB-PLAN.md) and [audio components](docs/THIRD-PARTY-AUDIO.md): protocol, source lifecycle, platform capture and redistribution details.
-- [Changelog](CHANGELOG.md): current candidate and retained project history.
+- [Installation](docs/INSTALL.md): current Windows candidate status, local build and package checks.
+- [Desktop guide](docs/DESKTOP.md): application controls and current platform/device limits.
+- [MCP guide](docs/MCP.md): optional diagnostics, synthetic checks and access boundaries.
+- [Current status](docs/STATUS.md) and [review record](docs/REVIEW.md): evidence and remaining gates.
+- [Requirements](docs/REQUIREMENTS.md) and [plan](docs/PLAN.md): project scope and delivery gates.
+- [Changelog](CHANGELOG.md): user-visible changes and limits.
 
-This is an unpublished alpha candidate. Source/host checks, native platform execution and physical keyboard behavior are recorded separately; an offline pass does not establish flashing, retention or LED output. The six unsigned CI candidates passed packaged runtime and installation checks; signing, publication and hardware qualification remain open. Exact beta.2 images and backups retain separate compatibility rules. Offline project format v2 pins the release, catalog and Intel HEX; beta.1 v1 projects need deliberate manual migration.
-
-Firmware source and releases remain in [dvino/ak820](https://github.com/dvino/ak820). This repository contains the configurator. Entropy history, copyright notices and the imported GPL-3.0-or-later license are preserved; see [LICENSE](LICENSE). Third-party notices continue to apply to their respective files.
+Firmware sources and releases remain in [dvino/ak820](https://github.com/dvino/ak820). OEM ROM and recovery material stay local. This repository preserves Entropy history, copyright notices and the GPL-3.0-or-later license; see [LICENSE](LICENSE).

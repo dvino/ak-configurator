@@ -493,6 +493,10 @@ pub(crate) mod platform {
     }
 
     impl Store {
+        #[cfg(test)]
+        pub(crate) fn test_open_in(base: &Path) -> io::Result<Self> {
+            Self::open_in(base)
+        }
         pub(crate) fn open() -> io::Result<Self> {
             let base = dirs::data_local_dir()
                 .ok_or_else(|| invalid("per-user local data directory unavailable"))?;
@@ -1146,7 +1150,8 @@ pub(crate) mod platform {
 
 // These primitives are adapted from the project's Windows backup I/O; unlike
 // backup staging they must also support bounded inventory and a stable lock.
-// Native Windows behavior remains unverified.
+// Native Windows focused tests cover storage mechanics; ACL isolation across
+// principals and power-loss durability require separate platform evidence.
 #[cfg(target_os = "windows")]
 pub(crate) mod platform {
     use super::*;
@@ -1537,7 +1542,7 @@ pub(crate) mod platform {
             let bytes =
                 unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), io.information) };
             let length = u32::from_ne_bytes(bytes[8..12].try_into().unwrap()) as usize;
-            if length % 2 != 0 || length > bytes.len() - 12 {
+            if !length.is_multiple_of(2) || length > bytes.len() - 12 {
                 return Err(invalid());
             }
             let units: Vec<u16> = bytes[12..12 + length]
@@ -1651,6 +1656,10 @@ pub(crate) mod platform {
     }
 
     impl Store {
+        #[cfg(test)]
+        pub(crate) fn test_open_in(base: &Path) -> io::Result<Self> {
+            Self::open_in(base)
+        }
         pub(crate) fn open() -> io::Result<Self> {
             let base = dirs::data_local_dir().ok_or_else(invalid)?;
             Self::open_in(&base)
@@ -2185,6 +2194,215 @@ pub(crate) mod platform {
             temp.path().join("ak-configurator/mcp-artifacts/v1")
         }
 
+        #[link(name = "advapi32")]
+        extern "system" {
+            fn SetNamedSecurityInfoW(
+                name: *mut u16,
+                kind: u32,
+                info: u32,
+                owner: *mut c_void,
+                group: *mut c_void,
+                dacl: *mut c_void,
+                sacl: *mut c_void,
+            ) -> u32;
+        }
+
+        fn make_public(path: &Path) {
+            let sddl: Vec<u16> = "D:P(A;OICI;FA;;;WD)"
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
+            let mut sd = null_mut();
+            // SAFETY: the SDDL and output pointer are valid for this call.
+            assert_ne!(
+                unsafe {
+                    ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                        sddl.as_ptr(),
+                        1,
+                        &mut sd,
+                        null_mut(),
+                    )
+                },
+                0
+            );
+            let sd = Local(sd);
+            let (mut present, mut defaulted, mut acl) = (0, 0, null_mut());
+            // SAFETY: sd is a live descriptor and the outputs are writable.
+            assert_ne!(
+                unsafe { GetSecurityDescriptorDacl(sd.0, &mut present, &mut acl, &mut defaulted) },
+                0
+            );
+            assert_ne!(present, 0);
+            let mut name: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            // SAFETY: name is NUL-terminated and acl belongs to the live descriptor.
+            let status = unsafe {
+                SetNamedSecurityInfoW(
+                    name.as_mut_ptr(),
+                    1,
+                    0x8000_0004,
+                    null_mut(),
+                    null_mut(),
+                    acl,
+                    null_mut(),
+                )
+            };
+            assert_eq!(status, 0, "SetNamedSecurityInfoW failed: {status}");
+        }
+
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn DeviceIoControl(
+                handle: Handle,
+                code: u32,
+                input: *const c_void,
+                input_len: u32,
+                output: *mut c_void,
+                output_len: u32,
+                returned: *mut u32,
+                overlapped: *mut c_void,
+            ) -> i32;
+        }
+
+        struct Junction(std::path::PathBuf);
+        impl Drop for Junction {
+            fn drop(&mut self) {
+                std::fs::remove_dir(&self.0).expect("remove test junction");
+            }
+        }
+
+        fn junction(path: &Path, target: &Path) -> Junction {
+            std::fs::create_dir(path).unwrap();
+            let guard = Junction(path.to_owned());
+            let target = std::fs::canonicalize(target).unwrap();
+            let target = target.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
+            let substitute: Vec<u16> = format!(r"\??\{target}").encode_utf16().collect();
+            let print: Vec<u16> = target.encode_utf16().collect();
+            let sub_bytes = (substitute.len() * 2) as u16;
+            let print_bytes = (print.len() * 2) as u16;
+            let mut buffer = Vec::new();
+            buffer.extend_from_slice(&0xa000_0003u32.to_le_bytes());
+            buffer.extend_from_slice(&(8 + sub_bytes + 2 + print_bytes + 2).to_le_bytes());
+            buffer.extend_from_slice(&0u16.to_le_bytes());
+            buffer.extend_from_slice(&0u16.to_le_bytes());
+            buffer.extend_from_slice(&sub_bytes.to_le_bytes());
+            buffer.extend_from_slice(&(sub_bytes + 2).to_le_bytes());
+            buffer.extend_from_slice(&print_bytes.to_le_bytes());
+            for c in substitute
+                .into_iter()
+                .chain(Some(0))
+                .chain(print)
+                .chain(Some(0))
+            {
+                buffer.extend_from_slice(&c.to_le_bytes());
+            }
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .share_mode(0)
+                .custom_flags(0x0220_0000)
+                .open(path)
+                .unwrap();
+            let mut returned = 0;
+            // SAFETY: the handle and bounded reparse buffer remain live for this synchronous call.
+            let ok = unsafe {
+                DeviceIoControl(
+                    file.as_raw_handle(),
+                    0x0009_00a4,
+                    buffer.as_ptr().cast(),
+                    buffer.len() as u32,
+                    null_mut(),
+                    0,
+                    &mut returned,
+                    null_mut(),
+                )
+            };
+            assert_ne!(
+                ok,
+                0,
+                "FSCTL_SET_REPARSE_POINT: {}",
+                io::Error::last_os_error()
+            );
+            assert_ne!(
+                std::fs::symlink_metadata(path).unwrap().file_attributes() & 0x400,
+                0
+            );
+            guard
+        }
+
+        #[test]
+        fn mcp_artifacts_windows_changed_dacl_is_revalidated() {
+            for component in [
+                "ak-configurator",
+                "ak-configurator/mcp-artifacts",
+                "ak-configurator/mcp-artifacts/v1",
+            ] {
+                let (temp, store) = store();
+                assert!(store.inventory().is_ok());
+                make_public(&temp.path().join(component));
+                assert!(
+                    store.inventory().is_err(),
+                    "changed DACL accepted on {component}"
+                );
+                assert!(Store::open_in(temp.path()).is_err());
+            }
+            for child in ["", "payload.bin", "manifest.json"] {
+                let (temp, store) = store();
+                let (id, _) = store.put(Kind::Backup, b"fixture", source()).unwrap();
+                let path = root(&temp).join(&id).join(child);
+                make_public(&path);
+                assert!(store.read(&id).is_err(), "changed DACL accepted on {child}");
+                assert!(store.evict(&id).is_err());
+                assert!(path.exists());
+            }
+        }
+
+        #[test]
+        fn mcp_artifacts_windows_junctions_are_rejected() {
+            let temp = tempfile::tempdir().unwrap();
+            let target = temp.path().join("target");
+            std::fs::create_dir(&target).unwrap();
+            let base = temp.path().join("base");
+            let base_link = junction(&base, &target);
+            assert!(Store::open_in(&base).is_err());
+            assert!(std::fs::read_dir(&target).unwrap().next().is_none());
+            drop(base_link);
+
+            let (temp, store) = store();
+            let target = temp.path().join("outside");
+            std::fs::create_dir(&target).unwrap();
+            let id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            let path = root(&temp).join(id);
+            let artifact_link = junction(&path, &target);
+            assert!(store.read(id).is_err());
+            assert!(store.evict(id).is_err());
+            assert!(store.inventory().is_err());
+            assert!(std::fs::read_dir(&target).unwrap().next().is_none());
+            drop(artifact_link);
+
+            let (id, _) = store.put(Kind::Backup, b"fixture", source()).unwrap();
+            let payload = root(&temp).join(&id).join("payload.bin");
+            std::fs::remove_file(&payload).unwrap();
+            let payload_link = junction(&payload, &target);
+            assert!(store.read(&id).is_err());
+            assert!(store.evict(&id).is_err());
+            assert!(std::fs::read_dir(&target).unwrap().next().is_none());
+            drop(payload_link);
+        }
+
+        #[test]
+        fn mcp_artifacts_windows_oversized_manifest_and_unknown_file() {
+            let (temp, store) = store();
+            let (id, _) = store.put(Kind::Backup, b"fixture", source()).unwrap();
+            let dir = root(&temp).join(&id);
+            std::fs::write(dir.join("manifest.json"), vec![b'x'; MAX_MANIFEST + 1]).unwrap();
+            assert!(store.read(&id).is_err());
+            let unknown = dir.join("unexpected");
+            std::fs::write(&unknown, b"keep").unwrap();
+            assert!(store.evict(&id).is_err());
+            assert_eq!(std::fs::read(&unknown).unwrap(), b"keep");
+            assert!(dir.join("payload.bin").exists());
+            assert!(dir.join("manifest.json").exists());
+        }
+
         #[test]
         fn mcp_artifacts_windows_roundtrip_collision_and_faults() {
             let (temp, store) = store();
@@ -2222,6 +2440,39 @@ pub(crate) mod platform {
             let mut plan = source();
             plan.plan_expiry_utc = Some("2030-01-01T00:00:00Z");
             assert!(store.put(Kind::Plan, &vec![0; MAX_PLAN + 1], plan).is_err());
+        }
+
+        #[test]
+        fn mcp_artifacts_windows_exact_limits_and_explicit_overflow_recovery() {
+            let (_temp, store) = store();
+            let mut plan = source();
+            plan.plan_expiry_utc = Some("2030-01-01T00:00:00Z");
+            let (plan_id, _) = store.put(Kind::Plan, &vec![0; MAX_PLAN], plan).unwrap();
+            assert_eq!(store.read(&plan_id).unwrap().1.len(), MAX_PLAN);
+            store.evict(&plan_id).unwrap();
+
+            let (backup_id, _) = store
+                .put(Kind::Backup, &vec![0; MAX_BACKUP], source())
+                .unwrap();
+            assert_eq!(store.read(&backup_id).unwrap().1.len(), MAX_BACKUP);
+            store.evict(&backup_id).unwrap();
+
+            for value in 0..MAX_ARTIFACTS {
+                store
+                    .put_with_id(
+                        Kind::Backup,
+                        b"bounded",
+                        source(),
+                        &format!("{value:032x}"),
+                        None,
+                    )
+                    .unwrap();
+            }
+            assert_eq!(store.inventory().unwrap().len(), MAX_ARTIFACTS);
+            assert!(store.put(Kind::Backup, b"overflow", source()).is_err());
+            store.evict(&format!("{:032x}", MAX_ARTIFACTS - 1)).unwrap();
+            assert_eq!(store.inventory().unwrap().len(), MAX_ARTIFACTS - 1);
+            store.put(Kind::Backup, b"recovered", source()).unwrap();
         }
 
         #[test]

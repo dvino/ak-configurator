@@ -123,8 +123,38 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         for name in ("Package unsigned desktop alpha candidate", "Upload development binary and checksum",
                      "Upload candidate package and checksum"):
             # These steps retain GitHub Actions' implicit success() gate.
-            self.assertNotIn("if:", steps[name])
+            if name == "Package unsigned desktop alpha candidate":
+                self.assertIn("if: runner.os != 'Windows'", steps[name])
+            else:
+                self.assertNotIn("if:", steps[name])
             self.assertLess(workflow.index(diagnostic), workflow.index(steps[name]))
+
+    def test_windows_installers_cover_native_matrix_and_secrets_are_scoped(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        for platform in ("windows-x86_64", "windows-arm64"):
+            self.assertIn("platform: " + platform, workflow)
+        installer = steps["Build and exercise Windows GUI installer"]
+        self.assertIn("github.event_name != 'pull_request'", installer)
+        self.assertIn("github.repository == 'dvino/ak-configurator'", installer)
+        self.assertIn("scripts/windows_signing_ci.py", installer)
+        self.assertIn("--timestamp-url http://timestamp.digicert.com", installer)
+        self.assertIn("scripts/build_windows_ci_candidate.py", installer)
+        for name in ("AK_WINDOWS_CODE_SIGN_PFX_BASE64", "AK_WINDOWS_CODE_SIGN_PFX_PASSWORD"):
+            self.assertIn("secrets." + name, installer)
+            self.assertEqual(workflow.count("secrets." + name), 1)
+        self.assertIn("target/candidate/*-setup.exe", steps["Upload candidate package and checksum"])
+        self.assertIn("target/candidate/*-setup.exe.build.p7s", steps["Upload candidate package and checksum"])
+
+    def test_release_binaries_enable_production_mcp_without_mock(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
+        for name in ("Build development binary (Linux and Windows)", "Build development binary (macOS)"):
+            self.assertIn("--release --features mcp", steps[name])
+            self.assertNotIn("mcp-mock", steps[name])
+        builder = (ROOT / "scripts/build_windows_ci_candidate.py").read_text(encoding="utf-8")
+        self.assertIn("scripts/test_mcp_production_metadata.py", builder)
+        self.assertIn("archive.read(base + '/ak-configurator.exe')", builder)
 
 
 class ReleaseVerificationTests(unittest.TestCase):
@@ -134,6 +164,8 @@ class ReleaseVerificationTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@v7", workflow)
         self.assertNotIn("gh release create", workflow)
         self.assertNotIn("contents: write", workflow)
+        self.assertIn("--require-windows-signing", workflow)
+        self.assertIn("candidate-artifacts/*-setup.exe.build.p7s", workflow)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

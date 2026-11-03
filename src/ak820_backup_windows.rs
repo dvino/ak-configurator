@@ -289,7 +289,7 @@ pub(super) fn directory(path: &Path) -> BackupResult<File> {
     let mut parts = full.components();
     let drive = match parts.next() {
         Some(Component::Prefix(p)) => match p.kind() {
-            Prefix::Disk(d) => d,
+            Prefix::Disk(d) | Prefix::VerbatimDisk(d) => d,
             _ => return Err(invalid()),
         },
         _ => return Err(invalid()),
@@ -350,7 +350,7 @@ fn names(dir: &File, limit: usize) -> BackupResult<Vec<OsString>> {
         let bytes =
             unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), io.information) };
         let length = u32::from_ne_bytes(bytes[8..12].try_into().unwrap()) as usize;
-        if length % 2 != 0 || length > bytes.len() - 12 {
+        if !length.is_multiple_of(2) || length > bytes.len() - 12 {
             return Err(invalid());
         }
         let units: Vec<u16> = bytes[12..12 + length]
@@ -393,7 +393,7 @@ pub(super) fn regular(dir: &File, entry: &str, maximum: usize) -> BackupResult<V
     }
     Ok(bytes)
 }
-pub(super) fn read(dir: &File) -> BackupResult<(Vec<u8>, BTreeMap<String, Vec<u8>>)> {
+pub(super) fn read(dir: &File) -> BackupResult<BackupDirectoryContents> {
     let entries = names(dir, ENTRY_COUNT)?;
     if entries.len() != ENTRY_COUNT || entries.iter().any(|name| !allowed_name(name)) {
         return Err(invalid());
@@ -777,6 +777,7 @@ mod tests {
     #[test]
     fn staging_acl_reread_cleanup_and_no_replacement() {
         let temp = tempfile::tempdir().unwrap();
+        let canonical = std::fs::canonicalize(temp.path()).unwrap();
         let target = temp.path().join("existing");
         std::fs::create_dir(&target).unwrap();
         std::fs::write(target.join("sentinel"), b"keep").unwrap();
@@ -793,7 +794,7 @@ mod tests {
         }
         assert_eq!(std::fs::read(target.join("sentinel")).unwrap(), b"keep");
         assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1);
-        let mut stage = Stage::new(directory(temp.path()).unwrap()).unwrap();
+        let mut stage = Stage::new(directory(&canonical).unwrap()).unwrap();
         stage.write(MANIFEST, b"{}").unwrap();
         for (name, _) in FILES {
             stage.write(name, b"x").unwrap();
@@ -825,7 +826,13 @@ mod tests {
         for name in ["..", "a:b", "a\\b", "name.", "name ", "NUL", "con.txt"] {
             assert!(component(OsStr::new(name)).is_err());
         }
-        for path in [r"\\server\share\archive", r"\\?\C:\archive", r"C:archive"] {
+        for path in [
+            r"\\server\share\archive",
+            r"\\?\UNC\server\share\archive",
+            r"\\.\C:\archive",
+            r"\\?\C:\..\archive",
+            r"C:archive",
+        ] {
             assert!(directory(Path::new(path)).is_err());
         }
     }

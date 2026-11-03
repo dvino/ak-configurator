@@ -78,6 +78,27 @@ def verify_check(path, platform):
     return result
 
 
+def guard_windows_smoke_paths(root, local, roaming):
+    """Fail before Windows install/removal if any target escapes the test home."""
+    root = root.resolve(strict=True)
+    programs = local / "Programs"
+    menu = roaming / "Microsoft/Windows/Start Menu/Programs"
+    targets = (local, roaming, programs, programs / "AK Configurator",
+               programs / ".ak-configurator-stage-probe",
+               programs / ".ak-configurator-backup-probe", menu,
+               menu / "AK Configurator.lnk", menu / ".AK Configurator-probe.lnk",
+               roaming / "ak-configurator/app_settings.json")
+    for path in targets:
+        resolved = path.resolve(strict=False)
+        if resolved == root or not resolved.is_relative_to(root):
+            raise ValueError("Windows install smoke target escapes temporary root")
+    if programs.exists():
+        for pattern in (".ak-configurator-stage-*", ".ak-configurator-backup-*"):
+            for path in programs.glob(pattern):
+                if not path.resolve(strict=False).is_relative_to(root):
+                    raise ValueError("Windows install smoke staging target escapes temporary root")
+
+
 def exercise(archive, platform, report_path):
     with tempfile.TemporaryDirectory(prefix="ak-configurator-install-smoke-") as temporary:
         root = Path(temporary)
@@ -106,6 +127,7 @@ def exercise(archive, platform, report_path):
             home = root / "home"
             local, roaming = home / "AppData/Local", home / "AppData/Roaming"
             env.update(LOCALAPPDATA=str(local), APPDATA=str(roaming))
+            guard_windows_smoke_paths(root, local, roaming)
             run(["powershell", "-NoProfile", "-File", str(bundle / "install-user.ps1")], env=env)
             installed = local / "Programs/AK Configurator/ak-configurator.exe"
             uninstall = local / "Programs/AK Configurator/uninstall-user.ps1"
@@ -129,6 +151,7 @@ def exercise(archive, platform, report_path):
         data.write_text("preserve", encoding="utf-8")
         installer = bundle / ("install-user.ps1" if platform.startswith("windows-") else "install-user.sh")
         if platform.startswith("windows-"):
+            guard_windows_smoke_paths(root, local, roaming)
             run(["powershell", "-NoProfile", "-File", str(installer)], env=env)
         else:
             run(["sh", str(installer)], env=env)
@@ -139,6 +162,7 @@ def exercise(archive, platform, report_path):
         run([str(installed), "--self-check", "--output", str(check_path)], env=env)
         check = verify_check(check_path, platform)
         if platform.startswith("windows-"):
+            guard_windows_smoke_paths(root, local, roaming)
             run(["powershell", "-NoProfile", "-File", str(uninstall)], env=env, input_text="y\n")
         else:
             run(["sh", str(uninstall)], env=env, input_text="y\n")

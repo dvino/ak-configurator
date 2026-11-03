@@ -1,4 +1,5 @@
 use crate::application_layouts::DetectedApplication;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 use std::sync::{mpsc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -25,6 +26,13 @@ enum LinuxForegroundBackend {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ForegroundState {
     Focused(DetectedApplication),
+    #[cfg_attr(
+        target_os = "windows",
+        expect(
+            dead_code,
+            reason = "Shared foreground model; Windows currently reports no focused window when identity is unavailable"
+        )
+    )]
     UnidentifiedWindow(String),
     NoFocusedWindow,
     BackendUnavailable(String),
@@ -499,7 +507,7 @@ fn merge_applications(
     applications.truncate(512);
 }
 
-#[cfg(any(test, target_os = "macos"))]
+#[cfg(any(target_os = "macos", all(test, target_os = "linux")))]
 fn status_from_application(
     backend: impl Into<String>,
     application: Option<DetectedApplication>,
@@ -920,9 +928,15 @@ pub(crate) fn start_gnome_shell_integration_install() -> Result<GnomeIntegration
     Ok(GnomeIntegrationInstallTask { receiver })
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(test, not(target_os = "linux")))]
 pub(crate) fn gnome_shell_integration_needed() -> bool {
     false
+}
+
+#[cfg(all(test, not(target_os = "linux")))]
+#[test]
+fn gnome_shell_integration_is_not_needed_outside_linux() {
+    assert!(!gnome_shell_integration_needed());
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -2767,6 +2781,7 @@ fn platform_available_apps() -> Vec<DetectedApplication> {
     Vec::new()
 }
 
+#[cfg(target_os = "linux")]
 fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     output

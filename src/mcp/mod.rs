@@ -2,7 +2,9 @@
 mod artifacts;
 mod backend;
 mod dto;
+mod immutable_plan;
 mod mock;
+mod strict_input;
 pub(crate) mod trace;
 use rmcp::{model::*, service::RequestContext, ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde_json::Value;
@@ -51,9 +53,11 @@ pub fn run(raw_args: &[std::ffi::OsString]) -> anyhow::Result<()> {
         .build()?;
     let result = runtime.block_on(async move {
         let (input, output) = rmcp::transport::stdio_pipes();
-        let transport =
-            rmcp::transport::async_rw::AsyncRwTransport::<RoleServer, _, _>::new(input, output)
-                .with_max_line_length(65536);
+        let transport = rmcp::transport::async_rw::AsyncRwTransport::<RoleServer, _, _>::new(
+            strict_input::StrictInput::new(input),
+            output,
+        )
+        .with_max_line_length(strict_input::MAX_LINE);
         let server = Adapter { backend }.serve(transport).await?;
         server.waiting().await?;
         Ok::<(), anyhow::Error>(())
@@ -157,6 +161,16 @@ fn tools() -> Vec<Tool> {
             "Inspect or cooperatively cancel this process's operation.",
             false,
         ),
+        definition::<dto::Prepare>(
+            "ak820_prepare",
+            "Prepare an immutable offline installation preview in private storage.",
+            false,
+        ),
+        definition::<dto::Backup>(
+            "ak820_backup",
+            "Capture a verified backup into private local storage.",
+            false,
+        ),
     ]
 }
 impl ServerHandler for Adapter {
@@ -183,9 +197,19 @@ impl ServerHandler for Adapter {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         let args = Value::Object(request.arguments.unwrap_or_default());
-        let result = tokio::select! {
-            result = self.backend.call(&request.name, args) => result,
-            _ = context.ct.cancelled() => self.backend.cancelled_request(),
+        let result = if request.name == "ak820_prepare" {
+            // Dispatch returns a tracked operation immediately. Do not race its
+            // accepted ID against request cancellation after queueing the work.
+            if context.ct.is_cancelled() {
+                self.backend.cancelled_request()
+            } else {
+                self.backend.call(&request.name, args).await
+            }
+        } else {
+            tokio::select! {
+                result = self.backend.call(&request.name, args) => result,
+                _ = context.ct.cancelled() => self.backend.cancelled_request(),
+            }
         };
         let failed = result["error"].is_object();
         Ok(if failed {

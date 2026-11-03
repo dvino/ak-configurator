@@ -4,6 +4,7 @@ mod action_icons;
 mod ak820;
 mod ak820_backup_capture;
 mod ak820_backup_files;
+#[cfg(any(feature = "mcp", test))]
 mod ak820_diagnostics;
 mod ak820_help;
 mod ak820_image_pack;

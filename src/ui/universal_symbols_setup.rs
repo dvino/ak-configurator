@@ -42,13 +42,17 @@ enum MacosPermissionStatusKind {
 }
 
 #[derive(Clone, Copy)]
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 struct UniversalSymbolsRowContext {
     content_width: f32,
     height: f32,
     metrics: crate::ui_style::ResponsiveMetrics,
     lang: crate::i18n::Language,
     dark: bool,
+    #[cfg(any(target_os = "macos", all(test, target_os = "linux")))]
     suppress_tooltips: bool,
 }
 
@@ -61,7 +65,10 @@ struct MacosPermissionRow {
 }
 
 #[derive(Clone, Copy)]
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 struct UniversalSymbolsFinishStep {
     label_key: &'static str,
     tooltip_key: &'static str,
@@ -137,7 +144,10 @@ const RELOAD_IBUS_ACTION: UniversalSymbolsAction = UniversalSymbolsAction {
     button_key: "universal_symbols_setup.reload_ibus_button",
 };
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_2() -> UniversalSymbolsFinishStep {
     UniversalSymbolsFinishStep {
         label_key: "universal_symbols_setup.finish_step_2",
@@ -147,7 +157,10 @@ fn universal_symbols_finish_step_2() -> UniversalSymbolsFinishStep {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_3() -> UniversalSymbolsFinishStep {
     UniversalSymbolsFinishStep {
         label_key: "universal_symbols_setup.finish_step_3",
@@ -158,7 +171,10 @@ fn universal_symbols_finish_step_3() -> UniversalSymbolsFinishStep {
 }
 
 impl EntropyApp {
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(super) fn draw_text_expander_setup_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -421,7 +437,10 @@ impl EntropyApp {
         }
     }
 
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     fn draw_universal_symbols_setup_rows(
         &mut self,
         ui: &mut egui::Ui,
@@ -438,6 +457,7 @@ impl EntropyApp {
             metrics,
             lang,
             dark,
+            #[cfg(any(target_os = "macos", all(test, target_os = "linux")))]
             suppress_tooltips: false,
         };
 
@@ -498,7 +518,10 @@ impl EntropyApp {
         );
     }
 
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     fn draw_universal_symbols_recommended_control(
         &mut self,
         ui: &mut egui::Ui,
@@ -556,7 +579,10 @@ impl EntropyApp {
         }
     }
 
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     fn draw_universal_symbols_setup_actions(
         &mut self,
         ui: &mut egui::Ui,
@@ -1006,7 +1032,10 @@ fn macos_event_capture_detail(
     String::new()
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn draw_universal_symbols_value(
     ui: &mut egui::Ui,
     metrics: crate::ui_style::ResponsiveMetrics,
@@ -1028,7 +1057,10 @@ fn draw_universal_symbols_value(
     );
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn draw_universal_symbols_two_line_value(
     ui: &mut egui::Ui,
     metrics: crate::ui_style::ResponsiveMetrics,
@@ -1055,7 +1087,10 @@ fn draw_universal_symbols_two_line_value(
     );
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn draw_universal_symbols_section_label(
     ui: &mut egui::Ui,
     metrics: crate::ui_style::ResponsiveMetrics,
@@ -1072,7 +1107,10 @@ fn draw_universal_symbols_section_label(
     ui.add_space(metrics.value(2.0));
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn draw_universal_symbols_finish_step_row(
     ui: &mut egui::Ui,
     row: UniversalSymbolsRowContext,
@@ -1146,7 +1184,10 @@ fn draw_universal_symbols_action_row_with_tooltip_state(
     clicked
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_intro_key() -> &'static str {
     #[cfg(target_os = "linux")]
     {
@@ -1166,7 +1207,10 @@ fn universal_symbols_intro_key() -> &'static str {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_backend_value_key() -> &'static str {
     #[cfg(target_os = "linux")]
     {
@@ -1186,7 +1230,10 @@ fn universal_symbols_backend_value_key() -> &'static str {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_2_key() -> &'static str {
     #[cfg(target_os = "linux")]
     {
@@ -1206,7 +1253,10 @@ fn universal_symbols_finish_step_2_key() -> &'static str {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_2_detail_key() -> Option<&'static str> {
     #[cfg(target_os = "linux")]
     {
@@ -1218,7 +1268,10 @@ fn universal_symbols_finish_step_2_detail_key() -> Option<&'static str> {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_3_key() -> &'static str {
     #[cfg(target_os = "linux")]
     {
@@ -1238,7 +1291,10 @@ fn universal_symbols_finish_step_3_key() -> &'static str {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_finish_step_3_detail_key() -> Option<&'static str> {
     #[cfg(target_os = "linux")]
     {
@@ -1250,7 +1306,10 @@ fn universal_symbols_finish_step_3_detail_key() -> Option<&'static str> {
     }
 }
 
-#[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(any(
+    all(test, target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 fn universal_symbols_text_expander_key() -> &'static str {
     #[cfg(target_os = "linux")]
     {

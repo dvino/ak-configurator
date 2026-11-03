@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify six complete unsigned candidate packages before artifact retention."""
+"""Verify six complete candidate packages before artifact retention."""
 import argparse
 import hashlib
 import json
@@ -12,6 +12,8 @@ import zipfile
 import io
 
 from package_ak820_candidate import DOCUMENTS, PLATFORMS, check_architecture, package_document
+from ak820_package_metadata import public_inputs, provenance_bytes, runtime_identity
+from windows_signing import CERT_THUMBPRINT, verify_report_signature, verify_signed_payload
 from test_ak820_runtime_smoke import validate_startup
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +22,6 @@ STATIC_FILES = {
     "audio-sources/build_cava_helper.py": "scripts/build_cava_helper.py",
     "CAVA-LICENSE": "vendor/cava/LICENSE",
     "CAVA-PROVENANCE.json": "vendor/cava-provenance.json",
-    "firmware-provenance.json": "assets/ak820/beta3-provenance.json",
     "LICENSE": "LICENSE",
     "FONT-LICENSES.txt": "assets/FONT-LICENSES.txt",
     "LUCIDE-LICENSE.txt": "assets/LUCIDE-LICENSE.txt",
@@ -43,6 +44,7 @@ def sha256(data):
 
 def expected_static_files(platform, commit):
     files = {name: (ROOT / path).read_bytes() for name, path in STATIC_FILES.items()}
+    files["firmware-provenance.json"] = provenance_bytes()
     files.update({name: package_document(source, commit) for name, source in DOCUMENTS.items()})
     os_name = TARGETS[platform][0]
     for kind in ("install", "uninstall"):
@@ -51,12 +53,7 @@ def expected_static_files(platform, commit):
         files[filename] = (ROOT / "scripts/ak820-release" / os_name / filename).read_bytes()
         if os_name == "macos":
             files[f"AK-Configurator.app/Contents/Resources/{filename}"] = files[filename]
-    for asset in sorted((ROOT / "assets/ak820").glob("beta3-*.json")):
-        files[f"offline/{asset.name.removeprefix('beta3-')}"] = asset.read_bytes()
-    for asset in sorted((ROOT / "assets/ak820/firmware-beta3").rglob("*")):
-        if asset.is_file():
-            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta3").as_posix()
-            files[f"offline/firmware-beta3/{relative}"] = asset.read_bytes()
+    files.update(public_inputs())
     for dependency in sorted((ROOT / "vendor/cava-dependencies").iterdir()):
         if dependency.is_file():
             files["audio-sources/" + dependency.name] = dependency.read_bytes()
@@ -68,24 +65,7 @@ def expected_static_files(platform, commit):
 
 
 def expected_runtime_identity(platform):
-    provenance = json.loads((ROOT / "assets/ak820/beta3-provenance.json").read_text(encoding="utf-8"))
-    defaults = json.loads((ROOT / "tests/fixtures/ak820-beta3-defaults.json").read_text(encoding="utf-8"))
-    catalog = (ROOT / "assets/ak820/beta3-capability-catalog.json").read_bytes()
-    profiles = []
-    for profile in ("main", "game", "mmo", "typing", "code", "pointer", "onehand", "creative", "shortcuts", "multios"):
-        folder = ROOT / "assets/ak820/firmware-beta3" / profile
-        profiles.append({
-            "profile": profile,
-            "ihx_sha256": sha256((folder / "application.ihx").read_bytes()),
-            "map_sha256": sha256((folder / "application.map").read_bytes()),
-            "default_settings_sha256": defaults[profile],
-        })
-    profiles.sort(key=lambda item: item["profile"])
-    return {
-        "firmware_release": provenance["release"],
-        "catalog_sha256": sha256(catalog),
-        "profiles": profiles,
-    }
+    return runtime_identity()
 
 
 def normalize_runtime_profiles(report):
@@ -190,7 +170,7 @@ def verify_internal_checksums(contents):
             raise ValueError(f"Internal checksum mismatch for {filename}")
 
 
-def verify(directory: Path, version: str, commit: str):
+def verify(directory: Path, version: str, commit: str, require_windows_signing=False):
     if tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"] != version:
         raise ValueError("Requested application version differs from checked-out Cargo.toml")
     checked_out_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -199,7 +179,8 @@ def verify(directory: Path, version: str, commit: str):
     common_static = expected_static_files("linux-x86_64", commit)
     firmware = json.loads(common_static["firmware-provenance.json"])
     result = {"format": "ak-configurator-release-candidate-1", "application_version": version,
-              "source_commit": commit, "status": "unsigned desktop trial; hardware and platform qualification remain separate",
+              "source_commit": commit, "status": ("Windows local-development signing evidence verified; public trust and hardware qualification remain separate"
+                                                    if require_windows_signing else "desktop trial; signing and hardware qualification remain separate"),
               "platforms": {}}
     for platform in EXPECTED:
         expected_static = expected_static_files(platform, commit)
@@ -240,6 +221,17 @@ def verify(directory: Path, version: str, commit: str):
             expected_names = {cava_name, "audio-sources/cava-patched-source.tar.gz"} | set(expected_static) | helper_names | {binary_name, "manifest.json", "SHA256SUMS", "runtime-self-check.json"}
             if platform.startswith("windows-"):
                 expected_names.add("audio-sources/windows-built-dependencies.tar.gz")
+                signed_names = {root + 'windows-signing.json', root + 'windows-signing.p7s'}
+                present = signed_names.intersection(names)
+                if present and present != signed_names:
+                    raise ValueError('Incomplete Windows signing evidence')
+                signed = bool(present)
+                if require_windows_signing and not signed:
+                    raise ValueError('Windows signing is required')
+                if signed:
+                    expected_names |= {'windows-signing.json', 'windows-signing.p7s'}
+            else:
+                signed = False
             app_binary = "AK-Configurator.app/Contents/MacOS/ak-configurator"
             if platform.startswith("macos-"):
                 expected_names.remove(binary_name)
@@ -247,7 +239,10 @@ def verify(directory: Path, version: str, commit: str):
             if {member[len(root):] for member in names} != expected_names:
                 raise ValueError(f"Candidate package has missing or unexpected members for {platform}")
             contents = {member[len(root):]: read_member(member) for member in names}
+        signing_report = verify_signed_payload(contents, expected_static, ROOT) if signed else None
         for filename, expected in expected_static.items():
+            if signed and filename in ('install-user.ps1', 'uninstall-user.ps1'):
+                continue
             if contents.get(filename) != expected:
                 raise ValueError(f"Bundled source file differs from checked-out source: {filename}")
         verify_internal_checksums(contents)
@@ -324,9 +319,42 @@ def verify(directory: Path, version: str, commit: str):
             raise ValueError(f"CAVA helper identity mismatch for {platform}")
         result["platforms"][platform] = {"archive": name, "sha256": archive_hash,
                                          "runtime_self_check": runtime, "installation_smoke": smoke,
+                                         **({'windows_signing': signing_report} if signing_report else {}),
                                          **({"gui_runtime_smoke": gui_smoke} if gui_smoke is not None else {})}
     if set(result["platforms"]) != set(EXPECTED):
         raise ValueError("Candidate platform set is incomplete")
+    if require_windows_signing:
+        for platform in ('windows-x86_64', 'windows-arm64'):
+            base = f'ak-configurator-{version}-{platform}-setup.exe'
+            raw = (directory / base).read_bytes()
+            checksum = (directory / (base + '.sha256')).read_text(encoding='ascii').strip()
+            if checksum != f'{sha256(raw)}  {base}':
+                raise ValueError(f'Installer checksum mismatch: {platform}')
+            report_bytes = (directory / (base + '.build.json')).read_bytes()
+            verify_report_signature(report_bytes, (directory / (base + '.build.p7s')).read_bytes(), ROOT)
+            setup = json.loads(report_bytes)
+            expected = {'format': 'ak-configurator-windows-installer-build-1', 'platform': platform,
+                        'application_version': version, 'source_commit': commit, 'checkout_dirty': False,
+                        'candidate_source_dirty': False, 'output': base, 'output_sha256': sha256(raw),
+                        'input_zip': result['platforms'][platform]['archive'],
+                        'input_zip_sha256': result['platforms'][platform]['sha256'], 'setup_architecture': 'x64',
+                        'start_menu_group_override': True,
+                        'signing': {'mode': 'local-development', 'signer_thumbprint': CERT_THUMBPRINT,
+                                    'public_trust': False, 'setup_signature_verified': True,
+                                    'signed_uninstaller_requested': True}}
+            if not isinstance(setup, dict) or any(setup.get(k) != v for k, v in expected.items()):
+                raise ValueError(f'Invalid signed installer build evidence: {platform}')
+            result['platforms'][platform]['windows_installer'] = setup
+            smoke = json.loads((directory / f'setup-smoke-{platform}.json').read_text(encoding='utf-8'))
+            expected_smoke = {'format': 'ak-configurator-windows-installer-smoke-1',
+                              'setup_sha256': sha256(raw), 'reinstall_verified': True,
+                              'uninstalled': True, 'user_data_preserved': True, 'start_menu_group_isolated': True,
+                              'uninstaller_signature_verified': True, 'signer_thumbprint': CERT_THUMBPRINT}
+            if (not isinstance(smoke, dict) or any(smoke.get(k) != v for k, v in expected_smoke.items())
+                    or not isinstance(smoke.get('installed_self_check'), dict)
+                    or normalize_runtime_profiles(smoke['installed_self_check']) != normalize_runtime_profiles(result['platforms'][platform]['runtime_self_check'])):
+                raise ValueError(f'Invalid installer runtime smoke: {platform}')
+            result['platforms'][platform]['windows_installer_smoke'] = smoke
     index = {
         "schema_version": 1,
         "tag": f"v{version}",
@@ -354,9 +382,10 @@ def main():
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--update-index", type=Path)
+    parser.add_argument('--require-windows-signing', action='store_true')
     args = parser.parse_args()
     try:
-        report = verify(args.directory, args.version, args.source_commit)
+        report = verify(args.directory, args.version, args.source_commit, args.require_windows_signing)
         args.manifest.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         if args.update_index:
             args.update_index.write_text(json.dumps(report["app_update_index"], indent=2, sort_keys=True) + "\n", encoding="utf-8")

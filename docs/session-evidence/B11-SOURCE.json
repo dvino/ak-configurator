@@ -1,0 +1,515 @@
+{
+  "scope": "B11 installer admission/preservation plus preparatory strict MCP input; offline host/model only, no device or full C04 acceptance",
+  "base_commit": "af1935a514788c7f863306b8173d3616f2ac8071",
+  "branch": "codex/c02-windows",
+  "tracked_source_patch_sha256": "4515e617ff69d8bf504b6703335168df083baecd5ccba519bebe91b273c990d6",
+  "source_inventory_sha256": "c6bbd33b63d544b7f3d34d131f2c86fe4167af02573b93533c1ad9108d19b4e8",
+  "inventory_algorithm": "SHA256 of UTF-8 compact JSON files array with sorted object keys; generated node_modules excluded, lockfile verified separately",
+  "files": [
+    {
+      "path": ".github/scripts/test_beta5_catalog.py",
+      "size": 5192,
+      "sha256": "525f74b9689ccccfd990a8ca44d4cb8358f12a8c8cf8d10a976ce9829f0cb026"
+    },
+    {
+      "path": ".gitignore",
+      "size": 500,
+      "sha256": "a8710287b24a5c26b41a013fe45679232c20e328cbe617be832c72c5841824cf"
+    },
+    {
+      "path": "Cargo.toml",
+      "size": 4294,
+      "sha256": "e446fbf71a36295865c4e1e186ee092d3e2e83d8279f583c2a2d2ecf3c37bc80"
+    },
+    {
+      "path": "assets/ak820/beta5-capability-catalog.json",
+      "size": 74704,
+      "sha256": "a1b489026fced8135d424069bb1ed80f6e975468804a2a2cec5aae72047dda91"
+    },
+    {
+      "path": "assets/ak820/beta5-firmware-matrix.json",
+      "size": 1750531,
+      "sha256": "12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb"
+    },
+    {
+      "path": "assets/ak820/beta5-module-descriptions.json",
+      "size": 61695,
+      "sha256": "52ee9cfc278ac3524b0da5f6757279cf479a17ccf84dcdf987b63e84b1b671a4"
+    },
+    {
+      "path": "assets/ak820/beta5-profiles.json",
+      "size": 1750530,
+      "sha256": "96f0a928f75dab71a612fbd2ca422fc66d81b37d516d2261d177d13d76567e95"
+    },
+    {
+      "path": "assets/ak820/beta5-release-catalog.json",
+      "size": 31614,
+      "sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/code/application.ihx",
+      "size": 95768,
+      "sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/code/application.map",
+      "size": 105606,
+      "sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/creative/application.ihx",
+      "size": 97022,
+      "sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/creative/application.map",
+      "size": 105189,
+      "sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/game/application.ihx",
+      "size": 96748,
+      "sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/game/application.map",
+      "size": 104595,
+      "sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/main/application.ihx",
+      "size": 96926,
+      "sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/main/application.map",
+      "size": 105924,
+      "sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/mmo/application.ihx",
+      "size": 96428,
+      "sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/mmo/application.map",
+      "size": 104290,
+      "sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/multios/application.ihx",
+      "size": 95468,
+      "sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/multios/application.map",
+      "size": 105469,
+      "sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/onehand/application.ihx",
+      "size": 93006,
+      "sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/onehand/application.map",
+      "size": 103082,
+      "sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/pointer/application.ihx",
+      "size": 96722,
+      "sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/pointer/application.map",
+      "size": 105823,
+      "sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/shortcuts/application.ihx",
+      "size": 96416,
+      "sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/shortcuts/application.map",
+      "size": 106026,
+      "sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/typing/application.ihx",
+      "size": 96566,
+      "sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/typing/application.map",
+      "size": 106415,
+      "sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02"
+    },
+    {
+      "path": "i18n/en.toml",
+      "size": 110698,
+      "sha256": "075aa24221db03b19cb2f404e86d754267c14d3c1bca7f5eea9d5bbfc889d025"
+    },
+    {
+      "path": "i18n/ru.toml",
+      "size": 159906,
+      "sha256": "95938685d19687a86c087a0b5c855e15c3f91dfeb53b32f3b90edb85ae5416fe"
+    },
+    {
+      "path": "scripts/mcp-interop/check.mjs",
+      "size": 4123,
+      "sha256": "db3dbfe79bee97faea9ceb12ccc627ab69af94c5cf70a611ce6f20099e8671c7"
+    },
+    {
+      "path": "scripts/test_mcp_stdio.py",
+      "size": 18441,
+      "sha256": "de9dc251b7fa06cc5d3605303c5daa5480611f2ba24448de73c9b2ec82a8a759"
+    },
+    {
+      "path": "src/ak820.rs",
+      "size": 26383,
+      "sha256": "e03b640f60683578c5f91f3814e339b15f16fceb7f7c6ae83debd605b9b12fbc"
+    },
+    {
+      "path": "src/ak820_backup_capture.rs",
+      "size": 5517,
+      "sha256": "78ce728a3bf10f62bd0c580b1ba0ce5612497283eca28009fbeac45c7310458c"
+    },
+    {
+      "path": "src/ak820_backup_files.rs",
+      "size": 64913,
+      "sha256": "0756e5584dff7a45d111965ac0e91fda91454b9e8353a6f54c489c01d457d192"
+    },
+    {
+      "path": "src/ak820_backup_windows.rs",
+      "size": 28291,
+      "sha256": "7ae256fda68259fabd4b41381f8e68f65657d8140128ab7487efa68dd573baef"
+    },
+    {
+      "path": "src/ak820_beta1_profiles.rs",
+      "size": 52558,
+      "sha256": "3cd537c7e8fbf18450170500614b4dfb45bdc265c57c105d6e742dd1fcb63bb0"
+    },
+    {
+      "path": "src/ak820_diagnostics.rs",
+      "size": 4558,
+      "sha256": "fbb618166e5a2b9a5c0236c25cd65099ce1a19073eba5de8e83dacbc810075ee"
+    },
+    {
+      "path": "src/ak820_image_pack.rs",
+      "size": 37914,
+      "sha256": "a781dbe06b248bd1577cf781dac0ddf058d65dddfab43188c4ff3862c8e4c54f"
+    },
+    {
+      "path": "src/ak820_install_executor.rs",
+      "size": 50565,
+      "sha256": "89c8555f92c9c38e23839a234fa46c8badc16ee21c2478414171c06e583a89c3"
+    },
+    {
+      "path": "src/ak820_installer.rs",
+      "size": 18265,
+      "sha256": "d3d4833870f82c9424c346b66796ffb4fa8d1f4942d21e17943f5d567a75bfdd"
+    },
+    {
+      "path": "src/ak820_os_indicator.rs",
+      "size": 6314,
+      "sha256": "cef3f19d2957bed5c97b3a10030982eec967174ac77054c57ec6ccddcd01710c"
+    },
+    {
+      "path": "src/ak820_qs_nvm_migration_offline.rs",
+      "size": 11127,
+      "sha256": "65a429547f10d775b4e4aad82282c2ab2579f4620de6586913d14b4e9debf308"
+    },
+    {
+      "path": "src/ak820_qs_versioned_offline.rs",
+      "size": 25199,
+      "sha256": "865315f38064922f26c6bb2518764f1bf504718e72c87fa702270ca2ff37ce18"
+    },
+    {
+      "path": "src/ak820_release.rs",
+      "size": 47408,
+      "sha256": "3141f265182f2d54d56277876f543d20373573e91171f09e54c7b63a52811227"
+    },
+    {
+      "path": "src/ak820_restore_plan.rs",
+      "size": 52627,
+      "sha256": "d799ebcc0bdd939a1ad88e3e449607d4dba32710d70e2494822edf574e855147"
+    },
+    {
+      "path": "src/ak820_settings_backup.rs",
+      "size": 30824,
+      "sha256": "b879bbb4c0c6a136da8c718f54c3e814f391e2df21b72182bd13b2856a2cf8ab"
+    },
+    {
+      "path": "src/ak820_settings_model.rs",
+      "size": 52749,
+      "sha256": "218391ed883741fb66640746c14b262cb69830db07fef2c0162228cf98995d19"
+    },
+    {
+      "path": "src/ak820_versioned_backup_offline.rs",
+      "size": 18103,
+      "sha256": "c170cf82a58ff0cdf700f13d44692e3eb00abd08ad1dbc043c436b69975b33d1"
+    },
+    {
+      "path": "src/app_discovery.rs",
+      "size": 129936,
+      "sha256": "484dd8c80b36fefd65c16b4482349735d3f9efb704ffee8ff88ca2625d4497a0"
+    },
+    {
+      "path": "src/app_icon.rs",
+      "size": 853,
+      "sha256": "49b4752900c4deabef202a4b5eee818f012ddb35fcfd633de46272ed23120431"
+    },
+    {
+      "path": "src/app_init.rs",
+      "size": 36252,
+      "sha256": "5f49e1aacd0a263e5f3e173333895b42aa4e17b543efbb90dfe96f50a182a577"
+    },
+    {
+      "path": "src/app_state.rs",
+      "size": 216521,
+      "sha256": "5e970ef0e2c38eb5866ca63f7c2a359b81a33a1b0f584cb48142dfd6187097ef"
+    },
+    {
+      "path": "src/app_storage.rs",
+      "size": 53203,
+      "sha256": "3a5d3c998a7ad16427864339f9380f22aacff5b81e2112d5e71822e10a91d755"
+    },
+    {
+      "path": "src/app_update.rs",
+      "size": 47752,
+      "sha256": "01eaa4f7ed9303a288481e81cc6a176627d434b76828d5c26051ad5b740c7b01"
+    },
+    {
+      "path": "src/app_update/verified.rs",
+      "size": 27076,
+      "sha256": "d8499b7dcd86ef59b699d9909d039e07fad47d597d33d07348e693005d345290"
+    },
+    {
+      "path": "src/application_layouts.rs",
+      "size": 177239,
+      "sha256": "c48c6a186df6c49c06c70540e5a0f922dc7743362e4077f90301963c231749ff"
+    },
+    {
+      "path": "src/hid.rs",
+      "size": 111920,
+      "sha256": "c9705b56098937cd6647daec28264616b6ce70a05b187fd3b8e6ed071fa778f0"
+    },
+    {
+      "path": "src/hid_ak820.rs",
+      "size": 76044,
+      "sha256": "de5c9c601f9c477798f2131414950bea8f2bb9b3fa737e9edbb960ffacfdbf0c"
+    },
+    {
+      "path": "src/hid_ak820_backup_tests.rs",
+      "size": 21084,
+      "sha256": "cab22da8488453fa1f2f41f6c2ca732c63ad462a92b6997060d9c49a0707154f"
+    },
+    {
+      "path": "src/hid_ak820_install.rs",
+      "size": 31813,
+      "sha256": "b7b8d08e2d9426a5bd052371ed29b706bd81f48e0a764282b6c6f28381913960"
+    },
+    {
+      "path": "src/hid_ak820_tests.rs",
+      "size": 49587,
+      "sha256": "b45b2d86619aab2d8324d676f9d55d94bb8269e44626fbb70482125818ef14da"
+    },
+    {
+      "path": "src/hid_ownership.rs",
+      "size": 9275,
+      "sha256": "44dfb9b70c345dbdec311a7359f0d7d3579d00babe7fbd21a81d1038a1470c29"
+    },
+    {
+      "path": "src/hid_protocol.rs",
+      "size": 7900,
+      "sha256": "fcfcc9eacde71a92a2c8ea5cc7a67be495140c73dab0fded91a0e6774c4a68f8"
+    },
+    {
+      "path": "src/hid_proxy.rs",
+      "size": 86610,
+      "sha256": "70a11ad321e63faad8e2cda04f840dab835bbd322e481738efb49826d29c995d"
+    },
+    {
+      "path": "src/hid_vial.rs",
+      "size": 8107,
+      "sha256": "c34af8b9758fed3ba67bac4ae7e5bb22a0d3558b7e432364df20673db50a4741"
+    },
+    {
+      "path": "src/i18n.rs",
+      "size": 118146,
+      "sha256": "9e057286bd6334c1a64c50a049cbc3a90827d19e60d17260558c05251a986f3c"
+    },
+    {
+      "path": "src/macos_usb_registry_tests.rs",
+      "size": 9359,
+      "sha256": "fa97606a00f6349d89b1214e296d8b00fea28d5a0c7b77f65bbdabf3cab19b79"
+    },
+    {
+      "path": "src/main.rs",
+      "size": 24107,
+      "sha256": "b9ddb3e760f545731d35e6d9921602fecb67c6f129ae70c12e02aba64b0acaeb"
+    },
+    {
+      "path": "src/mcp/artifacts.rs",
+      "size": 97884,
+      "sha256": "311e27c5c0c67202532c819f582a399720b2d8f05ce0e9e46f41bf0280f00523"
+    },
+    {
+      "path": "src/mcp/backend.rs",
+      "size": 67872,
+      "sha256": "801bdc60f817dff280cf743996292b158b3701218a9abfc880380327054d293f"
+    },
+    {
+      "path": "src/mcp/dto.rs",
+      "size": 4639,
+      "sha256": "f59578675f5c10cfbed3bfc335c20cad85ca6a5dc8c003b9b654f467cd62fa3b"
+    },
+    {
+      "path": "src/mcp/mod.rs",
+      "size": 9330,
+      "sha256": "3a619adb41af5bc8cd121ae33a31ef612ac4195974b98c179bb5bdb2da139bcc"
+    },
+    {
+      "path": "src/mcp/strict_input.rs",
+      "size": 8280,
+      "sha256": "61aa9fd8b5404f8e7d7d517a431116a06acafcbb4f45a44fed2f593944829a47"
+    },
+    {
+      "path": "src/runtime_smoke_app.rs",
+      "size": 12039,
+      "sha256": "779b77ed03be551c10e8ef382edf6ad7b0eb562ebdd10db4c90f298cc1f6ca39"
+    },
+    {
+      "path": "src/smart_input.rs",
+      "size": 46423,
+      "sha256": "00d4877a8a69fa25fefad890a37c57fbcbe833ab0818533a24e78e0fea1427a9"
+    },
+    {
+      "path": "src/smart_input_windows.rs",
+      "size": 32133,
+      "sha256": "fcbc60cabfa914b2380816c7075e40c3262374a3322d3422ee0cc2e6d7d9ed99"
+    },
+    {
+      "path": "src/text_expander.rs",
+      "size": 22576,
+      "sha256": "5dbdb205ee3af67f21d0d8e7e6bc986e1a70e2431de2b1206d2495ccf5977b14"
+    },
+    {
+      "path": "src/ui/ak820_backup_inspection.rs",
+      "size": 94886,
+      "sha256": "befcae5397f59fda4a67b5159678fae590922084f3a55750f743eea0ce713037"
+    },
+    {
+      "path": "src/ui/ak820_connection.rs",
+      "size": 26176,
+      "sha256": "e58f9cfa94bd490ae52899e15685cdf20a27468e454a41cad490144dbce7276c"
+    },
+    {
+      "path": "src/ui/ak820_install.rs",
+      "size": 100386,
+      "sha256": "b1ba4b368c6210e3643955cd92daf81a04395041364af1d5302d4a0461e759b8"
+    },
+    {
+      "path": "src/ui/ak820_os_indicator.rs",
+      "size": 84717,
+      "sha256": "4c6845e3f6bfe2a7031afe8c2db9a2dbbe6967b1e0f4129a18d4287276a9ddff"
+    },
+    {
+      "path": "src/ui/ak820_rgb_palette.rs",
+      "size": 56222,
+      "sha256": "2839a33f2ece9930e90579eabd9f9c0698c170424d759cf380433a2f2dc3af1d"
+    },
+    {
+      "path": "src/ui/ak820_status.rs",
+      "size": 24317,
+      "sha256": "3dd2e95aa76cf1109cf0ce1dd1e5482a7f1c32b2659f916f0c9485065d082a5b"
+    },
+    {
+      "path": "src/ui/app_lifecycle.rs",
+      "size": 116629,
+      "sha256": "29be3c5740167aced77c9e74b80156d659a2b06d02c33e6b6d4904e908d1cded"
+    },
+    {
+      "path": "src/ui/app_settings.rs",
+      "size": 44279,
+      "sha256": "a5b58e4f238ef1e4ec1e0a68d67453e3fe6636f353fd863bba67317b4c41a631"
+    },
+    {
+      "path": "src/ui/application_layout_runtime.rs",
+      "size": 191109,
+      "sha256": "94fa299bd73a0997b76394cc46ffb665e1436a91d50dc274b8756fb1713c56b3"
+    },
+    {
+      "path": "src/ui/application_layouts_settings.rs",
+      "size": 136767,
+      "sha256": "c704675a1eb25a9f61ced5f81f79100c496d1b3bb981df40c3351cc2fcd1f366"
+    },
+    {
+      "path": "src/ui/device_connect_apply.rs",
+      "size": 88240,
+      "sha256": "06651f27cd14af1054be2d5feb1c3e78b72d479003750c62c31cd4e90369f134"
+    },
+    {
+      "path": "src/ui/device_connect_task.rs",
+      "size": 93889,
+      "sha256": "856824578189429d226b807b7a1b8e1537ac65ccec0baaf948764a05d51efb50"
+    },
+    {
+      "path": "src/ui/device_deferred_load.rs",
+      "size": 89965,
+      "sha256": "abb1c5358cb90c2a809c405c3b10d19c5590567058de4422daad76c7e9c95546"
+    },
+    {
+      "path": "src/ui/display_settings.rs",
+      "size": 294385,
+      "sha256": "a98c2636a386b7c6c6d72dc592c83640eee725d1456b1336162facd664a32bad"
+    },
+    {
+      "path": "src/ui/layout_indicator_window.rs",
+      "size": 49137,
+      "sha256": "902176abcbdf01cbc972593313f9228731836cd38c441c3a462a6962534c515f"
+    },
+    {
+      "path": "src/ui/rgb_settings.rs",
+      "size": 47013,
+      "sha256": "f8523274ff638ba3af711fdecc0c12c4e052512e14781809f5567f2fb09869a0"
+    },
+    {
+      "path": "src/ui/settings_shell.rs",
+      "size": 26925,
+      "sha256": "57f6b79ce96b6ee695e9b46685f5b2e3a72e064aee20759722ade654d52fdf33"
+    },
+    {
+      "path": "src/ui/universal_symbols_setup.rs",
+      "size": 50074,
+      "sha256": "d65b680cccb030654960e0ad96e413503812c27c4120674d1eae358ed2904720"
+    },
+    {
+      "path": "src/ui/usb_hotplug_tests.rs",
+      "size": 44757,
+      "sha256": "4e71b690c326ddae632aad7d22a211190fb7921660da0aae3aff8f40802e094d"
+    },
+    {
+      "path": "src/ui/vial_hid_task.rs",
+      "size": 192955,
+      "sha256": "860f38dc4604921d48fb4c2436604c537eac7633a2dafc44126c2d4fd1c97d42"
+    },
+    {
+      "path": "src/ui/window_lifecycle.rs",
+      "size": 77118,
+      "sha256": "e9a122c8ff3f28208c549df080b2ba21bfc1cbe2fb2b81fee1b39bd062f4fafa"
+    },
+    {
+      "path": "src/usb_discovery.rs",
+      "size": 19668,
+      "sha256": "fbfa0a2294fb68eaec8a877b4125c042d3e54c97a5976e77f1e2d8a3fd61aac9"
+    },
+    {
+      "path": "src/vial/unlock.rs",
+      "size": 24800,
+      "sha256": "d149e4f7ecba2a6a2db826f63e0ecbaf0305fd92f21146cf5791374d672595df"
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "format": "ak820-b11-public-asset-inventory-1",
+  "source_release": "v0.6.0-beta.5",
+  "source_release_commit": "dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd",
+  "source_bundle": {
+    "name": "firmware-bundle.zip",
+    "size_bytes": 2990062,
+    "sha256": "497bc8b11dec6b43ee0b3a24b1df7856028d014d1d96497bdc486b419baeb4c0"
+  },
+  "source_matrix": {
+    "name": "firmware-matrix.json",
+    "size_bytes": 1750531,
+    "sha256": "12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb"
+  },
+  "assets_root": "assets/ak820/firmware-beta5",
+  "files": [
+    {
+      "profile": "main",
+      "file": "main/application.ihx",
+      "size_bytes": 96926,
+      "sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3"
+    },
+    {
+      "profile": "main",
+      "file": "main/application.map",
+      "size_bytes": 105924,
+      "sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4"
+    },
+    {
+      "profile": "game",
+      "file": "game/application.ihx",
+      "size_bytes": 96748,
+      "sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069"
+    },
+    {
+      "profile": "game",
+      "file": "game/application.map",
+      "size_bytes": 104595,
+      "sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538"
+    },
+    {
+      "profile": "mmo",
+      "file": "mmo/application.ihx",
+      "size_bytes": 96428,
+      "sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360"
+    },
+    {
+      "profile": "mmo",
+      "file": "mmo/application.map",
+      "size_bytes": 104290,
+      "sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09"
+    },
+    {
+      "profile": "typing",
+      "file": "typing/application.ihx",
+      "size_bytes": 96566,
+      "sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b"
+    },
+    {
+      "profile": "typing",
+      "file": "typing/application.map",
+      "size_bytes": 106415,
+      "sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02"
+    },
+    {
+      "profile": "code",
+      "file": "code/application.ihx",
+      "size_bytes": 95768,
+      "sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1"
+    },
+    {
+      "profile": "code",
+      "file": "code/application.map",
+      "size_bytes": 105606,
+      "sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf"
+    },
+    {
+      "profile": "pointer",
+      "file": "pointer/application.ihx",
+      "size_bytes": 96722,
+      "sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9"
+    },
+    {
+      "profile": "pointer",
+      "file": "pointer/application.map",
+      "size_bytes": 105823,
+      "sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82"
+    },
+    {
+      "profile": "onehand",
+      "file": "onehand/application.ihx",
+      "size_bytes": 93006,
+      "sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34"
+    },
+    {
+      "profile": "onehand",
+      "file": "onehand/application.map",
+      "size_bytes": 103082,
+      "sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23"
+    },
+    {
+      "profile": "creative",
+      "file": "creative/application.ihx",
+      "size_bytes": 97022,
+      "sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760"
+    },
+    {
+      "profile": "creative",
+      "file": "creative/application.map",
+      "size_bytes": 105189,
+      "sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113"
+    },
+    {
+      "profile": "shortcuts",
+      "file": "shortcuts/application.ihx",
+      "size_bytes": 96416,
+      "sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1"
+    },
+    {
+      "profile": "shortcuts",
+      "file": "shortcuts/application.map",
+      "size_bytes": 106026,
+      "sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2"
+    },
+    {
+      "profile": "multios",
+      "file": "multios/application.ihx",
+      "size_bytes": 95468,
+      "sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358"
+    },
+    {
+      "profile": "multios",
+      "file": "multios/application.map",
+      "size_bytes": 105469,
+      "sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f"
+    }
+  ],
+  "limits": [
+    "Public IHX and map bytes copied from exact allowlisted official bundle paths.",
+    "Matrix identity.ihx_sha256 and identity.map_sha256 match these assets.",
+    "These assets and inventory do not establish packed CODE identity or device behavior."
+  ]
+}

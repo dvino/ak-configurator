@@ -11,6 +11,7 @@ use std::fmt;
 
 pub const FORMAT: &str = "ak820-settings-backup-1";
 pub const FORMAT_V2: &str = "ak820-settings-backup-2";
+pub const FORMAT_V3: &str = "ak820-settings-backup-3";
 pub const FILES: [(&str, usize); 5] = [
     ("settings.json", 512 * 1024),
     ("before-full-rom.bin", 65536),
@@ -154,6 +155,7 @@ where
     )?;
     let manifest = parse_json(manifest_raw)?;
     let object = manifest.as_object().ok_or("Invalid backup manifest")?;
+    let is_v3 = manifest["format"] == FORMAT_V3;
     let allowed = [
         "format",
         "created_utc",
@@ -168,7 +170,10 @@ where
         "files",
     ];
     ensure(
-        object.len() == allowed.len() && object.keys().all(|k| allowed.contains(&k.as_str())),
+        object.len() == allowed.len() + usize::from(is_v3)
+            && object
+                .keys()
+                .all(|k| allowed.contains(&k.as_str()) || (is_v3 && k == "metadata")),
         "Missing or unknown backup manifest field",
     )?;
     ensure(
@@ -203,12 +208,13 @@ where
         "Backup schema differs",
     )?;
     ensure(
-        manifest["format"]
-            == if source.schema == 0x082003 {
-                FORMAT_V2
-            } else {
-                FORMAT
-            },
+        is_v3
+            || manifest["format"]
+                == if source.schema == 0x082003 {
+                    FORMAT_V2
+                } else {
+                    FORMAT
+                },
         "Backup format/schema mismatch",
     )?;
     ensure(
@@ -244,6 +250,26 @@ where
         "Incomplete ROM/NVM",
     )?;
     ensure(&rom[0xc700..0xef00] == nvm, "NVM differs from ROM")?;
+    {
+        use crate::app::ak820_beta1_profiles::ProfileId::*;
+        let image = [
+            Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts, Multios,
+        ]
+        .into_iter()
+        .find_map(|p| crate::ak820_settings_model::profile_image_for_identity(p, &source));
+        if is_v3 {
+            let image = image.ok_or("Unsupported versioned backup image")?;
+            ensure(
+                manifest["metadata"] == versioned_metadata(image, nvm)?,
+                "Backup metadata differs from source image or NVM",
+            )?;
+        } else {
+            ensure(
+                !matches!(image, Some(crate::ak820::ImageContract::Beta5(_))),
+                "Beta.5 requires versioned backup metadata",
+            )?;
+        }
+    }
     let settings = parse_json(&files["settings.json"])?;
     let expected = decode_trusted_rom(rom, nvm, &source)?;
     ensure(
@@ -256,6 +282,177 @@ where
         settings: expected,
         source,
     })
+}
+
+pub(crate) fn versioned_metadata(
+    image: crate::ak820::ImageContract,
+    nvm: &[u8],
+) -> BackupResult<Value> {
+    use crate::ak820::ImageContract;
+    use crate::ak820_qs_versioned_offline::ImageVersion;
+    let (release, alias, matrix, capability): (&str, Option<&str>, &[u8], &[u8]) = match image {
+        ImageContract::Beta4(_) => (
+            "v0.6.0-beta.4",
+            Some("v0.6.0-beta.4.1"),
+            include_bytes!("../assets/ak820/beta4.1-firmware-matrix.json"),
+            include_bytes!("../assets/ak820/beta4.1-capability-catalog.json"),
+        ),
+        ImageContract::Beta5(_) => (
+            "v0.6.0-beta.5",
+            None,
+            include_bytes!("../assets/ak820/beta5-firmware-matrix.json"),
+            include_bytes!("../assets/ak820/beta5-capability-catalog.json"),
+        ),
+        _ => return Err("Unsupported versioned backup image".into()),
+    };
+    let row = image.matrix_profile().ok_or("Missing image profile")?;
+    let format = crate::ak820_settings_model::exact_qs_format(image)?;
+    let image_version = match format.version() {
+        ImageVersion::V1 => 1,
+        ImageVersion::V2 => 2,
+        ImageVersion::V3 => 3,
+    };
+    let marker = row
+        .settings_identity
+        .as_ref()
+        .and_then(|i| i.leader_default.as_ref())
+        .map(|m| m.milliseconds);
+    let raw = nvm.get(0x6a8..0x6c0).ok_or("Incomplete saved QS record")?;
+    let record_version = if raw.iter().all(|v| *v == 0) || raw.iter().all(|v| *v == 255) {
+        None
+    } else if raw.starts_with(b"QS") && (1..=3).contains(&raw[2]) {
+        Some(raw[2])
+    } else {
+        return Err("Unknown saved QS record version".into());
+    };
+    Ok(json!({
+        "observed_image": {"release": release, "profile": row.profile.as_str(), "byte_identical_alias": alias},
+        "source_catalog": {"matrix_sha256": sha256(matrix), "capability_sha256": sha256(capability)},
+        "qs": {"image_version": image_version, "record_version": record_version, "leader_default_ms": marker, "runtime_ids": row.capabilities.runtime_qmk_settings_ids},
+        "selected_target": null, "target_qs_version": null, "trusted_receipt": null
+    }))
+}
+
+#[cfg(test)]
+mod versioned_metadata_tests {
+    use super::*;
+    use crate::ak820::ImageContract;
+    use crate::app::ak820_beta1_profiles::ProfileId::*;
+
+    #[test]
+    fn exact_profiles_preserve_qs_and_unknown_provenance() {
+        let nvm = vec![0xff; 0x2800];
+        for profile in [
+            Main, Game, Mmo, Typing, Code, Pointer, Onehand, Creative, Shortcuts, Multios,
+        ] {
+            let image = ImageContract::Beta5(profile);
+            let metadata = versioned_metadata(image, &nvm).unwrap();
+            assert_eq!(metadata["qs"]["image_version"], 3);
+            assert_eq!(metadata["qs"]["leader_default_ms"], 300);
+            assert!(metadata["qs"]["record_version"].is_null());
+            assert!(metadata["selected_target"].is_null());
+            assert!(metadata["target_qs_version"].is_null());
+            assert!(metadata["trusted_receipt"].is_null());
+            assert_eq!(
+                metadata["qs"]["runtime_ids"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!(23)),
+                image
+                    .matrix_profile()
+                    .unwrap()
+                    .capabilities
+                    .runtime_qmk_settings_ids
+                    .contains(&23)
+            );
+        }
+        let metadata = versioned_metadata(ImageContract::Beta4(Main), &nvm).unwrap();
+        assert_eq!(
+            metadata["observed_image"]["byte_identical_alias"],
+            "v0.6.0-beta.4.1"
+        );
+        assert!(metadata["trusted_receipt"].is_null());
+    }
+
+    #[test]
+    fn versioned_envelope_rejects_metadata_and_identity_changes() {
+        let contract = ImageContract::Beta5(Main);
+        let row = contract.matrix_profile().unwrap();
+        let exact = row.settings_identity.as_ref().unwrap();
+        let image = ImageIdentity {
+            ihx_sha256: exact.ihx_sha256.clone(),
+            code_sha256: exact.code_sha256.clone(),
+            definition_sha256: exact.definition_sha256.clone(),
+            schema: exact.nvm_schema,
+        };
+        let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        files.insert("settings.json".into(), b"{}\n".to_vec());
+        files.insert("before-full-rom.bin".into(), vec![0; 65536]);
+        files.insert("saved-nvm.bin".into(), vec![0; 0x2800]);
+        files.insert("read-log.jsonl".into(), Vec::new());
+        files.insert(".gitignore".into(), b"*\n".to_vec());
+        let records: Map<String, Value> =
+            files.iter().map(|(k, v)| (k.clone(), record(v))).collect();
+        let manifest = json!({"format":FORMAT_V3,"created_utc":"2026-10-25T09:00:00+00:00","scope":"saved supported settings and exposed RGB values; not all current RAM","device":{"vid":0x320f,"pid":0x505b,"vial_uid":"0470ff9001b915d3"},"definition_sha256":image.definition_sha256,"nvm_schema":image.schema,"source_build_id":image.schema,"source_ihx_sha256":image.ihx_sha256,"code_sha256":image.code_sha256,"counts":{"layers":6,"physical_keys":83,"assignments":498,"encoder_assignments":12,"macros":16,"macro_capacity":8192},"files":records,"metadata":versioned_metadata(contract, &files["saved-nvm.bin"]).unwrap()});
+        let check = |value: &Value| {
+            validate_archive(
+                &canonical(value).unwrap(),
+                &files,
+                std::slice::from_ref(&image),
+                None,
+                |_, _, _| Ok(json!({})),
+            )
+        };
+        assert!(check(&manifest).is_ok());
+        let mut changed = manifest.clone();
+        changed["metadata"]["qs"]["leader_default_ms"] = json!(301);
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["metadata"]["extra"] = json!(true);
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["metadata"]["trusted_receipt"] = json!({});
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["metadata"]["source_catalog"]["matrix_sha256"] = json!("00".repeat(32));
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["metadata"]["source_catalog"]["capability_sha256"] = json!("00".repeat(32));
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["metadata"]["qs"]["record_version"] = json!(3);
+        assert!(check(&changed).is_err());
+        assert!(validate_archive(
+            &canonical(&manifest).unwrap(),
+            &files,
+            std::slice::from_ref(&image),
+            Some(&"00".repeat(32)),
+            |_, _, _| Ok(json!({}))
+        )
+        .is_err());
+        changed = manifest.clone();
+        changed["source_ihx_sha256"] = json!("wrong");
+        assert!(check(&changed).is_err());
+        changed = manifest.clone();
+        changed["format"] = json!(FORMAT_V2);
+        changed.as_object_mut().unwrap().remove("metadata");
+        assert!(check(&changed).is_err());
+    }
+
+    #[test]
+    fn persisted_qs_header_is_distinct_from_image_format() {
+        let image = ImageContract::Beta5(Main);
+        for (header, expected) in [(1, 1), (2, 2), (3, 3)] {
+            let mut nvm = vec![0; 0x2800];
+            nvm[0x6a8..0x6ab].copy_from_slice(&[b'Q', b'S', header]);
+            let metadata = versioned_metadata(image, &nvm).unwrap();
+            assert_eq!(metadata["qs"]["record_version"], expected);
+            assert_eq!(metadata["qs"]["image_version"], 3);
+        }
+        let mut nvm = vec![0; 0x2800];
+        nvm[0x6a8] = 1;
+        assert!(versioned_metadata(image, &nvm).is_err());
+    }
 }
 
 /// A transition is permitted only by an exact hash pair, never profile names.
@@ -451,6 +648,22 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err, "ROM is unqualified");
+        // Legacy envelopes remain readable up to the mandatory trusted decoder.
+        let mut legacy_image = image.clone();
+        legacy_image.schema = 0x082002;
+        let mut legacy = manifest.clone();
+        legacy["format"] = json!(FORMAT);
+        legacy["nvm_schema"] = json!(legacy_image.schema);
+        legacy["source_build_id"] = json!(legacy_image.schema);
+        let error = validate_archive(
+            &canonical(&legacy).unwrap(),
+            &files,
+            &[legacy_image],
+            None,
+            |_, _, _| Err("ROM is unqualified".into()),
+        )
+        .unwrap_err();
+        assert_eq!(error, "ROM is unqualified");
         manifest["unknown"] = json!(1);
         assert!(validate_archive(
             &canonical(&manifest).unwrap(),

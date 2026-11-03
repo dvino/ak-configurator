@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package an unsigned desktop candidate; never publish or operate a device."""
+"""Package a desktop candidate; never publish or operate a device."""
 
 import argparse
 import hashlib
@@ -13,7 +13,11 @@ import zipfile
 import io
 import plistlib
 import re
+import tempfile
 from urllib.parse import quote, unquote, urlsplit
+from ak820_package_metadata import public_inputs, provenance, provenance_bytes, runtime_identity
+from windows_signing import (CERT_THUMBPRINT, SIGNED_PATHS, canonical_report, pinned_certificate,
+                             sign_file, sign_report, thumbprint)
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
@@ -39,11 +43,13 @@ DOCUMENTS = {
     "STATUS.ru.md": "docs/ru/STATUS.md",
     "REVIEW.en.md": "docs/REVIEW.md",
     "REVIEW.ru.md": "docs/ru/REVIEW.md",
+    "MCP.en.md": "docs/MCP.md",
+    "MCP.ru.md": "docs/ru/MCP.md",
 }
 
 
 def package_document(source, commit):
-    """Keep delivered guide links local; pin other source links to this checkout."""
+    """Keep delivered guide links local and mark omitted source documents."""
     source = ROOT / source
     destinations = {(ROOT / path).resolve(): name for name, path in DOCUMENTS.items()}
     destinations[(ROOT / "vendor/cava-dependencies/REBUILD.md").resolve()] = "audio-sources/REBUILD.md"
@@ -58,7 +64,7 @@ def package_document(source, commit):
             raise ValueError(f"Broken documentation link in {source.name}: {match[2]}")
         link = destinations.get(path)
         if link is None:
-            link = f"https://github.com/dvino/ak-configurator/blob/{commit}/{quote(relative.as_posix())}"
+            return match[1][:-1] + " (source document not included in this package)"
         if target.query:
             link += "?" + target.query
         if target.fragment:
@@ -91,7 +97,8 @@ def check_architecture(data, platform):
         raise ValueError(f"Binary format/architecture does not match {platform}")
 
 
-def build_package(binary, platform, output, allow_dirty=False, runtime_check=None, cava_helper=None):
+def build_package(binary, platform, output, allow_dirty=False, runtime_check=None, cava_helper=None,
+                  signing_thumbprint=None, signtool=None, timestamp_url=None):
     if cava_helper is None:
         raise ValueError("Bundled CAVA helper is required")
     cava_data = Path(cava_helper).read_bytes()
@@ -104,27 +111,9 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).strip())
     if dirty and not allow_dirty:
         raise ValueError("Source tree is dirty; use --allow-dirty only for a labeled local trial")
-    provenance = (ROOT / "assets/ak820/beta3-provenance.json").read_bytes()
-    release_manifest = json.loads((ROOT / "assets/ak820/beta3-release-manifest.json").read_text(encoding="utf-8"))
-    offline_files = {}
-    for asset in sorted((ROOT / "assets/ak820").glob("beta3-*.json")):
-        relative = asset.name.removeprefix("beta3-")
-        offline_files[f"offline/{relative}"] = asset.read_bytes()
-    for asset in sorted((ROOT / "assets/ak820/firmware-beta3").rglob("*")):
-        if asset.is_file():
-            relative = asset.relative_to(ROOT / "assets/ak820/firmware-beta3").as_posix()
-            offline_files[f"offline/firmware-beta3/{relative}"] = asset.read_bytes()
-            profile, basename = relative.split("/", 1)
-            manifest_name = f"profiles/{profile}/firmware/{basename}"
-            identity = release_manifest["files"].get(manifest_name)
-            if not identity or len(offline_files[f"offline/firmware-beta3/{relative}"]) != identity["size"] or digest(offline_files[f"offline/firmware-beta3/{relative}"]) != identity["sha256"]:
-                raise ValueError(f"Bundled public firmware asset differs from release manifest: {manifest_name}")
-    firmware = json.loads(provenance)
-    for asset in firmware["assets"]:
-        if asset["name"].endswith(".json"):
-            bundled = (ROOT / "assets/ak820" / ("beta3-" + asset["name"])).read_bytes()
-            if len(bundled) != asset["size"] or digest(bundled) != asset["sha256"]:
-                raise ValueError(f"Bundled firmware catalog differs: {asset['name']}")
+    provenance_data = provenance_bytes()
+    firmware = provenance()
+    offline_files = public_inputs()
     executable = "ak-configurator.exe" if platform.startswith("windows-") else "ak-configurator"
     app_bundle = platform.startswith("macos-")
     payload_binary = "AK-Configurator.app/Contents/MacOS/ak-configurator" if app_bundle else executable
@@ -135,7 +124,7 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         "CAVA-LICENSE": (ROOT / "vendor/cava/LICENSE").read_bytes(),
         "CAVA-PROVENANCE.json": (ROOT / "vendor/cava-provenance.json").read_bytes(),
         payload_binary: data,
-        "firmware-provenance.json": provenance,
+        "firmware-provenance.json": provenance_data,
         "LICENSE": (ROOT / "LICENSE").read_bytes(),
         "FONT-LICENSES.txt": (ROOT / "assets/FONT-LICENSES.txt").read_bytes(),
         "LUCIDE-LICENSE.txt": (ROOT / "assets/LUCIDE-LICENSE.txt").read_bytes(),
@@ -154,6 +143,22 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         if not windows_source.is_file():
             raise ValueError("Windows helper corresponding dependency source is required")
         files["audio-sources/windows-built-dependencies.tar.gz"] = windows_source.read_bytes()
+    if signing_thumbprint or signtool or timestamp_url:
+        if not platform.startswith('windows-') or thumbprint(signing_thumbprint or '') != CERT_THUMBPRINT or not signtool or not timestamp_url:
+            raise ValueError('Windows signing requires the pinned development certificate, SignTool and timestamp URL')
+        pinned_certificate(ROOT)
+        signing = {}
+        with tempfile.TemporaryDirectory(prefix='ak-sign-payload-') as temporary:
+            for name in SIGNED_PATHS:
+                path = Path(temporary).joinpath(*name.split('/'))
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(files[name])
+                info = sign_file(path, signing_thumbprint, signtool, timestamp_url)
+                files[name] = path.read_bytes()
+                signing[name] = {'unsigned_sha256': info['unsigned_sha256'], 'signed_sha256': info['signed_sha256']}
+            files['windows-signing.json'] = canonical_report(signing)
+            files['windows-signing.p7s'] = sign_report(files['windows-signing.json'], signing_thumbprint)
+        data, cava_data = files[payload_binary], files[cava_name]
     files.update(offline_files)
     for dependency in sorted((ROOT / "vendor/cava-dependencies").iterdir()):
         if dependency.is_file():
@@ -178,8 +183,13 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
             raise ValueError("Runtime self-check does not prove a passing, offline, device-free execution for this target")
         if (check.get("application_version") != version
                 or check.get("firmware_release") != firmware["release"]
-                or check.get("catalog_sha256") != digest(offline_files["offline/capability-catalog.json"])):
+                or check.get("catalog_sha256") != digest(offline_files["offline/release-catalog.json"])):
             raise ValueError("Runtime self-check belongs to a different application or firmware catalog")
+        profiles = check.get("profiles")
+        if (not isinstance(profiles, list)
+                or any(not isinstance(p, dict) or not isinstance(p.get("profile"), str) for p in profiles)
+                or sorted(profiles, key=lambda p: p["profile"]) != runtime_identity()["profiles"]):
+            raise ValueError("Runtime self-check profile identities differ")
         files["runtime-self-check.json"] = (json.dumps(check, indent=2, sort_keys=True) + "\n").encode()
     if app_bundle:
         numeric_version = ".".join(version.split("-", 1)[0].split("+")[0].split(".")[:3])
@@ -201,11 +211,12 @@ def build_package(binary, platform, output, allow_dirty=False, runtime_check=Non
         "source_commit": commit,
         "source_repository": "https://github.com/dvino/ak-configurator",
         "source_dirty": dirty,
-        "status": "unsigned desktop trial; hardware and platform qualification remain separate",
+        "status": ("local-development signed desktop trial; public trust and hardware qualification remain separate"
+                   if signing_thumbprint else "unsigned desktop trial; hardware and platform qualification remain separate"),
         "firmware_release": firmware["release"],
         "firmware_commit": firmware["tag_commit"],
         "firmware_tag_object": firmware["tag_object"],
-        "firmware_provenance_sha256": digest(provenance),
+        "firmware_provenance_sha256": digest(provenance_data),
         "binary_sha256": digest(data),
         "audio_helper": {**cava_identity, "path": cava_name, "sha256": digest(cava_data)},
     }
@@ -249,9 +260,13 @@ def main():
     parser.add_argument("--allow-dirty", action="store_true")
     parser.add_argument("--runtime-check", type=Path, help="JSON produced by the built target's --self-check")
     parser.add_argument("--cava-helper", type=Path, required=True)
+    parser.add_argument('--windows-signing-thumbprint')
+    parser.add_argument('--signtool', type=Path)
+    parser.add_argument('--timestamp-url')
     args = parser.parse_args()
     try:
-        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty, args.runtime_check, args.cava_helper))
+        print(build_package(args.binary, args.platform, args.output_dir, args.allow_dirty, args.runtime_check, args.cava_helper,
+                            args.windows_signing_thumbprint, args.signtool, args.timestamp_url))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Packaging stopped: {error}\n")
 

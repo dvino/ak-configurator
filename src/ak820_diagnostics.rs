@@ -1,4 +1,4 @@
-//! FD01 v1 RAM diagnostic snapshot, pinned to firmware beta.3 (88d190ab).
+//! FD01 v1 RAM diagnostic snapshot for exact admitted firmware images.
 //! No ROM contents, serials, host paths, macros or typing data are exposed.
 use anyhow::{ensure, Result};
 

@@ -1,0 +1,24 @@
+B12 native Windows MCP test listing, 2026-11-04
+Command: D:\codex-ak-configurator-c02-target\debug\deps\ak_configurator-04a648322ca955d3.exe --ignored --list
+This lists skipped cases; it does not execute or qualify them.
+
+ak820_backup_files::mcp_backup_private_exact_fixture_matches_native_files
+ak820_install_executor::tests::beta5_preservation_keeps_exact_bytes_and_rejects_bad_records
+ak820_installer::tests::beta5_project_fixture_packs_and_checks_complete_reinstall
+app::application_layout_runtime::tests::autolayout_standby_wake_host_to_firmware
+app::display_settings_ui::pipeline_tests::delete_catalog_tests::export_actual_pictogram_catalog_for_firmware_audit
+app::display_settings_ui::pipeline_tests::full_ui_supplied_library_replay_hides_known_stock_preserves_unknown_artwork
+app::layout_element_visibility::tests::canvas_clicks_toggle_a_key_and_an_encoder_without_keymap_writes
+hid::hid_ak820::backup_tests::mcp_backup_diagnostic_cancel_disconnect_and_storage_fault_stop
+hid::hid_ak820::transaction_tests::diagnostic_bootstrap_exact_beta5_private_payload
+hid::hid_proxy::tests::helper_process
+hid::hid_proxy::tests::windows_lifetime_child_fixture
+hid::hid_proxy::tests::windows_lifetime_parent_fixture
+mcp::backend::tests::diagnostic_engine_exact_beta5_owner_close_and_disconnect
+mcp::backend::tests::diagnostic_engine_real_helper_ambiguity_and_release
+mcp::backend::tests::mcp_backup_engine_exact_fixture_publication_and_fail_stop
+mcp::backend::tests::mcp_prepare_native_private_fixture_parity_and_stale
+mcp::backend::tests::mcp_prepare_tracked_private_publication_is_retrievable
+mcp::backend::tests::mcp_prepare_two_hundred_offline_builder_pairs
+
+18 tests, 0 benchmarks

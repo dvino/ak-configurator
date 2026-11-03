@@ -617,7 +617,7 @@ pub(crate) fn usb_port(_path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
     )
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 pub(crate) fn usb_port(path: &std::ffi::CStr) -> Result<std::path::PathBuf> {
     use windows_sys::Win32::Devices::{DeviceAndDriverInstallation::*, Properties::*};
     let interface: Vec<u16> = path.to_str()?.encode_utf16().chain(Some(0)).collect();

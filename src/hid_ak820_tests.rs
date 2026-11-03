@@ -1,6 +1,100 @@
 //! Offline transaction checks; scripted saved bytes do not prove physical durability.
 use super::*;
 
+// Explicitly run with AK820_C01_PERMANENT_PATH pointing to the privately
+// reconstructed 51136-byte beta.5 main permanent payload. Never commit it.
+#[test]
+#[ignore = "requires private B01 permanent payload in AK820_C01_PERMANENT_PATH"]
+fn diagnostic_bootstrap_exact_beta5_private_payload() {
+    let path = std::env::var_os("AK820_C01_PERMANENT_PATH")
+        .expect("AK820_C01_PERMANENT_PATH is required for the ignored private-input test");
+    let payload = std::fs::read(path).expect("cannot read private permanent payload");
+    assert_eq!(payload.len(), 0xc7c0);
+    for mutation in ["none", "code", "mode", "schema", "digest"] {
+        let mut rom = vec![0u8; 65536];
+        rom[0x2800..0xefc0].copy_from_slice(&payload);
+        match mutation {
+            "code" => rom[0x2800] ^= 1,
+            "mode" => rom[0xef89] = 1,
+            "schema" => rom[0xef8c..0xef90].copy_from_slice(&0x082002u32.to_le_bytes()),
+            "digest" => rom[0xef90] ^= 1,
+            _ => {}
+        }
+        let (hid, recorder) = HidDevice::test_ak820_device(false);
+        recorder.respond_by(move |p| {
+            let mut reply = [0u8; 32];
+            match (p[0], p[1]) {
+                (0xfd, 0) => {
+                    let address = usize::from(u16::from_be_bytes([p[2], p[3]]));
+                    let count = usize::from(p[4]);
+                    reply[..5].copy_from_slice(&p[..5]);
+                    reply[5..5 + count].copy_from_slice(&rom[address..address + count]);
+                }
+                (0xfd, 1) => reply[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+                (1, 0) => {
+                    reply[0] = 1;
+                    reply[2] = 9;
+                }
+                (0xfe, 0) => {
+                    reply[..4].copy_from_slice(&6u32.to_le_bytes());
+                    reply[4..12].copy_from_slice(&crate::ak820::VIAL_UID.to_le_bytes());
+                }
+                _ => panic!("unexpected bootstrap packet"),
+            }
+            Some(Ok(reply))
+        });
+        let result = hid.ak820_diagnostic_bootstrap(&AtomicBool::new(false));
+        let requests = recorder.requests();
+        let first_status = requests.iter().position(|p| p[..2] == [0xfd, 1]);
+        if mutation != "none" {
+            assert!(result.is_err());
+            assert!(first_status.is_none());
+            let count = requests.len();
+            assert!(hid.ak820_diagnostic_status().is_err());
+            assert_eq!(recorder.requests().len(), count);
+        } else {
+            assert_eq!(
+                result.unwrap().0,
+                ImageContract::Beta5(crate::app::ak820_beta1_profiles::ProfileId::Main)
+            );
+            let at = first_status.expect("FD01 after complete CODE");
+            assert!(requests[..at].iter().all(|p| p[..2] == [0xfd, 0]));
+            assert_eq!(
+                requests[at..]
+                    .iter()
+                    .map(|p| (p[0], p[1]))
+                    .collect::<Vec<_>>(),
+                vec![(0xfd, 1), (1, 0), (0xfd, 1), (0xfe, 0), (0xfd, 1)]
+            );
+            let code_bytes: usize = requests[..at]
+                .iter()
+                .filter(|p| u16::from_be_bytes([p[2], p[3]]) < 0xc700)
+                .map(|p| usize::from(p[4]))
+                .sum();
+            assert_eq!(code_bytes, 0x9f00);
+        }
+    }
+}
+
+#[test]
+fn diagnostic_bootstrap_unknown_manifest_stops_without_fd01_or_retry() {
+    let (hid, recorder) = HidDevice::test_ak820_device(false);
+    recorder.respond_by(|p| {
+        let mut reply = [0; 32];
+        reply[..5].copy_from_slice(&p[..5]);
+        Some(Ok(reply))
+    });
+    assert!(hid
+        .ak820_diagnostic_bootstrap(&AtomicBool::new(false))
+        .is_err());
+    assert!(recorder.requests().iter().all(|p| p[..2] == [0xfd, 0]));
+    let count = recorder.requests().len();
+    assert!(hid
+        .ak820_diagnostic_bootstrap(&AtomicBool::new(false))
+        .is_err());
+    assert_eq!(recorder.requests().len(), count);
+}
+
 #[test]
 fn diagnostic_bootstrap_cancelled_before_open_sends_no_packets() {
     let (hid, recorder) = HidDevice::test_ak820_device(false);
@@ -30,7 +124,7 @@ fn diagnostic_bootstrap_cancels_at_the_next_packet_boundary() {
 }
 
 #[test]
-fn diagnostic_status_requires_exact_beta3_and_latches_transport_failure() {
+fn diagnostic_status_requires_reviewed_image_and_latches_transport_failure() {
     let (unknown, record) = HidDevice::test_ak820_device(false);
     assert!(unknown.ak820_diagnostic_status().is_err());
     assert!(record.requests().is_empty());
@@ -43,6 +137,16 @@ fn diagnostic_status_requires_exact_beta3_and_latches_transport_failure() {
     assert_eq!(recorder.requests().len(), 1);
     assert!(hid.ak820_diagnostic_status().is_err());
     assert_eq!(recorder.requests().len(), 1);
+}
+
+#[test]
+fn diagnostic_status_refuses_preidentified_beta4_without_io() {
+    let (hid, recorder) = HidDevice::test_ak820_device(false);
+    hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Beta4(
+        crate::app::ak820_beta1_profiles::ProfileId::Main,
+    ));
+    assert!(hid.ak820_diagnostic_status().is_err());
+    assert!(recorder.requests().is_empty());
 }
 
 #[test]
@@ -936,6 +1040,194 @@ fn rgb_save_checks_scripted_persistent_bytes_and_latches_mismatch() {
             assert_eq!(log.requests().len(), before);
         }
     }
+}
+
+#[test]
+fn guarded_rgb_cancels_at_each_packet_boundary_and_latches_failure() {
+    // The same responder models successful SET, GET and durable SAVE.
+    for (save, cancel_after) in (0..=4)
+        .map(|n| (false, n))
+        .chain((0..=9).map(|n| (true, n)))
+        .chain([(false, usize::MAX), (true, usize::MAX)])
+    {
+        let (hid, log) = HidDevice::test_ak820_device(true);
+        let cancel = std::sync::Arc::new(AtomicBool::new(cancel_after == 0));
+        let flag = cancel.clone();
+        let mut count = 0;
+        log.respond_by(move |p| {
+            count += 1;
+            let mut r = *p;
+            match (p[0], p[1]) {
+                (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+                (7, 0x41) | (9, _) => {}
+                (8, 0x41) => r[..8].copy_from_slice(&[8, 0x41, 2, 0, 42, 80, 200, 100]),
+                (0xfd, 0) => {
+                    r[..5].copy_from_slice(&p[..5]);
+                    r[5..13].copy_from_slice(&[5, 80, 200, 100, 42, 0, 0, 0]);
+                }
+                _ => panic!("unexpected packet"),
+            }
+            if count == cancel_after {
+                flag.store(true, Ordering::Release);
+            }
+            Some(Ok(r))
+        });
+        let result = hid.ak820_set_rgb_guarded(2, 42, 80, 200, 100, save, &cancel);
+        let requests = log.requests();
+        if cancel_after == usize::MAX {
+            assert!(result.is_ok());
+            let expected = vec![
+                (0xfd, 1),
+                (7, 0x41),
+                (8, 0x41),
+                (0xfd, 1),
+                (0xfd, 1),
+                (9, 0),
+                (8, 0x41),
+                (0xfd, 0),
+                (0xfd, 1),
+            ];
+            assert_eq!(
+                requests.iter().map(|p| (p[0], p[1])).collect::<Vec<_>>(),
+                expected[..if save { 9 } else { 4 }]
+            );
+        } else {
+            assert_eq!(requests.len(), cancel_after);
+            if cancel_after < if save { 9 } else { 4 } {
+                assert!(result.is_err());
+            }
+            if result.is_err() {
+                assert!(hid.ak820_failure().is_some());
+                assert!(hid
+                    .ak820_set_rgb_guarded(2, 42, 80, 200, 100, save, &AtomicBool::new(false))
+                    .is_err());
+                assert_eq!(log.requests().len(), requests.len());
+            }
+        }
+    }
+}
+
+#[test]
+fn guarded_rgb_rejects_read_only_and_unverified_without_packets() {
+    let (mut hid, log) = HidDevice::test_ak820_device(true);
+    hid.read_only = Some(Default::default());
+    for save in [false, true] {
+        assert!(hid
+            .ak820_prevalidate_rgb(2, 42, 80, 200, 100, save)
+            .is_err());
+        assert!(hid
+            .ak820_set_rgb_guarded(2, 42, 80, 200, 100, save, &AtomicBool::new(false))
+            .is_err());
+    }
+    assert!(log.requests().is_empty());
+    let (hid, log) = HidDevice::test_ak820_device(false);
+    assert!(hid
+        .ak820_prevalidate_rgb(2, 42, 80, 200, 100, false)
+        .is_err());
+    assert!(log.requests().is_empty());
+    let (hid, log) = HidDevice::test_ak820_device(true);
+    hid.ak820.as_ref().unwrap().lock().unwrap().image = Some(ImageContract::Beta5(
+        crate::app::ak820_beta1_profiles::ProfileId::Main,
+    ));
+    for save in [false, true] {
+        assert!(hid
+            .ak820_prevalidate_rgb(2, 42, 80, 200, 100, save)
+            .is_err());
+        assert!(hid
+            .ak820_set_rgb_guarded(2, 42, 80, 200, 100, save, &AtomicBool::new(false))
+            .is_err());
+    }
+    assert!(allowed_request(&padded_request(&[9]), hid.ak820_image()).is_err());
+    assert!(log.requests().is_empty());
+}
+
+#[test]
+fn guarded_rgb_transport_failures_stop_without_retry() {
+    for fail_at in 1..=9 {
+        for fault in ["timeout", "disconnect", "mismatch"] {
+            let (hid, log) = HidDevice::test_ak820_device(true);
+            let mut count = 0;
+            log.respond_by(move |p| {
+                count += 1;
+                if count == fail_at && fault != "mismatch" {
+                    return Some(Err(fault.into()));
+                }
+                let mut r = *p;
+                match (p[0], p[1]) {
+                    (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+                    (7, 0x41) | (9, _) => {}
+                    (8, 0x41) => r[..8].copy_from_slice(&[8, 0x41, 2, 0, 42, 80, 200, 100]),
+                    (0xfd, 0) => {
+                        r[..5].copy_from_slice(&p[..5]);
+                        r[5..13].copy_from_slice(&[5, 80, 200, 100, 42, 0, 0, 0]);
+                    }
+                    _ => panic!("unexpected packet"),
+                }
+                if count == fail_at {
+                    r[0] ^= 0xff;
+                }
+                Some(Ok(r))
+            });
+            assert!(hid
+                .ak820_set_rgb_guarded(2, 42, 80, 200, 100, true, &AtomicBool::new(false))
+                .is_err());
+            assert_eq!(
+                log.requests().len(),
+                fail_at,
+                "fault={fault} packet={fail_at}"
+            );
+            assert!(hid.ak820_failure().is_some());
+            assert!(hid
+                .ak820_set_rgb_guarded(2, 42, 80, 200, 100, true, &AtomicBool::new(false))
+                .is_err());
+            assert_eq!(
+                log.requests().len(),
+                fail_at,
+                "retry after fault={fault} packet={fail_at}"
+            );
+        }
+    }
+}
+
+#[test]
+fn guarded_rgb_save_value_mismatch_requires_saved_read_before_failure() {
+    let (hid, log) = HidDevice::test_ak820_device(true);
+    let mut reads = 0;
+    log.respond_by(move |p| {
+        let mut r = *p;
+        match (p[0], p[1]) {
+            (0xfd, 1) => r[..4].copy_from_slice(&[0xfd, 1, 1, 0xa8]),
+            (7, 0x41) | (9, _) => {}
+            (8, 0x41) => {
+                reads += 1;
+                r[..8].copy_from_slice(&[
+                    8,
+                    0x41,
+                    2,
+                    0,
+                    42,
+                    80,
+                    200,
+                    if reads == 2 { 99 } else { 100 },
+                ]);
+            }
+            (0xfd, 0) => {
+                r[..5].copy_from_slice(&p[..5]);
+                r[5..13].copy_from_slice(&[5, 80, 200, 100, 42, 0, 0, 0]);
+            }
+            _ => panic!("unexpected packet"),
+        }
+        Some(Ok(r))
+    });
+    assert!(hid
+        .ak820_set_rgb_guarded(2, 42, 80, 200, 100, true, &AtomicBool::new(false))
+        .is_err());
+    assert_eq!(log.requests().len(), 8);
+    assert!(hid.ak820_failure().is_some());
+    assert!(hid
+        .ak820_set_rgb_guarded(2, 42, 80, 200, 100, true, &AtomicBool::new(false))
+        .is_err());
+    assert_eq!(log.requests().len(), 8);
 }
 
 /// Synthetic negative verification fixture: zero CODE cannot match alpha.3.

@@ -55,6 +55,9 @@ jobs:
     uses: ./.github/workflows/desktop-dev.yml
     with:
       candidate_ref: ${{ needs.validate.outputs.commit }}
+    secrets:
+      AK_WINDOWS_CODE_SIGN_PFX_BASE64: ${{ secrets.AK_WINDOWS_CODE_SIGN_PFX_BASE64 }}
+      AK_WINDOWS_CODE_SIGN_PFX_PASSWORD: ${{ secrets.AK_WINDOWS_CODE_SIGN_PFX_PASSWORD }}
     permissions:
       contents: read
 
@@ -81,6 +84,7 @@ jobs:
             --directory candidate-artifacts \
             --version "$CANDIDATE_VERSION" \
             --source-commit "$SOURCE_COMMIT" \
+            --require-windows-signing \
             --manifest release-manifest.json \
             --update-index app-update-index.json
       - name: Retain verified candidate packages (no release publication)
@@ -91,6 +95,10 @@ jobs:
             candidate-artifacts/*.zip
             candidate-artifacts/*.tar.gz
             candidate-artifacts/*.sha256
+            candidate-artifacts/*-setup.exe
+            candidate-artifacts/*-setup.exe.build.json
+            candidate-artifacts/*-setup.exe.build.p7s
+            candidate-artifacts/setup-smoke-*.json
             candidate-artifacts/install-smoke-*.json
             candidate-artifacts/runtime-smoke-*.json
             release-manifest.json

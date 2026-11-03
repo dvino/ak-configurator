@@ -35,7 +35,7 @@ impl RuntimeSmokeApp {
         inner.keycode_picker.language = crate::i18n::Language::English;
         inner.app_settings.close_to_tray_behavior = CloseToTrayBehavior::Close;
         let now = Instant::now();
-        let mut result = Self {
+        let result = Self {
             inner,
             started: now,
             stage: 0,
@@ -49,6 +49,8 @@ impl RuntimeSmokeApp {
             #[cfg(target_os = "linux")]
             tray_fixture: None,
         };
+        #[cfg(target_os = "linux")]
+        let mut result = result;
         #[cfg(target_os = "linux")]
         if std::env::var("AK820_RUNTIME_SMOKE_TRAY_FIXTURE").as_deref() == Ok("1") {
             result.tray_host = crate::runtime_smoke_linux::TrayFixture::EVIDENCE;

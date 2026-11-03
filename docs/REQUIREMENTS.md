@@ -158,6 +158,8 @@ The native desktop configurator is the first milestone. Browser requirements mar
 
 **AKW-060 · Desktop.** Release a native application for Windows and Linux x86_64 and arm64, and macOS arm64 and x86_64. Stabilize the native editor first, then begin the WebAssembly/browser stage; desktop release does not depend on website readiness. Use Entropy’s native application and shared Rust model. The application includes compatible firmware, all curated AK820 profiles, the compatibility catalog, and help. Configuration, installation of bundled or local firmware, backups, and rollback using a suitable dump work offline.
 
+**Current milestone clarification, 2026-11-04:** The first local alpha milestone prepares Windows x86_64 and ARM64 packages/CI. Runtime checks cover x86_64; actual ARM64 execution remains unverified. This is a scoped delivery step, not acceptance of AKW-060. Linux x86_64/arm64 and macOS x86_64/arm64 remain required before the six-target application requirement is complete. Native macOS is excluded from the current milestone.
+
 **Acceptance:** record minimum supported OS versions, Linux package/runtime dependencies and X11/Wayland limits before release. Build, USB connection, memory use, startup speed, and required features are confirmed separately for each OS/CPU pair; a build on one target does not confirm another. A CI runner label alone does not define OS compatibility.
 
 **AKW-061 · Desktop.** Application updates are offered separately and started only by the user; they do not start firmware flashing and preserve helper settings. If new firmware needs a newer configurator, offer the application update first. A compatible bundled firmware remains available offline.

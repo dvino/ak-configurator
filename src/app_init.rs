@@ -486,6 +486,12 @@ impl EntropyApp {
             #[cfg(not(target_arch = "wasm32"))]
             vial_hid_task: None,
             #[cfg(not(target_arch = "wasm32"))]
+            rgb_draft: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            rgb_uncertain: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            rgb_request_id: 0,
+            #[cfg(not(target_arch = "wasm32"))]
             pending_layout_undo: false,
             #[cfg(not(target_arch = "wasm32"))]
             deferred_device_load: DeferredDeviceLoadState::default(),
@@ -569,6 +575,8 @@ impl EntropyApp {
             pending_entlayout_import_path: None,
             pending_file_dialog: None,
             connection_generation: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            connection_failure: None,
             parent_window_handle: None,
             parent_display_handle: None,
             pending_entsettings_import_path: None,
@@ -613,6 +621,10 @@ impl EntropyApp {
             force_close_requested: false,
             #[cfg(not(target_arch = "wasm32"))]
             exit_after_hid_write: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            rgb_exit_pending: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            rgb_exit_ready: false,
             main_menu_tab: MainMenuTab::Keyboard,
             combo_entries: vec![],
             combo_synced_entries: vec![],

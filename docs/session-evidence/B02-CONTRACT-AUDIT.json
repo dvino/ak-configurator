@@ -1,0 +1,145 @@
+{
+  "format": "ak820-b02-contract-audit-1",
+  "firmware_commit": "dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd",
+  "source_sha256": {
+    "qmk-8051-ak820/keyboards/ajazz/ak820/ak820_settings.c": "cdf433dfedcca1c7e8c9eb7ae56f506cb82f37f868a610f6ed627f73bd13c6c0",
+    "qmk-8051-ak820/keyboards/ajazz/ak820/ak820_settings.h": "38f181449e066062fac3c69d5a988e36bcd3787e062beb90ad41188a87d3552b",
+    "qmk-8051-ak820/keyboards/ajazz/ak820/ak820_leader_timeout.h": "2890a0b2f227c4d6a184a201cb430cfd8968994bb211c4cfc1020781aa50564d",
+    "qmk-8051-ak820/util/ak820_extension_settings.py": "215f3706a3721a04c5e0c941270679bb1ce22fdb9291ee6118401e33698489b7"
+  },
+  "bundle_sha256": "497bc8b11dec6b43ee0b3a24b1df7856028d014d1d96497bdc486b419baeb4c0",
+  "capability_catalog_sha256": "a1b489026fced8135d424069bb1ed80f6e975468804a2a2cec5aae72047dda91",
+  "artifact_scope": "Published linked IHX and map; no installed CODE or physical behavior verified.",
+  "extraction": "Each map symbol address resolves six explicitly present bytes in its checksum-validated IHX; both file SHA256 match published capability catalog.",
+  "profiles": [
+    {
+      "profile": "code",
+      "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+      "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+      "marker_address": 48787,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "creative",
+      "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+      "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+      "marker_address": 49231,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "game",
+      "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+      "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+      "marker_address": 49105,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": false
+    },
+    {
+      "profile": "main",
+      "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+      "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+      "marker_address": 49245,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "mmo",
+      "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+      "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+      "marker_address": 48989,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": false
+    },
+    {
+      "profile": "multios",
+      "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+      "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+      "marker_address": 48686,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "onehand",
+      "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+      "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+      "marker_address": 47568,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "pointer",
+      "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+      "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+      "marker_address": 49124,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "shortcuts",
+      "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+      "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+      "marker_address": 48993,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    },
+    {
+      "profile": "typing",
+      "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+      "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+      "marker_address": 49126,
+      "marker_hex": "414b4c012c01",
+      "leader_default": 300,
+      "leader_enabled": true
+    }
+  ],
+  "contract": {
+    "record_offset": 1704,
+    "record_length": 24,
+    "v1_header": "5153010b3f",
+    "v2_header": "5153020f7f",
+    "v3_header": "51530311ff",
+    "v3_qsid23_offset": 20,
+    "v3_qsid23_encoding": "u16-le",
+    "v3_qsid23_range": [
+      1,
+      1000
+    ],
+    "crc": "CRC-16 CCITT polynomial 0x1021 init 0xffff, bytes 0..21, stored little-endian at 22..23",
+    "v1_reserved_offsets": [
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+    ],
+    "v2_reserved_offsets": [
+      20,
+      21
+    ],
+    "v3_reserved_offsets": []
+  },
+  "golden_vectors": {
+    "official_python_v3_defaults_leader_300_qsid22_0": "51530311ff002800c80000005000af00010000002c01eba4",
+    "official_python_v3_maxima": "51530311ff0fe803e80364006400e8031d013075e803666d",
+    "firmware_c_blank_defaults_leader_300_qsid22_1": "51530311ff002800c80000005000af00010100002c01ba0e"
+  },
+  "disagreements": [
+    "Execution plan header 515303139f differs from firmware C header and Python header 51530311ff.",
+    "C blank defaults set QSID22 to 1; official Python and published capability metadata default QSID22 to 0.",
+    "V1 upgrade preserves zero in byte17, whereas blank C defaults set byte17 to 1."
+  ],
+  "migration": "Firmware validates v1/v2/v3; on valid older record v1 sets byte16=1, preserves byte17 (zero for v1), v2 preserves values; sets v3 header and image marker at 20..21 then seals CRC. Startup upgrade is in RAM; first changed setting commits current record. Invalid nonblank triggers schema fault and volatile defaults; blank uses C defaults.",
+  "limits": "Offline evidence only; no Rust changes, tests, build, HID, device or firmware operation."
+}

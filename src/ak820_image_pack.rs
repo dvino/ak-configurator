@@ -480,7 +480,7 @@ fn pack_with_routine(
         sha256(ihx.as_bytes()) == exact.ihx_sha256,
         "Linked input differs from catalog",
     )?;
-    validate_nvm(nvm, exact.nvm_schema)?;
+    validate_nvm_for_image(nvm, image)?;
     let data = read_ihex(ihx)?;
     let payload = pack_core(&data, symbols, source, routine, nvm, mode, exact.nvm_schema)?;
     validate_catalog_payload_for_image(&payload, image)?;
@@ -505,7 +505,7 @@ pub(crate) fn validate_catalog_payload_for_image(
         .settings_identity
         .as_ref()
         .ok_or("Profile lacks qualified packed identity")?;
-    let mode = verify_payload(payload, exact.nvm_schema)?;
+    let mode = verify_payload_for_image(payload, exact.nvm_schema, Some(image))?;
     need(
         payload[MANIFEST - APP_START + 10..MANIFEST - APP_START + 12] == [0, 0],
         "Catalog manifest reserved bytes differ",
@@ -517,7 +517,40 @@ pub(crate) fn validate_catalog_payload_for_image(
     )?;
     Ok(mode)
 }
+fn validate_nvm_for_image(nvm: &[u8], image: crate::ak820::ImageContract) -> BackupResult<()> {
+    let exact = image
+        .matrix_profile()
+        .and_then(|row| row.settings_identity.as_ref())
+        .ok_or("Image lacks qualified packed identity")?;
+    if matches!(
+        image,
+        crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)
+    ) {
+        let layout = crate::ak820_settings_model::validate_nvm_structure(nvm, exact.nvm_schema)?;
+        layout.validate_macros(nvm)?;
+        crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm)?;
+        let format = crate::ak820_settings_model::exact_qs_format(image)?;
+        crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_formats(
+            &nvm[0x6a8..0x6c0],
+            format,
+            format,
+        )?;
+    } else {
+        validate_nvm(nvm, exact.nvm_schema)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 fn verify_payload(payload: &[u8], schema: u32) -> BackupResult<EntryMode> {
+    verify_payload_for_image(payload, schema, None)
+}
+
+fn verify_payload_for_image(
+    payload: &[u8],
+    schema: u32,
+    image: Option<crate::ak820::ImageContract>,
+) -> BackupResult<EntryMode> {
     need(
         payload.len() == APP_END - APP_START,
         "Wrong update image length; full ROM forbidden",
@@ -545,7 +578,11 @@ fn verify_payload(payload: &[u8], schema: u32) -> BackupResult<EntryMode> {
             .all(|&v| v == 0),
         "Journal must be empty",
     )?;
-    validate_nvm(nvm, schema)?;
+    if let Some(image) = image {
+        validate_nvm_for_image(nvm, image)?;
+    } else {
+        validate_nvm(nvm, schema)?;
+    }
     Ok(if m[9] == 1 {
         EntryMode::Trial
     } else {
@@ -658,6 +695,43 @@ fn pack_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn beta4_image_nvm_accepts_persisted_v2_without_weakening_checks() {
+        let image = crate::ak820::ImageContract::Beta4(ProfileId::Main);
+        let mut nvm = crate::ak820_release::defaults_for_image(image).unwrap();
+        // Official Python V2 default, independently pinned including CRC.
+        nvm[0x6a8..0x6c0].copy_from_slice(&[
+            0x51, 0x53, 0x02, 0x0f, 0x7f, 0x00, 0x28, 0x00, 0xc8, 0x00, 0x00, 0x00, 0x50, 0x00,
+            0xaf, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8e, 0x61,
+        ]);
+        assert!(validate_nvm_for_image(&nvm, image).is_ok());
+        assert!(validate_nvm(&nvm, 0x082003).is_err());
+        let mut bad = nvm.clone();
+        bad[0x6a8 + 22] ^= 1;
+        assert!(validate_nvm_for_image(&bad, image).is_err());
+        let mut bad = nvm.clone();
+        bad[0x7f0] = 1;
+        assert!(validate_nvm_for_image(&bad, image).is_err());
+        let mut bad = nvm;
+        bad[37] ^= 1;
+        assert!(validate_nvm_for_image(&bad, image).is_err());
+    }
+
+    #[test]
+    fn beta5_image_nvm_accepts_official_v2_defaults_and_rejects_corruption() {
+        for row in &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles {
+            let image = crate::ak820::ImageContract::Beta5(row.profile);
+            let nvm = crate::ak820_release::defaults_for_image(image).unwrap();
+            validate_nvm_for_image(&nvm, image).unwrap();
+            let mut bad = nvm.clone();
+            bad[0x6a8 + 22] ^= 1;
+            assert!(validate_nvm_for_image(&bad, image).is_err());
+            let mut bad = nvm;
+            bad[37] = 2;
+            assert!(validate_nvm_for_image(&bad, image).is_err());
+        }
+    }
 
     #[test]
     fn reference_preparation_rejects_malformed_candidate_bytes() {

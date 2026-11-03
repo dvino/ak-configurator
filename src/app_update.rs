@@ -465,7 +465,7 @@ fn launch_url_in_browser(url: &str) -> bool {
                 SW_SHOWNORMAL,
             )
         };
-        return result as usize > 32;
+        result as usize > 32
     }
     #[cfg(target_os = "macos")]
     {

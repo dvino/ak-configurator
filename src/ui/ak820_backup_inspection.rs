@@ -14,7 +14,7 @@ const STATE_ID: &str = "ak820_backup_inspection_state";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Problem {
     File,
-    Capture,
+    Inspection(files::BackupInspectionError),
     Changed,
     Incompatible,
     Restore,
@@ -25,12 +25,55 @@ fn problem_text(problem: Problem, ru: bool) -> &'static str {
         (Problem::Restore, false) => "Restore stopped. Some settings may have changed. Any saved safety backup remains in the selected folder. Read settings again; there is no automatic retry or rollback.",
         (Problem::File, true) => "Не удалось проверить или сохранить копию. Нужна доступная папка с полным составом файлов и поддерживаемой прошивкой. Существующие копии не заменяются.",
         (Problem::File, false) => "Could not validate or save the backup. Select an accessible folder with a complete supported backup. Existing backups are never replaced.",
-        (Problem::Capture, true) => "Чтение остановлено. Проверьте подключение и прочитайте настройки снова. Новая копия не сохранена.",
-        (Problem::Capture, false) => "Reading stopped. Check the connection and read settings again. No new backup was saved.",
+        (Problem::Inspection(cause), ru) => inspection_problem_text(cause, ru),
         (Problem::Changed, true) => "Подключение изменилось. Для сравнения нужна новая копия текущих настроек.",
         (Problem::Changed, false) => "The connection changed. Read a new snapshot of the current settings before comparing.",
         (Problem::Incompatible, true) => "Восстановление в выбранную прошивку недоступно: переход или сохранённые значения не поддерживаются. Настройки не изменены.",
         (Problem::Incompatible, false) => "Restore to the selected firmware is unavailable: the transition or stored values are unsupported. Settings have not changed.",
+    }
+}
+fn inspection_problem_text(cause: files::BackupInspectionError, ru: bool) -> &'static str {
+    use files::BackupInspectionError::*;
+    match (cause, ru) {
+        (Image, false) => "The backup claims an unsupported firmware image; it was not validated.",
+        (Image, true) => "В копии указана неподдерживаемая прошивка; копия не проверена.",
+        (Version, false) => {
+            "The backup claims an unsupported format or settings version; it was not validated."
+        }
+        (Version, true) => {
+            "В копии указан неподдерживаемый формат или версия настроек; копия не проверена."
+        }
+        (Policy, false) => {
+            "The backup's claimed image is denied by compatibility policy; it was not validated."
+        }
+        (Policy, true) => {
+            "Указанная в копии прошивка запрещена правилами совместимости; копия не проверена."
+        }
+        (Invalid, false) => "The backup is incomplete or failed validation.",
+        (Invalid, true) => "Копия неполная или не прошла проверку.",
+        (Io, false) => "The backup files could not be read.",
+        (Io, true) => "Не удалось прочитать файлы копии.",
+        (Changed, false) => "The backup changed while it was being checked.",
+        (Changed, true) => "Копия изменилась во время проверки.",
+    }
+}
+fn capture_problem_text(cause: super::vial_hid_task::CaptureFailure, ru: bool) -> &'static str {
+    use super::vial_hid_task::CaptureFailure::*;
+    match (cause, ru) {
+        (OperationBusy, false) => "Another operation is in progress. Wait for it to finish before reading a backup.",
+        (OperationBusy, true) => "Выполняется другая операция. Дождитесь её завершения перед чтением копии.",
+        (LeaseBusy, false) => "Another AK Configurator process is using this keyboard. Close it before reading a backup.",
+        (LeaseBusy, true) => "Клавиатура занята другим процессом AK Configurator. Закройте его перед чтением копии.",
+        (Disconnected, false) => "The device is unavailable. Reconnect it and read settings again.",
+        (Disconnected, true) => "Устройство недоступно. Подключите его снова и прочитайте настройки.",
+        (Cancelled, false) => "Backup reading was cancelled. No new backup was saved.",
+        (Cancelled, true) => "Чтение копии отменено. Новая копия не сохранена.",
+        (Storage, false) => "Backup reading stopped because the storage status was invalid or changed. Read settings again.",
+        (Storage, true) => "Чтение копии остановлено: состояние памяти недопустимо или изменилось. Прочитайте настройки снова.",
+        (Reconciliation, false) => "Backup reading stopped because a device value differed from saved settings. Read settings again.",
+        (Reconciliation, true) => "Чтение копии остановлено: значение устройства отличается от сохранённых настроек. Прочитайте настройки снова.",
+        (Failed, false) => "Backup reading failed. No new backup was saved; read settings again.",
+        (Failed, true) => "Не удалось прочитать копию. Новая копия не сохранена; прочитайте настройки снова.",
     }
 }
 fn tr<'a>(ru: bool, en: &'a str, russian: &'a str) -> &'a str {
@@ -154,8 +197,25 @@ struct WindowState {
     preview: Option<Preview>,
     saved_name: Option<String>,
     error: Option<Problem>,
+    capture_error: Option<super::vial_hid_task::CaptureFailure>,
+    target_stale: bool,
 }
 impl WindowState {
+    fn actions(&self, busy: bool, can_capture: bool, files_supported: bool) -> [bool; 4] {
+        let current = self.target.is_some() && !self.target_stale;
+        [
+            !busy && current && self.root.is_some() && files_supported,
+            !busy && current && can_capture,
+            !busy && current && self.source.is_some(),
+            !busy
+                && current
+                && can_capture
+                && self.preview.as_ref().is_some_and(|p| p.commands > 0)
+                && self.preview_plan.is_some()
+                && (self.reset_preview || self.source_path.is_some())
+                && self.root.is_some(),
+        ]
+    }
     fn id(&mut self) -> u64 {
         self.next_id = self.next_id.wrapping_add(1);
         self.next_id
@@ -213,23 +273,22 @@ impl WindowState {
         true
     }
     fn invalidate_target(&mut self, generation: u64) {
-        if self
-            .target
-            .as_ref()
-            .is_some_and(|t| t.generation != generation)
+        if (!self.target_stale
+            && self
+                .target
+                .as_ref()
+                .is_some_and(|t| t.generation != generation))
             || self.capture_pending.is_some_and(|(_, g)| g != generation)
             || self.restore_pending.is_some_and(|(_, g)| g != generation)
         {
-            self.target = None;
             self.capture_pending = None;
             // Keep the request token until its worker reports a safety copy.
             self.preview_plan = None;
-            self.preview = None;
+            self.target_stale = true;
             self.error = Some(Problem::Changed);
         }
     }
     fn close(&mut self) {
-        self.reset_preview = false;
         self.delete_confirm = false;
         self.choosing_path = None;
         #[cfg(not(target_arch = "wasm32"))]
@@ -240,14 +299,8 @@ impl WindowState {
         self.id();
         self.pending = None;
         self.capture_pending = None;
-        self.source = None;
-        self.source_path = None;
-        self.preview_plan = None;
         // A cancelled restore may already have saved a safety copy. Keep its
         // token until the worker reports the final outcome.
-        self.target = None;
-        self.preview = None;
-        self.saved_name = None;
         self.error = None;
     }
 }
@@ -258,7 +311,7 @@ pub(super) fn capture_finished(
     ctx: &egui::Context,
     id: u64,
     generation: u64,
-    result: Result<CapturedBackup, ()>,
+    result: Result<CapturedBackup, super::vial_hid_task::CaptureFailure>,
 ) {
     ctx.data_mut(|d| {
         if !d.get_temp::<bool>(egui::Id::new(OPEN_ID)).unwrap_or(false) {
@@ -271,10 +324,12 @@ pub(super) fn capture_finished(
             return;
         }
         state.capture_pending = None;
-        state.preview = None;
-        state.preview_plan = None;
         match result {
             Ok(snapshot) => {
+                state.preview = None;
+                state.preview_plan = None;
+                state.target_stale = false;
+                state.capture_error = None;
                 state.target = Some(TargetSnapshot {
                     data: Arc::new(snapshot),
                     generation,
@@ -283,14 +338,55 @@ pub(super) fn capture_finished(
                 state.saved_name = None;
                 state.error = None;
             }
-            Err(()) => {
-                state.target = None;
-                state.error = Some(Problem::Capture);
+            Err(cause) => {
+                state.capture_error = Some(cause);
             }
         }
         d.insert_temp(egui::Id::new(STATE_ID), state);
     });
     ctx.request_repaint();
+}
+
+#[cfg(test)]
+pub(super) fn test_capture_pending(ctx: &egui::Context, id: u64, generation: u64) {
+    ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::new(OPEN_ID), true);
+        d.insert_temp(
+            egui::Id::new(STATE_ID),
+            WindowState {
+                capture_pending: Some((id, generation)),
+                ..Default::default()
+            },
+        );
+    });
+}
+
+#[cfg(test)]
+pub(super) type TestFrameState = (Option<(u64, u64)>, Option<bool>, String);
+
+#[cfg(test)]
+pub(super) fn test_frame_state(ctx: &egui::Context) -> Option<TestFrameState> {
+    ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+        .map(|state| (state.capture_pending, state.choosing_path, state.path_entry))
+}
+
+#[cfg(test)]
+pub(super) fn test_set_frame_state(ctx: &egui::Context, generation: u64) {
+    test_capture_pending(ctx, 42, generation);
+    ctx.data_mut(|d| {
+        let mut state = d.get_temp::<WindowState>(egui::Id::new(STATE_ID)).unwrap();
+        state.choosing_path = Some(false);
+        state.path_entry = "synthetic inspection".into();
+        d.insert_temp(egui::Id::new(STATE_ID), state);
+    });
+}
+
+#[cfg(test)]
+pub(super) fn test_capture_failure(
+    ctx: &egui::Context,
+) -> Option<super::vial_hid_task::CaptureFailure> {
+    ctx.data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+        .and_then(|state| state.capture_error)
 }
 
 /// The worker has already checked the complete result. The editor reloads via
@@ -398,12 +494,6 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
     state.error = None;
     state.choosing_path = None;
     state.browser = None;
-    if matches!(action, FileAction::Open(..) | FileAction::OpenManifest(_)) {
-        state.source = None;
-        state.source_path = None;
-        state.preview_plan = None;
-        state.preview = None;
-    }
     if matches!(action, FileAction::History(_)) {
         state.history = None;
     }
@@ -420,13 +510,13 @@ fn start_file(ctx: &egui::Context, state: &mut WindowState, action: FileAction) 
                 }
                 FileAction::OpenManifest(manifest) => {
                     let path = backup_directory_from_manifest(&manifest)?;
-                    files::read_backup_auto(&path, None)
+                    files::read_backup_inspection(&path, None)
                         .map(|source| Some(FilePayload::Source { path, source }))
-                        .map_err(|_| Problem::File)
+                        .map_err(Problem::Inspection)
                 }
-                FileAction::Open(path, pin) => files::read_backup_auto(&path, pin.as_deref())
+                FileAction::Open(path, pin) => files::read_backup_inspection(&path, pin.as_deref())
                     .map(|source| Some(FilePayload::Source { path, source }))
-                    .map_err(|_| Problem::File),
+                    .map_err(Problem::Inspection),
                 FileAction::History(root) => {
                     let history = files::scan_backup_history(&root).map_err(|_| Problem::File)?;
                     Ok(Some(FilePayload::History { root, history }))
@@ -678,6 +768,20 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
     }
     let busy =
         state.file_busy() || state.capture_pending.is_some() || state.restore_pending.is_some();
+    #[cfg(not(target_arch = "wasm32"))]
+    let can_capture =
+        app.capture_availability() == super::vial_hid_task::CaptureAvailability::Ready;
+    #[cfg(target_arch = "wasm32")]
+    let can_capture = false;
+    let actions = state.actions(
+        busy,
+        can_capture,
+        cfg!(any(
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows"
+        )),
+    );
     if state.file_in_flight.load(Ordering::Acquire) {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
@@ -694,6 +798,8 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 super::ak820_help_ui::open_section(ctx, "backups-restore");
             }
             ui.label(tr(ru, "Complete saved settings and firmware evidence. ROM and macros stay in the chosen local folder.", "Полные сохранённые настройки и данные для проверки прошивки. ROM и макросы остаются в выбранной локальной папке."));
+            ui.label(tr(ru, "1. Open an existing backup → 2. Inspect source and compatibility → 3. Review restore prerequisites", "1. Откройте существующую копию → 2. Проверьте источник и совместимость → 3. Изучите условия восстановления"));
+            ui.label(tr(ru, "For beta.5: restore unavailable because saved-settings writes are not authorized for this release. Inspection remains available.", "Для beta.5 восстановление недоступно: запись сохранённых настроек для этого выпуска не разрешена. Проверка копии доступна."));
             if !cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows")) {
                 ui.label(tr(ru, "Backup folder access is unavailable on this platform.", "Работа с папками копий недоступна на этой платформе."));
             }
@@ -750,14 +856,13 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
             ui.separator();
             ui.strong(tr(ru, "Current keyboard", "Текущая клавиатура"));
-            #[cfg(not(target_arch = "wasm32"))]
-            let can_capture = app.can_capture_ak820_backup();
-            #[cfg(target_arch = "wasm32")]
-            let can_capture = false;
             if crate::ui_style::action_button(ui, tr(ru, "Read complete snapshot", "Прочитать полный снимок"), !busy && can_capture).clicked() { capture = true; }
             if app.ak820_demo {
                 ui.label(tr(ru, "Demo has no physical settings snapshot. Connect a supported keyboard to create a complete backup.", "В деморежиме нет снимка физической клавиатуры. Для полной копии подключите поддерживаемую клавиатуру."));
             } else if !can_capture && state.capture_pending.is_none() {
+                #[cfg(not(target_arch = "wasm32"))]
+                if let super::vial_hid_task::CaptureAvailability::Unavailable(cause) = app.capture_availability() { ui.label(capture_problem_text(cause, ru)); }
+                #[cfg(target_arch = "wasm32")]
                 ui.label(tr(ru, "A verified supported AK820 connection with no pending edits is required.", "Нужно проверенное подключение поддерживаемой AK820 без ожидающих изменений."));
             }
             if let Some((id, _)) = state.capture_pending {
@@ -770,14 +875,15 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
             if let Some(target) = &state.target {
+                if state.target_stale { ui.colored_label(egui::Color32::LIGHT_RED, tr(ru, "This snapshot is stale. Read current settings again before using it.", "Этот снимок устарел. Перед использованием снова прочитайте текущие настройки.")); }
                 ui.label(format!("{} · {}", profile_label(Some(target.data.profile()), ru), target.read_at));
                 ui.label(tr(ru, "64 KiB ROM and 10 KiB saved settings checked. This snapshot reflects the time it was read.", "Проверены 64 КиБ ROM и 10 КиБ сохранённых настроек. Снимок соответствует моменту чтения."));
                 if let Some(name) = &state.saved_name { ui.label(format!("{}: {}", tr(ru, "Saved and rechecked", "Сохранено и проверено повторно"), short_text(name))); }
                 else { ui.label(tr(ru, "Snapshot is in memory; no backup file has been saved yet.", "Снимок в памяти; файл резервной копии ещё не сохранён.")); }
-                if crate::ui_style::action_button(ui, tr(ru, "Save new backup", "Сохранить новую копию"), !busy && state.root.is_some() && cfg!(any(target_os = "linux", target_os = "macos", target_os = "windows"))).clicked() {
+                if crate::ui_style::action_button(ui, tr(ru, "Save new backup", "Сохранить новую копию"), actions[0]).clicked() {
                     file_action = Some(FileAction::Save { root: state.root.clone().unwrap(), snapshot: target.data.clone() });
                 }
-                if crate::ui_style::action_button(ui, tr(ru, "Preview reset to release defaults…", "Предпросмотр сброса к настройкам выпуска…"), !busy && can_capture).clicked() { reset = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Preview reset to release defaults…", "Предпросмотр сброса к настройкам выпуска…"), actions[1]).clicked() { reset = true; }
             }
             if state.restore_verified {
                 ui.colored_label(egui::Color32::LIGHT_GREEN, tr(ru, "Restore verified. The editor reads the current settings again.", "Восстановление проверено. Редактор повторно читает текущие настройки."));
@@ -790,7 +896,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             }
             if let Some(source) = &state.source {
                 ui.separator(); draw_source(ui, source, ru);
-                if crate::ui_style::action_button(ui, tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"), !busy && state.target.is_some()).clicked() { compare = true; }
+                if crate::ui_style::action_button(ui, tr(ru, "Preview restore to this snapshot", "Предпросмотр восстановления в этот снимок"), actions[2]).clicked() { compare = true; }
                 if crate::ui_style::action_button(ui, tr(ru, "Delete this backup…", "Удалить эту копию…"), !busy && state.source_path.is_some()).clicked() { state.delete_confirm = true; }
                 if state.delete_confirm {
                     let name = state.source_path.as_ref().and_then(|p| p.file_name()).map(|p| p.to_string_lossy()).unwrap_or_default();
@@ -807,7 +913,7 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
             if let Some(value) = &state.preview {
                 ui.separator(); draw_preview(ui, value, ru);
                 if state.reset_preview { ui.label(tr(ru, "Reset supported keys, encoder mappings, macros, lighting and enabled modules. Inactive and inaccessible data remain intact. A verified safety backup is required before fresh confirmation.", "Сбрасываются поддерживаемые назначения клавиш и энкодера, макросы, подсветка и включённые модули. Неактивные и недоступные данные сохраняются. Перед новым подтверждением обязательна проверенная защитная копия.")); }
-                let ready = !busy && can_capture && value.commands > 0 && state.preview_plan.is_some() && (state.reset_preview || state.source_path.is_some()) && state.root.is_some();
+                let ready = actions[3];
                 let label = if state.reset_preview { tr(ru, "Reset these settings…", "Сбросить эти настройки…") } else { tr(ru, "Restore these settings…", "Восстановить эти настройки…") };
                 if crate::ui_style::action_button(ui, label, ready).clicked() { restore = true; }
                 if state.root.is_none() { ui.label(tr(ru, "Choose a backup folder before restore.", "Перед восстановлением выберите папку для защитной копии.")); }
@@ -829,22 +935,21 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                 ui.label(tr(ru, "Stopping leaves already written changes in place. The safety copy remains available.", "При остановке уже записанные изменения сохраняются. Защитная копия остаётся доступной."));
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
+            if let Some(cause) = state.capture_error { ui.colored_label(egui::Color32::LIGHT_RED, capture_problem_text(cause, ru)); }
             if let Some(error) = state.error { ui.colored_label(egui::Color32::LIGHT_RED, problem_text(error, ru)); }
             if state.file_busy() { ui.spinner(); ui.label(tr(ru, "Checking local files…", "Проверка локальных файлов…")); }
             if crate::ui_style::action_button(ui, tr(ru, "Close", "Закрыть"), true).clicked() { close = true; }
         });
     if compare {
-        state.reset_preview = false;
         if let (Some(source), Some(target)) = (&state.source, &state.target) {
             match preview(source, &target.data) {
                 Ok((value, plan)) => {
                     state.preview = Some(value);
                     state.preview_plan = Some(plan);
+                    state.reset_preview = false;
                     state.error = None;
                 }
                 Err(error) => {
-                    state.preview = None;
-                    state.preview_plan = None;
                     state.error = Some(error);
                 }
             }
@@ -879,8 +984,6 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     state.error = None;
                 }
                 Err(_) => {
-                    state.preview = None;
-                    state.preview_plan = None;
                     state.error = Some(Problem::Incompatible);
                 }
             }
@@ -891,18 +994,10 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
         state.choosing_path = None;
         state.browser = None;
         let id = state.id();
-        state.target = None;
-        state.preview = None;
-        state.preview_plan = None;
-        state.restore_verified = false;
-        state.saved_name = None;
-        state.error = None;
-        if app.start_ak820_backup_capture(ctx, id)
-            == super::vial_hid_task::VialHidTaskStart::Started
-        {
-            state.capture_pending = Some((id, app.connection_generation));
-        } else {
-            state.error = Some(Problem::Capture);
+        state.capture_error = None;
+        match app.start_ak820_backup_capture(ctx, id) {
+            Ok(()) => state.capture_pending = Some((id, app.connection_generation)),
+            Err(cause) => state.capture_error = Some(cause),
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -964,13 +1059,14 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some((id, _)) = state.restore_pending {
             app.cancel_ak820_restore(id);
+            state.target_stale = true;
+            state.preview_plan = None;
         }
         // Keep the restore request token until the worker reports the actual
         // outcome. Close discards it only after signalling cancellation.
-        state.capture_pending = None;
-        state.target = None;
-        state.preview = None;
-        state.preview_plan = None;
+        if state.capture_pending.take().is_some() {
+            state.capture_error = Some(super::vial_hid_task::CaptureFailure::Cancelled);
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(action) = file_action {
@@ -1162,7 +1258,10 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
         assert!(state.accept(message));
-        assert_eq!(state.error, Some(Problem::File));
+        assert_eq!(
+            state.error,
+            Some(Problem::Inspection(files::BackupInspectionError::Io))
+        );
         assert!(state.source.is_none());
         assert!(state.source_path.is_none());
     }
@@ -1302,19 +1401,311 @@ mod tests {
             );
         });
         for (id, generation) in [(6, 5), (7, 4)] {
-            capture_finished(&ctx, id, generation, Err(()));
+            capture_finished(
+                &ctx,
+                id,
+                generation,
+                Err(crate::app::vial_hid_task::CaptureFailure::Failed),
+            );
         }
         let state = ctx
             .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
             .unwrap();
         assert_eq!(state.capture_pending, Some((7, 5)));
         assert!(state.error.is_none());
-        capture_finished(&ctx, 7, 5, Err(()));
+        capture_finished(
+            &ctx,
+            7,
+            5,
+            Err(crate::app::vial_hid_task::CaptureFailure::Failed),
+        );
         let state = ctx
             .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
             .unwrap();
-        assert_eq!(state.error, Some(Problem::Capture));
+        assert_eq!(
+            state.capture_error,
+            Some(crate::app::vial_hid_task::CaptureFailure::Failed)
+        );
         assert!(state.capture_pending.is_none());
+    }
+    #[test]
+    fn navigation_and_failed_capture_preserve_the_previous_preview() {
+        use crate::app::vial_hid_task::CaptureFailure;
+        let ctx = egui::Context::default();
+        let previous = Preview {
+            source_profile: Some(ProfileId::Main),
+            target_profile: ProfileId::Main,
+            groups: vec![],
+            changed_bytes: 1,
+            commands: 1,
+        };
+        let mut state = WindowState {
+            preview: Some(previous.clone()),
+            capture_pending: Some((3, 7)),
+            ..Default::default()
+        };
+        state.close();
+        assert_eq!(state.preview, Some(previous.clone()));
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new(OPEN_ID), true);
+            d.insert_temp(egui::Id::new(STATE_ID), state);
+        });
+        capture_finished(&ctx, 3, 7, Err(CaptureFailure::Failed));
+        let mut state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert_eq!(state.preview, Some(previous.clone()));
+        assert!(state.capture_error.is_none());
+        state.capture_pending = Some((4, 7));
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        capture_finished(&ctx, 3, 7, Err(CaptureFailure::Failed));
+        capture_finished(&ctx, 4, 7, Err(CaptureFailure::OperationBusy));
+        let state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert_eq!(state.preview, Some(previous));
+        assert_eq!(state.capture_error, Some(CaptureFailure::OperationBusy));
+    }
+
+    #[test]
+    fn untrusted_ui_fixture_preserves_bound_objects_until_generation_changes() {
+        use crate::app::vial_hid_task::CaptureFailure;
+        let ctx = egui::Context::default();
+        let plan = Arc::new(crate::ak820_restore_plan::RestorePlan::untrusted_ui_fixture());
+        let target = Arc::new(CapturedBackup::untrusted_ui_fixture());
+        let state = WindowState {
+            source: Some(LoadedBackup::untrusted_ui_fixture()),
+            source_path: Some(PathBuf::from("fixture")),
+            target: Some(TargetSnapshot {
+                data: target.clone(),
+                generation: 7,
+                read_at: "fixture".into(),
+            }),
+            preview_plan: Some(plan.clone()),
+            preview: Some(Preview {
+                source_profile: Some(ProfileId::Main),
+                target_profile: ProfileId::Main,
+                groups: vec![],
+                changed_bytes: 1,
+                commands: 1,
+            }),
+            capture_pending: Some((3, 7)),
+            ..Default::default()
+        };
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(STATE_ID), state));
+        crate::app::ak820_status::leave_service_pages(&ctx);
+        let mut state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert!(Arc::ptr_eq(&state.target.as_ref().unwrap().data, &target));
+        assert!(Arc::ptr_eq(state.preview_plan.as_ref().unwrap(), &plan));
+        assert!(state.source.is_some());
+        let _sender = pending(&mut state);
+        let file_id = state.pending.as_ref().unwrap().id;
+        assert!(state.accept(FileMessage {
+            id: file_id,
+            result: Err(Problem::Inspection(files::BackupInspectionError::Image))
+        }));
+        assert!(state.source.is_some());
+        assert!(Arc::ptr_eq(state.preview_plan.as_ref().unwrap(), &plan));
+        state.capture_pending = Some((4, 7));
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new(OPEN_ID), true);
+            d.insert_temp(egui::Id::new(STATE_ID), state);
+        });
+        capture_finished(&ctx, 3, 7, Err(CaptureFailure::Failed));
+        capture_finished(&ctx, 4, 7, Err(CaptureFailure::Cancelled));
+        let mut state = ctx
+            .data(|d| d.get_temp::<WindowState>(egui::Id::new(STATE_ID)))
+            .unwrap();
+        assert_eq!(state.capture_error, Some(CaptureFailure::Cancelled));
+        assert!(Arc::ptr_eq(state.preview_plan.as_ref().unwrap(), &plan));
+        state.invalidate_target(8);
+        assert!(state.target_stale);
+        assert!(state.preview.is_some());
+        assert!(state.preview_plan.is_none());
+        assert!(Arc::ptr_eq(&state.target.as_ref().unwrap().data, &target));
+        state.capture_pending = Some((5, 8));
+        state.invalidate_target(8);
+        assert_eq!(state.capture_pending, Some((5, 8)));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn actual_failed_open_and_close_keep_bound_preview() {
+        for close in [false, true] {
+            let ctx = egui::Context::default();
+            let plan = Arc::new(crate::ak820_restore_plan::RestorePlan::untrusted_ui_fixture());
+            let target = Arc::new(CapturedBackup::untrusted_ui_fixture());
+            let mut state = WindowState {
+                source: Some(LoadedBackup::untrusted_ui_fixture()),
+                source_path: Some(PathBuf::from("old-fixture")),
+                target: Some(TargetSnapshot {
+                    data: target.clone(),
+                    generation: 7,
+                    read_at: "fixture".into(),
+                }),
+                preview_plan: Some(plan.clone()),
+                preview: Some(Preview {
+                    source_profile: Some(ProfileId::Main),
+                    target_profile: ProfileId::Main,
+                    groups: vec![],
+                    changed_bytes: 1,
+                    commands: 1,
+                }),
+                ..Default::default()
+            };
+            let temp = tempfile::tempdir().unwrap();
+            let missing = temp.path().join("missing");
+            start_file(&ctx, &mut state, FileAction::Open(missing, None));
+            assert!(state.source.is_some());
+            assert!(Arc::ptr_eq(state.preview_plan.as_ref().unwrap(), &plan));
+            assert!(Arc::ptr_eq(&state.target.as_ref().unwrap().data, &target));
+            let pending = state.pending.clone().unwrap();
+            if close {
+                state.close();
+                assert!(state.pending.is_none());
+            }
+            let message = pending
+                .receiver
+                .lock()
+                .unwrap()
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            if close {
+                assert!(!state.accept(message));
+            } else {
+                assert!(state.accept(message));
+                assert_eq!(
+                    state.error,
+                    Some(Problem::Inspection(files::BackupInspectionError::Io))
+                );
+            }
+            assert!(state.source.is_some());
+            assert!(state.preview.is_some());
+            assert!(Arc::ptr_eq(state.preview_plan.as_ref().unwrap(), &plan));
+        }
+    }
+
+    #[test]
+    fn action_predicates_deny_stale_bound_snapshot() {
+        let mut state = WindowState {
+            source: Some(LoadedBackup::untrusted_ui_fixture()),
+            source_path: Some(PathBuf::from("fixture")),
+            root: Some(PathBuf::from("fixture")),
+            target: Some(TargetSnapshot {
+                data: Arc::new(CapturedBackup::untrusted_ui_fixture()),
+                generation: 7,
+                read_at: "fixture".into(),
+            }),
+            preview_plan: Some(Arc::new(
+                crate::ak820_restore_plan::RestorePlan::untrusted_ui_fixture(),
+            )),
+            preview: Some(Preview {
+                source_profile: Some(ProfileId::Main),
+                target_profile: ProfileId::Main,
+                groups: vec![],
+                changed_bytes: 1,
+                commands: 1,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(state.actions(false, true, true), [true; 4]);
+        state.invalidate_target(8);
+        assert_eq!(state.actions(false, true, true), [false; 4]);
+    }
+
+    #[test]
+    fn capture_causes_are_rendered_in_both_languages() {
+        use crate::app::vial_hid_task::CaptureFailure;
+        use egui_kittest::{kittest::Queryable, Harness};
+        for (language, ru) in [
+            (crate::i18n::Language::English, false),
+            (crate::i18n::Language::Russian, true),
+        ] {
+            for cause in [
+                CaptureFailure::OperationBusy,
+                CaptureFailure::LeaseBusy,
+                CaptureFailure::Disconnected,
+                CaptureFailure::Cancelled,
+                CaptureFailure::Storage,
+                CaptureFailure::Reconciliation,
+                CaptureFailure::Failed,
+            ] {
+                let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+                let mut app = EntropyApp::new_ak820_demo(&cc);
+                app.app_settings.language = language;
+                let mut harness = Harness::builder()
+                    .with_size(egui::vec2(800.0, 900.0))
+                    .build_ui_state(
+                        move |ui, app: &mut EntropyApp| {
+                            ui.ctx().data_mut(|d| {
+                                if d.get_temp::<WindowState>(egui::Id::new(STATE_ID)).is_none() {
+                                    d.insert_temp(egui::Id::new(OPEN_ID), true);
+                                    d.insert_temp(
+                                        egui::Id::new(STATE_ID),
+                                        WindowState {
+                                            capture_error: Some(cause),
+                                            ..Default::default()
+                                        },
+                                    );
+                                }
+                            });
+                            show(app, ui);
+                        },
+                        app,
+                    );
+                harness.run();
+                assert!(harness
+                    .query_by_label(capture_problem_text(cause, ru))
+                    .is_some());
+            }
+        }
+    }
+    #[test]
+    fn stale_snapshot_is_visible_and_comparison_is_disabled() {
+        use egui_kittest::{
+            kittest::{NodeT, Queryable},
+            Harness,
+        };
+        for (language, ru) in [
+            (crate::i18n::Language::English, false),
+            (crate::i18n::Language::Russian, true),
+        ] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            let mut harness = Harness::builder().with_size(egui::vec2(900.0, 1200.0)).build_ui_state(|ui, app: &mut EntropyApp| {
+                ui.ctx().data_mut(|d| {
+                    if d.get_temp::<WindowState>(egui::Id::new(STATE_ID)).is_none() {
+                        d.insert_temp(egui::Id::new(OPEN_ID), true);
+                        d.insert_temp(egui::Id::new(STATE_ID), WindowState {
+                            source: Some(LoadedBackup::untrusted_ui_fixture()),
+                            target: Some(TargetSnapshot { data: Arc::new(CapturedBackup::untrusted_ui_fixture()), generation: u64::MAX, read_at: "fixture".into() }),
+                            preview_plan: Some(Arc::new(crate::ak820_restore_plan::RestorePlan::untrusted_ui_fixture())),
+                            ..Default::default()
+                        });
+                    }
+                });
+                show(app, ui);
+            }, app);
+            harness.run();
+            assert!(harness
+                .query_by_label(tr(
+                    ru,
+                    "This snapshot is stale. Read current settings again before using it.",
+                    "Этот снимок устарел. Перед использованием снова прочитайте текущие настройки."
+                ))
+                .is_some());
+            assert!(harness
+                .get_by_label(tr(
+                    ru,
+                    "Preview restore to this snapshot",
+                    "Предпросмотр восстановления в этот снимок"
+                ))
+                .accesskit_node()
+                .is_disabled());
+        }
     }
     #[test]
     fn restore_failure_keeps_only_the_matching_operations_safety_backup() {
@@ -1449,14 +1840,15 @@ mod tests {
         };
         state.invalidate_target(4);
         assert!(state.capture_pending.is_none());
-        assert!(state.preview.is_none());
+        assert!(state.preview.is_some());
+        assert!(state.target_stale);
         assert_eq!(state.error, Some(Problem::Changed));
     }
     #[test]
     fn local_errors_and_folder_labels_do_not_echo_private_diagnostics() {
         for p in [
             Problem::File,
-            Problem::Capture,
+            Problem::Inspection(files::BackupInspectionError::Invalid),
             Problem::Changed,
             Problem::Incompatible,
             Problem::Restore,
@@ -1518,6 +1910,87 @@ mod tests {
     }
 
     #[test]
+    fn full_shell_keeps_backup_page_state_in_root_viewport_after_reopen() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        for (language, backups, heading, folder, open, choose, editor) in [
+            (
+                crate::i18n::Language::English,
+                "Backups and restore…",
+                "AK820 backups",
+                "Folder: b09-fixture-folder",
+                "Open backup…",
+                "Choose backup folder…",
+                "Editor",
+            ),
+            (
+                crate::i18n::Language::Russian,
+                "Резервные копии…",
+                "Резервные копии AK820",
+                "Папка: b09-fixture-folder",
+                "Открыть копию…",
+                "Папка для копий…",
+                "Редактор",
+            ),
+        ] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            let frame = eframe::Frame::_new_kittest();
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1400.0, 900.0))
+                .build_ui_state(
+                    |ui, state: &mut (EntropyApp, eframe::Frame, Option<egui::Context>)| {
+                        state.2 = Some(ui.ctx().clone());
+                        eframe::App::ui(&mut state.0, ui, &mut state.1);
+                    },
+                    (app, frame, None),
+                );
+            harness.run();
+            let ctx = harness.state().2.as_ref().unwrap().clone();
+            assert_eq!(ctx.viewport_id(), egui::ViewportId::ROOT);
+            harness.get_by_label(backups).click();
+            harness.run();
+            harness.get_by_label(heading);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            ctx.data_mut(|d| {
+                let mut state = d
+                    .get_temp::<WindowState>(egui::Id::new(STATE_ID))
+                    .unwrap_or_default();
+                state.root = Some(PathBuf::from("b09-fixture-folder"));
+                d.insert_temp(egui::Id::new(STATE_ID), state);
+            });
+            harness.run();
+            harness.get_by_label(folder);
+            harness.get_by_label(open).focus();
+            harness.run();
+            harness.key_press(egui::Key::Tab);
+            harness.run();
+            assert!(harness.get_by_label(choose).is_focused());
+            harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+            harness.run();
+            assert!(harness.get_by_label(open).is_focused());
+            harness.get_by_label(editor).click();
+            harness.run();
+            assert!(harness.query_by_label(heading).is_none());
+            harness.get_by_label(backups).click();
+            harness.run();
+            harness.get_by_label(heading);
+            harness.get_by_label(folder);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            assert_eq!(ctx.viewport_id(), egui::ViewportId::ROOT);
+            assert!(harness.state().0.hid_device.is_none());
+        }
+    }
+
+    #[test]
     fn backup_page_controls_fit_small_viewport_in_both_languages() {
         use egui_kittest::{kittest::Queryable, Harness};
         for (language, heading, help, close) in [
@@ -1551,6 +2024,34 @@ mod tests {
                     (app, false),
                 );
             harness.run();
+            let (steps, denial) = if language == crate::i18n::Language::Russian {
+                ("1. Откройте существующую копию → 2. Проверьте источник и совместимость → 3. Изучите условия восстановления", "Для beta.5 восстановление недоступно: запись сохранённых настроек для этого выпуска не разрешена. Проверка копии доступна.")
+            } else {
+                ("1. Open an existing backup → 2. Inspect source and compatibility → 3. Review restore prerequisites", "For beta.5: restore unavailable because saved-settings writes are not authorized for this release. Inspection remains available.")
+            };
+            assert!(harness.query_by_label(steps).is_some());
+            assert!(harness.query_by_label(denial).is_some());
+            let (open, cancel) = if language == crate::i18n::Language::Russian {
+                ("Открыть копию…", "Отмена")
+            } else {
+                ("Open backup…", "Cancel")
+            };
+            for label in [steps, denial, open] {
+                let rect = harness.get_by_label(label).rect();
+                assert!(
+                    rect.min.x >= 0.0
+                        && rect.min.y >= 0.0
+                        && rect.max.x <= 800.0
+                        && rect.max.y <= 500.0,
+                    "{label}: {rect:?}"
+                );
+            }
+            harness.get_by_label(open).click();
+            harness.run();
+            harness.get_by_label(cancel).click();
+            harness.run();
+            assert!(harness.query_by_label(cancel).is_none());
+            assert!(harness.state().0.hid_device.is_none());
             for label in [heading, help] {
                 let rect = harness.get_by_label(label).rect();
                 assert!(

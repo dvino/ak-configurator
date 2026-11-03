@@ -29,6 +29,7 @@ struct Preview {
     capture: Option<CapturedBackup>,
     backup_root: PathBuf,
     provenance: Option<crate::ak820_install_executor::RecoveryProvenance>,
+    preserved_nvm: Option<(String, bool)>,
 }
 
 enum Owner {
@@ -156,7 +157,7 @@ pub(crate) struct Runtime {
     mode: Mode,
     source: Source,
     profile: crate::app::ak820_beta1_profiles::ProfileId,
-    beta4_1: bool,
+    release: crate::ak820_release::InstallerRelease,
     prerelease_opt_in: bool,
     start_with_defaults: bool,
     without_oem_archive: bool,
@@ -184,7 +185,7 @@ impl Default for Runtime {
             mode: Mode::Firmware,
             source: Source::Bundled,
             profile: crate::app::ak820_beta1_profiles::ProfileId::Main,
-            beta4_1: true,
+            release: crate::ak820_release::InstallerRelease::Beta5,
             prerelease_opt_in: false,
             start_with_defaults: false,
             without_oem_archive: false,
@@ -341,7 +342,16 @@ fn profile_nvm_identity(
 fn build_preserved_nvm(
     capture: &CapturedBackup,
     target: crate::app::ak820_beta1_profiles::ProfileId,
+    image: crate::ak820::ImageContract,
 ) -> Result<Vec<u8>, String> {
+    if matches!(image, crate::ak820::ImageContract::Beta5(_)) {
+        let source = capture
+            .files()
+            .get("before-full-rom.bin")
+            .ok_or("Captured full ROM is missing")?;
+        let source_kind = crate::ak820_installer::classify_snapshot(source)?;
+        return crate::ak820_install_executor::preserved_nvm(source_kind, source, target, image);
+    }
     if capture.identity() == &profile_nvm_identity(target)? {
         return Ok(capture.nvm().to_vec());
     }
@@ -399,7 +409,9 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
     if app.ak820_install_runtime.owns_hid() || app.hid_write_lifecycle_busy() || app.headless {
         return;
     }
-    if app.ak820_install_runtime.mode == Mode::Firmware && !app.ak820_install_runtime.beta4_1 {
+    if app.ak820_install_runtime.mode == Mode::Firmware
+        && app.ak820_install_runtime.release == crate::ak820_release::InstallerRelease::Beta3
+    {
         if let Some(error) = beta3_admission_error(app.ak820_install_runtime.profile) {
             app.status_msg = format!(
                 "{}: {error}",
@@ -460,13 +472,9 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
         }
     };
     let profile = app.ak820_install_runtime.profile;
-    let beta4_1 = app.ak820_install_runtime.beta4_1;
-    let image = if beta4_1 {
-        crate::ak820::ImageContract::Beta4(profile)
-    } else {
-        crate::ak820::ImageContract::Beta3(profile)
-    };
-    let defaults = app.ak820_install_runtime.start_with_defaults || beta4_1;
+    let release = app.ak820_install_runtime.release;
+    let image = release.image(profile);
+    let defaults = app.ak820_install_runtime.start_with_defaults;
     let without_oem_archive = app.ak820_install_runtime.without_oem_archive;
     let source = app.ak820_install_runtime.source;
     let opt_in = app.ak820_install_runtime.prerelease_opt_in;
@@ -544,7 +552,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                         let expected = if defaults {
                             crate::ak820_release::bundled_defaults_for_image(image)?
                         } else {
-                            build_preserved_nvm(capture.as_ref().ok_or("Complete saved settings are required to preserve/migrate payload settings")?, profile)?
+                            build_preserved_nvm(capture.as_ref().ok_or("Complete saved settings are required to preserve/migrate payload settings")?, profile, image)?
                         };
                         let digest = validate_payload_nvm(&payload, &expected)?;
                         InstallRequest::Firmware {
@@ -578,7 +586,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                             let capture = capture
                                 .as_ref()
                                 .ok_or("No complete settings capture is available")?;
-                            let nvm = build_preserved_nvm(capture, profile)?;
+                            let nvm = build_preserved_nvm(capture, profile, image)?;
                             InstallSettingsChoice::PreservedInPayload {
                                 nvm_sha256: sha256(&nvm),
                             }
@@ -593,12 +601,9 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                 }
             };
             let admission = if mode == Mode::Firmware {
-                let admission = if beta4_1 {
-                    crate::ak820_release::ReleaseAdmission::beta4_1(profile, opt_in)?
-                } else {
-                    crate::ak820_release::ReleaseAdmission::bundled(profile, opt_in)?
-                        .with_observation(&observation)?
-                };
+                let admission =
+                    crate::ak820_release::ReleaseAdmission::selected(release, profile, opt_in)?
+                        .with_observation(&observation)?;
                 Some(admission)
             } else {
                 None
@@ -606,6 +611,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
             let plan = hid
                 .ak820_prepare_install(request, admission.as_ref(), &worker_cancel)
                 .map_err(|e| format!("Installation preview rejected: {e:#}"))?;
+            let mut preserved_nvm = None;
             if let Some(capture) = &capture {
                 let source = capture
                     .files()
@@ -616,6 +622,20 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                         "Full-ROM digest changed between settings capture and installation preview"
                             .into(),
                     );
+                }
+                if mode == Mode::Firmware
+                    && !defaults
+                    && matches!(image, crate::ak820::ImageContract::Beta5(_))
+                {
+                    let nvm = build_preserved_nvm(capture, profile, image)?;
+                    let source_kind = crate::ak820_installer::classify_snapshot(source)?;
+                    let converted =
+                        crate::ak820_install_executor::preservation_materializes_beta4_qs(
+                            source_kind,
+                            source,
+                            image,
+                        );
+                    preserved_nvm = Some((sha256(&nvm), converted));
                 }
             }
             let provenance = if without_oem_archive {
@@ -629,6 +649,7 @@ fn start_prepare(app: &mut EntropyApp, external: Option<SelectedFile>) {
                 capture,
                 backup_root: root,
                 provenance,
+                preserved_nvm,
             })
         })();
         let _ = tx.send(result);
@@ -894,7 +915,7 @@ impl EntropyApp {
                         if self
                             .app_settings
                             .ak820_release_observation
-                            .blocks_current_release()
+                            .blocks_selected(self.ak820_install_runtime.release)
                         {
                             tr(
                                 ru,
@@ -936,7 +957,7 @@ impl EntropyApp {
         if self
             .app_settings
             .ak820_release_observation
-            .blocks_current_release()
+            .blocks_selected(self.ak820_install_runtime.release)
             && matches!(&self.ak820_install_runtime.owner, Owner::Prepared(preview) if preview.plan.summary().action.starts_with("firmware:"))
         {
             self.retire_install_preview();
@@ -1005,18 +1026,12 @@ fn launch_execute(app: &mut EntropyApp, confirmed_pin: String) {
     let admission = if firmware_action {
         let profile = app.ak820_install_runtime.profile;
         let observation = &app.app_settings.ak820_release_observation;
-        let admission = if app.ak820_install_runtime.beta4_1 {
-            crate::ak820_release::ReleaseAdmission::beta4_1(
-                profile,
-                app.ak820_install_runtime.prerelease_opt_in,
-            )
-        } else {
-            crate::ak820_release::ReleaseAdmission::bundled(
-                profile,
-                app.ak820_install_runtime.prerelease_opt_in,
-            )
-            .and_then(|admission| admission.with_observation(observation))
-        };
+        let admission = crate::ak820_release::ReleaseAdmission::selected(
+            app.ak820_install_runtime.release,
+            profile,
+            app.ak820_install_runtime.prerelease_opt_in,
+        )
+        .and_then(|admission| admission.with_observation(observation));
         match admission {
             Ok(admission) => Some(admission),
             Err(error) => {
@@ -1135,8 +1150,9 @@ fn start_release_check(runtime: &mut Runtime, ru: bool) {
         return;
     }
     let (tx, rx) = mpsc::channel();
+    let selected = runtime.release;
     std::thread::spawn(move || {
-        let result = crate::ak820_release::check_bundled_release();
+        let result = crate::ak820_release::check_bundled_release(selected);
         let _ = tx.send(result);
     });
     runtime.release_check = Some(rx);
@@ -1170,17 +1186,90 @@ fn pick(runtime: &mut Runtime, kind: Pick) {
     });
 }
 
+fn draw_source_and_target(
+    ui: &mut egui::Ui,
+    ru: bool,
+    observed: Option<crate::ak820::ImageContract>,
+    runtime: &Runtime,
+) {
+    ui.label(format!(
+        "{}: {}",
+        tr(
+            ru,
+            "Selected installer device / observed source CODE",
+            "Выбранное устройство установки / обнаруженный CODE"
+        ),
+        observed.map(|image| image.label()).unwrap_or_else(|| tr(
+            ru,
+            "Unknown or not verified",
+            "Неизвестно или не проверено"
+        )
+        .into())
+    ));
+    if let Some(image) = observed {
+        let digest = image
+            .matrix_profile()
+            .and_then(|profile| profile.settings_identity.as_ref())
+            .map(|identity| identity.code_sha256.as_str())
+            .unwrap_or(crate::ak820::CODE_SHA256);
+        ui.label(format!(
+            "{}: {digest}",
+            tr(ru, "Observed CODE SHA-256", "SHA-256 обнаруженного CODE")
+        ));
+    }
+    ui.label(tr(ru, "CODE identity does not identify the installed package or verify the full ROM. Package receipt provenance: unavailable.", "Идентификация CODE не определяет установленный пакет и не проверяет весь ROM. Подтверждение происхождения пакета недоступно."));
+    if runtime.mode == Mode::Firmware {
+        ui.label(format!(
+            "{}: {} / {}",
+            tr(ru, "Selected install target", "Выбранная цель установки"),
+            runtime.release.version(),
+            runtime.profile.as_str()
+        ));
+    }
+}
+
+fn same_candidate(path: &str, token: &str, editor_path: &str, editor_token: &str) -> bool {
+    !path.is_empty() && !token.is_empty() && path == editor_path && token == editor_token
+}
+
+fn candidate_observation(
+    candidate: Option<(&str, &str)>,
+    editor: Option<(&str, &str)>,
+    observed: Option<crate::ak820::ImageContract>,
+) -> Option<crate::ak820::ImageContract> {
+    match (candidate, editor) {
+        (Some((path, token)), Some((editor_path, editor_token)))
+            if same_candidate(path, token, editor_path, editor_token) =>
+        {
+            observed
+        }
+        _ => None,
+    }
+}
+
 fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
     let ru = app.app_settings.language == crate::i18n::Language::Russian;
     let selected = app
         .ak820_install_runtime
         .candidate_index
         .and_then(|i| app.ak820_install_runtime.candidates.get(i))
-        .or_else(|| {
-            app.selected_device
-                .and_then(|i| app.device_manager.devices().get(i))
-        })
         .map(|d| format!("{} · {}", d.name, d.serial_number));
+    let editor_device = app
+        .selected_device
+        .and_then(|i| app.device_manager.devices().get(i));
+    let candidate = app
+        .ak820_install_runtime
+        .candidate_index
+        .and_then(|i| app.ak820_install_runtime.candidates.get(i));
+    let observed = candidate_observation(
+        candidate.map(|device| (device.path.as_str(), device.instance_token.as_str())),
+        editor_device.map(|device| (device.path.as_str(), device.instance_token.as_str())),
+        app.hid_device
+            .as_ref()
+            .and_then(crate::hid::HidDevice::ak820_image)
+            .or_else(|| app.ak820_os_indicator_display_image()),
+    );
+    draw_source_and_target(ui, ru, observed, &app.ak820_install_runtime);
     let mut retire = false;
     let mut begin = false;
     let mut execute = None;
@@ -1358,14 +1447,13 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             if runtime.mode == Mode::Firmware {
                 ui.label(tr(ru, "Release", "Выпуск"));
                 egui::ComboBox::from_id_salt("ak820_install_release")
-                    .selected_text(if runtime.beta4_1 { "v0.6.0-beta.4.1" } else { "v0.6.0-beta.3" })
+                    .selected_text(runtime.release.version())
                     .show_ui(ui, |ui| {
-                        if ui.selectable_value(&mut runtime.beta4_1, false, "v0.6.0-beta.3").changed() {
-                            retire = true;
-                        }
-                        if ui.selectable_value(&mut runtime.beta4_1, true, "v0.6.0-beta.4.1").changed() {
-                            runtime.start_with_defaults = true;
-                            retire = true;
+                        for release in [crate::ak820_release::InstallerRelease::Beta3, crate::ak820_release::InstallerRelease::Beta4_1, crate::ak820_release::InstallerRelease::Beta5] {
+                            if ui.selectable_value(&mut runtime.release, release, release.version()).changed() {
+                                runtime.start_with_defaults = false;
+                                retire = true;
+                            }
                         }
                     });
                 ui.label(tr(ru, "Profile", "Профиль"));
@@ -1402,11 +1490,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     .selectable_value(
                         &mut runtime.source,
                         Source::Bundled,
-                        if runtime.beta4_1 {
-                            tr(ru, "Bundled beta4.1 image", "Встроенный образ beta4.1")
-                        } else {
-                            tr(ru, "Bundled beta3 image", "Встроенный образ beta3")
-                        },
+                        tr(ru, "Bundled release image", "Встроенный образ выпуска"),
                     )
                     .changed()
                 {
@@ -1443,18 +1527,19 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
             {
                 retire = true;
             }
-            if !runtime.beta4_1 {
+            if runtime.release == crate::ak820_release::InstallerRelease::Beta3 {
                 if let Some(error) = beta3_admission_error(runtime.profile) {
                     ui.label(format!("{}: {error}", tr(ru, "Release admission denied", "Допуск выпуска отклонён")));
                 }
             }
-            if runtime.beta4_1 {
+            if runtime.release == crate::ak820_release::InstallerRelease::Beta4_1 {
                 ui.label(tr(
                     ru,
                     "Beta.4.1 installs exact release defaults; saved-settings writes and restore are not authorized.",
                     "Beta.4.1 устанавливает точные настройки выпуска; запись сохранённых настроек и восстановление не разрешены.",
                 ));
-            } else if ui
+            }
+            if ui
                 .checkbox(&mut runtime.start_with_defaults,
                     tr(ru, "Start with defaults (explicit)", "Начать с настроек по умолчанию (явный выбор)"))
                 .changed() {
@@ -1538,7 +1623,7 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     matches!(app.connect_state, ConnectState::Idle)
                         && runtime.dialog.is_none()
                         && (runtime.mode != Mode::Firmware
-                            || runtime.beta4_1
+                            || runtime.release != crate::ak820_release::InstallerRelease::Beta3
                             || beta3_admission_error(runtime.profile).is_none()),
                 )
                 .clicked()
@@ -1602,6 +1687,21 @@ fn draw(app: &mut EntropyApp, ui: &mut egui::Ui) {
                     tr(ru, "Settings", "Настройки"),
                     settings_outcome_text(preview.plan.settings_outcome(), ru)
                 ));
+                if let Some((digest, converted)) = &preview.preserved_nvm {
+                    ui.label(format!(
+                        "{}: {digest}",
+                        tr(
+                            ru,
+                            "Prepared settings SHA-256",
+                            "SHA-256 подготовленных настроек"
+                        )
+                    ));
+                    if *converted {
+                        ui.label(tr(ru,
+                            "The erased Beta.4 settings record is replaced with its original defaults to preserve its behavior on Beta.5.",
+                            "Пустая запись настроек Beta.4 заменена её исходными значениями по умолчанию, чтобы сохранить поведение в Beta.5."));
+                    }
+                }
                 ui.label(if summary.physical_hold {
                     tr(
                         ru,
@@ -1787,6 +1887,229 @@ pub(crate) fn show(app: &mut EntropyApp, ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_shell_reopens_installer_with_selected_target_in_root_viewport() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        for (language, install, heading, target, back, help) in [
+            (
+                crate::i18n::Language::English,
+                "Install firmware…",
+                "AK820 firmware installation",
+                "Selected install target: v0.6.0-beta.5 / game",
+                "Back",
+                "Help",
+            ),
+            (
+                crate::i18n::Language::Russian,
+                "Установить прошивку…",
+                "Установка прошивки AK820",
+                "Выбранная цель установки: v0.6.0-beta.5 / game",
+                "Назад",
+                "Справка",
+            ),
+        ] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1400.0, 900.0))
+                .build_ui_state(
+                    |ui, state: &mut (EntropyApp, eframe::Frame, Option<egui::Context>)| {
+                        state.2 = Some(ui.ctx().clone());
+                        eframe::App::ui(&mut state.0, ui, &mut state.1);
+                    },
+                    (app, eframe::Frame::_new_kittest(), None),
+                );
+            harness.run();
+            harness.get_by_label(install).click();
+            harness.run();
+            harness.get_by_label(heading);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            harness.state_mut().0.ak820_install_runtime.profile =
+                crate::app::ak820_beta1_profiles::ProfileId::Game;
+            harness.run();
+            harness.get_by_label(target);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            harness.get_by_label(back).focus();
+            harness.run();
+            harness.key_press(egui::Key::Tab);
+            harness.run();
+            assert!(harness.get_by_label(help).is_focused());
+            harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+            harness.run();
+            assert!(harness.get_by_label(back).is_focused());
+            harness.get_by_label(back).click();
+            harness.run();
+            assert!(harness.query_by_label(heading).is_none());
+            harness.get_by_label(install).click();
+            harness.run();
+            harness.get_by_label(heading);
+            harness.get_by_label(target);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            assert_eq!(
+                harness.state().2.as_ref().unwrap().viewport_id(),
+                egui::ViewportId::ROOT
+            );
+            assert!(harness.state().0.hid_device.is_none());
+        }
+    }
+
+    #[test]
+    fn candidate_observation_requires_matching_path_and_instance() {
+        assert!(same_candidate(
+            "path-a",
+            "instance-a",
+            "path-a",
+            "instance-a"
+        ));
+        assert!(!same_candidate(
+            "path-b",
+            "instance-a",
+            "path-a",
+            "instance-a"
+        ));
+        assert!(!same_candidate(
+            "path-a",
+            "instance-b",
+            "path-a",
+            "instance-a"
+        ));
+        assert!(!same_candidate("", "", "", ""));
+    }
+
+    #[test]
+    fn candidate_selection_renders_only_matching_observation() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        let image =
+            crate::ak820::ImageContract::Beta4(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        let candidates = [
+            ("path-a", "instance-a"),
+            ("path-b", "instance-a"),
+            ("path-a", "instance-b"),
+        ];
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1400.0, 300.0))
+            .build_ui_state(
+                move |ui, index: &mut Option<usize>| {
+                    let candidate = index.and_then(|i| candidates.get(i).copied());
+                    let observed = candidate_observation(
+                        candidate,
+                        Some(("path-a", "instance-a")),
+                        Some(image),
+                    );
+                    draw_source_and_target(ui, false, observed, &Runtime::default());
+                },
+                None,
+            );
+        for index in [None, Some(99), Some(1), Some(2)] {
+            *harness.state_mut() = index;
+            harness.run();
+            harness.get_by_label(
+                "Selected installer device / observed source CODE: Unknown or not verified",
+            );
+        }
+        *harness.state_mut() = Some(0);
+        harness.run();
+        harness.get_by_label(&format!(
+            "Selected installer device / observed source CODE: {}",
+            image.label()
+        ));
+    }
+
+    #[test]
+    fn executing_cancel_is_available_only_before_erase() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.language = crate::i18n::Language::English;
+        let (_tx, rx) = mpsc::channel();
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let progress = std::sync::Arc::new(AtomicU32::new(0));
+        app.ak820_install_runtime.owner = Owner::Executing {
+            rx,
+            cancel: cancel.clone(),
+            progress: progress.clone(),
+            safety: Default::default(),
+        };
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1200.0, 1200.0))
+            .build_ui_state(|ui, app: &mut EntropyApp| draw(app, ui), app);
+        harness.run();
+        harness.get_by_label("Cancel before erase").click();
+        harness.run();
+        assert!(cancel.load(Ordering::Acquire));
+        progress.store(20, Ordering::Release);
+        harness.run();
+        assert!(harness.query_by_label("Cancel before erase").is_none());
+        harness.get_by_label("Erase/write started; cancellation is no longer effective.");
+        assert!(harness.state().hid_device.is_none());
+    }
+
+    #[test]
+    fn beta4_alias_render_stays_observed_when_target_changes() {
+        use crate::app::ak820_beta1_profiles::ProfileId;
+        use egui_kittest::{kittest::Queryable, Harness};
+        let observed = crate::ak820::ImageContract::Beta4(ProfileId::Main);
+        let expected_source = format!(
+            "Selected installer device / observed source CODE: {}",
+            observed.label()
+        );
+        assert!(expected_source.contains("beta.4.1 (byte-identical)"));
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1400.0, 300.0))
+            .build_ui_state(
+                move |ui, runtime: &mut Runtime| {
+                    draw_source_and_target(ui, false, Some(observed), runtime)
+                },
+                Runtime::default(),
+            );
+        harness.run();
+        harness.get_by_label(&expected_source);
+        harness.get_by_label("Selected install target: v0.6.0-beta.5 / main");
+        harness.state_mut().release = crate::ak820_release::InstallerRelease::Beta3;
+        harness.run();
+        harness.get_by_label(&expected_source);
+        harness.get_by_label("Selected install target: v0.6.0-beta.3 / main");
+        harness.get_by_label("CODE identity does not identify the installed package or verify the full ROM. Package receipt provenance: unavailable.");
+    }
+
+    #[test]
+    fn installer_distinguishes_unverified_source_from_selected_target() {
+        use egui_kittest::{kittest::Queryable, Harness};
+        let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = EntropyApp::new_ak820_demo(&cc);
+        app.app_settings.language = crate::i18n::Language::English;
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1000.0, 1000.0))
+            .build_ui_state(|ui, app: &mut EntropyApp| draw(app, ui), app);
+        harness.run();
+        harness.get_by_label("Device: select in device list");
+        harness.get_by_label(
+            "Selected installer device / observed source CODE: Unknown or not verified",
+        );
+        harness.get_by_label("Selected install target: v0.6.0-beta.5 / main");
+        harness.state_mut().ak820_install_runtime.release =
+            crate::ak820_release::InstallerRelease::Beta3;
+        harness.run();
+        harness.get_by_label(
+            "Selected installer device / observed source CODE: Unknown or not verified",
+        );
+        harness.get_by_label("Selected install target: v0.6.0-beta.3 / main");
+        assert!(harness.state().hid_device.is_none());
+    }
 
     #[test]
     fn preview_settings_text_uses_prepared_outcome() {

@@ -1,0 +1,154 @@
+{
+  "official_commit": "dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd",
+  "packer_git_blob": "1ced695dd33ffc4d0ff27b3414eb8282f2d295ab",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "profiles": [
+    {
+      "profile": "main",
+      "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+      "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+      "code_sha256": "cd11665942abb5dc01b3bdce0c73b1520c6e106a9cb8d754b891b12171e4f784",
+      "expected_code_sha256": "cd11665942abb5dc01b3bdce0c73b1520c6e106a9cb8d754b891b12171e4f784",
+      "permanent_sha256": "67094e0d850cd14f49c87feee1677d3f125ef1b4aa3eace104a03424bc2680cc",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "game",
+      "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+      "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+      "code_sha256": "fca2b98b4b97f2ee2933801c97443f18512bb9f05eb7253c46c975f599368e65",
+      "expected_code_sha256": "fca2b98b4b97f2ee2933801c97443f18512bb9f05eb7253c46c975f599368e65",
+      "permanent_sha256": "2a7b8f8a57dd755600062fc4376899718331b2d5996933ca186ca601a27027d1",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "mmo",
+      "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+      "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+      "code_sha256": "0d4129766e093a2b4dfdc5250dff061298802b121de279360640bf5013962db6",
+      "expected_code_sha256": "0d4129766e093a2b4dfdc5250dff061298802b121de279360640bf5013962db6",
+      "permanent_sha256": "b55f046316c21be39ccf185cfea7b4d2db074d0977e3a9f5e9e29be33a38f493",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "typing",
+      "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+      "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+      "code_sha256": "e4980f03c175624ea9cee327e6764f485dab7f86e2d0a5e3cc95e26fea6ad2b5",
+      "expected_code_sha256": "e4980f03c175624ea9cee327e6764f485dab7f86e2d0a5e3cc95e26fea6ad2b5",
+      "permanent_sha256": "22d2bcef00f690938669aae301b0055521f1eb9a20b0794388d8a733ba2c0061",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "code",
+      "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+      "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+      "code_sha256": "abd76ef2c00a94d95394faf46d2185a1de0262ccb23d35be2bf8186b22abc7f0",
+      "expected_code_sha256": "abd76ef2c00a94d95394faf46d2185a1de0262ccb23d35be2bf8186b22abc7f0",
+      "permanent_sha256": "1b4fae06bca3630ea908323915edf06d3875b9bdd19dc8410a07b860d20ee3db",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "pointer",
+      "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+      "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+      "code_sha256": "c33269113e4dc92a765c4c46d426d7823c7acb308f6ed7a63d8f121cadc9f8a9",
+      "expected_code_sha256": "c33269113e4dc92a765c4c46d426d7823c7acb308f6ed7a63d8f121cadc9f8a9",
+      "permanent_sha256": "041bcb9012149abea36c6357f968e9e399a4c065d1b4237f695fa01527d381cd",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "onehand",
+      "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+      "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+      "code_sha256": "2e087ecf339e9953150ff0baf4b1189ba273fb6a1e8cbe966045075f9b0c564f",
+      "expected_code_sha256": "2e087ecf339e9953150ff0baf4b1189ba273fb6a1e8cbe966045075f9b0c564f",
+      "permanent_sha256": "baf9efdfaf01b9731d15dcff31e8f32064450daa02ae502d68feb8653a256fdd",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "creative",
+      "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+      "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+      "code_sha256": "ce0db213906cad7d800d4e3580a51cc44ceab0d6423c340042366efe488d6f3d",
+      "expected_code_sha256": "ce0db213906cad7d800d4e3580a51cc44ceab0d6423c340042366efe488d6f3d",
+      "permanent_sha256": "33b8d63c07012591e29d23e1a80c6f05c45315143d4766372171a34896533e83",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "shortcuts",
+      "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+      "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+      "code_sha256": "e6a8bc1b28c89569f9c2c37e50d10a679ec91df275aba67fb66c1d322d2660d3",
+      "expected_code_sha256": "e6a8bc1b28c89569f9c2c37e50d10a679ec91df275aba67fb66c1d322d2660d3",
+      "permanent_sha256": "ada17a1351ddbdec8036567d7932d4933242e71f78e5e85596fc213d59ad76c1",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    },
+    {
+      "profile": "multios",
+      "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+      "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+      "code_sha256": "607ae7e7323f97d51f491a7967b94d8366e759279faa207f5379aaa5c3ae098d",
+      "expected_code_sha256": "607ae7e7323f97d51f491a7967b94d8366e759279faa207f5379aaa5c3ae098d",
+      "permanent_sha256": "aadad65918014ab21b137fa82aa9703b00540d803246a4e297e9d1c600c690ec",
+      "permanent_size": 51136,
+      "packer_exit": 0
+    }
+  ],
+  "device_operations": false,
+  "status": "10/10 matched; not B01 acceptance",
+  "packer_sha256": "1714b3ed879232326326422ab852e1cbf6984ef40e18ceb1c425d4025b67dcb3",
+  "firmware-bundle.zip": {
+    "size": 2990062,
+    "sha256": "497bc8b11dec6b43ee0b3a24b1df7856028d014d1d96497bdc486b419baeb4c0"
+  },
+  "firmware-matrix.json": {
+    "size": 1750531,
+    "sha256": "12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb"
+  },
+  "input_metadata": [
+    {
+      "role": "stock-rom",
+      "size": 65536,
+      "sha256": "03c6bd3351f272c855b9bc736d597170f694b5260b2001d1fc9cbfba8b382994"
+    },
+    {
+      "role": "native-reference-sanitized",
+      "size": 51136,
+      "sha256": "29446ba54e21990dbb5cbb1df542df9dc0c59b3b5f0098dcfdf13ee3a780faf6"
+    },
+    {
+      "role": "native-rom-snapshot",
+      "size": 65536,
+      "sha256": "1dc3e2f79bd03d0bdc4e7a0fc43241e6e89445799948990725ee644ec45c09d1"
+    }
+  ],
+  "code_interval": {
+    "start": "0x2800",
+    "end_exclusive": "0xc700",
+    "basis": "packer manifest digest full[APP_START:CODE_END]; permanent payload offset 0"
+  },
+  "raw_private_outputs": "removed after child processes exited and metadata saved",
+  "command_template": "python -B PACKER --ihx PROFILE_IHX --map PROFILE_MAP --stock-rom STOCK_ROM --native-reference NATIVE_REFERENCE --native-rom NATIVE_ROM --out FRESH_PRIVATE_PROFILE_OUTPUT",
+  "preflight": {
+    "first_attempt": "Stopped before packer execution: firmware-bundle.zip was absent from release-catalog assets. No profile was packed.",
+    "correction": "Verified bundle and matrix size and SHA256 against GitHub release asset metadata; matrix digest also matched release catalog. A fresh private output directory was used.",
+    "first_attempt_metadata_sha256": "e2f5bc52887cfc414e68ada2292ef66277b166f8bae9144e384d3cb0f56ae20a"
+  },
+  "provenance": {
+    "official_release": "v0.6.0-beta.5",
+    "packer": "GitHub git tree blob for the pinned official commit; both Git blob SHA-1 and SHA256 verified before execution",
+    "profile_inputs": "Bundle installer-release size/hash and release matrix identity hash both checked for every IHX and map",
+    "reference_validation": "Pinned packer validate_native passed snapshot as patched and stock as factory; sanitized reference matched public_native_reference of snapshot application slice",
+    "limitations": "Offline reconstruction only; no device operations, physical validation, B01 acceptance, or independent review is claimed. Historical input provenance is not independently established."
+  }
+}

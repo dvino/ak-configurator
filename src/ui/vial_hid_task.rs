@@ -2,6 +2,18 @@ use super::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
+pub(super) struct Ak820RgbWrite {
+    pub(super) request_id: u64,
+    pub(super) generation: u64,
+    pub(super) device: crate::device::Device,
+    pub(super) image: crate::ak820::ImageContract,
+    pub(super) old: RgbSettingsState,
+    pub(super) value: RgbSettingsState,
+    pub(super) save: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
 pub(super) struct LayerNameWrite {
     pub(super) device: crate::device::Device,
     pub(super) device_key: String,
@@ -55,6 +67,139 @@ fn report_stale_restore(ctx: &egui::Context, generation: u64, operation: &VialHi
 }
 
 impl EntropyApp {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retire_unconfirmed_hid_loan(&mut self, hid: Option<&crate::hid::HidDevice>) {
+        if let Some(retirement) = hid.and_then(|device| device.retirement_handle()) {
+            retirement.retire();
+        }
+        self.retire_selected_qmk_hid_host_bridges();
+        self.shared_hid_output = None;
+        self.pending_device_connect = None;
+        self.vial_unlocked = None;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn validate_selected_hid_owner(&mut self) -> bool {
+        let Some(hid) = self.hid_device.as_ref() else {
+            return false;
+        };
+        let matches = self
+            .selected_device
+            .and_then(|index| self.device_manager.devices().get(index))
+            .is_some_and(|target| hid.is_bound_to(target));
+        if matches {
+            return true;
+        }
+        if let Some(retirement) = hid.retirement_handle() {
+            retirement.retire();
+        }
+        self.retire_selected_qmk_hid_host_bridges();
+        self.hid_device = None;
+        self.shared_hid_output = None;
+        self.pending_device_connect = None;
+        self.rgb_draft = None;
+        self.vial_unlocked = None;
+        self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+            "Соединение с устройством изменилось. Прочитайте данные снова."
+        } else {
+            "Device connection changed. Read the data again."
+        }
+        .into();
+        false
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn rgb_target_matches(&self, request: &Ak820RgbWrite) -> bool {
+        request.generation == self.connection_generation
+            && self
+                .selected_device
+                .and_then(|i| self.device_manager.devices().get(i))
+                .is_some_and(|device| {
+                    device.path == request.device.path
+                        && device.instance_token == request.device.instance_token
+                        && device.permits_hid_target(&request.device)
+                })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn cancel_rgb_for_exit(&mut self) {
+        self.rgb_draft = None;
+        if let Some(task) = &self.vial_hid_task {
+            if matches!(
+                task.operation,
+                VialHidOperation::Ak820RgbWrite(_) | VialHidOperation::UnlockSession(_)
+            ) {
+                task.cancel
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn begin_rgb_exit(&mut self) -> bool {
+        if self.rgb_exit_pending
+            || self.rgb_draft.is_some()
+            || self.active_rgb_request().is_some()
+            || self
+                .vial_hid_task
+                .as_ref()
+                .is_some_and(|task| matches!(task.operation, VialHidOperation::UnlockSession(_)))
+        {
+            self.rgb_exit_pending = true;
+            self.cancel_rgb_for_exit();
+        }
+        self.rgb_exit_pending
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn active_rgb_request(&self) -> Option<&Ak820RgbWrite> {
+        match &self.vial_hid_task.as_ref()?.operation {
+            VialHidOperation::Ak820RgbWrite(request) => Some(request),
+            _ => None,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_rgb_draft(&mut self, ctx: &egui::Context) {
+        let Some(request) = self.rgb_draft.take() else {
+            return;
+        };
+        if !self.validate_selected_hid_owner() {
+            return;
+        }
+        if self.exit_after_hid_write
+            || self.settings_tab != SettingsTab::Rgb
+            || !matches!(
+                self.main_menu_tab,
+                MainMenuTab::Settings | MainMenuTab::Advanced
+            )
+            || !self.rgb_target_matches(&request)
+            || self.rgb_uncertain == Some(request.generation)
+        {
+            return;
+        }
+        let admitted = self.hid_device.as_ref().is_some_and(|hid| {
+            hid.is_bound_to(&request.device)
+                && hid.ak820_image() == Some(request.image)
+                && hid
+                    .ak820_prevalidate_rgb(
+                        request.value.effect,
+                        request.value.speed,
+                        request.value.hue,
+                        request.value.saturation,
+                        request.value.brightness,
+                        request.save,
+                    )
+                    .is_ok()
+        });
+        if !admitted {
+            return;
+        }
+        if self.start_vial_hid_operation(ctx, VialHidOperation::Ak820RgbWrite(request.clone()))
+            == VialHidTaskStart::Busy
+        {
+            self.rgb_draft = Some(request);
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn selected_layer_names_uncertain(&self) -> bool {
         let key = self.application_layout_device_key();
@@ -237,6 +382,7 @@ fn battery_refresh_delay(battery: Option<crate::hid::BatteryHalves>) -> std::tim
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub(super) enum VialHidOperation {
+    Ak820RgbWrite(Ak820RgbWrite),
     Ak820BackupCapture {
         request_id: u64,
     },
@@ -245,7 +391,10 @@ pub(super) enum VialHidOperation {
         request: std::sync::Arc<super::ak820_restore_request::PreparedRestore>,
     },
     LayerNameWrite(LayerNameWrite),
+    UnlockSession(std::sync::Arc<std::sync::Mutex<Option<VialUnlockStatus>>>),
+    #[cfg(test)]
     UnlockStart,
+    #[cfg(test)]
     UnlockPoll,
     Lock,
     Matrix {
@@ -308,6 +457,299 @@ pub(super) enum VialHidOperation {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+pub(super) struct VialUnlockStatus {
+    pub(super) keys: Vec<(u8, u8)>,
+    pub(super) counter: u8,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug)]
+enum UnlockResult {
+    Confirmed,
+    Denied,
+    TimedOut,
+    Cancelled,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug)]
+struct UnlockBoundary(UnlockResult);
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug)]
+enum UnlockFailureKind {
+    Status,
+    Start,
+    Poll,
+    TransportTimeout,
+    Disconnected,
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl std::fmt::Display for UnlockFailureKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unlock {self:?}")
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl std::error::Error for UnlockFailureKind {}
+#[cfg(not(target_arch = "wasm32"))]
+impl std::fmt::Display for UnlockBoundary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unlock dispatch stopped")
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl std::error::Error for UnlockBoundary {}
+
+#[cfg(not(target_arch = "wasm32"))]
+type UnlockInitialStatus = (bool, bool, Vec<(u8, u8)>);
+
+#[cfg(not(target_arch = "wasm32"))]
+trait UnlockIo {
+    fn status(&mut self) -> anyhow::Result<UnlockInitialStatus>;
+    fn start(&mut self) -> anyhow::Result<()>;
+    fn poll(
+        &mut self,
+        guard: &mut dyn FnMut() -> anyhow::Result<()>,
+    ) -> anyhow::Result<(bool, bool, u8)>;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl UnlockIo for &crate::hid::HidDevice {
+    fn status(&mut self) -> anyhow::Result<UnlockInitialStatus> {
+        self.get_unlock_status_with_progress()
+    }
+    fn start(&mut self) -> anyhow::Result<()> {
+        self.unlock_start()
+    }
+    fn poll(
+        &mut self,
+        guard: &mut dyn FnMut() -> anyhow::Result<()>,
+    ) -> anyhow::Result<(bool, bool, u8)> {
+        self.unlock_poll_guarded(guard)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+trait UnlockClock {
+    fn now(&self) -> std::time::Duration;
+    fn wait(&mut self, duration: std::time::Duration);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct RealUnlockClock(std::time::Instant);
+#[cfg(not(target_arch = "wasm32"))]
+impl UnlockClock for RealUnlockClock {
+    fn now(&self) -> std::time::Duration {
+        self.0.elapsed()
+    }
+    fn wait(&mut self, duration: std::time::Duration) {
+        std::thread::sleep(duration);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_unlock_session(
+    io: &mut impl UnlockIo,
+    clock: &mut impl UnlockClock,
+    cancel: &std::sync::atomic::AtomicBool,
+    status: &std::sync::Mutex<Option<VialUnlockStatus>>,
+) -> anyhow::Result<UnlockResult> {
+    use std::sync::atomic::Ordering;
+    let cancelled = || cancel.load(Ordering::Acquire);
+    if cancelled() {
+        return Ok(UnlockResult::Cancelled);
+    }
+    let (unlocked, in_progress, keys) = io
+        .status()
+        .map_err(|e| e.context(UnlockFailureKind::Status))?;
+    if cancelled() {
+        return Ok(UnlockResult::Cancelled);
+    }
+    if unlocked && !in_progress {
+        return Ok(UnlockResult::Confirmed);
+    }
+    if !in_progress {
+        io.start()
+            .map_err(|e| e.context(UnlockFailureKind::Start))?;
+    }
+    let deadline = clock.now() + std::time::Duration::from_secs(15);
+    let mut latest = VialUnlockStatus {
+        counter: u8::try_from(keys.len()).unwrap_or(u8::MAX).max(1),
+        keys,
+    };
+    *status.lock().unwrap_or_else(|e| e.into_inner()) = Some(latest.clone());
+    loop {
+        clock.wait(std::time::Duration::from_millis(200));
+        if cancelled() {
+            return Ok(UnlockResult::Cancelled);
+        }
+        if clock.now() >= deadline {
+            return Ok(UnlockResult::TimedOut);
+        }
+        let mut guard = || -> anyhow::Result<()> {
+            if cancelled() {
+                return Err(UnlockBoundary(UnlockResult::Cancelled).into());
+            }
+            if clock.now() >= deadline {
+                return Err(UnlockBoundary(UnlockResult::TimedOut).into());
+            }
+            Ok(())
+        };
+        let (unlocked, in_progress, counter) = match io.poll(&mut guard) {
+            Ok(value) => value,
+            Err(error) if error.is::<UnlockBoundary>() => {
+                return Ok(error
+                    .downcast::<UnlockBoundary>()
+                    .expect("checked boundary")
+                    .0)
+            }
+            Err(error) => return Err(error.context(UnlockFailureKind::Poll)),
+        };
+        if cancelled() {
+            return Ok(UnlockResult::Cancelled);
+        }
+        latest.counter = counter;
+        *status.lock().unwrap_or_else(|e| e.into_inner()) = Some(latest.clone());
+        if !in_progress {
+            return Ok(if unlocked {
+                UnlockResult::Confirmed
+            } else {
+                UnlockResult::Denied
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod finite_unlock_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    struct Clock(Duration);
+    impl UnlockClock for Clock {
+        fn now(&self) -> Duration {
+            self.0
+        }
+        fn wait(&mut self, duration: Duration) {
+            self.0 += duration;
+        }
+    }
+    struct Fake<'a> {
+        initial: (bool, bool),
+        packets: Vec<&'static str>,
+        fail: bool,
+        cancel_after_poll: Option<&'a AtomicBool>,
+    }
+    impl UnlockIo for Fake<'_> {
+        fn status(&mut self) -> anyhow::Result<UnlockInitialStatus> {
+            self.packets.push("FE05");
+            Ok((self.initial.0, self.initial.1, vec![(1, 2)]))
+        }
+        fn start(&mut self) -> anyhow::Result<()> {
+            self.packets.push("FE06");
+            Ok(())
+        }
+        fn poll(
+            &mut self,
+            guard: &mut dyn FnMut() -> anyhow::Result<()>,
+        ) -> anyhow::Result<(bool, bool, u8)> {
+            guard()?;
+            self.packets.push("FE07");
+            if self.fail {
+                anyhow::bail!("injected fault");
+            }
+            if let Some(cancel) = self.cancel_after_poll {
+                cancel.store(true, Ordering::Release);
+                guard()?;
+                self.packets.push("FE05");
+            }
+            Ok((true, true, 3))
+        }
+    }
+    fn fake(initial: (bool, bool)) -> Fake<'static> {
+        Fake {
+            initial,
+            packets: vec![],
+            fail: false,
+            cancel_after_poll: None,
+        }
+    }
+    #[test]
+    fn vial_unlock_finite_virtual_timeout_and_progress_without_frames() {
+        let mut io = fake((false, false));
+        let mut clock = Clock(Duration::ZERO);
+        let status = std::sync::Mutex::new(None);
+        let result =
+            run_unlock_session(&mut io, &mut clock, &AtomicBool::new(false), &status).unwrap();
+        assert!(matches!(result, UnlockResult::TimedOut));
+        assert_eq!(clock.0, Duration::from_secs(15));
+        assert_eq!(&io.packets[..2], &["FE05", "FE06"]);
+        assert_eq!(io.packets.iter().filter(|p| **p == "FE07").count(), 74);
+        assert_eq!(status.lock().unwrap().as_ref().unwrap().counter, 3);
+    }
+    #[test]
+    fn vial_unlock_finite_already_unlocked_or_in_progress_never_starts() {
+        for initial in [(true, false), (true, true), (false, true)] {
+            let mut io = fake(initial);
+            let result = run_unlock_session(
+                &mut io,
+                &mut Clock(Duration::ZERO),
+                &AtomicBool::new(false),
+                &std::sync::Mutex::new(None),
+            )
+            .unwrap();
+            assert!(matches!(
+                result,
+                UnlockResult::Confirmed | UnlockResult::TimedOut
+            ));
+            assert!(!io.packets.contains(&"FE06"));
+        }
+    }
+    #[test]
+    fn vial_unlock_finite_stops_on_fault_and_guarded_cancellation() {
+        let mut io = fake((false, false));
+        io.fail = true;
+        assert!(run_unlock_session(
+            &mut io,
+            &mut Clock(Duration::ZERO),
+            &AtomicBool::new(false),
+            &std::sync::Mutex::new(None)
+        )
+        .is_err());
+        assert_eq!(io.packets, ["FE05", "FE06", "FE07"]);
+        let cancel = AtomicBool::new(true);
+        let mut io = fake((false, false));
+        assert!(matches!(
+            run_unlock_session(
+                &mut io,
+                &mut Clock(Duration::ZERO),
+                &cancel,
+                &std::sync::Mutex::new(None)
+            )
+            .unwrap(),
+            UnlockResult::Cancelled
+        ));
+        assert!(io.packets.is_empty());
+        cancel.store(false, Ordering::Release);
+        let mut io = fake((false, false));
+        io.cancel_after_poll = Some(&cancel);
+        assert!(matches!(
+            run_unlock_session(
+                &mut io,
+                &mut Clock(Duration::ZERO),
+                &cancel,
+                &std::sync::Mutex::new(None)
+            )
+            .unwrap(),
+            UnlockResult::Cancelled
+        ));
+        assert_eq!(io.packets, ["FE05", "FE06", "FE07"]);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 impl VialHidOperation {
     fn is_pictogram_upload(&self) -> bool {
         match self {
@@ -320,7 +762,10 @@ impl VialHidOperation {
 
     fn display_diagnostic_label(&self) -> Option<&'static str> {
         match self {
+            Self::UnlockSession(_) => Some("unlock-session"),
+            #[cfg(test)]
             Self::UnlockStart => Some("unlock-start"),
+            #[cfg(test)]
             Self::UnlockPoll => Some("unlock-poll"),
             Self::Lock => Some("lock"),
             Self::PictogramLoad { .. } => Some("pictogram-load"),
@@ -334,13 +779,17 @@ impl VialHidOperation {
 
 #[cfg(not(target_arch = "wasm32"))]
 enum VialHidOutcome {
+    UnlockSession(UnlockResult),
+    Ak820RgbWritten,
     Ak820BackupCaptured(crate::ak820_backup_capture::CapturedBackup),
     Ak820Restored(super::ak820_restore_request::RestoreCompleted),
     LayerNameWritten(String),
+    #[cfg(test)]
     UnlockStarted {
         unlocked: bool,
         keys: Vec<(u8, u8)>,
     },
+    #[cfg(test)]
     UnlockPolled {
         unlocked: bool,
         in_progress: bool,
@@ -372,6 +821,9 @@ struct VialHidTaskResult {
     operation: VialHidOperation,
     outcome: Result<VialHidOutcome, String>,
     disconnected: bool,
+    unlock_failure: Option<UnlockFailureKind>,
+    unlock_target: Option<crate::device::Device>,
+    unlock_image: Option<crate::ak820::ImageContract>,
     generation: u64,
 }
 
@@ -392,6 +844,46 @@ pub(super) enum VialHidTaskStart {
     NoDevice,
 }
 
+/// Bounded causes contain no device paths, packet contents or settings values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CaptureFailure {
+    OperationBusy,
+    LeaseBusy,
+    Disconnected,
+    Cancelled,
+    Storage,
+    Reconciliation,
+    Failed,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CaptureAvailability {
+    Ready,
+    Unavailable(CaptureFailure),
+}
+
+impl CaptureFailure {
+    fn from_worker(error: &str, disconnected: bool) -> Self {
+        if disconnected {
+            return Self::Disconnected;
+        }
+        if error.contains("Backup capture cancelled") {
+            return Self::Cancelled;
+        }
+        if error.contains("Storage") || error.contains("storage") {
+            return Self::Storage;
+        }
+        if error.contains("getter differs")
+            || error.contains("capabilities differ")
+            || error.contains("changed during backup capture")
+        {
+            return Self::Reconciliation;
+        }
+        Self::Failed
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn run_vial_hid_operation_with_progress(
     hid: &crate::hid::HidDevice,
@@ -400,6 +892,37 @@ fn run_vial_hid_operation_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
 ) -> anyhow::Result<VialHidOutcome> {
     match operation {
+        VialHidOperation::UnlockSession(status) => run_unlock_session(
+            &mut &*hid,
+            &mut RealUnlockClock(std::time::Instant::now()),
+            cancel,
+            &status,
+        )
+        .map(VialHidOutcome::UnlockSession),
+        VialHidOperation::Ak820RgbWrite(request) => {
+            anyhow::ensure!(
+                hid.ak820_image() == Some(request.image),
+                "RGB image changed"
+            );
+            hid.ak820_prevalidate_rgb(
+                request.value.effect,
+                request.value.speed,
+                request.value.hue,
+                request.value.saturation,
+                request.value.brightness,
+                request.save,
+            )?;
+            hid.ak820_set_rgb_guarded(
+                request.value.effect,
+                request.value.speed,
+                request.value.hue,
+                request.value.saturation,
+                request.value.brightness,
+                request.save,
+                cancel,
+            )?;
+            Ok(VialHidOutcome::Ak820RgbWritten)
+        }
         VialHidOperation::Ak820Restore { request, .. } => request
             .run(hid, cancel, progress)
             .map(VialHidOutcome::Ak820Restored),
@@ -414,6 +937,7 @@ fn run_vial_hid_operation_with_progress(
             anyhow::ensure!(actual == expected, "layer name readback mismatch");
             Ok(VialHidOutcome::LayerNameWritten(actual))
         }
+        #[cfg(test)]
         VialHidOperation::UnlockStart => {
             let (unlocked, in_progress, keys) = hid.get_unlock_status_with_progress()?;
             if !unlocked && !in_progress {
@@ -424,6 +948,7 @@ fn run_vial_hid_operation_with_progress(
                 keys,
             })
         }
+        #[cfg(test)]
         VialHidOperation::UnlockPoll => {
             let (unlocked, in_progress, counter) = hid.unlock_poll()?;
             Ok(VialHidOutcome::UnlockPolled {
@@ -683,15 +1208,54 @@ impl EntropyApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn capture_availability(&self) -> CaptureAvailability {
+        use CaptureAvailability::*;
+        use CaptureFailure::*;
+        if self.vial_hid_task.is_some()
+            || self.another_hid_owner_or_write_is_pending()
+            || !matches!(self.connect_state, ConnectState::Idle)
+            || self.pending_device_connect.is_some()
+        {
+            return Unavailable(OperationBusy);
+        }
+        if let Some((generation, failure)) = self.connection_failure {
+            if generation == self.connection_generation {
+                return Unavailable(match failure {
+                    ConnectionFailure::LeaseBusy => LeaseBusy,
+                    ConnectionFailure::Failed => Failed,
+                });
+            }
+        }
+        if self.hid_device.is_none() {
+            return Unavailable(if self.ak820_os_indicator_display_connected() {
+                OperationBusy
+            } else {
+                Disconnected
+            });
+        }
+        if self.can_capture_ak820_backup() {
+            Ready
+        } else {
+            Unavailable(OperationBusy)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_ak820_backup_capture(
         &mut self,
         ctx: &egui::Context,
         request_id: u64,
-    ) -> VialHidTaskStart {
-        if !self.can_capture_ak820_backup() {
-            return VialHidTaskStart::Busy;
+    ) -> Result<(), CaptureFailure> {
+        if let CaptureAvailability::Unavailable(cause) = self.capture_availability() {
+            return Err(cause);
         }
-        self.start_vial_hid_operation(ctx, VialHidOperation::Ak820BackupCapture { request_id })
+        match self
+            .start_vial_hid_operation(ctx, VialHidOperation::Ak820BackupCapture { request_id })
+        {
+            VialHidTaskStart::Started => Ok(()),
+            VialHidTaskStart::Busy => Err(CaptureFailure::OperationBusy),
+            VialHidTaskStart::NoDevice => Err(CaptureFailure::Disconnected),
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -754,7 +1318,9 @@ impl EntropyApp {
         if let Some(task) = self.vial_hid_task.as_ref().filter(|task| {
             matches!(
                 task.operation,
-                VialHidOperation::Ak820BackupCapture { .. } | VialHidOperation::Ak820Restore { .. }
+                VialHidOperation::Ak820BackupCapture { .. }
+                    | VialHidOperation::Ak820Restore { .. }
+                    | VialHidOperation::UnlockSession(_)
             )
         }) {
             task.cancel
@@ -778,12 +1344,50 @@ impl EntropyApp {
             + Send
             + 'static,
     ) -> VialHidTaskStart {
+        if self.rgb_exit_pending {
+            return VialHidTaskStart::Busy;
+        }
         if self.vial_hid_task.is_some() || self.another_hid_owner_or_write_is_pending() {
             return VialHidTaskStart::Busy;
+        }
+        if matches!(
+            operation,
+            VialHidOperation::Ak820RgbWrite(_) | VialHidOperation::UnlockSession(_)
+        ) && !self.validate_selected_hid_owner()
+        {
+            return VialHidTaskStart::NoDevice;
+        }
+        if let VialHidOperation::Ak820RgbWrite(request) = &operation {
+            if !self.rgb_target_matches(request)
+                || !self.hid_device.as_ref().is_some_and(|hid| {
+                    hid.is_bound_to(&request.device) && hid.ak820_image() == Some(request.image)
+                })
+            {
+                return VialHidTaskStart::NoDevice;
+            }
+        }
+        let unlock_target = if matches!(operation, VialHidOperation::UnlockSession(_)) {
+            self.selected_device
+                .and_then(|index| self.device_manager.devices().get(index))
+                .cloned()
+        } else {
+            None
+        };
+        if matches!(operation, VialHidOperation::UnlockSession(_)) {
+            let Some(target) = unlock_target.as_ref() else {
+                return VialHidTaskStart::NoDevice;
+            };
+            let Some(hid) = self.hid_device.as_ref() else {
+                return VialHidTaskStart::NoDevice;
+            };
+            if !hid.is_bound_to(target) || (target.is_ak820() && hid.ak820_image().is_none()) {
+                return VialHidTaskStart::NoDevice;
+            }
         }
         let Some(hid_device) = self.hid_device.take() else {
             return VialHidTaskStart::NoDevice;
         };
+        let unlock_image = hid_device.ak820_image();
 
         if matches!(operation, VialHidOperation::PictogramLoad { .. }) {
             self.display_settings.pictograms.loading = true;
@@ -834,6 +1438,26 @@ impl EntropyApp {
                 .err()
                 .map(crate::hid::is_disconnect_error)
                 .unwrap_or(false);
+            let unlock_failure = outcome.as_ref().err().and_then(|error| {
+                error
+                    .downcast_ref::<UnlockFailureKind>()
+                    .copied()
+                    .map(|kind| {
+                        let timed_out = error.chain().any(|cause| {
+                            let message = cause.to_string().to_ascii_lowercase();
+                            message.contains("timed out")
+                                || message.contains("timeout")
+                                || message.contains("device did not respond")
+                        });
+                        if timed_out {
+                            UnlockFailureKind::TransportTimeout
+                        } else if disconnected {
+                            UnlockFailureKind::Disconnected
+                        } else {
+                            kind
+                        }
+                    })
+            });
             if let Some(label) = diagnostic_label {
                 match &outcome {
                     Ok(_) => log::debug!(
@@ -846,6 +1470,16 @@ impl EntropyApp {
                     ),
                 }
             }
+            if matches!(operation, VialHidOperation::UnlockSession(_))
+                && !matches!(
+                    &outcome,
+                    Ok(VialHidOutcome::UnlockSession(UnlockResult::Confirmed))
+                )
+            {
+                if let Some(retirement) = hid_device.retirement_handle() {
+                    retirement.retire();
+                }
+            }
             let hid_device = (!disconnected).then_some(hid_device);
             let outcome = outcome.map_err(|error| format!("{error:#}"));
             let _ = sender.send(VialHidTaskResult {
@@ -853,6 +1487,9 @@ impl EntropyApp {
                 operation,
                 outcome,
                 disconnected,
+                unlock_failure,
+                unlock_target,
+                unlock_image,
                 generation,
             });
             repaint_ctx.request_repaint();
@@ -869,12 +1506,43 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_vial_unlock(&mut self, ctx: &egui::Context) -> VialHidTaskStart {
-        self.start_vial_hid_operation(ctx, VialHidOperation::UnlockStart)
+        self.start_vial_hid_operation(
+            ctx,
+            VialHidOperation::UnlockSession(std::sync::Arc::new(std::sync::Mutex::new(None))),
+        )
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn start_vial_unlock_poll(&mut self, ctx: &egui::Context) -> VialHidTaskStart {
-        self.start_vial_hid_operation(ctx, VialHidOperation::UnlockPoll)
+    pub(super) fn observe_vial_unlock(&mut self) {
+        let latest = self
+            .vial_hid_task
+            .as_ref()
+            .and_then(|task| match &task.operation {
+                VialHidOperation::UnlockSession(status) => {
+                    status.lock().ok().and_then(|s| s.clone())
+                }
+                _ => None,
+            });
+        if let Some(latest) = latest {
+            if !self.vial_unlock_polling {
+                self.finish_vial_unlock_start(false, latest.keys);
+            }
+            self.vial_unlocked = None;
+            self.vial_unlock_counter = latest.counter;
+            self.vial_unlock_total = self.vial_unlock_total.max(latest.counter);
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn cancel_vial_unlock_wait(&self) {
+        if let Some(task) = self
+            .vial_hid_task
+            .as_ref()
+            .filter(|task| matches!(task.operation, VialHidOperation::UnlockSession(_)))
+        {
+            task.cancel
+                .store(true, std::sync::atomic::Ordering::Release);
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -954,8 +1622,35 @@ impl EntropyApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_vial_hid_task(&mut self, ctx: &egui::Context) {
+        if self
+            .rgb_uncertain
+            .is_some_and(|generation| generation != self.connection_generation)
+        {
+            self.rgb_uncertain = None;
+        }
+        if self
+            .rgb_draft
+            .as_ref()
+            .is_some_and(|draft| draft.generation != self.connection_generation)
+        {
+            self.rgb_draft = None;
+        }
+        if self.exit_after_hid_write
+            || self.settings_tab != SettingsTab::Rgb
+            || !matches!(
+                self.main_menu_tab,
+                MainMenuTab::Settings | MainMenuTab::Advanced
+            )
+        {
+            self.rgb_draft = None;
+        }
         self.poll_vial_hid_task_with_settings_save(ctx, save_app_settings);
-        self.maybe_start_layer_name_write(ctx);
+        if self.vial_hid_task.is_none() {
+            self.start_rgb_draft(ctx);
+        }
+        if !self.rgb_exit_pending {
+            self.maybe_start_layer_name_write(ctx);
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -982,12 +1677,23 @@ impl EntropyApp {
                 }
                 if task.generation == self.connection_generation {
                     self.hid_device = None;
+                    if matches!(task.operation, VialHidOperation::UnlockSession(_)) {
+                        self.vial_unlocked = None;
+                        self.stop_vial_unlock_with_status(
+                            if self.app_settings.language == crate::i18n::Language::Russian {
+                                "Ошибка работника разблокировки. Состояние не подтверждено."
+                            } else {
+                                "Unlock worker failed. State is unconfirmed."
+                            },
+                        );
+                        return;
+                    }
                     if let VialHidOperation::Ak820BackupCapture { request_id } = &task.operation {
                         super::ak820_backup_inspection::capture_finished(
                             ctx,
                             *request_id,
                             task.generation,
-                            Err(()),
+                            Err(CaptureFailure::Failed),
                         );
                     }
                     if let VialHidOperation::Ak820Restore {
@@ -1008,20 +1714,163 @@ impl EntropyApp {
                         true,
                     );
                 }
-                self.resume_pending_device_connect();
+                if !self.rgb_exit_pending {
+                    self.resume_pending_device_connect();
+                }
                 return;
             }
         };
 
         self.vial_hid_task = None;
         if result.generation != self.connection_generation {
+            if matches!(result.operation, VialHidOperation::Ak820RgbWrite(_)) {
+                self.rgb_draft = None;
+            }
             report_stale_restore(ctx, result.generation, &result.operation);
-            self.resume_pending_device_connect();
+            if !self.rgb_exit_pending {
+                self.resume_pending_device_connect();
+            }
             return;
         }
 
+        if let VialHidOperation::Ak820RgbWrite(request) = &result.operation {
+            let returned_image_matches = result
+                .hid_device
+                .as_ref()
+                .map(|hid| {
+                    hid.is_bound_to(&request.device) && hid.ak820_image() == Some(request.image)
+                })
+                .unwrap_or(result.outcome.is_err());
+            if !self.rgb_target_matches(request) || !returned_image_matches {
+                self.retire_unconfirmed_hid_loan(result.hid_device.as_ref());
+                self.rgb_draft = None;
+                self.rgb_uncertain = Some(request.generation);
+                self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                    "Устройство или образ изменились. Прочитайте настройки снова."
+                } else {
+                    "Device or image changed. Read settings again."
+                }
+                .into();
+                return;
+            }
+        }
+
+        if self.rgb_exit_pending
+            && matches!(
+                result.operation,
+                VialHidOperation::Ak820RgbWrite(_) | VialHidOperation::UnlockSession(_)
+            )
+        {
+            if result.outcome.is_err() {
+                self.rgb_uncertain = Some(result.generation);
+            }
+            // The closing UI must not regain a transport between worker return
+            // and the final viewport Close event.
+            drop(result.hid_device);
+            return;
+        }
+
+        if matches!(result.operation, VialHidOperation::UnlockSession(_)) {
+            let target_matches = match &result.unlock_target {
+                Some(target) => self
+                    .selected_device
+                    .and_then(|index| self.device_manager.devices().get(index))
+                    .is_some_and(|current| {
+                        current.path == target.path
+                            && current.instance_token == target.instance_token
+                            && current.permits_hid_target(target)
+                    }),
+                None => false,
+            };
+            let confirmed = matches!(
+                &result.outcome,
+                Ok(VialHidOutcome::UnlockSession(UnlockResult::Confirmed))
+            );
+            let owner_matches = !confirmed
+                || result
+                    .hid_device
+                    .as_ref()
+                    .zip(result.unlock_target.as_ref())
+                    .is_some_and(|(hid, target)| hid.is_bound_to(target));
+            let image_matches = result
+                .hid_device
+                .as_ref()
+                .map(|hid| hid.ak820_image() == result.unlock_image)
+                .unwrap_or(result.outcome.is_err());
+            if !target_matches || !owner_matches || !image_matches {
+                self.retire_unconfirmed_hid_loan(result.hid_device.as_ref());
+                drop(result.hid_device);
+                self.vial_unlocked = None;
+                self.stop_vial_unlock_with_status(
+                    if self.app_settings.language == crate::i18n::Language::Russian {
+                        "Устройство или образ изменились. Состояние не подтверждено."
+                    } else {
+                        "Device or image changed. State is unconfirmed."
+                    },
+                );
+                return;
+            }
+        }
+        if matches!(result.operation, VialHidOperation::UnlockSession(_))
+            && !matches!(
+                &result.outcome,
+                Ok(VialHidOutcome::UnlockSession(UnlockResult::Confirmed))
+            )
+        {
+            self.retire_unconfirmed_hid_loan(result.hid_device.as_ref());
+            drop(result.hid_device);
+            self.vial_unlocked = None;
+            let ru = self.app_settings.language == crate::i18n::Language::Russian;
+            let message = match (&result.outcome, result.unlock_failure, ru) {
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::Denied)), _, true) => {
+                    "Устройство отклонило разблокировку. Состояние не подтверждено."
+                }
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::Denied)), _, false) => {
+                    "Device denied unlock. State is unconfirmed."
+                }
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::TimedOut)), _, true) => {
+                    "Время ожидания истекло. Отпустите клавиши, проверьте клавиатуру и при необходимости повторите попытку вручную."
+                }
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::TimedOut)), _, false) => {
+                    "Unlock wait timed out. Release the keys, check the keyboard, and retry manually if needed."
+                }
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::Cancelled)), _, true) => {
+                    "Ожидание остановлено; устройство может продолжать разблокировку."
+                }
+                (Ok(VialHidOutcome::UnlockSession(UnlockResult::Cancelled)), _, false) => {
+                    "Stopped waiting; the device may still be unlocking."
+                }
+                (_, Some(UnlockFailureKind::Disconnected), true) => "Устройство отключено. Состояние не подтверждено.",
+                (_, Some(UnlockFailureKind::Disconnected), false) => "Device disconnected. State is unconfirmed.",
+                (_, Some(UnlockFailureKind::TransportTimeout), true) => "Время ответа устройства истекло. Состояние не подтверждено.",
+                (_, Some(UnlockFailureKind::TransportTimeout), false) => "Device response timed out. State is unconfirmed.",
+                (_, Some(UnlockFailureKind::Status), true) => "Не удалось прочитать состояние разблокировки.",
+                (_, Some(UnlockFailureKind::Status), false) => "Could not read unlock status.",
+                (_, Some(UnlockFailureKind::Start), true) => "Не удалось запустить разблокировку. Состояние не подтверждено.",
+                (_, Some(UnlockFailureKind::Start), false) => "Unlock start failed. State is unconfirmed.",
+                (_, Some(UnlockFailureKind::Poll), true) => "Ошибка проверки разблокировки. Состояние не подтверждено.",
+                (_, Some(UnlockFailureKind::Poll), false) => "Unlock check failed. State is unconfirmed.",
+                (_, None, true) => "Ошибка разблокировки. Состояние не подтверждено.",
+                (_, None, false) => "Unlock failed. State is unconfirmed.",
+            };
+            self.stop_vial_unlock_with_status(message);
+            return;
+        }
         self.hid_device = result.hid_device;
         match result.outcome {
+            Ok(VialHidOutcome::UnlockSession(_)) => self.finish_vial_unlock_poll(true, false, 0),
+            Ok(VialHidOutcome::Ak820RgbWritten) => {
+                if let VialHidOperation::Ak820RgbWrite(request) = result.operation {
+                    log::debug!("RGB request {} completed", request.request_id);
+                    if self.rgb_target_matches(&request) && !self.exit_after_hid_write {
+                        self.rgb_settings = request.value;
+                        if let Some(draft) = &mut self.rgb_draft {
+                            draft.old = self.rgb_settings.clone();
+                        }
+                        self.rgb_uncertain = None;
+                    }
+                }
+            }
             Ok(VialHidOutcome::Ak820Restored(completed)) => {
                 if let VialHidOperation::Ak820Restore { request_id, .. } = result.operation {
                     super::ak820_backup_inspection::restore_finished(
@@ -1094,9 +1943,11 @@ impl EntropyApp {
                     }
                 }
             }
+            #[cfg(test)]
             Ok(VialHidOutcome::UnlockStarted { unlocked, keys }) => {
                 self.finish_vial_unlock_start(unlocked, keys);
             }
+            #[cfg(test)]
             Ok(VialHidOutcome::UnlockPolled {
                 unlocked,
                 in_progress,
@@ -1327,7 +2178,7 @@ impl EntropyApp {
                         ctx,
                         *request_id,
                         result.generation,
-                        Err(()),
+                        Err(CaptureFailure::from_worker(&error, result.disconnected)),
                     );
                 }
                 if let VialHidOperation::Ak820Restore {
@@ -1346,8 +2197,10 @@ impl EntropyApp {
             }
         }
 
-        self.continue_pending_settings_writes(ctx);
-        self.resume_pending_device_connect();
+        if !self.rgb_exit_pending {
+            self.continue_pending_settings_writes(ctx);
+            self.resume_pending_device_connect();
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1483,6 +2336,23 @@ impl EntropyApp {
         error: String,
         disconnected: bool,
     ) {
+        if let VialHidOperation::Ak820RgbWrite(request) = &operation {
+            self.rgb_draft = None;
+            self.rgb_uncertain = Some(request.generation);
+            self.rgb_settings = request.old.clone();
+            if disconnected {
+                let old = request.old.clone();
+                let status = if self.app_settings.language == crate::i18n::Language::Russian {
+                    "Изменение RGB остановлено: устройство отключено. Прочитайте настройки снова."
+                } else {
+                    "RGB update stopped: device disconnected. Read settings again."
+                };
+                self.clear_connected_keyboard_state(status);
+                self.rgb_settings = old;
+                self.rgb_uncertain = Some(self.connection_generation);
+                return;
+            }
+        }
         if matches!(operation, VialHidOperation::Ak820Restore { .. }) {
             let text = if self.app_settings.language == crate::i18n::Language::Russian {
                 "Восстановление остановлено. Прочитайте настройки снова; сохранённые защитные копии доступны в выбранной папке."
@@ -1604,10 +2474,21 @@ impl EntropyApp {
             VialHidOperation::Ak820BackupCapture { .. } | VialHidOperation::Ak820Restore { .. } => {
                 unreachable!("backup operation handled above")
             }
+            VialHidOperation::Ak820RgbWrite(_) => {
+                self.status_msg = if self.app_settings.language == crate::i18n::Language::Russian {
+                    "Изменение RGB остановлено. Прочитайте настройки снова."
+                } else {
+                    "RGB update stopped. Read settings again."
+                }
+                .into();
+            }
+            VialHidOperation::UnlockSession(_) => self.fail_vial_unlock_start(error),
+            #[cfg(test)]
             VialHidOperation::UnlockStart => self.fail_vial_unlock_start(error),
             VialHidOperation::LayerNameWrite(_) => {
                 self.status_msg = layer_name_write_error(self.app_settings.language, &error);
             }
+            #[cfg(test)]
             VialHidOperation::UnlockPoll => self.fail_vial_unlock_poll(error),
             VialHidOperation::Lock => {
                 self.status_msg = crate::i18n::tr_catalog_format(
@@ -1706,6 +2587,450 @@ mod repeat_lifecycle_tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU32};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn rgb_selected_device_must_match_bound_handle_before_worker() {
+        let (mut app, ctx, _) = app();
+        let (hid, recorder) = crate::hid::HidDevice::test_beta2_ak820_device(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        let image = hid.ak820_image().unwrap();
+        let selected = crate::device::test_usb_device("3-1", 1, crate::ak820::PID);
+        let mut old = selected.clone();
+        old.instance_token.push_str("-old");
+        recorder.bind_device(old);
+        app.device_manager.replace_devices(vec![selected.clone()]);
+        app.selected_device = Some(0);
+        app.hid_device = Some(hid);
+        let request = Ak820RgbWrite {
+            request_id: 1,
+            generation: app.connection_generation,
+            device: selected,
+            image,
+            old: app.rgb_settings.clone(),
+            value: app.rgb_settings.clone(),
+            save: true,
+        };
+        assert_eq!(
+            app.start_vial_hid_operation(&ctx, VialHidOperation::Ak820RgbWrite(request)),
+            VialHidTaskStart::NoDevice
+        );
+        assert!(app.vial_hid_task.is_none());
+        assert!(app.hid_device.is_none());
+        assert!(recorder.requests().is_empty());
+    }
+
+    #[test]
+    fn rgb_delayed_worker_coalesces_and_quit_discards_draft() {
+        let (mut app, ctx, _) = app();
+        let (hid, recorder) = crate::hid::HidDevice::test_beta2_ak820_device(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        let image = hid.ak820_image().unwrap();
+        app.hid_device = Some(hid);
+        let device = crate::device::test_usb_device("3-1", 1, crate::ak820::PID);
+        recorder.bind_device(device.clone());
+        app.device_manager.replace_devices(vec![device.clone()]);
+        app.selected_device = Some(0);
+        app.settings_tab = SettingsTab::Rgb;
+        app.main_menu_tab = MainMenuTab::Settings;
+        app.rgb_settings = RgbSettingsState {
+            supported: true,
+            kind: RgbSupportKind::VialRgb,
+            effect: 2,
+            brightness: 100,
+            speed: 20,
+            max_brightness: 160,
+            supported_effects: vec![0, 1, 2],
+            last_enabled_effect: 2,
+            ..Default::default()
+        };
+        let request = Ak820RgbWrite {
+            request_id: 1,
+            generation: app.connection_generation,
+            device,
+            image,
+            old: app.rgb_settings.clone(),
+            value: app.rgb_settings.clone(),
+            save: true,
+        };
+        let (release, gate) = std::sync::mpsc::channel();
+        assert_eq!(
+            app.start_vial_hid_operation_with_runner(
+                &ctx,
+                VialHidOperation::Ak820RgbWrite(request),
+                move |_, _, _, cancel| {
+                    gate.recv_timeout(Duration::from_secs(8)).unwrap();
+                    assert!(cancel.load(std::sync::atomic::Ordering::Acquire));
+                    Err(anyhow::anyhow!("cancelled"))
+                }
+            ),
+            VialHidTaskStart::Started
+        );
+        assert!(app.queue_ak820_rgb(&ctx, |value| value.brightness = 110));
+        assert!(app.queue_ak820_rgb(&ctx, |value| value.brightness = 120));
+        assert_eq!(app.rgb_draft.as_ref().unwrap().value.brightness, 120);
+        assert_eq!(app.rgb_settings.brightness, 100);
+        app.pending_handed_swap = Some((0, 0, crate::keyboard::KeyBinding::Vial(4)));
+        app.debounce_touchpad_setting_write(&ctx, "fixture".into(), 134, 0, 1);
+        app.request_explicit_quit(&ctx);
+        assert!(app.exit_after_hid_write && app.rgb_exit_pending);
+        assert!(app.rgb_draft.is_none());
+        let started = Instant::now();
+        let release_thread = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(5100));
+            release.send(()).unwrap();
+        });
+        let mut frames = 0;
+        let mut emitted_close = false;
+        while app.vial_hid_task_active() {
+            assert!(started.elapsed() < Duration::from_secs(8));
+            let frame_started = Instant::now();
+            let events = vec![egui::Event::PointerButton {
+                pos: egui::pos2(400.0, 300.0),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            }];
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1100.0, 1000.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let rendered = ctx.run_ui(input, |ui| {
+                eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest());
+            });
+            assert!(!rendered.shapes.is_empty());
+            let output = ctx.run_ui(egui::RawInput::default(), |_ui| {
+                app.update_native_background_for_platform(
+                    &ctx,
+                    started.elapsed().as_secs_f64(),
+                    false,
+                    false,
+                    "windows",
+                );
+            });
+            emitted_close |= output.viewport_output[&egui::ViewportId::ROOT]
+                .commands
+                .contains(&egui::ViewportCommand::Close);
+            assert!(frame_started.elapsed() < Duration::from_secs(1));
+            frames += 1;
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        release_thread.join().unwrap();
+        assert!(started.elapsed() >= Duration::from_secs(5));
+        assert!(frames > 3);
+        assert!(emitted_close);
+        assert_eq!(app.pending_qmk_settings_write_value(134), Some(1));
+        assert!(app.pending_handed_swap.is_some());
+        assert!(app.hid_device.is_none());
+        app.settings_tab = SettingsTab::AutoShift;
+        app.auto_shift_timeout = Some(200);
+        for pressed in [true, false] {
+            let input = egui::RawInput {
+                events: vec![
+                    egui::Event::PointerMoved(egui::pos2(400.0, 300.0)),
+                    egui::Event::PointerButton {
+                        pos: egui::pos2(400.0, 300.0),
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+                ..Default::default()
+            };
+            let rendered = ctx.run_ui(input, |ui| {
+                eframe::App::ui(&mut app, ui, &mut eframe::Frame::_new_kittest());
+            });
+            assert!(!rendered.shapes.is_empty());
+        }
+        assert_eq!(app.auto_shift_timeout, Some(200));
+        assert!(app.pending_handed_swap.is_some());
+        assert!(app.hid_device.is_none());
+        assert!(app.rgb_exit_ready);
+        assert_rgb_terminal_close_event(&mut app, &ctx);
+        assert_eq!(app.rgb_settings.brightness, 100);
+        assert!(app.rgb_uncertain.is_some());
+        assert!(recorder.requests().is_empty());
+    }
+
+    #[test]
+    fn rgb_stale_completion_does_not_restore_handle_or_value() {
+        let (mut app, ctx, _) = app();
+        let (hid, recorder) = crate::hid::HidDevice::test_beta2_ak820_device(
+            crate::app::ak820_beta1_profiles::ProfileId::Main,
+            true,
+        );
+        let image = hid.ak820_image().unwrap();
+        app.hid_device = Some(hid);
+        let device = crate::device::test_usb_device("3-1", 1, crate::ak820::PID);
+        recorder.bind_device(device.clone());
+        app.device_manager.replace_devices(vec![device.clone()]);
+        app.selected_device = Some(0);
+        app.settings_tab = SettingsTab::Rgb;
+        app.main_menu_tab = MainMenuTab::Settings;
+        app.rgb_settings = RgbSettingsState {
+            supported: true,
+            kind: RgbSupportKind::VialRgb,
+            effect: 2,
+            brightness: 100,
+            speed: 20,
+            max_brightness: 160,
+            supported_effects: vec![0, 1, 2],
+            last_enabled_effect: 2,
+            ..Default::default()
+        };
+        let mut value = app.rgb_settings.clone();
+        value.brightness = 120;
+        let request = Ak820RgbWrite {
+            request_id: 1,
+            generation: app.connection_generation,
+            device,
+            image,
+            old: app.rgb_settings.clone(),
+            value,
+            save: true,
+        };
+        let (release, gate) = std::sync::mpsc::channel();
+        assert_eq!(
+            app.start_vial_hid_operation_with_runner(
+                &ctx,
+                VialHidOperation::Ak820RgbWrite(request),
+                move |_, _, _, _| {
+                    gate.recv_timeout(Duration::from_secs(5)).unwrap();
+                    Ok(VialHidOutcome::Ak820RgbWritten)
+                }
+            ),
+            VialHidTaskStart::Started
+        );
+        assert!(app.queue_ak820_rgb(&ctx, |value| value.brightness = 130));
+        app.rgb_uncertain = Some(app.connection_generation);
+        app.connection_generation = app.connection_generation.wrapping_add(1);
+        app.status_msg = "new connection".into();
+        app.poll_vial_hid_task(&ctx);
+        assert!(app.rgb_uncertain.is_none());
+        assert!(app.rgb_draft.is_none());
+        release.send(()).unwrap();
+        poll(&mut app, &ctx, &mut 0);
+        assert!(app.hid_device.is_none());
+        assert!(app.rgb_draft.is_none());
+        assert_eq!(app.rgb_settings.brightness, 100);
+        assert_eq!(app.status_msg, "new connection");
+        assert!(recorder.requests().is_empty());
+    }
+
+    #[test]
+    fn rgb_same_generation_rejects_changed_image_path_or_instance() {
+        for change in ["image", "path", "instance"] {
+            let (mut app, ctx, _) = app();
+            let (hid, recorder) = crate::hid::HidDevice::test_beta2_ak820_device(
+                crate::app::ak820_beta1_profiles::ProfileId::Main,
+                true,
+            );
+            let actual = hid.ak820_image().unwrap();
+            app.hid_device = Some(hid);
+            let device = crate::device::test_usb_device("3-1", 1, crate::ak820::PID);
+            recorder.bind_device(device.clone());
+            app.device_manager.replace_devices(vec![device.clone()]);
+            app.selected_device = Some(0);
+            app.rgb_settings.brightness = 100;
+            let mut value = app.rgb_settings.clone();
+            value.brightness = 120;
+            let image = actual;
+            let request = Ak820RgbWrite {
+                request_id: 1,
+                generation: app.connection_generation,
+                device: device.clone(),
+                image,
+                old: app.rgb_settings.clone(),
+                value,
+                save: true,
+            };
+            let (release, gate) = std::sync::mpsc::channel();
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::Ak820RgbWrite(request),
+                    move |_, _, _, _| {
+                        gate.recv_timeout(Duration::from_secs(5)).unwrap();
+                        Ok(VialHidOutcome::Ak820RgbWritten)
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            let mut replacement = device;
+            if change == "path" {
+                replacement.path.push_str("-changed");
+            }
+            if change == "instance" {
+                replacement.instance_token.push_str("-changed");
+            }
+            app.device_manager.replace_devices(vec![replacement]);
+            release.send(()).unwrap();
+            if change == "image" {
+                let task = app.vial_hid_task.as_mut().unwrap();
+                let mut result = task.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+                if let VialHidOperation::Ak820RgbWrite(request) = &mut result.operation {
+                    request.image = crate::ak820::ImageContract::Beta3(
+                        crate::app::ak820_beta1_profiles::ProfileId::Main,
+                    );
+                }
+                let (sender, receiver) = std::sync::mpsc::channel();
+                assert!(sender.send(result).is_ok());
+                task.receiver = receiver;
+            }
+            poll(&mut app, &ctx, &mut 0);
+            assert!(app.hid_device.is_none(), "{change}");
+            assert_eq!(app.rgb_settings.brightness, 100, "{change}");
+            assert!(recorder.requests().is_empty());
+        }
+    }
+
+    #[test]
+    fn rgb_window_close_only_cancels_on_committed_exit() {
+        let _storage = crate::app::app_storage::ScopedTempConfig::new();
+        for choice in ["tray", "ask_cancel", "unlock", "close"] {
+            let (mut app, ctx, _) = app();
+            app.app_settings.language = crate::i18n::Language::English;
+            let (hid, recorder) = crate::hid::HidDevice::test_beta2_ak820_device(
+                crate::app::ak820_beta1_profiles::ProfileId::Main,
+                true,
+            );
+            let image = hid.ak820_image().unwrap();
+            app.hid_device = Some(hid);
+            let device = crate::device::test_usb_device("3-1", 1, crate::ak820::PID);
+            recorder.bind_device(device.clone());
+            app.device_manager.replace_devices(vec![device.clone()]);
+            app.selected_device = Some(0);
+            app.settings_tab = SettingsTab::Rgb;
+            app.main_menu_tab = MainMenuTab::Settings;
+            let request = Ak820RgbWrite {
+                request_id: 1,
+                generation: app.connection_generation,
+                device,
+                image,
+                old: app.rgb_settings.clone(),
+                value: app.rgb_settings.clone(),
+                save: true,
+            };
+            let (release, gate) = std::sync::mpsc::channel();
+            let expect_cancel = choice == "close";
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::Ak820RgbWrite(request),
+                    move |_, _, _, cancel| {
+                        gate.recv_timeout(Duration::from_secs(5)).unwrap();
+                        assert_eq!(
+                            cancel.load(std::sync::atomic::Ordering::Acquire),
+                            expect_cancel
+                        );
+                        Err(anyhow::anyhow!("fixture"))
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            app.app_settings.close_to_tray_behavior = match choice {
+                "tray" => CloseToTrayBehavior::Tray,
+                "ask_cancel" => CloseToTrayBehavior::Ask,
+                _ => CloseToTrayBehavior::Close,
+            };
+            app.app_settings.text_expander_enabled = choice == "ask_cancel";
+            app.unlock_open = choice == "unlock";
+            if choice == "close" {
+                app.debounce_touchpad_setting_write(&ctx, "fixture".into(), 134, 0, 1);
+            }
+            let mut input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1100.0, 1000.0),
+                )),
+                ..Default::default()
+            };
+            input
+                .viewports
+                .get_mut(&egui::ViewportId::ROOT)
+                .unwrap()
+                .events
+                .push(egui::ViewportEvent::Close);
+            let _ = ctx.run_ui(input, |_ui| app.handle_close_to_tray(&ctx));
+            if choice == "ask_cancel" {
+                assert!(app.close_to_tray_prompt_open);
+                let prompt_input = || egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1100.0, 1000.0),
+                    )),
+                    ..Default::default()
+                };
+                let _ = ctx.run_ui(prompt_input(), |_ui| app.draw_close_to_tray_prompt(&ctx));
+                let output = ctx.run_ui(prompt_input(), |_ui| app.draw_close_to_tray_prompt(&ctx));
+                let pos = text_position(&output, "Cancel");
+                for pressed in [true, false] {
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1100.0, 1000.0),
+                        )),
+                        events: vec![
+                            egui::Event::PointerMoved(pos),
+                            egui::Event::PointerButton {
+                                pos,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: Default::default(),
+                            },
+                        ],
+                        ..Default::default()
+                    };
+                    let _ = ctx.run_ui(input, |_ui| app.draw_close_to_tray_prompt(&ctx));
+                }
+                assert!(!app.close_to_tray_prompt_open);
+            }
+            assert_eq!(app.rgb_exit_pending, expect_cancel, "{choice}");
+            assert_eq!(app.exit_after_hid_write, expect_cancel, "{choice}");
+            release.send(()).unwrap();
+            poll(&mut app, &ctx, &mut 0);
+            if choice == "close" {
+                let output = ctx.run_ui(egui::RawInput::default(), |_ui| {
+                    app.finish_deferred_exit_after_hid_write(&ctx)
+                });
+                assert!(output.viewport_output[&egui::ViewportId::ROOT]
+                    .commands
+                    .contains(&egui::ViewportCommand::Close));
+                assert!(app.rgb_exit_ready);
+                assert_rgb_terminal_close_event(&mut app, &ctx);
+                assert_eq!(app.pending_qmk_settings_write_value(134), Some(1));
+            }
+            assert!(recorder.requests().is_empty());
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            app.release_tray_before_gui_drop();
+        }
+    }
+
+    fn assert_rgb_terminal_close_event(app: &mut EntropyApp, ctx: &egui::Context) {
+        let mut input = egui::RawInput::default();
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .events
+            .push(egui::ViewportEvent::Close);
+        let output = ctx.run_ui(input, |_ui| app.handle_close_to_tray(ctx));
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .contains(&egui::ViewportCommand::CancelClose));
+        assert!(app.rgb_exit_pending && app.rgb_exit_ready);
+        assert_eq!(
+            app.start_vial_hid_operation(ctx, VialHidOperation::Lock),
+            VialHidTaskStart::Busy
+        );
+    }
 
     fn app() -> (EntropyApp, egui::Context, crate::hid::TestHidRecorder) {
         let mut app = EntropyApp::new_inert_for_test();
@@ -2089,6 +3414,65 @@ mod repeat_lifecycle_tests {
 mod tests {
     use super::*;
     use crate::keyboard::KeyBinding;
+    use std::time::Duration;
+
+    fn bind_unlock_fixture(app: &mut EntropyApp, recorder: &crate::hid::TestHidRecorder) {
+        let device = crate::device::test_usb_device("3-1", 1, 0x42);
+        recorder.bind_device(device.clone());
+        app.device_manager.replace_devices(vec![device]);
+        app.selected_device = Some(0);
+    }
+
+    #[test]
+    fn vial_unlock_rejects_unbound_or_wrong_owner_before_first_packet() {
+        for case in [
+            "no_selection",
+            "unbound",
+            "path",
+            "instance",
+            "unknown_ak_image",
+        ] {
+            let mut app = EntropyApp::new_inert_for_test();
+            let ctx = egui::Context::default();
+            let (hid, recorder) = crate::hid::HidDevice::test_device();
+            let mut selected = crate::device::test_usb_device(
+                "3-1",
+                1,
+                if case == "unknown_ak_image" {
+                    crate::ak820::PID
+                } else {
+                    0x42
+                },
+            );
+            if case == "unknown_ak_image" {
+                selected.vendor_id = crate::ak820::VID;
+            }
+            let mut bound = selected.clone();
+            if case == "path" {
+                bound.path.push_str("-old");
+            }
+            if case == "instance" {
+                bound.instance_token.push_str("-old");
+            }
+            if case != "unbound" {
+                recorder.bind_device(bound);
+            }
+            if case != "no_selection" {
+                app.device_manager.replace_devices(vec![selected]);
+                app.selected_device = Some(0);
+            }
+            app.hid_device = Some(hid);
+            assert_eq!(
+                app.start_vial_unlock(&ctx),
+                VialHidTaskStart::NoDevice,
+                "{case}"
+            );
+            assert!(app.vial_hid_task.is_none());
+            assert_eq!(app.hid_device.is_some(), case == "unknown_ak_image");
+            assert!(app.shared_hid_output.is_none());
+            assert!(recorder.requests().is_empty());
+        }
+    }
 
     fn single_key_layout(keycode: u16) -> KeyboardLayout {
         KeyboardLayout {
@@ -2160,6 +3544,431 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         panic!("Vial HID task did not finish");
+    }
+
+    #[test]
+    fn vial_unlock_runner_busy_stale_and_committed_exit_stop_packets() {
+        let _storage = crate::app::app_storage::ScopedTempConfig::new();
+        for exit in [false, true] {
+            let mut app = EntropyApp::new_inert_for_test();
+            let ctx = egui::Context::default();
+            let (hid, recorder) = crate::hid::HidDevice::test_device();
+            bind_unlock_fixture(&mut app, &recorder);
+            app.hid_device = Some(hid);
+            let (release, gate) = std::sync::mpsc::channel();
+            let status = std::sync::Arc::new(std::sync::Mutex::new(None));
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::UnlockSession(status),
+                    move |hid, operation, progress, cancel| {
+                        gate.recv_timeout(Duration::from_secs(5)).unwrap();
+                        run_vial_hid_operation_with_progress(hid, operation, progress, cancel)
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            assert_eq!(app.start_vial_unlock(&ctx), VialHidTaskStart::Busy);
+            if exit {
+                assert!(app.defer_exit_until_hid_write_returns(&ctx));
+            } else {
+                assert!(app.cancel_active_ak820_backup_capture());
+                app.connection_generation = app.connection_generation.wrapping_add(1);
+            }
+            release.send(()).unwrap();
+            poll_until_vial_hid_idle(&mut app, &ctx);
+            assert!(recorder.requests().is_empty());
+            assert!(app.hid_device.is_none());
+            if exit {
+                app.finish_deferred_exit_after_hid_write(&ctx);
+                assert!(app.rgb_exit_ready);
+            }
+        }
+    }
+
+    #[test]
+    fn vial_unlock_runner_real_transport_virtual_clock_confirms_without_start() {
+        struct Clock(std::time::Duration);
+        impl UnlockClock for Clock {
+            fn now(&self) -> std::time::Duration {
+                self.0
+            }
+            fn wait(&mut self, duration: std::time::Duration) {
+                self.0 += duration;
+            }
+        }
+        let _storage = crate::app::app_storage::ScopedTempConfig::new();
+        let mut app = EntropyApp::new_inert_for_test();
+        let ctx = egui::Context::default();
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        bind_unlock_fixture(&mut app, &recorder);
+        let mut status_response = [0xff; 32];
+        status_response[..2].copy_from_slice(&[1, 0]);
+        recorder.respond_with([status_response]);
+        app.hid_device = Some(hid);
+        app.unlock_open = true;
+        let status = std::sync::Arc::new(std::sync::Mutex::new(None));
+        assert_eq!(
+            app.start_vial_hid_operation_with_runner(
+                &ctx,
+                VialHidOperation::UnlockSession(status),
+                |hid, operation, _, cancel| {
+                    let VialHidOperation::UnlockSession(status) = operation else {
+                        unreachable!()
+                    };
+                    run_unlock_session(
+                        &mut &*hid,
+                        &mut Clock(std::time::Duration::ZERO),
+                        cancel,
+                        &status,
+                    )
+                    .map(VialHidOutcome::UnlockSession)
+                }
+            ),
+            VialHidTaskStart::Started
+        );
+        poll_until_vial_hid_idle(&mut app, &ctx);
+        assert_eq!(app.vial_unlocked, Some(true));
+        assert_eq!(recorder.requests().len(), 1);
+        assert!(recorder.requests()[0].starts_with(&[0xfe, 5]));
+    }
+
+    #[test]
+    fn vial_unlock_runner_real_transport_full_sessions_and_first_fault() {
+        struct Clock(Duration);
+        impl UnlockClock for Clock {
+            fn now(&self) -> Duration {
+                self.0
+            }
+            fn wait(&mut self, duration: Duration) {
+                self.0 += duration;
+            }
+        }
+        for mode in ["new", "pending", "deny", "fault", "disconnect"] {
+            let _storage = crate::app::app_storage::ScopedTempConfig::new();
+            let mut app = EntropyApp::new_inert_for_test();
+            app.app_settings.language = crate::i18n::Language::English;
+            let ctx = egui::Context::default();
+            let (hid, recorder) = if mode == "fault" || mode == "disconnect" {
+                crate::hid::HidDevice::test_device_with_fault_after_requests(Some((
+                    2,
+                    if mode == "fault" {
+                        crate::hid::TestHidFault::Timeout
+                    } else {
+                        crate::hid::TestHidFault::Disconnect
+                    },
+                )))
+            } else {
+                crate::hid::HidDevice::test_device()
+            };
+            bind_unlock_fixture(&mut app, &recorder);
+            let mut initial = [0xff; 32];
+            initial[..4].copy_from_slice(&[0, u8::from(mode == "pending"), 1, 2]);
+            let mut pending = [0; 32];
+            pending[..3].copy_from_slice(&[0, 1, 3]);
+            let mut regressed = [0; 32];
+            regressed[..3].copy_from_slice(&[0, 1, 5]);
+            let mut confirm = [0; 32];
+            confirm[..3].copy_from_slice(&[0, 1, 0]);
+            let mut success = [0xff; 32];
+            success[..2].copy_from_slice(&[1, 0]);
+            let denied = [0; 32];
+            let mut responses = vec![initial];
+            if mode != "pending" {
+                responses.push([0; 32]);
+            }
+            if mode == "deny" {
+                responses.push(denied);
+            } else {
+                responses.extend([pending, regressed, confirm, success]);
+            }
+            recorder.respond_with(responses);
+            app.hid_device = Some(hid);
+            app.unlock_open = true;
+            let status = std::sync::Arc::new(std::sync::Mutex::new(None));
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::UnlockSession(status.clone()),
+                    |hid, operation, _, cancel| {
+                        let VialHidOperation::UnlockSession(status) = operation else {
+                            unreachable!()
+                        };
+                        run_unlock_session(&mut &*hid, &mut Clock(Duration::ZERO), cancel, &status)
+                            .map(VialHidOutcome::UnlockSession)
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            poll_until_vial_hid_idle(&mut app, &ctx);
+            let commands: Vec<_> = recorder
+                .requests()
+                .iter()
+                .map(|request| request[1])
+                .collect();
+            match mode {
+                "new" => {
+                    assert_eq!(commands, [5, 6, 7, 7, 7, 5]);
+                    assert_eq!(app.vial_unlocked, Some(true));
+                }
+                "pending" => {
+                    assert_eq!(commands, [5, 7, 7, 7, 5]);
+                    assert_eq!(app.vial_unlocked, Some(true));
+                }
+                "deny" | "fault" | "disconnect" => {
+                    assert_eq!(commands, [5, 6, 7]);
+                    assert_eq!(app.vial_unlocked, None);
+                    assert!(app.hid_device.is_none());
+                    if mode == "fault" {
+                        assert!(app.status_msg.contains("response timed out"));
+                    }
+                    if mode == "disconnect" {
+                        assert!(app.status_msg.contains("disconnected"));
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn vial_unlock_runner_deadline_starts_after_ack_or_initial_observation() {
+        use std::sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        };
+        struct Clock(Arc<AtomicU64>);
+        impl UnlockClock for Clock {
+            fn now(&self) -> Duration {
+                Duration::from_millis(self.0.load(Ordering::Acquire))
+            }
+            fn wait(&mut self, duration: Duration) {
+                self.0
+                    .fetch_add(duration.as_millis() as u64, Ordering::AcqRel);
+            }
+        }
+        for pending in [false, true] {
+            let _storage = crate::app::app_storage::ScopedTempConfig::new();
+            let mut app = EntropyApp::new_inert_for_test();
+            let ctx = egui::Context::default();
+            let (hid, recorder) = crate::hid::HidDevice::test_device();
+            bind_unlock_fixture(&mut app, &recorder);
+            let time = Arc::new(AtomicU64::new(0));
+            let responder_time = time.clone();
+            let dispatches = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let observed = dispatches.clone();
+            recorder.respond_by(move |request| {
+                let mut response = [0xff; 32];
+                match request[1] {
+                    5 => {
+                        responder_time.fetch_add(5000, Ordering::AcqRel);
+                        response[..4].copy_from_slice(&[0, u8::from(pending), 1, 2]);
+                    }
+                    6 => {
+                        responder_time.fetch_add(8000, Ordering::AcqRel);
+                        response = [0; 32];
+                    }
+                    7 => {
+                        let mut times = observed.lock().unwrap();
+                        times.push(responder_time.load(Ordering::Acquire));
+                        response[..3].copy_from_slice(&[
+                            0,
+                            1,
+                            if times.len() % 2 == 0 { 5 } else { 3 },
+                        ]);
+                    }
+                    _ => unreachable!(),
+                }
+                Some(Ok(response))
+            });
+            app.hid_device = Some(hid);
+            let status = Arc::new(std::sync::Mutex::new(None));
+            let worker_status = status.clone();
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::UnlockSession(worker_status),
+                    move |hid, operation, _, cancel| {
+                        let VialHidOperation::UnlockSession(status) = operation else {
+                            unreachable!()
+                        };
+                        run_unlock_session(&mut &*hid, &mut Clock(time), cancel, &status)
+                            .map(VialHidOutcome::UnlockSession)
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            poll_until_vial_hid_idle(&mut app, &ctx);
+            let times = dispatches.lock().unwrap();
+            let origin = if pending { 5000 } else { 13000 };
+            assert_eq!(times.len(), 74);
+            assert_eq!(times[0], origin + 200);
+            assert_eq!(*times.last().unwrap(), origin + 14800);
+            assert!(times.windows(2).all(|pair| pair[1] - pair[0] == 200));
+            assert_eq!(status.lock().unwrap().as_ref().unwrap().counter, 5);
+            assert_eq!(
+                recorder.requests().iter().filter(|r| r[1] == 6).count(),
+                usize::from(!pending)
+            );
+            assert_eq!(app.vial_unlocked, None);
+        }
+    }
+
+    #[test]
+    fn vial_unlock_runner_rejects_changed_target_or_image_and_ignores_stale() {
+        for change in ["path", "instance", "owner", "image", "generation"] {
+            let _storage = crate::app::app_storage::ScopedTempConfig::new();
+            let mut app = EntropyApp::new_inert_for_test();
+            let ctx = egui::Context::default();
+            let device = crate::device::test_usb_device("3-1", 1, 0x42);
+            app.device_manager.replace_devices(vec![device.clone()]);
+            app.selected_device = Some(0);
+            let (hid, recorder) = crate::hid::HidDevice::test_device();
+            recorder.bind_device(device.clone());
+            app.hid_device = Some(hid);
+            let status = std::sync::Arc::new(std::sync::Mutex::new(None));
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::UnlockSession(status),
+                    |_, _, _, _| Ok(VialHidOutcome::UnlockSession(UnlockResult::Confirmed))
+                ),
+                VialHidTaskStart::Started
+            );
+            let task = app.vial_hid_task.as_mut().unwrap();
+            let mut result = task.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            if change == "image" {
+                result.unlock_image = Some(crate::ak820::ImageContract::Beta2(
+                    crate::app::ak820_beta1_profiles::ProfileId::Main,
+                ));
+            }
+            let (sender, receiver) = std::sync::mpsc::channel();
+            assert!(sender.send(result).is_ok());
+            task.receiver = receiver;
+            if change == "path" || change == "instance" {
+                let mut replacement = device.clone();
+                if change == "path" {
+                    replacement.path.push_str("-changed");
+                } else {
+                    replacement.instance_token.push_str("-changed");
+                }
+                app.device_manager.replace_devices(vec![replacement]);
+            }
+            if change == "owner" {
+                let mut changed = device.clone();
+                changed.instance_token.push_str("-changed");
+                recorder.bind_device(changed);
+            }
+            if change == "generation" {
+                app.connection_generation = app.connection_generation.wrapping_add(1);
+                app.vial_unlocked = Some(true);
+            }
+            poll_until_vial_hid_idle(&mut app, &ctx);
+            assert!(recorder.requests().is_empty());
+            assert!(app.hid_device.is_none());
+            assert_eq!(
+                app.vial_unlocked,
+                if change == "generation" {
+                    Some(true)
+                } else {
+                    None
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn vial_unlock_runner_confirmation_boundary_and_transport_fault_keep_first_cause() {
+        use std::sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        };
+        struct Clock(Arc<AtomicU64>);
+        impl UnlockClock for Clock {
+            fn now(&self) -> Duration {
+                Duration::from_millis(self.0.load(Ordering::Acquire))
+            }
+            fn wait(&mut self, duration: Duration) {
+                self.0
+                    .fetch_add(duration.as_millis() as u64, Ordering::AcqRel);
+            }
+        }
+        for mode in ["cancel", "exit", "deadline", "fault"] {
+            let _storage = crate::app::app_storage::ScopedTempConfig::new();
+            let mut app = EntropyApp::new_inert_for_test();
+            app.app_settings.language = crate::i18n::Language::English;
+            let ctx = egui::Context::default();
+            let (hid, recorder) = crate::hid::HidDevice::test_device();
+            bind_unlock_fixture(&mut app, &recorder);
+            let time = Arc::new(AtomicU64::new(0));
+            let responder_time = time.clone();
+            let (entered, entered_rx) = std::sync::mpsc::channel();
+            let (release, release_rx) = std::sync::mpsc::channel();
+            recorder.respond_by(move |request| {
+                let mut response = [0xff; 32];
+                match request[1] {
+                    5 => response[..4].copy_from_slice(&[0, 0, 1, 2]),
+                    6 => response = [0; 32],
+                    7 => {
+                        if matches!(mode, "cancel" | "exit") {
+                            entered.send(()).unwrap();
+                            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                        } else {
+                            responder_time.store(15_000, Ordering::Release);
+                        }
+                        if mode == "fault" {
+                            return Some(Err("HID timeout — device did not respond".into()));
+                        }
+                        response[..3].copy_from_slice(&[0, 1, 0]);
+                    }
+                    _ => unreachable!(),
+                }
+                Some(Ok(response))
+            });
+            app.hid_device = Some(hid);
+            app.unlock_open = true;
+            let status = Arc::new(std::sync::Mutex::new(None));
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::UnlockSession(status),
+                    move |hid, operation, _, cancel| {
+                        let VialHidOperation::UnlockSession(status) = operation else {
+                            unreachable!()
+                        };
+                        run_unlock_session(&mut &*hid, &mut Clock(time), cancel, &status)
+                            .map(VialHidOutcome::UnlockSession)
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            if matches!(mode, "cancel" | "exit") {
+                entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                if mode == "exit" {
+                    assert!(app.defer_exit_until_hid_write_returns(&ctx));
+                } else {
+                    app.cancel_vial_unlock_wait();
+                }
+                release.send(()).unwrap();
+            }
+            poll_until_vial_hid_idle(&mut app, &ctx);
+            assert_eq!(
+                recorder.requests().iter().map(|r| r[1]).collect::<Vec<_>>(),
+                [5, 6, 7]
+            );
+            assert!(app.hid_device.is_none());
+            if mode == "exit" {
+                app.finish_deferred_exit_after_hid_write(&ctx);
+                assert!(app.rgb_exit_ready);
+            } else {
+                assert_eq!(app.vial_unlocked, None);
+                assert!(app.status_msg.contains(match mode {
+                    "cancel" => "Stopped waiting",
+                    "deadline" => "timed out",
+                    _ => "response timed out",
+                }));
+            }
+        }
     }
 
     #[test]
@@ -2311,6 +4120,25 @@ mod tests {
         let requests = recorder.requests();
         assert_eq!(&requests[0][..2], &[0xFE, 0x07]);
         assert_eq!(&requests[1][..2], &[0xFE, 0x08]);
+    }
+
+    #[test]
+    fn guarded_unlock_poll_stops_before_confirmation_packet() {
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        let mut pending = [0u8; 32];
+        pending[..3].copy_from_slice(&[0, 1, 0]);
+        recorder.respond_with([pending]);
+        let mut checks = 0;
+        let result = hid.unlock_poll_guarded(|| {
+            checks += 1;
+            anyhow::ensure!(checks == 1, "cancelled");
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_eq!(checks, 2);
+        let requests = recorder.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(&requests[0][..2], &[0xFE, 0x07]);
     }
 
     #[test]
@@ -2870,6 +4698,76 @@ mod ak820_backup_task_tests {
     }
 
     #[test]
+    fn backup_capture_failure_categories_are_bounded() {
+        assert_eq!(
+            CaptureFailure::from_worker("Backup capture read failed: private path", true),
+            CaptureFailure::Disconnected
+        );
+        assert_eq!(
+            CaptureFailure::from_worker("Backup capture cancelled", false),
+            CaptureFailure::Cancelled
+        );
+        assert_eq!(
+            CaptureFailure::from_worker("AK820 storage failed or is busy", false),
+            CaptureFailure::Storage
+        );
+        assert_eq!(
+            CaptureFailure::from_worker("Captured macro getter differs", false),
+            CaptureFailure::Reconciliation
+        );
+        assert_eq!(
+            CaptureFailure::from_worker("private path or packet", false),
+            CaptureFailure::Failed
+        );
+        let mut app = ready_app();
+        let ctx = egui::Context::default();
+        app.hid_device = None;
+        assert_eq!(
+            app.start_ak820_backup_capture(&ctx, 1),
+            Err(CaptureFailure::Disconnected)
+        );
+    }
+
+    #[test]
+    fn backup_capture_worker_disconnect_and_channel_failure_are_distinct() {
+        for (panic_worker, expected) in [
+            (false, CaptureFailure::Disconnected),
+            (true, CaptureFailure::Failed),
+        ] {
+            let mut app = ready_app();
+            let ctx = egui::Context::default();
+            super::super::ak820_backup_inspection::test_capture_pending(
+                &ctx,
+                19,
+                app.connection_generation,
+            );
+            assert_eq!(
+                app.start_vial_hid_operation_with_runner(
+                    &ctx,
+                    VialHidOperation::Ak820BackupCapture { request_id: 19 },
+                    move |_, _, _, _| {
+                        if panic_worker {
+                            panic!("synthetic worker failure");
+                        }
+                        Err(anyhow::anyhow!("hid read failed"))
+                    }
+                ),
+                VialHidTaskStart::Started
+            );
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while app.vial_hid_task_active() && std::time::Instant::now() < deadline {
+                app.poll_vial_hid_task(&ctx);
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            assert!(!app.vial_hid_task_active());
+            assert_eq!(
+                super::super::ak820_backup_inspection::test_capture_failure(&ctx),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
     fn backup_connection_retirement_cancels_and_retains_owner_until_worker_finishes() {
         let mut app = ready_app();
         let ctx = egui::Context::default();
@@ -2897,6 +4795,18 @@ mod ak820_backup_task_tests {
         assert_eq!(app.ak820_backup_capture_progress(17), Some(0.5));
         assert_eq!(app.ak820_backup_capture_progress(18), None);
         assert!(app.hid_write_task_owner_active());
+        assert!(
+            app.hid_device.is_none(),
+            "worker owns the HID handle during the loan"
+        );
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::OperationBusy)
+        );
+        assert_eq!(
+            app.start_ak820_backup_capture(&ctx, 18),
+            Err(CaptureFailure::OperationBusy)
+        );
         app.clear_connected_keyboard_state("retired");
         assert!(flag.load(Ordering::Acquire));
         assert!(app.hid_write_task_owner_active());

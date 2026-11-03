@@ -67,6 +67,7 @@ pub(super) const BUFFER_FETCH_CHUNK: usize = 28;
 /// These successful Vial replies carry only the requested value, not the
 /// encoder index or QSID. A transport therefore cannot distinguish a late
 /// reply to the previous request from the reply to the current one.
+#[cfg(target_os = "linux")]
 pub(crate) fn vial_reply_is_uncorrelated(command: &[u8]) -> bool {
     command.first() == Some(&CMD_VIA_VIAL_PREFIX)
         && matches!(

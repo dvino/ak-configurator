@@ -300,12 +300,15 @@ fn load_verified_ak820(
         let nvm = dev_conn
             .ak820_read_rom(0xC700, 0x2800)
             .map_err(|e| format!("Complete NVM read failed: {e:#}"))?;
-        let metadata = if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
+        let metadata = if matches!(
+            image,
+            crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)
+        ) {
             let layout = crate::ak820_settings_model::validate_nvm_structure(&nvm, image.schema())?;
-            crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_image(
+            crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_formats(
                 &nvm[0x6a8..0x6c0],
-                crate::ak820_qs_versioned_offline::ImageVersion::V2,
-                crate::ak820_qs_versioned_offline::ImageVersion::V2,
+                crate::ak820_settings_model::exact_qs_format(image)?,
+                crate::ak820_settings_model::exact_qs_format(image)?,
             )?;
             layout.validate_macros(&nvm)?
         } else {
@@ -337,14 +340,23 @@ fn load_verified_ak820(
         }
         // Derivation checks the saved Combo marker/version before comparing
         // its exposed wire fields. Reserved storage bytes remain untouched.
-        if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
-            crate::ak820_settings_model::settings_from_nvm_for_image_with_capabilities_offline(
+        if matches!(
+            image,
+            crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)
+        ) {
+            crate::ak820_settings_model::settings_from_nvm_for_formats_offline(
                 &nvm,
                 &[effect as u8, 0, speed, hue, saturation, brightness],
                 true,
-                crate::ak820_qs_versioned_offline::ImageVersion::V2,
-                crate::ak820_qs_versioned_offline::ImageVersion::V2,
-                crate::ak820_settings_model::OfflineSettingsCapabilities { combo_media: true },
+                crate::ak820_settings_model::exact_qs_format(image)?,
+                crate::ak820_settings_model::exact_qs_format(image)?,
+                crate::ak820_settings_model::OfflineSettingsCapabilities {
+                    combo_media: image
+                        .matrix_profile()
+                        .and_then(|profile| profile.settings_identity.as_ref())
+                        .ok_or("Missing exact settings identity")?
+                        .combo_media,
+                },
             )?;
         } else {
             crate::ak820_settings_model::settings_from_nvm(
@@ -367,29 +379,31 @@ fn load_verified_ak820(
                 return Err("AK820 Combo getter differs from NVM".into());
             }
         }
-        let (settings, tap_dance_extensions, key_override_extensions) =
-            if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
-                let settings = crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_image(
-                    &nvm[0x6a8..0x6c0],
-                    crate::ak820_qs_versioned_offline::ImageVersion::V2,
-                    crate::ak820_qs_versioned_offline::ImageVersion::V2,
-                )?;
-                let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(&nvm)?;
-                let settings = image
-                    .qsid_ids()
-                    .iter()
-                    .map(|&id| Ok((id, settings.get(id)?)))
-                    .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
-                (settings, extensions.tap_dance, extensions.key_overrides)
-            } else {
-                let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(&nvm)?;
-                let settings = image
-                    .qsid_ids()
-                    .iter()
-                    .map(|&id| Ok((id, extensions.settings.get(id)?)))
-                    .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
-                (settings, extensions.tap_dance, extensions.key_overrides)
-            };
+        let (settings, tap_dance_extensions, key_override_extensions) = if matches!(
+            image,
+            crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)
+        ) {
+            let settings = crate::ak820_qs_versioned_offline::SettingsRecord::decode_for_formats(
+                &nvm[0x6a8..0x6c0],
+                crate::ak820_settings_model::exact_qs_format(image)?,
+                crate::ak820_settings_model::exact_qs_format(image)?,
+            )?;
+            let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(&nvm)?;
+            let settings = image
+                .qsid_ids()
+                .iter()
+                .map(|&id| Ok((id, settings.get(id)?)))
+                .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
+            (settings, extensions.tap_dance, extensions.key_overrides)
+        } else {
+            let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(&nvm)?;
+            let settings = image
+                .qsid_ids()
+                .iter()
+                .map(|&id| Ok((id, extensions.settings.get(id)?)))
+                .collect::<Result<std::collections::BTreeMap<_, _>, String>>()?;
+            (settings, extensions.tap_dance, extensions.key_overrides)
+        };
         supported_qmk_settings = dev_conn
             .query_qmk_settings()
             .map_err(|e| format!("QMK Settings query failed: {e:#}"))?;
@@ -430,6 +444,7 @@ fn load_verified_ak820(
                 18 => tap_hold_settings.tap_code_delay = actual,
                 19 => tap_hold_settings.tap_hold_caps_delay = actual,
                 22 => caps_word_ruleset = Some(actual as u8),
+                23 => {} // Reconciled read-only; no setter is admitted here.
                 _ => return Err("Unknown AK820 QSID".into()),
             }
             if matches!(id, 7 | 18 | 19) {

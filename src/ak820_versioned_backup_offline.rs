@@ -187,7 +187,7 @@ mod tests {
         nvm[24..32].copy_from_slice(&[9, 20, 30, 160, 4, 0, 0, 0]);
         nvm[0x7f1..0x7f3].copy_from_slice(&16u16.to_le_bytes());
         if let Some(record) = record {
-            nvm[0x6a8..0x6c0].copy_from_slice(&SettingsRecord::defaults(record).encode());
+            nvm[0x6a8..0x6c0].copy_from_slice(&SettingsRecord::defaults(record).unwrap().encode());
         }
         nvm
     }

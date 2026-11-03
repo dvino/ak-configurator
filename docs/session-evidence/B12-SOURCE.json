@@ -1,0 +1,3555 @@
+{
+  "format": "ak-configurator-b12-source-checkpoint-1",
+  "base_commit": "af1935a514788c7f863306b8173d3616f2ac8071",
+  "checkout_dirty": true,
+  "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
+  "file_count": 709,
+  "aggregate_sha256": "13211cd585600c13dcb4e9ef75a6438a4b9acd8a02a265248c7312f7275bcf7f",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 949,
+      "sha256": "fa31f5a737027e46c7320e53c814c64d74106c79083649a9c945b410089b0e04"
+    },
+    {
+      "path": ".github/CI_POLICY.md",
+      "bytes": 4245,
+      "sha256": "3328d16d62da975042cf433dc6d5813b5431f01a040037e54269fc8fb46878d7"
+    },
+    {
+      "path": ".github/MACOS_SIGNING_TEST.md",
+      "bytes": 4166,
+      "sha256": "bc312a4c4a1943d873ca768109e1bfa01b184900481493f498bc5d958751b8bf"
+    },
+    {
+      "path": ".github/scripts/ci_policy.py",
+      "bytes": 12383,
+      "sha256": "73b8a1a1da13704cd7e2f8e8f5739f314fae8476ff594588803c84497514483a"
+    },
+    {
+      "path": ".github/scripts/test_beta5_catalog.py",
+      "bytes": 5192,
+      "sha256": "525f74b9689ccccfd990a8ca44d4cb8358f12a8c8cf8d10a976ce9829f0cb026"
+    },
+    {
+      "path": ".github/scripts/test_ci_policy.py",
+      "bytes": 18422,
+      "sha256": "6e34c4551c8d116078eb05ea1c9bccc6c4506bff7e42d49076edf67c327f6d16"
+    },
+    {
+      "path": ".github/scripts/test_entropy_ci_workflows.py",
+      "bytes": 6799,
+      "sha256": "06ea969a2e85e82db45dfa6eeb6c510f51b14f6e0245f890fd99f6604756d38d"
+    },
+    {
+      "path": ".github/workflows/ak820-release.yml",
+      "bytes": 4181,
+      "sha256": "1d7a2575ecec7a56813411e003c051ff314f9c183936898eeaecb2152c7897f0"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "bytes": 11322,
+      "sha256": "26ad31c5931256a3a2e0d2b4b009e133b58dca5644c141b63fde222d7fce41e9"
+    },
+    {
+      "path": ".github/workflows/desktop-dev.yml",
+      "bytes": 15780,
+      "sha256": "19160ac393f99093a669e22ee0c98986110d858246c9ab0fa7e97ec0a454455c"
+    },
+    {
+      "path": ".github/workflows/nix.yml",
+      "bytes": 4558,
+      "sha256": "b150638758758c8f04dd62e2a9283c98f82f7c8431940888c36946583870152d"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "bytes": 8211,
+      "sha256": "645a34305a77c78a1536f5ebf87e02e44b1593310277eea3e22877b1cb94c774"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 500,
+      "sha256": "a8710287b24a5c26b41a013fe45679232c20e328cbe617be832c72c5841824cf"
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 170385,
+      "sha256": "0ca10b1802c1696df6fed7def2cd9a4b1de1bee7c51e290b5250898a2e42b27c"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 4294,
+      "sha256": "e446fbf71a36295865c4e1e186ee092d3e2e83d8279f583c2a2d2ecf3c37bc80"
+    },
+    {
+      "path": "assets/ACTION-ICON-SOURCES.txt",
+      "bytes": 292,
+      "sha256": "cce3517fdcb5ac4ec3e23f103a9cd9878807a183adf6ce66e6b924a7fbd28542"
+    },
+    {
+      "path": "assets/Clock-DejaVuMono.ttf",
+      "bytes": 68372,
+      "sha256": "6ac249a503f5ba8e4fb41c3a39ccf8d16ac061589d81ec115d92dcd73013907a"
+    },
+    {
+      "path": "assets/Clock-DejaVuSans.ttf",
+      "bytes": 121240,
+      "sha256": "c9567ef477d28a856b722d5512b871a4119ba4b65149dae13020d1046a4ac755"
+    },
+    {
+      "path": "assets/Clock-DejaVuSerif.ttf",
+      "bytes": 97968,
+      "sha256": "b2563112442ac9f06f84120dfd2c63408ff8537081f9a8bfa295f8c32ceead99"
+    },
+    {
+      "path": "assets/Clock-LiberationMono.ttf",
+      "bytes": 108200,
+      "sha256": "28d9e014a63333c399279e8eaf19e6669abf78c6c2858b5e0cf6b9942462361d"
+    },
+    {
+      "path": "assets/Clock-LiberationSans.ttf",
+      "bytes": 117928,
+      "sha256": "7e8aaa10f586f71a2f7790970d180742387c6a0ac21debeba7450cd4dbcdb3e6"
+    },
+    {
+      "path": "assets/Clock-LiberationSerif.ttf",
+      "bytes": 140352,
+      "sha256": "fdd8686cc9f82f429921228fa23d19c69da3e5525c5255e3c8fcd6f9a1e88b86"
+    },
+    {
+      "path": "assets/Clock-UbuntuMono.ttf",
+      "bytes": 141676,
+      "sha256": "16d2688f80c1e2df84802b00d6e11a2e6de32d92205f47f626fd629757a73636"
+    },
+    {
+      "path": "assets/Clock-UbuntuSans.ttf",
+      "bytes": 421936,
+      "sha256": "ed8f7e3c87d655dd136f65cfd5922c63428386c6926b49c7e17191f11cb2532c"
+    },
+    {
+      "path": "assets/DejaVuSans.ttf",
+      "bytes": 759720,
+      "sha256": "57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e"
+    },
+    {
+      "path": "assets/EntropyDisplay-Narrow.ttf",
+      "bytes": 61888,
+      "sha256": "6acdbec15170ae75a2e4f4849740a992f646dcd43a3ca27df441c57e6bf7d98c"
+    },
+    {
+      "path": "assets/FONT-LICENSES.txt",
+      "bytes": 74786,
+      "sha256": "e40982b50daec8652d260ed967a49bbf584284df00dbca0baf1e8f478070fbd4"
+    },
+    {
+      "path": "assets/FONTS.md",
+      "bytes": 936,
+      "sha256": "11e329c5baac165eea0a5fd6a198a6e06d7b21af8910fc8d7488bc017f2d786a"
+    },
+    {
+      "path": "assets/LUCIDE-LICENSE.txt",
+      "bytes": 895,
+      "sha256": "c059ec5ba27c5876963f0678f63d2182a6fb6ce97d45ed8b6472ec0c2ec189bf"
+    },
+    {
+      "path": "assets/Montserrat-Medium.ttf",
+      "bytes": 243180,
+      "sha256": "421f26b23e2be6b98373d32acd3cb2897b154d4bf0a77d26534ce476e4cbed53"
+    },
+    {
+      "path": "assets/NotoEmoji-Regular.ttf",
+      "bytes": 879832,
+      "sha256": "3c4aea565060fa91575a851e2718a5b14b9fe8856ead696b374c5a7e672179cb"
+    },
+    {
+      "path": "assets/NotoEmoji-subset.ttf",
+      "bytes": 27248,
+      "sha256": "e3ca1e30534fc2126bc646c3f243f6590db892c6d37c347fe6300e7ef08ac028"
+    },
+    {
+      "path": "assets/NotoSansSymbols2-Regular.ttf",
+      "bytes": 656852,
+      "sha256": "630846d528dbe4c4981370a4d0a9475a1fd1491a129bb411f8e157cdb5de13c6"
+    },
+    {
+      "path": "assets/OFL-NotoEmoji.txt",
+      "bytes": 4393,
+      "sha256": "88f117575237307bdd86a17ef15e21790fc9a662fe4dfb103ca1ca077f0d9982"
+    },
+    {
+      "path": "assets/Roboto-Regular.ttf",
+      "bytes": 515100,
+      "sha256": "56a45233d29f11b4dfb86d248e921939d115778f87325e7ae8cc108383d6664d"
+    },
+    {
+      "path": "assets/action-icon-map.json",
+      "bytes": 15304,
+      "sha256": "3cc3ea0933aca764a6e913717e6aff3984bd2dfcd8ef6a28ace53ea71240dd8a"
+    },
+    {
+      "path": "assets/action-icons.bin",
+      "bytes": 18018,
+      "sha256": "4f8ce55f9502531f35cdbbac037cd457bdbc2b3b0fcd283a81865e73b0ca025f"
+    },
+    {
+      "path": "assets/ak-configurator-icon.png",
+      "bytes": 184752,
+      "sha256": "2f847d7a68ede54b043b197a23a1da4f9f3ed3ffea88eac941c44d9252e2c696"
+    },
+    {
+      "path": "assets/ak-configurator-logo.png",
+      "bytes": 1383379,
+      "sha256": "a1939621ef5c6aec7338d2a93d4ff76e75d19af5a63a59a8fc63a981291bb3a0"
+    },
+    {
+      "path": "assets/ak-configurator.ico",
+      "bytes": 84957,
+      "sha256": "a22768b76854d22497d117b2a04b22b717179253230803b05d5b35e7733a59b3"
+    },
+    {
+      "path": "assets/ak820/beta1-capability-catalog.json",
+      "bytes": 46101,
+      "sha256": "b5c1f29e7e3bf074e098cc489b0e8ea84e9085d530bf41313e4dde21353a5302"
+    },
+    {
+      "path": "assets/ak820/beta1-firmware-matrix.json",
+      "bytes": 127635,
+      "sha256": "6d46bf505a4d076e5eba4abaa94799ea724234b9f63ff84e1333a53f409eeabd"
+    },
+    {
+      "path": "assets/ak820/beta1-module-descriptions.json",
+      "bytes": 31518,
+      "sha256": "ea8186c100e771aadbe829118cfd3fa95794bcc7cbad14eb5dac48f1f5dbc460"
+    },
+    {
+      "path": "assets/ak820/beta2-capability-catalog.json",
+      "bytes": 63130,
+      "sha256": "9b1f5270a6a0bffdfc415e28ec8bac633b5c441f187c0e3012947d892e2d5353"
+    },
+    {
+      "path": "assets/ak820/beta2-firmware-matrix.json",
+      "bytes": 879783,
+      "sha256": "e646cb3cb58c50c55a184538b77674db92e0d54750b1a9734d1b092a6c20a08e"
+    },
+    {
+      "path": "assets/ak820/beta2-module-descriptions.json",
+      "bytes": 60052,
+      "sha256": "4da879c27fb543dc3879de37df2f3bd52364a2b80cd0025e93c2f0241ed98782"
+    },
+    {
+      "path": "assets/ak820/beta2-provenance.json",
+      "bytes": 2024,
+      "sha256": "c1ccd2acd47e372d1cfa3ae6624cbe8107bb54523f2408563cefa1ab85bfb868"
+    },
+    {
+      "path": "assets/ak820/beta2-release-catalog.json",
+      "bytes": 29522,
+      "sha256": "2ede283a4bf1acfaca237b80d221fc23ba81426ed647aeb4d62474f82e221a73"
+    },
+    {
+      "path": "assets/ak820/beta2-release-manifest.json",
+      "bytes": 29281,
+      "sha256": "999266594b741d92814b454616c2c0266f3515824f294738061066376b1c6ec6"
+    },
+    {
+      "path": "assets/ak820/beta3-capability-catalog.json",
+      "bytes": 64661,
+      "sha256": "cdf03e9fa4a9104ec715e9db58215b1061bfdafb9b239f16461871d278fe241b"
+    },
+    {
+      "path": "assets/ak820/beta3-firmware-matrix.json",
+      "bytes": 2605541,
+      "sha256": "d07cbc6bb562e84193f6de121733d13e21aceb129b653e9ff97ae954da36920c"
+    },
+    {
+      "path": "assets/ak820/beta3-module-descriptions.json",
+      "bytes": 60163,
+      "sha256": "2947032a7f53c43d906c3ab909a7fb0beb31d83bae4e44368db422ef18afffc6"
+    },
+    {
+      "path": "assets/ak820/beta3-provenance.json",
+      "bytes": 3833,
+      "sha256": "e2f68f94d104c7fac087cbec3927ad5098a9989fa12d801d55147846212d70f5"
+    },
+    {
+      "path": "assets/ak820/beta3-release-catalog.json",
+      "bytes": 29738,
+      "sha256": "bf1ce6f0287131bbe9a2d80dbb245c6be9eda3d31436451cda91a4b29e82bb42"
+    },
+    {
+      "path": "assets/ak820/beta3-release-manifest.json",
+      "bytes": 29497,
+      "sha256": "6495d6c075807362453a4831600b58779da98b0dc1d38f37cff9e9227a6b6159"
+    },
+    {
+      "path": "assets/ak820/beta4-capability-catalog.json",
+      "bytes": 71902,
+      "sha256": "b3c91ea8d2f0b9f1d359a6e150d6cd386b0c77944b0ababbaaa2e2937c2b6ed8"
+    },
+    {
+      "path": "assets/ak820/beta4-catalog.zip",
+      "bytes": 4815193,
+      "sha256": "14ffb5a1e3be81819f11eb3c5c6a5100a5b4b6bbbfa822f7cf33e578f79d8097"
+    },
+    {
+      "path": "assets/ak820/beta4-catalog.zip.sha256",
+      "bytes": 90,
+      "sha256": "754b160593e755103ffce9a88b58a4d75acedc17a078eb6d507ce4c317a4bb3a"
+    },
+    {
+      "path": "assets/ak820/beta4-firmware-matrix.json",
+      "bytes": 1746831,
+      "sha256": "48001ce5d0e3f59d9c0244c3674fe5db8b91497e5a64f40350946bb5ec53e874"
+    },
+    {
+      "path": "assets/ak820/beta4-module-descriptions.json",
+      "bytes": 60849,
+      "sha256": "9ddcf7270f0850b22355670d943399683294006bbdf7cfa8137ba716123b0314"
+    },
+    {
+      "path": "assets/ak820/beta4-profile-catalog.json",
+      "bytes": 7176,
+      "sha256": "2142f639846930dd267556d5218c12743727e73f9e56ecc2a1d974bcf0758423"
+    },
+    {
+      "path": "assets/ak820/beta4-release-catalog.json",
+      "bytes": 29738,
+      "sha256": "0ad0642d6add9f17b32c4075e86f0ba610baf591d968443b2ae3c452081b4a41"
+    },
+    {
+      "path": "assets/ak820/beta4-release-manifest.json",
+      "bytes": 29497,
+      "sha256": "89b62144526c95f0862c9969f8a8fa66681de2a9ab56da5977d9be70629dfb22"
+    },
+    {
+      "path": "assets/ak820/beta4.1-capability-catalog.json",
+      "bytes": 71896,
+      "sha256": "83c365b204d731823c22601d192af5d725252d26b7167c8047ceef07bdb6804b"
+    },
+    {
+      "path": "assets/ak820/beta4.1-firmware-matrix.json",
+      "bytes": 1746831,
+      "sha256": "7b38153e68d168718d04c5c8c8502daad875ca63298bf0e79c20a39c4648c570"
+    },
+    {
+      "path": "assets/ak820/beta4.1-release-catalog.json",
+      "bytes": 31613,
+      "sha256": "5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1"
+    },
+    {
+      "path": "assets/ak820/beta5-capability-catalog.json",
+      "bytes": 74704,
+      "sha256": "a1b489026fced8135d424069bb1ed80f6e975468804a2a2cec5aae72047dda91"
+    },
+    {
+      "path": "assets/ak820/beta5-firmware-matrix.json",
+      "bytes": 1750531,
+      "sha256": "12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb"
+    },
+    {
+      "path": "assets/ak820/beta5-module-descriptions.json",
+      "bytes": 61695,
+      "sha256": "52ee9cfc278ac3524b0da5f6757279cf479a17ccf84dcdf987b63e84b1b671a4"
+    },
+    {
+      "path": "assets/ak820/beta5-profiles.json",
+      "bytes": 1750530,
+      "sha256": "96f0a928f75dab71a612fbd2ca422fc66d81b37d516d2261d177d13d76567e95"
+    },
+    {
+      "path": "assets/ak820/beta5-release-catalog.json",
+      "bytes": 31614,
+      "sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d"
+    },
+    {
+      "path": "assets/ak820/catalog.json",
+      "bytes": 1842,
+      "sha256": "cde600a060c5e870396b1e16820bd469574028f36910de0f4cf1b2bc75987e86"
+    },
+    {
+      "path": "assets/ak820/demo-keymap.json",
+      "bytes": 1099,
+      "sha256": "8278cb509813be95641ee7cef3ef25b66b1d98394d52fbcf73067cd7153b7cfe"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/code/application.ihx",
+      "bytes": 95422,
+      "sha256": "7ace8ee559a0fe0b21286ba6f4f1923d3bcb13d72763072eb361743efc7b53f8"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/code/application.map",
+      "bytes": 101786,
+      "sha256": "51b028c8f1cb5114cdd4725c21b7249a2068293ac2c40ea4252db756798b82f6"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/creative/application.ihx",
+      "bytes": 95194,
+      "sha256": "9818eb5042d5d26b95e5ecdd6cb27ece1aeff709a2dbaaf8929a8b19fe0b75f4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/creative/application.map",
+      "bytes": 101588,
+      "sha256": "475e3c40a4c8b1e4974f26f1257c5d5bf8e23216ff26e0136d547fbe442a7077"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/game/application.ihx",
+      "bytes": 96130,
+      "sha256": "8963ce6e5e09f32e2cb4ef8c243f03baf90cc90cedd86c4773076239690025bc"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/game/application.map",
+      "bytes": 101933,
+      "sha256": "53623b5fb98dd5f1a4685c85a351d275fa4a27f8f0ff2783a8f5108f4455befb"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/main/application.ihx",
+      "bytes": 95458,
+      "sha256": "4544d1fe4bb8e9baf262feef8bab0db60a9e98ca2d547266e6d5ecbc10fb4843"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/main/application.map",
+      "bytes": 101821,
+      "sha256": "68893c6855ba12886e870029166c4f9749fafab317d07762d9d0094fec0548d4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/mmo/application.ihx",
+      "bytes": 95608,
+      "sha256": "8c684a8697bd332e72e993b59dd5fd112eb48630ab90266443b6c8d72b4a06a1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/mmo/application.map",
+      "bytes": 101436,
+      "sha256": "67ea3a9478adf163583acdf94e8e39a6c804b9477f1fc5185425910fb0bc5034"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/multios/application.ihx",
+      "bytes": 95180,
+      "sha256": "d8467f3cdd50bf6a4bca14ab1c4c05804f7bdd9a1d55a4ef589e4fdc51fa62c0"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/multios/application.map",
+      "bytes": 102000,
+      "sha256": "e8007e34fe3056591fdf7a767aafb7227ea66c25632e14a2125197508e64b7ff"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/onehand/application.ihx",
+      "bytes": 96066,
+      "sha256": "068e7810a6838e96615b20815ba2b050a28a1e359600f9f73e2fbfc1ab4d7153"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/onehand/application.map",
+      "bytes": 101700,
+      "sha256": "754a405420b6f79ef58b1549028ad3eb537ddf81600dd51b8cdf2722e397aa9e"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/pointer/application.ihx",
+      "bytes": 96156,
+      "sha256": "eec168e2ed8bbef3e603e811b89a92103ca210764fc383159ef7024578b36b7d"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/pointer/application.map",
+      "bytes": 102234,
+      "sha256": "d5746f43884007d8823110f7c6888840aa8c6a3952f4621504ad372e494dc10c"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/shortcuts/application.ihx",
+      "bytes": 96074,
+      "sha256": "b1dd7d7e97005feec624992ee0786a9b38e25ba622154a1b7651c1ad04ad6004"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/shortcuts/application.map",
+      "bytes": 102585,
+      "sha256": "ef1b1c3e7cb023ecf25edb504d44cbf6a9940914c5c951d2ece11ebb5df651b4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/typing/application.ihx",
+      "bytes": 95808,
+      "sha256": "131d3fb8d53d7f374fd1edfb85f72237ce6976b28c78269f7405a833407de692"
+    },
+    {
+      "path": "assets/ak820/firmware-beta2/typing/application.map",
+      "bytes": 102476,
+      "sha256": "87aef043eef9cb3f50a9121f7fd6c50af2204dfe6894e1cfb4c35ce8f2561991"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/code/application.ihx",
+      "bytes": 92330,
+      "sha256": "35803dda2c647d7b4b1c2208de2b7ce9a03405a6d87d05e0d3f5e91d5ff195fb"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/code/application.map",
+      "bytes": 101600,
+      "sha256": "73e19c7cae2c7ceade49cfa98842d22587b3021e77f83e38a20a98c3d111609c"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/creative/application.ihx",
+      "bytes": 95622,
+      "sha256": "476b1c667613712dfe302a4518f6bbd947bf994bc9e6fcb05323d5544b2b8c38"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/creative/application.map",
+      "bytes": 102630,
+      "sha256": "88a04f3d0d87ddf483b4485358227b24e8f06ad3b2bd4d6e00047b99b9324a24"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/game/application.ihx",
+      "bytes": 96956,
+      "sha256": "5351cfafa6eb8bc55272c55e67f86d60ab0dac04809cbe3f25df14c2137f5005"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/game/application.map",
+      "bytes": 102791,
+      "sha256": "7f70f3465cbbe9d4f1b8a240f9b358133852183439ecc7e23551a00bd2d6d70c"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/main/application.ihx",
+      "bytes": 97024,
+      "sha256": "391d6dbca948b46cfc4be989b0055f310fbdfaf832bdc634c76ff2bf5e23b34e"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/main/application.map",
+      "bytes": 103698,
+      "sha256": "d773582a094bb9896c2c1a170d6a13e8d4adcc3cc93dcb232a706a75f5d433b9"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/mmo/application.ihx",
+      "bytes": 96646,
+      "sha256": "963aff70931a3ac4530fa8a8fd9f2dd4ad43125c3dce963ce1c8a7cce3009821"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/mmo/application.map",
+      "bytes": 102561,
+      "sha256": "cda913e667c2791a2925eeb3609d8d44b12766f2290d2a13f80dc69e0943afc2"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/multios/application.ihx",
+      "bytes": 92178,
+      "sha256": "670b523bdc1a3e6eb28a3e874574bd3ba64eb7357d7040b40278a8ed37157a9f"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/multios/application.map",
+      "bytes": 101701,
+      "sha256": "45f1557d7adff77e41ea1bc7c69086b24e2ee9affb5f34545a1ae453408f0ad9"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/onehand/application.ihx",
+      "bytes": 93044,
+      "sha256": "f78f5f91f8382da4e8b60709a46b0e5cfb022f9a5cb925082434b04a3fb0fb8f"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/onehand/application.map",
+      "bytes": 101453,
+      "sha256": "6d41b63fa399d44095272b0cb15d866d04a9ccb784dcc8d2126dfbc99ba4996d"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/pointer/application.ihx",
+      "bytes": 93320,
+      "sha256": "6a97adeb76cc6333ee465b3b75dc000093843b884c08167e65a33f2ebba36946"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/pointer/application.map",
+      "bytes": 101993,
+      "sha256": "6642ecf8f4ae447adb075f9178e3d353267417c604e0f65b3b06e3b49ba56d30"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/shortcuts/application.ihx",
+      "bytes": 93048,
+      "sha256": "3154808d2012f55b5c46098d52c96bc5a0056bcfb9a4c8e3ec991090aab45f64"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/shortcuts/application.map",
+      "bytes": 102231,
+      "sha256": "b7e585afd12e4e026a6fd6bafa129ae12caf9a17de63ee3842b32750c7e8c561"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/typing/application.ihx",
+      "bytes": 92920,
+      "sha256": "57ec708eb400a885b6c1b803d934383709e9942688e619299259d0a0068fda14"
+    },
+    {
+      "path": "assets/ak820/firmware-beta3/typing/application.map",
+      "bytes": 102237,
+      "sha256": "647ba9767504bd27ba1f0ce643b667902b74808de33301b08e79d902ea7b8b1e"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/code/application.ihx",
+      "bytes": 92168,
+      "sha256": "fdfeb3cd0d793f54e58c26fa004c2f583db98098a7703a4dec7b0c72925336c3"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/code/application.map",
+      "bytes": 101529,
+      "sha256": "0bc18ed4f41e2967b50a6b6499ceeae95e63bed1393b866b41164b69eae191b4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/creative/application.ihx",
+      "bytes": 95514,
+      "sha256": "05c61ebfea8c5d362b8a69e71ec689e26c284137c0a593d1b6501ea1713adbf7"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/creative/application.map",
+      "bytes": 102348,
+      "sha256": "8063a91deb36ad3a2273a787aff28deea5d5d5b04bb32c6c42c6ba0e7c282616"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/game/application.ihx",
+      "bytes": 96782,
+      "sha256": "aa7452fb3ebc68b01b4e675c5423b868806ecee6f79b5fe5786be6fd19d9d67a"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/game/application.map",
+      "bytes": 102440,
+      "sha256": "2131ce13a65055a6cb3530fa4442008da90e4e00ece91f493257e10c442aebdd"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/main/application.ihx",
+      "bytes": 97052,
+      "sha256": "05f49d16b380a8f40b55c3a38c0e863a25d884237d4fd8d6aaef51b6fd95c389"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/main/application.map",
+      "bytes": 103560,
+      "sha256": "a75902721381da5d78228d4f6c2ab305bd058065c43e2045626329d373837fe6"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/mmo/application.ihx",
+      "bytes": 96516,
+      "sha256": "ae5232a4d183d9cecf5b8f1cde917ea14961ed7d8db6b76ee93f85d348ddea54"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/mmo/application.map",
+      "bytes": 102216,
+      "sha256": "5bb958087eb05b57b1703dfe52e77826153def5ae5c0a61b27faf547d511fae0"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/multios/application.ihx",
+      "bytes": 91930,
+      "sha256": "871f9d60715a40261808a5433085cf4f829083c3dd0ae2e1230792dd46522998"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/multios/application.map",
+      "bytes": 101451,
+      "sha256": "8ff0433e05d57ce969e95cbe53e950562d701f2d1492d449338d116c90ae62c1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/onehand/application.ihx",
+      "bytes": 92944,
+      "sha256": "32bfa36b3b5a9d4b674b69d0b55b891045c43d575c716384aa77a6ebe6e6b99e"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/onehand/application.map",
+      "bytes": 101484,
+      "sha256": "e8b7e506743e90cbd53ba01bf3b2da1e4c9891c5a1ea14cabad0296b8f09f642"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/pointer/application.ihx",
+      "bytes": 93130,
+      "sha256": "c08d1bfefb705df10c17b545d90d156708f0482464de0e9e0aeb66afeb5ba19e"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/pointer/application.map",
+      "bytes": 101806,
+      "sha256": "db2a9eb085b2c02c4042099b8ff90aa37044c33d97898f963c221f39fbed1ab6"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/shortcuts/application.ihx",
+      "bytes": 92802,
+      "sha256": "1df6f4fc00eb36bca75b2fe8b3a46dbed63529ea00d9474f708dfee51dd1421d"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/shortcuts/application.map",
+      "bytes": 101977,
+      "sha256": "756a5a333a6969a12c982dc13ba4c89e0d2fc00d47187f2a9d4154634ababea0"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/typing/application.ihx",
+      "bytes": 92986,
+      "sha256": "382e5e965740ce917b165ddc01d8a7078525173882016310a755bbb54a8b63a9"
+    },
+    {
+      "path": "assets/ak820/firmware-beta4/typing/application.map",
+      "bytes": 102376,
+      "sha256": "3bf13d1c533156bc94194d6bf4ef081870cdecc654ae5fb19fe3dd1acea40a65"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/code/application.ihx",
+      "bytes": 95768,
+      "sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/code/application.map",
+      "bytes": 105606,
+      "sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/creative/application.ihx",
+      "bytes": 97022,
+      "sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/creative/application.map",
+      "bytes": 105189,
+      "sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/game/application.ihx",
+      "bytes": 96748,
+      "sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/game/application.map",
+      "bytes": 104595,
+      "sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/main/application.ihx",
+      "bytes": 96926,
+      "sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/main/application.map",
+      "bytes": 105924,
+      "sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/mmo/application.ihx",
+      "bytes": 96428,
+      "sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/mmo/application.map",
+      "bytes": 104290,
+      "sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/multios/application.ihx",
+      "bytes": 95468,
+      "sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/multios/application.map",
+      "bytes": 105469,
+      "sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/onehand/application.ihx",
+      "bytes": 93006,
+      "sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/onehand/application.map",
+      "bytes": 103082,
+      "sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/pointer/application.ihx",
+      "bytes": 96722,
+      "sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/pointer/application.map",
+      "bytes": 105823,
+      "sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/shortcuts/application.ihx",
+      "bytes": 96416,
+      "sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/shortcuts/application.map",
+      "bytes": 106026,
+      "sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/typing/application.ihx",
+      "bytes": 96566,
+      "sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b"
+    },
+    {
+      "path": "assets/ak820/firmware-beta5/typing/application.map",
+      "bytes": 106415,
+      "sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02"
+    },
+    {
+      "path": "assets/ak820/layout.json",
+      "bytes": 2598,
+      "sha256": "080192880c40c102022fe6b75dc865b1d36638ffd4e6585cfd429eed3478c071"
+    },
+    {
+      "path": "assets/beta4-candidate/capability-catalog.json",
+      "bytes": 118317,
+      "sha256": "f156059c0f18178a08dca0b259fab21e5fd49c2ea0436eeddd9b25c9347ebb57"
+    },
+    {
+      "path": "assets/beta4-candidate/firmware-matrix.json",
+      "bytes": 5350259,
+      "sha256": "8a416dd29457f70edf5fdf6e08ebd7da0a92e1020e0478b554eed3f7422e7666"
+    },
+    {
+      "path": "assets/display-delete-right.bin",
+      "bytes": 154,
+      "sha256": "405487ce30e6d331c6a05fe6924233b379e5e23ac68912dd5ddb566014f4e1db"
+    },
+    {
+      "path": "assets/display-layer-20.alpha",
+      "bytes": 304,
+      "sha256": "0a8a19a4f06a2c0b7ccef8185960b6e211aba50440318624fc3f5933e8df0468"
+    },
+    {
+      "path": "assets/display-layer-28.alpha",
+      "bytes": 567,
+      "sha256": "01aab87473a9bc2458772ab54744bae536d75d3bd70f48315e9558dc72776394"
+    },
+    {
+      "path": "assets/display-layer-next.bin",
+      "bytes": 154,
+      "sha256": "fffb6870fd87fbccf422aa4f0f5b64773b815e9c77ad6204cbc261dd3b2c1693"
+    },
+    {
+      "path": "assets/display-layer-prev.bin",
+      "bytes": 154,
+      "sha256": "e8154d9b6ef608300641ba9fbae73654b98a994f9f63eaed7418c08ec25a05ff"
+    },
+    {
+      "path": "assets/entropy-layout-screenshot.png",
+      "bytes": 290327,
+      "sha256": "f4682d2853bfc32d43a5b012fc89557047c66c625fde4c31daf448cafeb0a7c7"
+    },
+    {
+      "path": "assets/entropy.ico",
+      "bytes": 285478,
+      "sha256": "cfc4337fc34f7c3fa5a8fd8633ea3d12a0454007a2b55809632dc5e0abcca04b"
+    },
+    {
+      "path": "assets/ergohaven-macropad-startup-logo.png",
+      "bytes": 4584,
+      "sha256": "61f81e6c9b69211527ad05d1baa9a97c0206158a21b411ced09efcf6027d529d"
+    },
+    {
+      "path": "assets/firmware-builtin-icons.bin",
+      "bytes": 3388,
+      "sha256": "aae157842921be58949e8af10f0ac314a36cc5b69f8dcfc1490e7de5c7b037ad"
+    },
+    {
+      "path": "assets/gnome-shell-extension/extension-legacy.js",
+      "bytes": 5744,
+      "sha256": "f550f04e5509a7fd2a306a33a3b6c019451b9da29fc52da092fdb953b463807a"
+    },
+    {
+      "path": "assets/gnome-shell-extension/extension-modern.js",
+      "bytes": 5732,
+      "sha256": "660ead49306614a01e1c58df8a86ff8d74505f2b1aa8fa287ae604eb024d0bd6"
+    },
+    {
+      "path": "assets/icons/hicolor/128x128/apps/entropy.png",
+      "bytes": 8197,
+      "sha256": "47796d843ce55a127bc78904256182606029d8fda499a4d857301ab476f162dd"
+    },
+    {
+      "path": "assets/icons/hicolor/16x16/apps/entropy.png",
+      "bytes": 482,
+      "sha256": "484a1e09bbc735255467561fec3e21c565816507c2d4443f7eb931ca71cdd0a6"
+    },
+    {
+      "path": "assets/icons/hicolor/256x256/apps/entropy.png",
+      "bytes": 15251,
+      "sha256": "5ba09124a0c52d8062a8f734b9f68f197d84b157791fe231e6019d0ba614c7b3"
+    },
+    {
+      "path": "assets/icons/hicolor/32x32/apps/entropy.png",
+      "bytes": 1215,
+      "sha256": "1c6ec418a2cbbbc0e2a4b3ed2fd03fe99de1ed649ae3cb341554d2a764f91c0b"
+    },
+    {
+      "path": "assets/icons/hicolor/48x48/apps/entropy.png",
+      "bytes": 1528,
+      "sha256": "11e8272e69b5af0326caf398f7990041e8acca43d1a94c94b5edc7820e79ed83"
+    },
+    {
+      "path": "assets/icons/hicolor/64x64/apps/entropy.png",
+      "bytes": 3662,
+      "sha256": "46495ace4b329732c5fc526fb75fd4c03f71c7f5735cbe5a1eb45fae8f4111f2"
+    },
+    {
+      "path": "assets/integration-icons.bin",
+      "bytes": 1694,
+      "sha256": "510b68f6264430e47d0519e7861cfaf5218b5d5afa6a610305026b46f553db67"
+    },
+    {
+      "path": "assets/key-picker-dark.png",
+      "bytes": 322643,
+      "sha256": "e0997817fe0c1445cbad9d8c541e151cefa9dd2c90c61f04612bc5104e7de699"
+    },
+    {
+      "path": "assets/key-picker-light.png",
+      "bytes": 244340,
+      "sha256": "738fe21330829f9cb863fcab0f8af981b8e1bea9e1d3e213ee1ae161909adad0"
+    },
+    {
+      "path": "assets/legacy-firmware-builtin-icons-c518c3c.bin",
+      "bytes": 3388,
+      "sha256": "71d55058370875935c1d0dd0f9817e5dec43859d591025d705f8d49347994a43"
+    },
+    {
+      "path": "assets/legacy-layer-navigation-afa3e6c.bin",
+      "bytes": 308,
+      "sha256": "3e96845666fa97381b5b2999be5ba212c5852f1e9b33836e6e78f2f2aabd4ff3"
+    },
+    {
+      "path": "assets/legacy-layer-navigation-agent-confirmed.bin",
+      "bytes": 308,
+      "sha256": "4b8d76964515b9b02dfdb06928c6857d167bfe8f0edb69ae18a567b68ad537c4"
+    },
+    {
+      "path": "assets/legacy-stock-catalog-pre-thinning.bin",
+      "bytes": 28952,
+      "sha256": "ad725f87fa5e2f14e91bd9a3b846f7aa90c235d4c497454b15bf28b41c4ee5c0"
+    },
+    {
+      "path": "assets/legacy-stock-provenance.md",
+      "bytes": 3898,
+      "sha256": "f86d17da10d99022ee8bd1f6da404d91487e8a4ae41b66f101a0b2d68a1eb85a"
+    },
+    {
+      "path": "assets/matrix-tester.png",
+      "bytes": 240600,
+      "sha256": "c4666bbb087fa018a685b0793755229bae287f0560ff69353f3840c0f32f14f8"
+    },
+    {
+      "path": "assets/sm62/clock-glyphs.json",
+      "bytes": 528,
+      "sha256": "0c67edc119a86026107510f8b34ab06be3f0799ba2172f043fb36d26e0b814a6"
+    },
+    {
+      "path": "assets/sm62/clock-unbounded-16.png",
+      "bytes": 1763,
+      "sha256": "9bab7487e2ca67acc67d3878aa063fc9f6325208724a06022f3e6162e0fad11f"
+    },
+    {
+      "path": "assets/sm62/clock-unbounded-48.png",
+      "bytes": 6365,
+      "sha256": "8a0b6d0c4404cff70eec1397885f96db76869b3836515e30bbe780cf4c0718e5"
+    },
+    {
+      "path": "assets/sm62/date-unbounded-16.png",
+      "bytes": 1047,
+      "sha256": "14f55bfe781117c74adf34343e0cb4e54471334366c902f1a894b90cea1a1e65"
+    },
+    {
+      "path": "assets/sm62/keymap-glyphs.json",
+      "bytes": 7124,
+      "sha256": "20b681aaa858daba5df1fa90d253ebcfe5fef527778a50a300302e38d2591620"
+    },
+    {
+      "path": "assets/sm62/keymap-grid-junction.png",
+      "bytes": 202,
+      "sha256": "7543363d8c3a803542352a721704a75d732b2ebac6720768140516988e9b4976"
+    },
+    {
+      "path": "assets/sm62/keymap-zen-20.png",
+      "bytes": 16754,
+      "sha256": "e486abf061e49ecbb9f47576bc14c047102cbf2b7607f158f14aec9a670a126e"
+    },
+    {
+      "path": "assets/sm62/keymap-zen-28.png",
+      "bytes": 23115,
+      "sha256": "01ac8c6d0eb1efbad5c57096281889630185c90ce648dac5749ccd895e0d417a"
+    },
+    {
+      "path": "assets/sm62/orbit_frames.png",
+      "bytes": 140075,
+      "sha256": "2e1c8de5a89d788374c00f45854d5b279cc530458ea641cdc74ae068ac82c168"
+    },
+    {
+      "path": "assets/sm62/player-glyphs.json",
+      "bytes": 20498,
+      "sha256": "fb73f46aa4854d56e5b381e8740d8b38e50e0ec001248650a21542e5f8711463"
+    },
+    {
+      "path": "assets/sm62/player-zen-bold_24.png",
+      "bytes": 11951,
+      "sha256": "a1952c1a8a3fed1899edcd9a4e99cb4b21f555755f3ab66f5806b3892f79ef15"
+    },
+    {
+      "path": "assets/sm62/player-zen-medium_20.png",
+      "bytes": 9869,
+      "sha256": "83371352c7ae56a1a9accbacfd364ff3ba554cab983afe3b10e547a7ebd46a33"
+    },
+    {
+      "path": "assets/sm62/player-zen-regular_20.png",
+      "bytes": 9497,
+      "sha256": "46c04c39c7d4114ad091a075d8a97bfafce9a3b3001f76955bae91e4e73cc758"
+    },
+    {
+      "path": "assets/sm62/player-zen-regular_24.png",
+      "bytes": 11857,
+      "sha256": "2f870b9760de52ac743f547b5d8db35c00efdf7537320cae6204f56c58652dde"
+    },
+    {
+      "path": "assets/sm62/sm62-logo.png",
+      "bytes": 4721,
+      "sha256": "62d8ad164b20f8ff16e83471b444d8901a0836b40505beb0ce176fac56f1c025"
+    },
+    {
+      "path": "assets/sm62/sm62-logo.svg",
+      "bytes": 7339,
+      "sha256": "1d4092991d73d18302f8cccdb14587956110d2572c89ed505df50e1a1bb0c97e"
+    },
+    {
+      "path": "assets/sm62/user-logo-original.svg",
+      "bytes": 21976,
+      "sha256": "9223fba9758727d7ea43f96716a2964c15d308846a01bd74449a32527ae517bf"
+    },
+    {
+      "path": "assets/text-expander.png",
+      "bytes": 278861,
+      "sha256": "e9c2a384b1137d6ce48aec44d2132b8c389f454058a2ce8ceec70225cf0cfabd"
+    },
+    {
+      "path": "assets/windows/ak-configurator-development.cer",
+      "bytes": 1082,
+      "sha256": "97a037c23c8e0d30849d6cb50aadf8e1142cef28e4a71adc7400e21935f47fee"
+    },
+    {
+      "path": "build.rs",
+      "bytes": 1636,
+      "sha256": "4f00bcdaea4c618d12a747a78b1b4f56edc5399cc67aa6fc3f9ccdc6d8b83ab1"
+    },
+    {
+      "path": "i18n/README.md",
+      "bytes": 973,
+      "sha256": "85131ad5d02fb0743e886985389146e6d37f5307bf8b235f155c3e79601e00c1"
+    },
+    {
+      "path": "i18n/en.toml",
+      "bytes": 110698,
+      "sha256": "075aa24221db03b19cb2f404e86d754267c14d3c1bca7f5eea9d5bbfc889d025"
+    },
+    {
+      "path": "i18n/ru.toml",
+      "bytes": 159906,
+      "sha256": "95938685d19687a86c087a0b5c855e15c3f91dfeb53b32f3b90edb85ae5416fe"
+    },
+    {
+      "path": "installer/ak-configurator.iss",
+      "bytes": 3410,
+      "sha256": "bb81a992ac0d56297a358fd3a264335b7fd80a610b23f41611696bb267c4d1d1"
+    },
+    {
+      "path": "installer/entropy.iss",
+      "bytes": 1624,
+      "sha256": "520a3a8629a4baccec803adfb39cdce5b508e08f4e7272b4291df591140538e4"
+    },
+    {
+      "path": "scripts/ak820-release/linux/install-user.sh",
+      "bytes": 4161,
+      "sha256": "abda8066d6f7f0d736c937cef238793bb5f83ffd4b49f72061ea9ba33815cd25"
+    },
+    {
+      "path": "scripts/ak820-release/linux/uninstall-user.sh",
+      "bytes": 927,
+      "sha256": "6010e3dcabfe54eb4c2f4c123854dd197b6f4006c5e37eac39ff05f314c91728"
+    },
+    {
+      "path": "scripts/ak820-release/macos/install-user.sh",
+      "bytes": 1863,
+      "sha256": "5d020cd2504073f05f632fb677cad36bde7ab32f6d41cbef3473851b15bd355d"
+    },
+    {
+      "path": "scripts/ak820-release/macos/uninstall-user.sh",
+      "bytes": 583,
+      "sha256": "65157d751e670b1ed19ae4030240b2165c907fe5cda4fbbd024e70e574832978"
+    },
+    {
+      "path": "scripts/ak820-release/windows/install-user.ps1",
+      "bytes": 5670,
+      "sha256": "497f8ede391c09c658a09993154107e87df0068cc001338b62065e5b7e15e47e"
+    },
+    {
+      "path": "scripts/ak820-release/windows/uninstall-user.ps1",
+      "bytes": 1911,
+      "sha256": "e527930cf68614d8f69afb9b0d185383a37fe11442dee80e616d2a571925f7c6"
+    },
+    {
+      "path": "scripts/ak820_package_metadata.py",
+      "bytes": 3972,
+      "sha256": "bb1edc514a3b8bf23a13fa36be01fd44b33900badf0016a942b59a442abe7c31"
+    },
+    {
+      "path": "scripts/appimagetool_pin.sh",
+      "bytes": 478,
+      "sha256": "19802523c9dd8b4d6116643a436eeaabe1e4b23676a8f7215db56616a38a82d7"
+    },
+    {
+      "path": "scripts/bootstrap_inno_setup.py",
+      "bytes": 2939,
+      "sha256": "097a6466425707a542cf44495cbf19ede444aa6919bb1ebe327ea504b8dc7ecb"
+    },
+    {
+      "path": "scripts/build_cava_helper.py",
+      "bytes": 11815,
+      "sha256": "a26cc607adac88d5930b12522734839f4c656d2482f2834b9368a5f96599586e"
+    },
+    {
+      "path": "scripts/build_linux_appimage.sh",
+      "bytes": 6989,
+      "sha256": "e343d8465b438b733f2816be441d0b62de337ad6d981039e3cabd0754a166533"
+    },
+    {
+      "path": "scripts/build_macos_app.sh",
+      "bytes": 7168,
+      "sha256": "1afa831c2b0fa8f6ee82f1fe1def81dffc8b44f01dc6f19aa374b48a6254b1a9"
+    },
+    {
+      "path": "scripts/build_windows_ci_candidate.py",
+      "bytes": 3701,
+      "sha256": "10eb48f58b7ee908570ee5a73b12eb83e22a49485ca937824087f3b88b73d9dc"
+    },
+    {
+      "path": "scripts/build_windows_installer.ps1",
+      "bytes": 647,
+      "sha256": "e8d629d46884e38cc58fcca780740462f71dd5c5aa61a32763e2692d944b25a9"
+    },
+    {
+      "path": "scripts/build_windows_installer.py",
+      "bytes": 12575,
+      "sha256": "95213f3ed79895936f7ba353d01b234aeaecf14579745173e989657e7401f719"
+    },
+    {
+      "path": "scripts/check_i18n.py",
+      "bytes": 4662,
+      "sha256": "ce0de072eeb59c37c0b3a7d0a338ee783bac29efcbacb3378065b76f6635e8cd"
+    },
+    {
+      "path": "scripts/collect_macos_signing_evidence.sh",
+      "bytes": 3078,
+      "sha256": "ddca185817b8f5c527af04e59ebe0046acfe238b2a9eeb376bd792c16fd2edda"
+    },
+    {
+      "path": "scripts/generate_icons.sh",
+      "bytes": 2093,
+      "sha256": "d70d4425616586b5cb7c65ab6dbd8943531abbc5c62a2bee3c9485ec69f331be"
+    },
+    {
+      "path": "scripts/glibc_baseline.sh",
+      "bytes": 1109,
+      "sha256": "937f9bad21091558c0ae6a31f13f824563f7d3b11b04d6eca742eba598efb4c3"
+    },
+    {
+      "path": "scripts/import_macos_certificate.swift",
+      "bytes": 1531,
+      "sha256": "cf2bf7fd55c9ec2865d78f8ffa32feee58cc801c5b42297cb05f43a7f786c942"
+    },
+    {
+      "path": "scripts/macos_stable_signing.sh",
+      "bytes": 2933,
+      "sha256": "daf5a4d7738f1bdf19b37cc008060da60da23f105243f68d65c0e5e4cf99a75d"
+    },
+    {
+      "path": "scripts/mcp-interop/check.mjs",
+      "bytes": 4140,
+      "sha256": "5b9f1f5ca7ac2c2f2e67eddd50acd93ce2374bb3495b1855b5b8617f3cb45ed2"
+    },
+    {
+      "path": "scripts/mcp-interop/package-lock.json",
+      "bytes": 118507,
+      "sha256": "61925e541ea1662ebabde98d8dae42115d421e45423ecbe5fb6f34cf03e7ff9d"
+    },
+    {
+      "path": "scripts/mcp-interop/package.json",
+      "bytes": 145,
+      "sha256": "a33d25490dcedfaa1b18eb59bfc24072cbac10216fbd54b2876341c4043ab832"
+    },
+    {
+      "path": "scripts/openrgb_interop_probe.rs",
+      "bytes": 1419,
+      "sha256": "14b838a311aeb45825fde1de0248a1aeebc8755fc3fb36ec042a01f9eea92e71"
+    },
+    {
+      "path": "scripts/package_ak820_candidate.py",
+      "bytes": 15525,
+      "sha256": "a51c4297a49225e6f7d7265b52524e575b03b3d0e2a6c7c4f473730a7a091a8d"
+    },
+    {
+      "path": "scripts/pkg_version.sh",
+      "bytes": 2175,
+      "sha256": "ddeabb5393d41369acf9e809427a602fd833d6b7193db163d65ee0b51cd3c4a4"
+    },
+    {
+      "path": "scripts/prepare_env.sh",
+      "bytes": 7668,
+      "sha256": "bfd17ef65eff8eb4a3fc450c4c4fc2f14c3da2aacb119206f868381493315d33"
+    },
+    {
+      "path": "scripts/run_windows_ci_runtime_smoke.py",
+      "bytes": 7550,
+      "sha256": "0632a48a3aaff779468540d6db9a164044a8e99bc2d9edb5bd7a439bedb5dfde"
+    },
+    {
+      "path": "scripts/sign_macos_release.sh",
+      "bytes": 4460,
+      "sha256": "e3eb3804f677c5fd3d1d2276cbdc1656d195f89aa536e82db927e2535d615e5f"
+    },
+    {
+      "path": "scripts/sync_firmware_startup_logo.py",
+      "bytes": 1540,
+      "sha256": "8cf769710c75a6dc675558052a02dd8408f1eb87236b83d9e7b4c6ed7285fae1"
+    },
+    {
+      "path": "scripts/test_ak820_installed_candidate.py",
+      "bytes": 11551,
+      "sha256": "0995e5551b95203deb8f3aad9770d0419138c096cf7ad0d65397b1e701fedf1b"
+    },
+    {
+      "path": "scripts/test_ak820_release_workflow.py",
+      "bytes": 29879,
+      "sha256": "702fd4b6e4e6eed7c35699b790c73685b2012f98cd05c151361517d31ac047be"
+    },
+    {
+      "path": "scripts/test_ak820_runtime_smoke.py",
+      "bytes": 7602,
+      "sha256": "1202a10e0d6bea666d0755f58ddd9d39c33424526f432723a3b48f826802fc00"
+    },
+    {
+      "path": "scripts/test_build_cava_helper.py",
+      "bytes": 14150,
+      "sha256": "a54977575c512e3552bb2c528d312e2db0f8b0393b1fd7410bb8c2b7c7d37a13"
+    },
+    {
+      "path": "scripts/test_build_linux_appimage.sh",
+      "bytes": 9797,
+      "sha256": "69c0f35942c5dbd1266716b246452a9ebcf5fc97d3d6a87ea923678f9839cdfb"
+    },
+    {
+      "path": "scripts/test_cava_helper.py",
+      "bytes": 3890,
+      "sha256": "a478a906ec254e88c74fd9ebefa041485e5787af5736e8068b17fbf187c878ce"
+    },
+    {
+      "path": "scripts/test_linux_install.sh",
+      "bytes": 2712,
+      "sha256": "873ee7fd8c12d22614499bf06868f963ace1b34586820298f6df8b06650333a4"
+    },
+    {
+      "path": "scripts/test_linux_install_guest.sh",
+      "bytes": 5595,
+      "sha256": "d069836ebf2fa42f30a3ff9298184604b7b976303e3c77e62ac365052bec84f2"
+    },
+    {
+      "path": "scripts/test_linux_packages.sh",
+      "bytes": 7851,
+      "sha256": "d14df7a19af90defde6e05f327e1133a9eae9b740a27afdca5522c349519a642"
+    },
+    {
+      "path": "scripts/test_linux_repro.sh",
+      "bytes": 2253,
+      "sha256": "f429dce8e2ffc3ed96e0bfa0b26d6c95c5acbb24cc962864764825c6dd6a042a"
+    },
+    {
+      "path": "scripts/test_macos_manual_workflow.py",
+      "bytes": 4462,
+      "sha256": "774df3113cbd83f4a88aac6165d885e4b5b9f8105ffdc1b5448d4a680f11cfbc"
+    },
+    {
+      "path": "scripts/test_macos_packaging.py",
+      "bytes": 16234,
+      "sha256": "78118344eeb9981dbc8452566c42d88e53dc2e01bcfd6cb5a52d2f0388658021"
+    },
+    {
+      "path": "scripts/test_macos_stable_signing.sh",
+      "bytes": 4067,
+      "sha256": "c93b53a4a4bfa335ab69e8e3aefe55512de2a5ef9b76f7a4d38877bc61e47ec1"
+    },
+    {
+      "path": "scripts/test_mcp_production_metadata.py",
+      "bytes": 942,
+      "sha256": "c4c599f7f8001a870fc059a52df92c6a2e65841f7fd06d204ed0a481fac68bac"
+    },
+    {
+      "path": "scripts/test_mcp_stdio.py",
+      "bytes": 19421,
+      "sha256": "661e031622e50fda446e42a7dde351fbc2492cc9bb0b7c1e6c567e0ce4d7045b"
+    },
+    {
+      "path": "scripts/test_openrgb_interop.py",
+      "bytes": 2953,
+      "sha256": "353c9c8720959296e4cabba3dd158fcf92d057ae2246e9ea5c0e78b3f8da1e02"
+    },
+    {
+      "path": "scripts/test_package_ak820_candidate.py",
+      "bytes": 11857,
+      "sha256": "363ed49a2c98a1b8c57ed554c54a697d6d897d88bc815f649c3f970359fed7a6"
+    },
+    {
+      "path": "scripts/test_pkg_version.sh",
+      "bytes": 1874,
+      "sha256": "bb938c234df5bb9aa785e741d210e9e05d9b8997f78cd890444688f9146853d0"
+    },
+    {
+      "path": "scripts/test_toolchain_pins.sh",
+      "bytes": 2268,
+      "sha256": "5352c558f68096c45d25bb11c48d49e88173370aa93bd150b27dd1e9a69fb1f2"
+    },
+    {
+      "path": "scripts/test_update_appimagetool_pin.sh",
+      "bytes": 2475,
+      "sha256": "a0e2043a55bc09e37df3c2302c5cc92ded7e51d7420eb11a89d3b33ce74ad3e3"
+    },
+    {
+      "path": "scripts/test_verify_sha256.sh",
+      "bytes": 1019,
+      "sha256": "90ccd2890db8b4a8d65299995ecb68be903277c545806ec34f186b48d84324fa"
+    },
+    {
+      "path": "scripts/test_windows_ci_runtime_smoke.py",
+      "bytes": 9702,
+      "sha256": "e79a9be75e55fa4f044770ba258bc8414770833dee404d75d06de01bf0274d9c"
+    },
+    {
+      "path": "scripts/test_windows_installer.py",
+      "bytes": 3687,
+      "sha256": "3a36b447b8db95425a34a42c25a70681a5238e83c54844571028c993dad63edc"
+    },
+    {
+      "path": "scripts/test_windows_installer_ci.py",
+      "bytes": 6367,
+      "sha256": "60b2d8dddbca99e04495a6dec2498694ed6b4b40bb5da5ed74511b428caa9bbe"
+    },
+    {
+      "path": "scripts/test_windows_installer_runtime.py",
+      "bytes": 7509,
+      "sha256": "3b469aa5af1735f16331517205bcd0b8a7bf9ba3e35a6d5de90a6745547ace8c"
+    },
+    {
+      "path": "scripts/test_windows_signing.py",
+      "bytes": 6502,
+      "sha256": "896096b22d748f0d50b0c99e56baa53b52c3276785b1f54af96e7889ed17131a"
+    },
+    {
+      "path": "scripts/tool_pins.sh",
+      "bytes": 1959,
+      "sha256": "11a16654f325106a0795f799a1e95804d776252829d8b7d6055f73874b46d459"
+    },
+    {
+      "path": "scripts/update_appimagetool_pin.sh",
+      "bytes": 2134,
+      "sha256": "a4807dc5640bb569a3bc4cefbcf8798bbfc87ee514a6d2cc80c4feb50c6258d6"
+    },
+    {
+      "path": "scripts/verify_ak820_release_candidate.py",
+      "bytes": 24837,
+      "sha256": "152cbac7d72e5ce67bb12ea7cdfc42e82639af69d2bacd0c21df7bb76a0c749d"
+    },
+    {
+      "path": "scripts/verify_sha256.sh",
+      "bytes": 909,
+      "sha256": "e37a119f59471568d2df1f5bd581f7cb9b603cd834d577d5d4966a84d52a9878"
+    },
+    {
+      "path": "scripts/windows_signing.py",
+      "bytes": 12559,
+      "sha256": "c840271d251e6d8a91ba507c57995f4c139cc1cbfd8dbe85f1665c6d1e004e90"
+    },
+    {
+      "path": "scripts/windows_signing_ci.py",
+      "bytes": 6658,
+      "sha256": "4b91571a685aaa8cec54cdf5f0b54a597a5ae27a4f47ba2e3d4279526b0314e7"
+    },
+    {
+      "path": "src/action_icons.rs",
+      "bytes": 11231,
+      "sha256": "3e4cfd2084287781fc2e40bf9240269aeeb9f06e94f1c7edb707549aa437fb4c"
+    },
+    {
+      "path": "src/ak820.rs",
+      "bytes": 26383,
+      "sha256": "e03b640f60683578c5f91f3814e339b15f16fceb7f7c6ae83debd605b9b12fbc"
+    },
+    {
+      "path": "src/ak820_backup_capture.rs",
+      "bytes": 5517,
+      "sha256": "78ce728a3bf10f62bd0c580b1ba0ce5612497283eca28009fbeac45c7310458c"
+    },
+    {
+      "path": "src/ak820_backup_files.rs",
+      "bytes": 65595,
+      "sha256": "03f7a3646dc09f025dfa816a326772ddb486485d58523082442b215641b64f86"
+    },
+    {
+      "path": "src/ak820_backup_windows.rs",
+      "bytes": 28291,
+      "sha256": "7ae256fda68259fabd4b41381f8e68f65657d8140128ab7487efa68dd573baef"
+    },
+    {
+      "path": "src/ak820_beta1_profiles.rs",
+      "bytes": 52558,
+      "sha256": "3cd537c7e8fbf18450170500614b4dfb45bdc265c57c105d6e742dd1fcb63bb0"
+    },
+    {
+      "path": "src/ak820_diagnostics.rs",
+      "bytes": 4558,
+      "sha256": "fbb618166e5a2b9a5c0236c25cd65099ce1a19073eba5de8e83dacbc810075ee"
+    },
+    {
+      "path": "src/ak820_help.rs",
+      "bytes": 72106,
+      "sha256": "21df143e7300e7f758c58a638f36d8b50538539bb91aefdad9086706177e615f"
+    },
+    {
+      "path": "src/ak820_image_pack.rs",
+      "bytes": 37914,
+      "sha256": "a781dbe06b248bd1577cf781dac0ddf058d65dddfab43188c4ff3862c8e4c54f"
+    },
+    {
+      "path": "src/ak820_install_executor.rs",
+      "bytes": 50565,
+      "sha256": "89c8555f92c9c38e23839a234fa46c8badc16ee21c2478414171c06e583a89c3"
+    },
+    {
+      "path": "src/ak820_install_plan.rs",
+      "bytes": 37698,
+      "sha256": "d13d5b8f5db264f4a95b1874aeacae885d3433116ebc5ed39889638986f9e76b"
+    },
+    {
+      "path": "src/ak820_installer.rs",
+      "bytes": 18265,
+      "sha256": "d3d4833870f82c9424c346b66796ffb4fa8d1f4942d21e17943f5d567a75bfdd"
+    },
+    {
+      "path": "src/ak820_loader.rs",
+      "bytes": 4751,
+      "sha256": "aa54c7561f82cdf7b8393c3fa02ad41915de75a1ba2d1abe909be117118a1bf1"
+    },
+    {
+      "path": "src/ak820_offline_project.rs",
+      "bytes": 26733,
+      "sha256": "f1a56e078e2e2abae7d541d03d4071b3aa991f24c9c7166402427ec2c1deb40a"
+    },
+    {
+      "path": "src/ak820_openrgb_bridge.rs",
+      "bytes": 26819,
+      "sha256": "afdf62cbcb92bca9ec0322c5262e0a74f5aad56d2faa3df1809fc38e8cad9bd4"
+    },
+    {
+      "path": "src/ak820_os_indicator.rs",
+      "bytes": 6314,
+      "sha256": "cef3f19d2957bed5c97b3a10030982eec967174ac77054c57ec6ccddcd01710c"
+    },
+    {
+      "path": "src/ak820_qs_nvm_migration_offline.rs",
+      "bytes": 11127,
+      "sha256": "65a429547f10d775b4e4aad82282c2ab2579f4620de6586913d14b4e9debf308"
+    },
+    {
+      "path": "src/ak820_qs_versioned_offline.rs",
+      "bytes": 25199,
+      "sha256": "865315f38064922f26c6bb2518764f1bf504718e72c87fa702270ca2ff37ce18"
+    },
+    {
+      "path": "src/ak820_release.rs",
+      "bytes": 47408,
+      "sha256": "3141f265182f2d54d56277876f543d20373573e91171f09e54c7b63a52811227"
+    },
+    {
+      "path": "src/ak820_restore_executor.rs",
+      "bytes": 22445,
+      "sha256": "520e25989554fc6e0181795992084f2f4e9756d6e9129d250870dea86f5ad362"
+    },
+    {
+      "path": "src/ak820_restore_plan.rs",
+      "bytes": 52627,
+      "sha256": "d799ebcc0bdd939a1ad88e3e449607d4dba32710d70e2494822edf574e855147"
+    },
+    {
+      "path": "src/ak820_rgb.rs",
+      "bytes": 8020,
+      "sha256": "ae3ca5e3e6d72f795291f9a1e8ec7e6dcd2a1c5f119be520e503e688164bdaa1"
+    },
+    {
+      "path": "src/ak820_rgb/direct.rs",
+      "bytes": 20739,
+      "sha256": "1dcf44ad14745e2bcc7d3f8b05086bbf6af11c7a5f9f3c30148ce6366a8c8afb"
+    },
+    {
+      "path": "src/ak820_rgb_audio.rs",
+      "bytes": 18388,
+      "sha256": "b2869280851260e692d7a9dff9d7ede4ab4e5e6222c3e221f57ef740b845f35f"
+    },
+    {
+      "path": "src/ak820_rgb_compositor.rs",
+      "bytes": 15529,
+      "sha256": "e16a4e8dc177de37b4c62d7150d695b7af6fd02d55c0a6d47b591ccad1868cfd"
+    },
+    {
+      "path": "src/ak820_rgb_scheduler.rs",
+      "bytes": 4011,
+      "sha256": "734b104c0274188236b2f588cea9ed5182d950b254ff6cbbfebb024a8d8634fc"
+    },
+    {
+      "path": "src/ak820_settings_backup.rs",
+      "bytes": 30824,
+      "sha256": "b879bbb4c0c6a136da8c718f54c3e814f391e2df21b72182bd13b2856a2cf8ab"
+    },
+    {
+      "path": "src/ak820_settings_identity_metadata_offline.rs",
+      "bytes": 7458,
+      "sha256": "83685c514c892155c63b9cc4e0042f500e75d50bdd1c6ad56e73a59e6fc411c1"
+    },
+    {
+      "path": "src/ak820_settings_model.rs",
+      "bytes": 52749,
+      "sha256": "218391ed883741fb66640746c14b262cb69830db07fef2c0162228cf98995d19"
+    },
+    {
+      "path": "src/ak820_typed_storage.rs",
+      "bytes": 20912,
+      "sha256": "76d56750dee6ad61998a9ae5d6cbb1c4c90de5d4f63c811ecc13ea46d78326f3"
+    },
+    {
+      "path": "src/ak820_versioned_backup_offline.rs",
+      "bytes": 18103,
+      "sha256": "c170cf82a58ff0cdf700f13d44692e3eb00abd08ad1dbc043c436b69975b33d1"
+    },
+    {
+      "path": "src/ak820_vial.rs",
+      "bytes": 41423,
+      "sha256": "55da2a7b51534db55f6830fc63165fb5b9a5ffb2bdbea9b26e3f41106ce58cb2"
+    },
+    {
+      "path": "src/app.rs",
+      "bytes": 9106,
+      "sha256": "7aa632e611a048d9e5dce31d2014fb42ec4fdd16d2d58402f14ab412ed2d1831"
+    },
+    {
+      "path": "src/app_discovery.rs",
+      "bytes": 129936,
+      "sha256": "484dd8c80b36fefd65c16b4482349735d3f9efb704ffee8ff88ca2625d4497a0"
+    },
+    {
+      "path": "src/app_icon.rs",
+      "bytes": 853,
+      "sha256": "49b4752900c4deabef202a4b5eee818f012ddb35fcfd633de46272ed23120431"
+    },
+    {
+      "path": "src/app_init.rs",
+      "bytes": 36252,
+      "sha256": "5f49e1aacd0a263e5f3e173333895b42aa4e17b543efbb90dfe96f50a182a577"
+    },
+    {
+      "path": "src/app_repaint.rs",
+      "bytes": 6978,
+      "sha256": "6c4a4bd08fe8c12c0e90d6fc3ea05db610413653a24a6b6fb42eb03e3fc39b1b"
+    },
+    {
+      "path": "src/app_state.rs",
+      "bytes": 216521,
+      "sha256": "5e970ef0e2c38eb5866ca63f7c2a359b81a33a1b0f584cb48142dfd6187097ef"
+    },
+    {
+      "path": "src/app_storage.rs",
+      "bytes": 56285,
+      "sha256": "4926c83f534c2c82951e2fb95c048da0da207e182997ef96687deb131fa7cc20"
+    },
+    {
+      "path": "src/app_theme.rs",
+      "bytes": 3638,
+      "sha256": "6762683bb88ed671a2b01f841b9360bfb0af80740e984a6a19eed51feb8161aa"
+    },
+    {
+      "path": "src/app_update.rs",
+      "bytes": 47752,
+      "sha256": "01eaa4f7ed9303a288481e81cc6a176627d434b76828d5c26051ad5b740c7b01"
+    },
+    {
+      "path": "src/app_update/verified.rs",
+      "bytes": 27076,
+      "sha256": "d8499b7dcd86ef59b699d9909d039e07fad47d597d33d07348e693005d345290"
+    },
+    {
+      "path": "src/application_layout_portable.rs",
+      "bytes": 5175,
+      "sha256": "bf7ca027f3e2b7476c904d7676647c80aae91e3a144f80aaf75613285aa1a8ee"
+    },
+    {
+      "path": "src/application_layouts.rs",
+      "bytes": 177239,
+      "sha256": "c48c6a186df6c49c06c70540e5a0f922dc7743362e4077f90301963c231749ff"
+    },
+    {
+      "path": "src/device.rs",
+      "bytes": 54039,
+      "sha256": "a483a0fcb2502213eac77a9deaa7ba97beec848522d64f27e24cba718f37db0e"
+    },
+    {
+      "path": "src/diagnostics.rs",
+      "bytes": 9007,
+      "sha256": "f5da7dc7c06c7a2f75e8ae2c73ddbb59e5961a661c3ed5b604e9c843330b99d0"
+    },
+    {
+      "path": "src/entlayout.rs",
+      "bytes": 193308,
+      "sha256": "54d53fe159d65209139d21865bc89bd5dac4a35a471b083ed8974e92c960d6a0"
+    },
+    {
+      "path": "src/entlayout_macropad_tests.rs",
+      "bytes": 136845,
+      "sha256": "c3b6ab9cf62a8b6f650616baa9d9233f21a3d15030f7fb8f5eb52a5b5a6ce06b"
+    },
+    {
+      "path": "src/entlayout_module_tests.rs",
+      "bytes": 10823,
+      "sha256": "4983fbc7503ff8e8fdb285a50539f7d22e99611c4149006c1e51615623b2ca2f"
+    },
+    {
+      "path": "src/entsettings.rs",
+      "bytes": 21397,
+      "sha256": "3a8f1c3ad4e8c7c06c9a13a5c41c385802cf626c7d49b39f4874808dda529fd3"
+    },
+    {
+      "path": "src/firmware.rs",
+      "bytes": 214,
+      "sha256": "72a6281010fb27f1f4de38d6f42a4c2edea7799aa3a0f522fff9ea088f94bd53"
+    },
+    {
+      "path": "src/firmware_builtin_icons.rs",
+      "bytes": 1659,
+      "sha256": "172762b31db5e5d79711cb725237a20e2b78ad89d6c46f5947579cfd0d85277a"
+    },
+    {
+      "path": "src/headless_export.rs",
+      "bytes": 49908,
+      "sha256": "1596c6118c8a3ed55bf54d74142dfdfb0f903bf9d80b6f17af3d46438ab2f6fd"
+    },
+    {
+      "path": "src/hid.rs",
+      "bytes": 111920,
+      "sha256": "c9705b56098937cd6647daec28264616b6ce70a05b187fd3b8e6ed071fa778f0"
+    },
+    {
+      "path": "src/hid_ak820.rs",
+      "bytes": 76044,
+      "sha256": "de5c9c601f9c477798f2131414950bea8f2bb9b3fa737e9edbb960ffacfdbf0c"
+    },
+    {
+      "path": "src/hid_ak820_backup_tests.rs",
+      "bytes": 21084,
+      "sha256": "cab22da8488453fa1f2f41f6c2ca732c63ad462a92b6997060d9c49a0707154f"
+    },
+    {
+      "path": "src/hid_ak820_beta2_tests.rs",
+      "bytes": 9363,
+      "sha256": "b4b5e4181a1c152972e452db7211dd80ede953a041f5dcdf6de625c991d22e68"
+    },
+    {
+      "path": "src/hid_ak820_install.rs",
+      "bytes": 31813,
+      "sha256": "b7b8d08e2d9426a5bd052371ed29b706bd81f48e0a764282b6c6f28381913960"
+    },
+    {
+      "path": "src/hid_ak820_tests.rs",
+      "bytes": 49587,
+      "sha256": "b45b2d86619aab2d8324d676f9d55d94bb8269e44626fbb70482125818ef14da"
+    },
+    {
+      "path": "src/hid_dynamic.rs",
+      "bytes": 18405,
+      "sha256": "bd9b606baac981230569487e161eb4403195b3312ecf6779e61f580b100c3439"
+    },
+    {
+      "path": "src/hid_keymap.rs",
+      "bytes": 13174,
+      "sha256": "460c65be9567a0e8fa6b9ada0ec186636faf6acc03415487bacc7cc767d92eb6"
+    },
+    {
+      "path": "src/hid_macros.rs",
+      "bytes": 5660,
+      "sha256": "c486cdc8262a7b7d7aeb3644a8dfd30e2d97b58f3b38a94ac6b871f16ea56bb3"
+    },
+    {
+      "path": "src/hid_ownership.rs",
+      "bytes": 9275,
+      "sha256": "44dfb9b70c345dbdec311a7359f0d7d3579d00babe7fbd21a81d1038a1470c29"
+    },
+    {
+      "path": "src/hid_parse.rs",
+      "bytes": 10243,
+      "sha256": "8b1bb4d41de4be1b2ee21970862bd14df4ace26aac8e34d6971b3bd57ded30a1"
+    },
+    {
+      "path": "src/hid_protocol.rs",
+      "bytes": 7900,
+      "sha256": "fcfcc9eacde71a92a2c8ea5cc7a67be495140c73dab0fded91a0e6774c4a68f8"
+    },
+    {
+      "path": "src/hid_proxy.rs",
+      "bytes": 86610,
+      "sha256": "70a11ad321e63faad8e2cda04f840dab835bbd322e481738efb49826d29c995d"
+    },
+    {
+      "path": "src/hid_settings.rs",
+      "bytes": 23239,
+      "sha256": "b3eec65dbcac826ff01850bc1c232374171acc9be5626eadfff000b9530df908"
+    },
+    {
+      "path": "src/hid_vial.rs",
+      "bytes": 8107,
+      "sha256": "c34af8b9758fed3ba67bac4ae7e5bb22a0d3558b7e432364df20673db50a4741"
+    },
+    {
+      "path": "src/hid_vial_reference_tests.rs",
+      "bytes": 5354,
+      "sha256": "625e74164e7fd98441e8a8cc7d48f8204c5961dd748136a97fa840ac7a459cc0"
+    },
+    {
+      "path": "src/i18n.rs",
+      "bytes": 118146,
+      "sha256": "9e057286bd6334c1a64c50a049cbc3a90827d19e60d17260558c05251a986f3c"
+    },
+    {
+      "path": "src/integration_icons.rs",
+      "bytes": 374,
+      "sha256": "f1d8c63cddc2b4af638f60edfd6f48bf03cb599a2cb056297d14376a8be654f6"
+    },
+    {
+      "path": "src/keyboard.rs",
+      "bytes": 35615,
+      "sha256": "6cfff8954888710c65f86a6aea52f180e2d6811c5185075f184224dfc9efcc66"
+    },
+    {
+      "path": "src/keycode.rs",
+      "bytes": 102952,
+      "sha256": "738920840187057cf25eebea2dbefb1c0c246082fe91ccf699c20b01825fe2be"
+    },
+    {
+      "path": "src/keycode_picker.rs",
+      "bytes": 123397,
+      "sha256": "eaf836c755459be45510f43baec0e5e9f708f18f73796463517b73f47fda3672"
+    },
+    {
+      "path": "src/keycode_picker_advanced.rs",
+      "bytes": 10359,
+      "sha256": "a5896ff11ae07ae13b67207e532acfb13e01573136e0d0c18f4b61b643a2b3ec"
+    },
+    {
+      "path": "src/keycode_picker_basic.rs",
+      "bytes": 19729,
+      "sha256": "1b3e8b20183c02420ef5af7bc95e19ed705595c81ff8cbd66ac4d03ea86c2374"
+    },
+    {
+      "path": "src/keycode_picker_catalog.rs",
+      "bytes": 5854,
+      "sha256": "7d3fe59b5fe83efba6b5b757e114f99008347dae49ab514bac76adb758cefba4"
+    },
+    {
+      "path": "src/keycode_picker_keyboard.rs",
+      "bytes": 3572,
+      "sha256": "5414151eacada13f42adb0c6ca90187916ea970155dde83f7cb9e7481b424a4b"
+    },
+    {
+      "path": "src/keycode_picker_lighting_quantum.rs",
+      "bytes": 4365,
+      "sha256": "38e03fb6da1fad2dc463d6b5b48c5c868872e17c9a1eb2d8acaa30736114d04d"
+    },
+    {
+      "path": "src/keycode_picker_macro.rs",
+      "bytes": 63309,
+      "sha256": "1f290a6ef1edcb965e045407d54c75678d46d9122f26ba39a28b4affcb8ff946"
+    },
+    {
+      "path": "src/keycode_picker_model.rs",
+      "bytes": 14580,
+      "sha256": "28bd030031c439dfd04b52c35e167601bc863683dce72474db3db3b35b5e2103"
+    },
+    {
+      "path": "src/keycode_picker_popups.rs",
+      "bytes": 13198,
+      "sha256": "f734dbe982fc5564d1d903cb8536eebbc250fb4bb3325a4f22efcd052214f5e0"
+    },
+    {
+      "path": "src/keycode_picker_rows.rs",
+      "bytes": 26262,
+      "sha256": "e8e9efb84f9029ce1b50d6a401398f16ced8fa1f0f7ff4db76e947dfe9116fd3"
+    },
+    {
+      "path": "src/keycode_picker_search.rs",
+      "bytes": 21966,
+      "sha256": "d1c960709a8e59128609e8e3a2bd8df09a6d51b52daab8457531b7966245b035"
+    },
+    {
+      "path": "src/keycode_picker_special.rs",
+      "bytes": 27238,
+      "sha256": "26f840fe11063224395e5403fd7e16a6452b2e4ca49b543dd5bf8354de6d634b"
+    },
+    {
+      "path": "src/keycode_picker_tabs.rs",
+      "bytes": 17246,
+      "sha256": "8e213006b370fbcbd6fa79a7dbc50e5e548042c52f9bab26896e71ef1773d351"
+    },
+    {
+      "path": "src/keycode_picker_tap_dance.rs",
+      "bytes": 26649,
+      "sha256": "d42530a6c76b7d78be545224c012808133299e39dcbd5443d07fbbafd4252827"
+    },
+    {
+      "path": "src/keycode_picker_tap_dance_picker.rs",
+      "bytes": 22106,
+      "sha256": "15f9abbb039d97c0cb1ca2c61fc5f1c50e631e2d9f0f6c3e1b333619a88596f8"
+    },
+    {
+      "path": "src/keycode_picker_ui.rs",
+      "bytes": 21076,
+      "sha256": "473678ed7a5a3df907d05bbe3d1e28417d077b9adbeecaf6b849f3280f603e1f"
+    },
+    {
+      "path": "src/layouts.rs",
+      "bytes": 5239,
+      "sha256": "8ce0f839a2c5ea9f1be512014aa676d83bbce95184a6d89c5813514d4dbff956"
+    },
+    {
+      "path": "src/layouts/imperial44.json",
+      "bytes": 2809,
+      "sha256": "f4a6649b0ae40894e8e5afefbf3ae1a5b364af27631256b04ee53522a8baf092"
+    },
+    {
+      "path": "src/layouts/k03.json",
+      "bytes": 6691,
+      "sha256": "5121cda34acf896fe3b642e9a1d2b4d924f9b70d1742fc3c2027d20792dc88ea"
+    },
+    {
+      "path": "src/layouts/op36.json",
+      "bytes": 2115,
+      "sha256": "287c42726ad382bda15b14c9d25d155f940db9ef15d7b31fe7115ac80a62c602"
+    },
+    {
+      "path": "src/linux_ble.rs",
+      "bytes": 60036,
+      "sha256": "db20cd5cff882493efb8060e504666080c0ad23df7c80989a7484facf64309ea"
+    },
+    {
+      "path": "src/linux_setup.rs",
+      "bytes": 19894,
+      "sha256": "aeffe04bc3c5722c0555f5a7677060645eb5053acf3921efb562cd2f57751a9e"
+    },
+    {
+      "path": "src/linux_usb_metadata.rs",
+      "bytes": 10636,
+      "sha256": "1c30a5bf4834735ca0107f4d0ce4fc017fea592b3e1be7a45dfe082081aa41d2"
+    },
+    {
+      "path": "src/macos_usb_discovery.rs",
+      "bytes": 10901,
+      "sha256": "4b54fdc02ef54aba84d15110f50e385ec3bfdc6aeb1e84d9d23f368f7a9bdffd"
+    },
+    {
+      "path": "src/macos_usb_metadata.rs",
+      "bytes": 3736,
+      "sha256": "3bede1e0fd2abe0a77ab98fa5bb44f9c739e6a28d413a36e0dbad402aa80dece"
+    },
+    {
+      "path": "src/macos_usb_registry_tests.rs",
+      "bytes": 9359,
+      "sha256": "fa97606a00f6349d89b1214e296d8b00fea28d5a0c7b77f65bbdabf3cab19b79"
+    },
+    {
+      "path": "src/main.rs",
+      "bytes": 24107,
+      "sha256": "b9ddb3e760f545731d35e6d9921602fecb67c6f129ae70c12e02aba64b0acaeb"
+    },
+    {
+      "path": "src/mcp/artifacts.rs",
+      "bytes": 97884,
+      "sha256": "311e27c5c0c67202532c819f582a399720b2d8f05ce0e9e46f41bf0280f00523"
+    },
+    {
+      "path": "src/mcp/backend.rs",
+      "bytes": 109326,
+      "sha256": "4e5e2ac86e796daabeac04632dd10256d32749ea7831254412510f90f4cf9ae4"
+    },
+    {
+      "path": "src/mcp/dto.rs",
+      "bytes": 7030,
+      "sha256": "0d6436d346ceeb2068a5fee28d17a7ed632020a96324dd589a086acda81305cb"
+    },
+    {
+      "path": "src/mcp/immutable_plan.rs",
+      "bytes": 8664,
+      "sha256": "8df91441150c2d3c74a97a9a2f8a1535071c45f8448239637ab81bcd432e1701"
+    },
+    {
+      "path": "src/mcp/mock.rs",
+      "bytes": 3916,
+      "sha256": "c8c3044be396f55a1c30d76723bb6b0ab604a874a365b3aac6affd9886c33a13"
+    },
+    {
+      "path": "src/mcp/mod.rs",
+      "bytes": 9968,
+      "sha256": "0a2d89de16cbe508c6db7f2fb379cd269c0b820090f51504a429fd7cd868cd37"
+    },
+    {
+      "path": "src/mcp/strict_input.rs",
+      "bytes": 8280,
+      "sha256": "61aa9fd8b5404f8e7d7d517a431116a06acafcbb4f45a44fed2f593944829a47"
+    },
+    {
+      "path": "src/mcp/trace.rs",
+      "bytes": 4978,
+      "sha256": "c9f5a4d2b2e5ec4783bb592420bf066e67e42fa881da47b1bab6ded690ee3183"
+    },
+    {
+      "path": "src/package_self_check.rs",
+      "bytes": 8008,
+      "sha256": "5d77eac4b80ff5be172e0f9b61595f34e2e35b2271ffd025f92c8708bfdb0c15"
+    },
+    {
+      "path": "src/pdf.rs",
+      "bytes": 14487,
+      "sha256": "480e7fbd8eafe28cf1662037d44b865a4421a48ad0df6e4d71f6006224a72b7c"
+    },
+    {
+      "path": "src/pictogram_origin.rs",
+      "bytes": 5568,
+      "sha256": "8bbe9215a5586c3f322ba784b8f6c62d35885053f9f4b5fff95a11541b8be7ab"
+    },
+    {
+      "path": "src/pictograms.rs",
+      "bytes": 94430,
+      "sha256": "ebce4bb08c396eb92d761c14a044d2ab10a69b1ec2e7cabd3222d1f894b2c391"
+    },
+    {
+      "path": "src/popup_state.rs",
+      "bytes": 2783,
+      "sha256": "2dc5be34815da2a7adedbd2d538c37b27d3de05e4487a7fd383338b26e414a61"
+    },
+    {
+      "path": "src/qmk_hid_host.rs",
+      "bytes": 180865,
+      "sha256": "ff868ace7f76a00cd9b33544de3f8f6170c03efb33848394dc32924032f2f6da"
+    },
+    {
+      "path": "src/qmk_hid_host/clock_tests.rs",
+      "bytes": 23499,
+      "sha256": "fcdb502438c5f0d317c5298674cf92f453a9a0cdf0a50b7400be08a6b1d1d304"
+    },
+    {
+      "path": "src/qmk_hid_host/macos_volume.rs",
+      "bytes": 7379,
+      "sha256": "69528833483be15a66cf51e9b669b78ae4b947a60626b14e952652100a385290"
+    },
+    {
+      "path": "src/qmk_hid_host/review_regressions.rs",
+      "bytes": 20125,
+      "sha256": "5c4ed0032a04b3f58ba8abdd529e4d51e73c4c4b524025789ddae437a39b9680"
+    },
+    {
+      "path": "src/qmk_hid_host/wake_identity.rs",
+      "bytes": 4129,
+      "sha256": "6d7bed1cc5617e234111f7577475ab44349bf80d39ffe883a68c271280ef6c05"
+    },
+    {
+      "path": "src/rmk_native.rs",
+      "bytes": 36757,
+      "sha256": "37f8e8d2ff20ff0db2a6f6c8dd5b15d265c3b60793bab249579cf84ce1e11e15"
+    },
+    {
+      "path": "src/runtime_safety.rs",
+      "bytes": 3109,
+      "sha256": "a0563dcb7ec322e011495dcd48189b816b04a34efd8ea1f7322576dd65c580b1"
+    },
+    {
+      "path": "src/runtime_smoke_app.rs",
+      "bytes": 12039,
+      "sha256": "779b77ed03be551c10e8ef382edf6ad7b0eb562ebdd10db4c90f298cc1f6ca39"
+    },
+    {
+      "path": "src/runtime_smoke_linux.rs",
+      "bytes": 11642,
+      "sha256": "12168655dcbd66e6c436a42393cae479a1f78a53a1f3c6c64234d1ce14eee353"
+    },
+    {
+      "path": "src/screen_color_picker.rs",
+      "bytes": 5757,
+      "sha256": "072d36eaeb6995ebfd94d58839c91f6c6379cea093fd884298a63f8bbc558d04"
+    },
+    {
+      "path": "src/smart_input.rs",
+      "bytes": 46423,
+      "sha256": "00d4877a8a69fa25fefad890a37c57fbcbe833ab0818533a24e78e0fea1427a9"
+    },
+    {
+      "path": "src/smart_input_windows.rs",
+      "bytes": 32133,
+      "sha256": "fcbc60cabfa914b2380816c7075e40c3262374a3322d3422ee0cc2e6d7d9ed99"
+    },
+    {
+      "path": "src/standby_background.rs",
+      "bytes": 73257,
+      "sha256": "07d7d302062c1f6f763759442cdc4ddf11e97f51653d42e546f1ea1cb1b31c21"
+    },
+    {
+      "path": "src/startup.rs",
+      "bytes": 8968,
+      "sha256": "64f48a3ce3ef4edfbd2e70d60652daba3d33d74d86f15d8d5fa0e1ee4ca52565"
+    },
+    {
+      "path": "src/text_expander.rs",
+      "bytes": 22576,
+      "sha256": "5dbdb205ee3af67f21d0d8e7e6bc986e1a70e2431de2b1206d2495ccf5977b14"
+    },
+    {
+      "path": "src/typing_trainer_symbols.rs",
+      "bytes": 11482,
+      "sha256": "2071f0abdadf8081a8b9550607126177f0457ea689b7e5a3c8b97ea831eae25e"
+    },
+    {
+      "path": "src/typing_trainer_words.rs",
+      "bytes": 9351,
+      "sha256": "ea6074f7386f4682c59dafb717c9e9fdbca482c92bfa1591e30bc4dc5e722b92"
+    },
+    {
+      "path": "src/ui/about_device.rs",
+      "bytes": 43250,
+      "sha256": "3cb6908a85a21ee3a9f9693e6f06ff9941c4523338e67a3040efce79833833f1"
+    },
+    {
+      "path": "src/ui/ak820_backup_inspection.rs",
+      "bytes": 94886,
+      "sha256": "befcae5397f59fda4a67b5159678fae590922084f3a55750f743eea0ce713037"
+    },
+    {
+      "path": "src/ui/ak820_beta1_profiles.rs",
+      "bytes": 14550,
+      "sha256": "6d6032bfe7921e49a8edcb8d686cca60bfeb6559747d379533a580a9c438c275"
+    },
+    {
+      "path": "src/ui/ak820_beta2_connection_tests.rs",
+      "bytes": 11417,
+      "sha256": "d14a5c3e1fc40ed1c35d19b53f98a6df450e1ad240b7467ca34960710774cef5"
+    },
+    {
+      "path": "src/ui/ak820_connection.rs",
+      "bytes": 26176,
+      "sha256": "e58f9cfa94bd490ae52899e15685cdf20a27468e454a41cad490144dbce7276c"
+    },
+    {
+      "path": "src/ui/ak820_connection_tests.rs",
+      "bytes": 10953,
+      "sha256": "f44db53f2bc55b95a9c94772e221201602963b91ecf9eff430bc7c82db1f6a34"
+    },
+    {
+      "path": "src/ui/ak820_help.rs",
+      "bytes": 16520,
+      "sha256": "42ddc8013c471d342df3f13fd9ed42b217404e58c50615aa0580fba22ac850c5"
+    },
+    {
+      "path": "src/ui/ak820_install.rs",
+      "bytes": 100386,
+      "sha256": "b1ba4b368c6210e3643955cd92daf81a04395041364af1d5302d4a0461e759b8"
+    },
+    {
+      "path": "src/ui/ak820_install_files.rs",
+      "bytes": 29204,
+      "sha256": "8fd8631cd15e833b4a149b810981e1edb74f103e6e95cef20d6b02ffc98b2972"
+    },
+    {
+      "path": "src/ui/ak820_offline_extensions.rs",
+      "bytes": 16477,
+      "sha256": "3f580adaf806abb3cfa667f72c268065f0f8520fb4ee06b02b943938ef780aee"
+    },
+    {
+      "path": "src/ui/ak820_offline_files.rs",
+      "bytes": 96919,
+      "sha256": "c21ce8fc8e0669bc80db237c9012d02e74d99116190a3d4f0666cce4980acdfc"
+    },
+    {
+      "path": "src/ui/ak820_offline_project_tests.rs",
+      "bytes": 10537,
+      "sha256": "a94ac701ed205383995f26f1ce412ab58df26dce41d5c95f15974831b0bc65c9"
+    },
+    {
+      "path": "src/ui/ak820_os_indicator.rs",
+      "bytes": 84717,
+      "sha256": "4c6845e3f6bfe2a7031afe8c2db9a2dbbe6967b1e0f4129a18d4287276a9ddff"
+    },
+    {
+      "path": "src/ui/ak820_restore_request.rs",
+      "bytes": 5972,
+      "sha256": "3116358933b89d1762945d84e17c12f7507101ed340746139cae061c621bbe9a"
+    },
+    {
+      "path": "src/ui/ak820_rgb_inputs.rs",
+      "bytes": 12160,
+      "sha256": "39df6224d50e44a27ae86cabdfae6b805776c3cb0a07339d3dbb43f12d1c1733"
+    },
+    {
+      "path": "src/ui/ak820_rgb_palette.rs",
+      "bytes": 56222,
+      "sha256": "2839a33f2ece9930e90579eabd9f9c0698c170424d759cf380433a2f2dc3af1d"
+    },
+    {
+      "path": "src/ui/ak820_rgb_runtime.rs",
+      "bytes": 66804,
+      "sha256": "9f565dcfeae862b9dc47e08a705ec456f93b0af044926550091807eec2d54205"
+    },
+    {
+      "path": "src/ui/ak820_status.rs",
+      "bytes": 24617,
+      "sha256": "829e602a6cb5b49fe4d8b97506255298ed0d6d79dedde6ab8de2ca0105b6d46a"
+    },
+    {
+      "path": "src/ui/alt_repeat_settings.rs",
+      "bytes": 43565,
+      "sha256": "40611e5373735b86e8857a3defa7864e1631e48c65356a6da60bffd81d37d436"
+    },
+    {
+      "path": "src/ui/app_lifecycle.rs",
+      "bytes": 117479,
+      "sha256": "fe40d4bf2da07c0b02f9958b75cc07e171a7f763891b2c1c13f782832492996e"
+    },
+    {
+      "path": "src/ui/app_settings.rs",
+      "bytes": 44279,
+      "sha256": "a5b58e4f238ef1e4ec1e0a68d67453e3fe6636f353fd863bba67317b4c41a631"
+    },
+    {
+      "path": "src/ui/app_updates.rs",
+      "bytes": 11557,
+      "sha256": "75355747fbc1064e787b6d8b1924bd883cd178d9fa68b080c8a03f4c19d66f30"
+    },
+    {
+      "path": "src/ui/application_layout_runtime.rs",
+      "bytes": 191109,
+      "sha256": "94fa299bd73a0997b76394cc46ffb665e1436a91d50dc274b8756fb1713c56b3"
+    },
+    {
+      "path": "src/ui/application_layouts_settings.rs",
+      "bytes": 136767,
+      "sha256": "c704675a1eb25a9f61ced5f81f79100c496d1b3bb981df40c3351cc2fcd1f366"
+    },
+    {
+      "path": "src/ui/auto_shift_settings.rs",
+      "bytes": 30324,
+      "sha256": "d32d6fcb8d41a3477e9d042ebe4eb6402aa5b527a85e0e950e6e20dc62aae667"
+    },
+    {
+      "path": "src/ui/bluetooth_settings.rs",
+      "bytes": 14297,
+      "sha256": "03350f90e8810a4c61021641fc416f45699d5d23673b6987d93ddb4c0655fc9a"
+    },
+    {
+      "path": "src/ui/combo_settings.rs",
+      "bytes": 61484,
+      "sha256": "1b86c673fc4b2a46273e2c69862ea1c1e9e4c0578d98e56dc4fe7f3d87636696"
+    },
+    {
+      "path": "src/ui/combo_write.rs",
+      "bytes": 13732,
+      "sha256": "94822a62bfd41c198d6601ac9a26535cb0e261e364fa58f03f4c9f9879f5e02c"
+    },
+    {
+      "path": "src/ui/device_connect_apply.rs",
+      "bytes": 88240,
+      "sha256": "06651f27cd14af1054be2d5feb1c3e78b72d479003750c62c31cd4e90369f134"
+    },
+    {
+      "path": "src/ui/device_connect_task.rs",
+      "bytes": 93889,
+      "sha256": "856824578189429d226b807b7a1b8e1537ac65ccec0baaf948764a05d51efb50"
+    },
+    {
+      "path": "src/ui/device_connection.rs",
+      "bytes": 24255,
+      "sha256": "2b5688d7e9127ab3e4ce42d28a7dac1b019e560ae77e0687f34696892ac24704"
+    },
+    {
+      "path": "src/ui/device_deferred_load.rs",
+      "bytes": 89965,
+      "sha256": "abb1c5358cb90c2a809c405c3b10d19c5590567058de4422daad76c7e9c95546"
+    },
+    {
+      "path": "src/ui/device_scan.rs",
+      "bytes": 37095,
+      "sha256": "4162859c457ec640bfec81c8b186da9e8d63ebc64fcd3736ce24cce75a4be244"
+    },
+    {
+      "path": "src/ui/device_settings_helpers.rs",
+      "bytes": 123611,
+      "sha256": "8f6c22a7b9c698b9417a622e08acdc017d066e68c6fb66eadde11a1cde0aedb3"
+    },
+    {
+      "path": "src/ui/device_settings_helpers/clock_lifecycle_tests.rs",
+      "bytes": 23618,
+      "sha256": "9fea0b74ecd6585fb93c6ccb87333897bdda20d85a66554cb7e73395d581bc55"
+    },
+    {
+      "path": "src/ui/display_preview.rs",
+      "bytes": 87353,
+      "sha256": "72c58100a1c016ed0adc79366b587f4dd9226047c635dbdb43cde3b3cfb504a6"
+    },
+    {
+      "path": "src/ui/display_preview/legacy_reference_tests.rs",
+      "bytes": 13352,
+      "sha256": "5558585e71e614724f15ff239264320a1362f16700e0ad2d7935f326eb46928c"
+    },
+    {
+      "path": "src/ui/display_settings.rs",
+      "bytes": 294385,
+      "sha256": "a98c2636a386b7c6c6d72dc592c83640eee725d1456b1336162facd664a32bad"
+    },
+    {
+      "path": "src/ui/display_settings/delete_catalog_tests.rs",
+      "bytes": 20492,
+      "sha256": "7c1d45b9f257fa3bb48e0991022b56db0c9403e2a065b112280b0c5a74686c33"
+    },
+    {
+      "path": "src/ui/display_settings/pictogram_reference_tests.rs",
+      "bytes": 6319,
+      "sha256": "627649a0e53d81a0f9384de908cde0536a2b9b4e1105ad668ceb5d46246bdcca"
+    },
+    {
+      "path": "src/ui/display_settings/pipeline_tests.rs",
+      "bytes": 47653,
+      "sha256": "f5f1405067e959eba6074a2a40563f03603ed8b1ffe6925b1924b4a435f4d6e3"
+    },
+    {
+      "path": "src/ui/display_settings/sm62_review_controls_tests.rs",
+      "bytes": 15314,
+      "sha256": "3cc624a309ee2b059cabd2f601d9064e0fbf51e14bbd4530d5266a9ed260b189"
+    },
+    {
+      "path": "src/ui/display_settings/sm62_shared_write_tests.rs",
+      "bytes": 12474,
+      "sha256": "4239944535553f78f5cc0549ba610edae658dc91091fbd439e2c1cba3cda7bdd"
+    },
+    {
+      "path": "src/ui/display_settings/sm62_timeout_tests.rs",
+      "bytes": 14063,
+      "sha256": "79617532e9b1847267d62fc5504452c0744a022fad4383e58df0635d6cb96c07"
+    },
+    {
+      "path": "src/ui/display_settings/tap_dance_tests.rs",
+      "bytes": 12621,
+      "sha256": "70fba2f34a37b2a208c0e48c1fe8db8f094dd1a04f4022ca02990ed10b9cf256"
+    },
+    {
+      "path": "src/ui/encoder_visibility_settings.rs",
+      "bytes": 25896,
+      "sha256": "1c96af2fd5febec69cbb225ddc050667ecdc2587040e3c402017bdc024262945"
+    },
+    {
+      "path": "src/ui/file_browser.rs",
+      "bytes": 17946,
+      "sha256": "143b2fc06559ef3494b0a43e69d71bc97dbc320c66e1786b4d94639249c85aa9"
+    },
+    {
+      "path": "src/ui/file_dialog.rs",
+      "bytes": 38704,
+      "sha256": "08185e509a4c4cb5d93a078ce166caa6e1bb3ef8597f9d00aa98c9a21b5a004f"
+    },
+    {
+      "path": "src/ui/grave_escape_settings.rs",
+      "bytes": 6702,
+      "sha256": "7ddda51a35542365aa2bcc8978736c9e1bcfcb7c327283b69460f76b930b703f"
+    },
+    {
+      "path": "src/ui/key_assignment.rs",
+      "bytes": 52596,
+      "sha256": "5dde72c37da307901f72704abcaac837fdd55a44a8aea2a4e24e74df73464191"
+    },
+    {
+      "path": "src/ui/key_override_settings.rs",
+      "bytes": 57767,
+      "sha256": "839bcce2d4d9acb751e4301be7873ca1e9cbc7806dfb7603258f784244dcd58e"
+    },
+    {
+      "path": "src/ui/layer_led_settings.rs",
+      "bytes": 27000,
+      "sha256": "0012c66c6a6f5ed80ef1473f28e4d8a14b0dfef0c4f6d394749739e20097c8c5"
+    },
+    {
+      "path": "src/ui/layer_operations.rs",
+      "bytes": 99976,
+      "sha256": "5aacd0817f3cedf620503493c8cd558404035c247da6a504dc3c38f108f0dc09"
+    },
+    {
+      "path": "src/ui/layout_advanced_dropdown.rs",
+      "bytes": 23388,
+      "sha256": "df1df1dfd85a12f120ff4162f7c661269d5e62fc1eeab68855510148ef2d6aa4"
+    },
+    {
+      "path": "src/ui/layout_chrome.rs",
+      "bytes": 5000,
+      "sha256": "30548e28dce7bc358b0e2ebfb4ab2136cd0d8a0af9479916a11e22daad38ab38"
+    },
+    {
+      "path": "src/ui/layout_device_dropdown.rs",
+      "bytes": 23314,
+      "sha256": "129c5c8b23874cddd078b124c02a095d7ddb941d644e43436e58fa23f60de3ea"
+    },
+    {
+      "path": "src/ui/layout_dropdowns.rs",
+      "bytes": 1446,
+      "sha256": "d7e968e78048c49bdbd2802661fef2a32535ed801cc4304026bf58b673a5e903"
+    },
+    {
+      "path": "src/ui/layout_element_visibility.rs",
+      "bytes": 22110,
+      "sha256": "1810788fa7c5fc37d0668efcc10b66a9de4f118eef53c2062dd6469ac0d2d3ca"
+    },
+    {
+      "path": "src/ui/layout_hints.rs",
+      "bytes": 19978,
+      "sha256": "e559d8dd44781c22a15b59da770a80af5b15619893693d1633b0935020604b62"
+    },
+    {
+      "path": "src/ui/layout_image_export.rs",
+      "bytes": 91085,
+      "sha256": "9e4f3cfa20015982f52b4044b1d6bcfff2ad485817a4a3e30599e8e18116e34c"
+    },
+    {
+      "path": "src/ui/layout_indicator.rs",
+      "bytes": 24734,
+      "sha256": "3d973403cc5a03940cd8d368badafd2c5b1cb4005f9cb65cb082668f23c0c38a"
+    },
+    {
+      "path": "src/ui/layout_indicator_preview.rs",
+      "bytes": 28662,
+      "sha256": "80ecabcb4b7461826cf9febc0cd670ee12641b0ce5280b25504659b262415b43"
+    },
+    {
+      "path": "src/ui/layout_indicator_window.rs",
+      "bytes": 49137,
+      "sha256": "902176abcbdf01cbc972593313f9228731836cd38c441c3a462a6962534c515f"
+    },
+    {
+      "path": "src/ui/layout_keyboard.rs",
+      "bytes": 47879,
+      "sha256": "174c0ffe445d0e27a2a371b7022fa545cd309d9dc6b3b96a805619a2ef9e9343"
+    },
+    {
+      "path": "src/ui/layout_layer_switcher.rs",
+      "bytes": 54127,
+      "sha256": "5575c4ec383fd397b9cd09ba88bf370b260ea45eda5264f50090dd83ad9a1e57"
+    },
+    {
+      "path": "src/ui/layout_options_settings.rs",
+      "bytes": 15893,
+      "sha256": "03f0539bb949ab5dbf4b5741f14684778122fccd6d480b2a45bfb815d349c420"
+    },
+    {
+      "path": "src/ui/layout_settings_dropdown.rs",
+      "bytes": 35334,
+      "sha256": "24fb08205c8425fe44745221c97a653ad010b5db6b9ddf048e7e133eb4fe2107"
+    },
+    {
+      "path": "src/ui/layout_settings_dropdown_tests.rs",
+      "bytes": 19282,
+      "sha256": "1e2a1dfaee1d0c1256d3fc108cf34a34bc38d0da888c3235c4afba799b46fbdb"
+    },
+    {
+      "path": "src/ui/layout_shared.rs",
+      "bytes": 30815,
+      "sha256": "60d2c49a57f213741e595291f5e56634af3c0ed6e64992f8ba0870a16e82985a"
+    },
+    {
+      "path": "src/ui/layout_top_tabs.rs",
+      "bytes": 10563,
+      "sha256": "1a48acf8117c602feb7758e258b76186abde964e1cfa91b2b5605b36fa1f8d39"
+    },
+    {
+      "path": "src/ui/layout_view.rs",
+      "bytes": 8322,
+      "sha256": "c93d963b63bb5cb2bd98f830772b0c3353f555d57ff6b0c5b823e0c58e835db8"
+    },
+    {
+      "path": "src/ui/live_features_settings.rs",
+      "bytes": 15409,
+      "sha256": "af8083cc06d14c840a4a56a3070c6f52a7b1b095b513a1ffd3126093e992af21"
+    },
+    {
+      "path": "src/ui/macro_tap_dance_settings.rs",
+      "bytes": 3349,
+      "sha256": "6fb4989d1ef401d2c5bbfbd5ca2bf2db6f82960a108acd587d94bed3967ee4b2"
+    },
+    {
+      "path": "src/ui/magic_settings.rs",
+      "bytes": 10814,
+      "sha256": "6966c3c5c6217ea9e06d6f96351aff2bca2d992bec100533a17d2a90b4a40f94"
+    },
+    {
+      "path": "src/ui/matrix_tester.rs",
+      "bytes": 15543,
+      "sha256": "2df7659ae29602c6a8bf641cf9ffc662b6a2a63c655e7cb39a9e7e7ad4f91b32"
+    },
+    {
+      "path": "src/ui/module_settings.rs",
+      "bytes": 70358,
+      "sha256": "74822ba60f50ce8f1ac9ee38e0dbd4b4cb67cec870960da63c06effa40c304cf"
+    },
+    {
+      "path": "src/ui/mouse_keys_settings.rs",
+      "bytes": 15841,
+      "sha256": "df51b5195e1ea4f172375494ff4662fa5f2904a9b5a215cf6f9033deb66fbc9c"
+    },
+    {
+      "path": "src/ui/onboarding_tour.rs",
+      "bytes": 12577,
+      "sha256": "b5e440eca9c12986cbb72ff85153e00dfa2608318da627a41119b52ed863abeb"
+    },
+    {
+      "path": "src/ui/onboarding_tour_state.rs",
+      "bytes": 1773,
+      "sha256": "56dea435a7de562e5e8936b62a0830f6565781997bfe9e4168d23101f0b80ae9"
+    },
+    {
+      "path": "src/ui/portable_settings.rs",
+      "bytes": 19655,
+      "sha256": "40f9d65b0a7a230dc4694cdaedfeba945da79339feba36f430effa5715445509"
+    },
+    {
+      "path": "src/ui/portable_settings/module_contract.rs",
+      "bytes": 5970,
+      "sha256": "9929888b1cba0684a535f627ebef0740771ace8a7fcc15363ded47225bced5d3"
+    },
+    {
+      "path": "src/ui/qmk_settings_write_queue.rs",
+      "bytes": 15896,
+      "sha256": "3b2b3bc3fd2af66dd1767e1faffbf3d8490658d2b1faee856de5b67599b085e8"
+    },
+    {
+      "path": "src/ui/rgb_settings.rs",
+      "bytes": 47013,
+      "sha256": "f8523274ff638ba3af711fdecc0c12c4e052512e14781809f5567f2fb09869a0"
+    },
+    {
+      "path": "src/ui/settings_shell.rs",
+      "bytes": 26925,
+      "sha256": "57f6b79ce96b6ee695e9b46685f5b2e3a72e064aee20759722ade654d52fdf33"
+    },
+    {
+      "path": "src/ui/settings_units.rs",
+      "bytes": 981,
+      "sha256": "b4bb8cab0e3a08e8792f0cfffe38bebf01098cecd492e58e2a5916a3c9c5ec90"
+    },
+    {
+      "path": "src/ui/settings_viewport.rs",
+      "bytes": 10145,
+      "sha256": "5917aed7ce4f1ae7479db27a8c58a4a013f097d3c125378ddff3961001af1971"
+    },
+    {
+      "path": "src/ui/settings_write_queue.rs",
+      "bytes": 81839,
+      "sha256": "e65b2a14f5c197cbc2812ba066695be7f368fcd5d204d8716cddf5efb94ba457"
+    },
+    {
+      "path": "src/ui/sm62_clock_preview.rs",
+      "bytes": 11038,
+      "sha256": "a48d6b0f35980c3b96b1f78413a2356f9bc752cfd76764703d91f55fadecc774"
+    },
+    {
+      "path": "src/ui/sm62_keymap_preview.rs",
+      "bytes": 4662,
+      "sha256": "ade24ad36d5dc10ae3466335739349e4a82838b33758a5bfcfb575afdbb461b3"
+    },
+    {
+      "path": "src/ui/sm62_player_preview.rs",
+      "bytes": 10291,
+      "sha256": "c36ac81d9a49632d9787717da859f4be9ad48e9919bde477801306fdf32c21fc"
+    },
+    {
+      "path": "src/ui/sm62_preview_edge_tests.rs",
+      "bytes": 6718,
+      "sha256": "9ec5f4e33286f3141db080fee20b7f3070c346b48aac8719ae16d880a5ea89c2"
+    },
+    {
+      "path": "src/ui/sm62_scroll.rs",
+      "bytes": 2932,
+      "sha256": "e816a2b4e0c16f12585c132f96152cdd49ea1fff952650edf4680b767fa2c0ad"
+    },
+    {
+      "path": "src/ui/sm62_shared_settings.rs",
+      "bytes": 8330,
+      "sha256": "c7b371463469dadccd5f3230cc534134f5ad979a7570abad7e5dfd5de9d58fe6"
+    },
+    {
+      "path": "src/ui/tap_hold_settings.rs",
+      "bytes": 33296,
+      "sha256": "fff7225fd924457213883f62f2a9cfdf6e8191cb083be7cb9545e0cc27879cb8"
+    },
+    {
+      "path": "src/ui/text_expander_editor.rs",
+      "bytes": 66617,
+      "sha256": "f1f3b033215cbf0f2d177711ffdf95ec718ac80a2ef7017648eef2c48717cb09"
+    },
+    {
+      "path": "src/ui/text_expander_emoji.rs",
+      "bytes": 23430,
+      "sha256": "bc6c98a35ac3ec71410276b1adc6a5bdf96e47d633cd0b030a282c6f946d13cd"
+    },
+    {
+      "path": "src/ui/text_expander_runtime.rs",
+      "bytes": 7873,
+      "sha256": "263d8e97849834b9fd99efe46a3bdb97bc151e8c48471896a53e16cb6a239837"
+    },
+    {
+      "path": "src/ui/text_expander_settings.rs",
+      "bytes": 26380,
+      "sha256": "d5305bf65ccfb2400946ecc50272dbed6c3ee8ed8138a16267a1df4c208c2a93"
+    },
+    {
+      "path": "src/ui/top_dropdown.rs",
+      "bytes": 24592,
+      "sha256": "31fd6a01ed8a1b574ef24ac72a5dae43459e602b0f60c832d3db614daf75e178"
+    },
+    {
+      "path": "src/ui/top_menu_icon_catalog.rs",
+      "bytes": 12226,
+      "sha256": "71108724d719698082cd425429f1e147fdb80cbc965d75acd01a82564bf9e465"
+    },
+    {
+      "path": "src/ui/touchpad_settings.rs",
+      "bytes": 28190,
+      "sha256": "17488b402c5baabd66beb8c2959b61577c8e6c41ca87410b999460375021877c"
+    },
+    {
+      "path": "src/ui/typing_trainer.rs",
+      "bytes": 57513,
+      "sha256": "f2b07df06bfd1419bd75444f62d830e517b18ce3e131ec29bdc23a5acfbba5bf"
+    },
+    {
+      "path": "src/ui/ui_scale.rs",
+      "bytes": 8224,
+      "sha256": "92b57fc944298ea2393293540443a2cf02648670ef12b0e00c09ef6cbd8da5b1"
+    },
+    {
+      "path": "src/ui/universal_symbols_setup.rs",
+      "bytes": 50074,
+      "sha256": "d65b680cccb030654960e0ad96e413503812c27c4120674d1eae358ed2904720"
+    },
+    {
+      "path": "src/ui/usb_hotplug_tests.rs",
+      "bytes": 44757,
+      "sha256": "4e71b690c326ddae632aad7d22a211190fb7921660da0aae3aff8f40802e094d"
+    },
+    {
+      "path": "src/ui/vial_hid_task.rs",
+      "bytes": 192955,
+      "sha256": "860f38dc4604921d48fb4c2436604c537eac7633a2dafc44126c2d4fd1c97d42"
+    },
+    {
+      "path": "src/ui/window_lifecycle.rs",
+      "bytes": 77118,
+      "sha256": "e9a122c8ff3f28208c549df080b2ba21bfc1cbe2fb2b81fee1b39bd062f4fafa"
+    },
+    {
+      "path": "src/ui_style.rs",
+      "bytes": 63081,
+      "sha256": "e31345bc7b4719ef51727443e9d9dac25c5ef0e1321ee7c7e082ae6a4fa5b00b"
+    },
+    {
+      "path": "src/universal_symbols.rs",
+      "bytes": 10865,
+      "sha256": "ce9a71891316d564ce1b376b6781ceded6b8acb0e368b3a0b61f732336501879"
+    },
+    {
+      "path": "src/usb_discovery.rs",
+      "bytes": 19668,
+      "sha256": "fbfa0a2294fb68eaec8a877b4125c042d3e54c97a5976e77f1e2d8a3fd61aac9"
+    },
+    {
+      "path": "src/vial/unlock.rs",
+      "bytes": 24800,
+      "sha256": "d149e4f7ecba2a6a2db826f63e0ecbaf0305fd92f21146cf5791374d672595df"
+    },
+    {
+      "path": "vendor/cava-dependencies/REBUILD.md",
+      "bytes": 3986,
+      "sha256": "1c20c20301b6605d75312a095eca636cf983c3962a299b226459098130fa3cac"
+    },
+    {
+      "path": "vendor/cava-dependencies/fftw-3.3.10-LICENSE",
+      "bytes": 18002,
+      "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c"
+    },
+    {
+      "path": "vendor/cava-dependencies/fftw-3.3.10.tar.gz",
+      "bytes": 4144100,
+      "sha256": "56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467"
+    },
+    {
+      "path": "vendor/cava-dependencies/iniparser-4.2.6-LICENSE",
+      "bytes": 1104,
+      "sha256": "da809b67f3cc571433b7b97d4253ae1f9d8817770aa859aad202df6bde1d5fde"
+    },
+    {
+      "path": "vendor/cava-dependencies/iniparser-4.2.6.tar.gz",
+      "bytes": 39062,
+      "sha256": "a0bd370713a744b1fa8ec27bba889ebf9dbd43060ec92e07fbe91fb43e3cb3ac"
+    },
+    {
+      "path": "vendor/cava-dependencies/provenance.json",
+      "bytes": 751,
+      "sha256": "f59ca6261ad68cae97951a5180d2c058d0a4b1bcdd8e351139b41940367a597b"
+    },
+    {
+      "path": "vendor/cava-dependencies/pthreads4w-3.0.0-LICENSE",
+      "bytes": 11357,
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+    },
+    {
+      "path": "vendor/cava-dependencies/pthreads4w-code-v3.0.0.zip",
+      "bytes": 862409,
+      "sha256": "b81136effb7185c77601fe2e0e6ac19bd996912e4814cebdd3010b0fac9e259b"
+    },
+    {
+      "path": "vendor/cava-provenance.json",
+      "bytes": 1174,
+      "sha256": "4c8806888521521dc4159b9ed2b0b755ab6bb38feadcc53c811347a7dcb4572d"
+    },
+    {
+      "path": "vendor/cava/.clang-format",
+      "bytes": 93,
+      "sha256": "50442961f7f7f9a086926a8373e65d2fd87f49d0406db34e288cf61544a31c5b"
+    },
+    {
+      "path": "vendor/cava/.codespellrc",
+      "bytes": 375,
+      "sha256": "eee37ca406ff3b5a2e29721196e12beb51d0943fa6a559bc5a2c3bc7a39c2861"
+    },
+    {
+      "path": "vendor/cava/.github/ISSUE_TEMPLATE/bug_report.md",
+      "bytes": 1391,
+      "sha256": "c35f260e4ad9e3c8158540a3d166d77d829464234997783170b42eb6132b9b13"
+    },
+    {
+      "path": "vendor/cava/.github/ISSUE_TEMPLATE/config.yml",
+      "bytes": 28,
+      "sha256": "1f103c6a9dd07cd13a9a6f17ace6b813f47747eb9cb7e00488cb2073caaf91bb"
+    },
+    {
+      "path": "vendor/cava/.github/ISSUE_TEMPLATE/feature_request.md",
+      "bytes": 595,
+      "sha256": "1f48c52f209a971b8e7eae4120144d28fcf8ee38a7778a7b4d8cf1ab356617d2"
+    },
+    {
+      "path": "vendor/cava/.github/workflows/android.yml",
+      "bytes": 1500,
+      "sha256": "d1b72d98aa0034fea5c70877926f574f7129cc147eb4913674248c847ff61fc5"
+    },
+    {
+      "path": "vendor/cava/.github/workflows/build-and-test.yml",
+      "bytes": 4554,
+      "sha256": "08463a752b2fcfb449612fc046f7914dcb7cca5814bd61d271f27fa057d14c64"
+    },
+    {
+      "path": "vendor/cava/.gitignore",
+      "bytes": 429,
+      "sha256": "edc5092bb7cd6ed1530ce6853ee7c11a4ddca1edc018a5a7c6861f922da25c0e"
+    },
+    {
+      "path": "vendor/cava/CAVACORE.md",
+      "bytes": 1930,
+      "sha256": "ea3807fba1f9061bd12e7098cb2cc88b00dac0968ad53cf1bbbab97bd805021c"
+    },
+    {
+      "path": "vendor/cava/CMakeLists.txt",
+      "bytes": 2985,
+      "sha256": "d1332f0805a61dba55e0fd5a56a42bbac46a293b5497eebf2d8f79d85635c5ff"
+    },
+    {
+      "path": "vendor/cava/CMakePresets.json",
+      "bytes": 345,
+      "sha256": "f98ea4da48caddabbe25d9192feab5bf3c54b411b37f725397315ae2bdc01458"
+    },
+    {
+      "path": "vendor/cava/CONTRIBUTING.md",
+      "bytes": 769,
+      "sha256": "dc9c660bddae9d5098219377f7ff520a01d6183f8938438953ef976d9b3242fb"
+    },
+    {
+      "path": "vendor/cava/LICENSE",
+      "bytes": 1082,
+      "sha256": "71bb3ae8c4dcaf2702a76bb5fddddfb2992e474c9c8ea53d2e2d2306b1a97920"
+    },
+    {
+      "path": "vendor/cava/Makefile.am",
+      "bytes": 2753,
+      "sha256": "939f65fe82e9b01e44afb93606de2afd73e00d1ffa230e780716afce63069a67"
+    },
+    {
+      "path": "vendor/cava/README.md",
+      "bytes": 29020,
+      "sha256": "f8245efb2e5b587295712906fcab490a57825b92a4ab1ae8c57bcfc1c103fe12"
+    },
+    {
+      "path": "vendor/cava/SHADERS.md",
+      "bytes": 1383,
+      "sha256": "937685f207c37d3505de3b09e15d00eb7d3c826ed3e02f19d63c56e1cb86549e"
+    },
+    {
+      "path": "vendor/cava/TERMINAL.md",
+      "bytes": 3654,
+      "sha256": "9b02681d138e22620ee743a4322e7bd03660356a8e250eb2fc80b59da31dbcde"
+    },
+    {
+      "path": "vendor/cava/autogen.sh",
+      "bytes": 213,
+      "sha256": "ba0b661ddc0603d1f520195fe306fd66f4de990314c96aced8304af337180562"
+    },
+    {
+      "path": "vendor/cava/cava.c",
+      "bytes": 65737,
+      "sha256": "b5b6c1470fd17e537e4fb36c0807dca7a7ef928bd4c39c6112d7244273b3d3d3"
+    },
+    {
+      "path": "vendor/cava/cava.psf",
+      "bytes": 4838,
+      "sha256": "0661e9b194e996cd9dd8eee09371d67b21786b6e6820ed8f0d7267386e28fa49"
+    },
+    {
+      "path": "vendor/cava/cava_win/app.ico",
+      "bytes": 99678,
+      "sha256": "072538d3e615a13b0b291f4846303c0f0dd5471fdbde2dd52ccacbb2b5cdedf4"
+    },
+    {
+      "path": "vendor/cava/cava_win/cava.rc",
+      "bytes": 1496,
+      "sha256": "8e223185950065d3176576822a445b857b216cebd3f08e48cd20be3f91940994"
+    },
+    {
+      "path": "vendor/cava/cava_win/cava.wxs",
+      "bytes": 2730,
+      "sha256": "eb8b0771d60120464f9fcb098ef62fbd9d358f3e5e435d86aa23f52a7e273b33"
+    },
+    {
+      "path": "vendor/cava/cava_win/license.rtf",
+      "bytes": 1209,
+      "sha256": "33dc538fd20a126ef73bcbeb9947e813462eac6c40ecc4db4b2c5f5959e831aa"
+    },
+    {
+      "path": "vendor/cava/cava_win/postsetupinfo.txt",
+      "bytes": 234,
+      "sha256": "a91608f4828a3fd775323183c561663c64baad1ef2fc87e16c028bb95e0d5e25"
+    },
+    {
+      "path": "vendor/cava/cava_win/setup.iss",
+      "bytes": 2312,
+      "sha256": "8ade7a213818d26e818b35d8c18f0f0136b3eeef709e197f2ab45667ead0dcfb"
+    },
+    {
+      "path": "vendor/cava/cavacore.c",
+      "bytes": 20739,
+      "sha256": "416700906719a8e08cd8437e3fc64a90e5ea19f98dfff69c873ae0d40e821044"
+    },
+    {
+      "path": "vendor/cava/cavacore.h",
+      "bytes": 4900,
+      "sha256": "ef427db332cab781e563be2336f4b29a9467b2872efb1b310f2d8d843dcea834"
+    },
+    {
+      "path": "vendor/cava/cavacore_test.c",
+      "bytes": 5251,
+      "sha256": "33ff01b87697c11de8fccd635f779441d5e2ad83615b7fb89b798965fb7d4f46"
+    },
+    {
+      "path": "vendor/cava/cavandroid/README.md",
+      "bytes": 542,
+      "sha256": "75bc695794953f51b48ba365844358c7d8646cf88e0b25c898dbb0c23c8b78f1"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/build.gradle.kts",
+      "bytes": 3374,
+      "sha256": "66a138295379aef974a1330714f0a6faed1818a0c32b64f2f07a28475419d5fb"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/proguard-rules.pro",
+      "bytes": 750,
+      "sha256": "56fd960cf225f6ca40f982b13a5dbb0d8bc3dfde13ff76422825c6070d0a1890"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/androidTest/java/com/example/cava/CavaCoreTest.kt",
+      "bytes": 934,
+      "sha256": "145fa65268dad03c950880941355ad1b8f6c46d41b1bf7a974ec860f4540a499"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/AndroidManifest.xml",
+      "bytes": 1458,
+      "sha256": "cb1b71a9be8540c8cc95552e5f3ee3e9a498bb218eb733e0023eac5c325e639e"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/ic_launcher-playstore.png",
+      "bytes": 11736,
+      "sha256": "4b36d61f777515cbfd041c7f93aeb65cede8ff1cab0b8979185d5dec047732eb"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/java/com/karlstav/cava/MainActivity.kt",
+      "bytes": 27590,
+      "sha256": "1d6afd93c263e3bb7107fcbc80a819073000be0835a89de535350f3ff3b05f77"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/baseline_bar_chart_24.xml",
+      "bytes": 341,
+      "sha256": "13bf221a43aa84184ef764948ddc101cba06a3003cf01d33dfe73e9edda8e6da"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/baseline_graphic_eq_24.xml",
+      "bytes": 374,
+      "sha256": "72bf7363b1ddc73863684b0ae843c3bae679f163524be136a61c2fb4f6810889"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/baseline_info_24.xml",
+      "bytes": 383,
+      "sha256": "f3302aa1df87441a8a03df046f2efd8199b7a4c7e9ddc44d34e4164879eb18b7"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/baseline_settings_24.xml",
+      "bytes": 1184,
+      "sha256": "038443c36a162a176a54f27c3c4660641925762228c38e9e871f85ab6f1fce9e"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/blue.xml",
+      "bytes": 348,
+      "sha256": "9ea538f69fdfde51ed84160644767743cca2038eed4482b235f426c402bfcc59"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/green.xml",
+      "bytes": 348,
+      "sha256": "01b2442bb472709c3735d304b6b1cc6bd517b2caf0eb9616c76ed5323aa77d1d"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/drawable/red.xml",
+      "bytes": 348,
+      "sha256": "f341115f93bdd68e975e0cd2279cc6d0528355e60522d8a9669b0bb97f9cb86d"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/menu/menu.xml",
+      "bytes": 447,
+      "sha256": "d4d14b5c3a141ee830987ddadc66280ad5c4ee69552579ac1861b1f32ce7dc2f"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "bytes": 265,
+      "sha256": "9c3a7e0a6515c6e1a7ae834a9ae430311ebc3241f7b2e5e7f0460aa690709a7c"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "bytes": 265,
+      "sha256": "9c3a7e0a6515c6e1a7ae834a9ae430311ebc3241f7b2e5e7f0460aa690709a7c"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-hdpi/ic_launcher.webp",
+      "bytes": 2608,
+      "sha256": "8cb8c046525923ab83d6580ea54f4d61a6b9451be1a5db12bebf1d6bae7e4b47"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-hdpi/ic_launcher_foreground.webp",
+      "bytes": 5692,
+      "sha256": "344a20ff72053bf7c44a1570656007da9ae6bb5c210c6c4bbbeb16e306930a94"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-hdpi/ic_launcher_round.webp",
+      "bytes": 3844,
+      "sha256": "d712f361341f0988d5020b55fdd4d86c36d8b212f327028c5fddbcb887b7e1bf"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-mdpi/ic_launcher.webp",
+      "bytes": 1948,
+      "sha256": "ccbcf2f54926924f5dd035aae834318c3a5cf9f0a2502cf3147bbe5d17a23cc3"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-mdpi/ic_launcher_foreground.webp",
+      "bytes": 4280,
+      "sha256": "f1d9229120dbd7a79d239ce6acb5e4dc43de940c174e39c89a9fa1f584e87823"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-mdpi/ic_launcher_round.webp",
+      "bytes": 2482,
+      "sha256": "5efd022b6aac16c11874b7a7a56e63089fae3b5e21283aeb1e84ede8f37e1137"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xhdpi/ic_launcher.webp",
+      "bytes": 3648,
+      "sha256": "5f8877290aa86e172bf56e2737b261f19db3067843af989045d6d7c2f1ab4e66"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.webp",
+      "bytes": 6520,
+      "sha256": "daadd4e833fff150d86c5822a959005873e06b7f5f6c45c4713a380748cb1eb4"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp",
+      "bytes": 5460,
+      "sha256": "a62619d3b54f96cfa1ea8082fd0559d48f7460ca4921ccf823114bc4ef852829"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp",
+      "bytes": 4828,
+      "sha256": "cbf4a6f5efa406831c6469b9e49549b1481ae45c111e3721ff96ef8691ee4f1f"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.webp",
+      "bytes": 7568,
+      "sha256": "eb62e898eff779f523f360496fe88d75ea7dfdfd368f21139d1d8e74449c5e5c"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp",
+      "bytes": 7826,
+      "sha256": "9344b011edff03d309177e9df8f1d945da03010255f5b57347bc4a030f92cf64"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
+      "bytes": 5706,
+      "sha256": "d71033cefc4210c7da67b368f3ef5938359d5a50d5b9327805ef6d4257f379c5"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp",
+      "bytes": 8492,
+      "sha256": "1999231e4a862a4d64216ac063dfa0b6c323567051d6a0fe9084eefa3315b82c"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp",
+      "bytes": 10386,
+      "sha256": "c6cc183e3ef39f90367716d6e0980a016dd40cb57ddf4163118d5e2ebe868d81"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/raw/bar_spectrum.frag",
+      "bytes": 4702,
+      "sha256": "49e4e77021522e3e911480c598d4510999f7dac29f70954cdef93cf8222a1c7e"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/raw/pass_through.vert",
+      "bytes": 351,
+      "sha256": "5968b768e93c47ef7c297010d02369e9da35419a6de7dd3aad29bf0a0187cf10"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/raw/seven_segment.frag",
+      "bytes": 2903,
+      "sha256": "2bb36e79f8c27f74bdc239f8113afae5b14a942f3bf8d282d09806baa791b732"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/values/array.xml",
+      "bytes": 702,
+      "sha256": "9f903d1b920c5b21543f8fe8d1f646997c2e7d96316b89bcd3c7c7335fd5be1a"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/values/colors.xml",
+      "bytes": 379,
+      "sha256": "44ad1eb65c197db6ec640db12be9edabf7f648d1bfc0cad5144afac7b0a9f5ff"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/values/ic_launcher_background.xml",
+      "bytes": 120,
+      "sha256": "d80a637240092d84a76bf66fdff7a711f43fba8b25088c6d6d7ea2600aaf0df7"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/values/strings.xml",
+      "bytes": 130,
+      "sha256": "11a6efe088ebfa6748c6f56d3d559f4e585016810c7424a2c217f1229b0dadba"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/values/styles.xml",
+      "bytes": 281,
+      "sha256": "b38a6683e9a528d8b02f5db33c8a68bad1225c94334e026e055fcf3bc0426f39"
+    },
+    {
+      "path": "vendor/cava/cavandroid/app/src/main/res/xml/preferences.xml",
+      "bytes": 5494,
+      "sha256": "c918ea54fb7f8f18c2f8f9acf7b2500c75b604b8e4e3781a213ae517f844168a"
+    },
+    {
+      "path": "vendor/cava/cavandroid/build.gradle.kts",
+      "bytes": 242,
+      "sha256": "0ae67e6294e8f4c6d94442219a745ee30bc5ca1cc7e7d93a6fd5295b322d9c92"
+    },
+    {
+      "path": "vendor/cava/cavandroid/gradle.properties",
+      "bytes": 1358,
+      "sha256": "4443da28b45f4228957c857cc189a0c333d6bc5d5fddb861fe400c57da781cc1"
+    },
+    {
+      "path": "vendor/cava/cavandroid/gradle/wrapper/gradle-wrapper.jar",
+      "bytes": 59203,
+      "sha256": "e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637"
+    },
+    {
+      "path": "vendor/cava/cavandroid/gradle/wrapper/gradle-wrapper.properties",
+      "bytes": 231,
+      "sha256": "4012f918dc2fa5ae47abfa18fbdf38ff71aa8fbdd807b17781b5bc87fc8c4d5d"
+    },
+    {
+      "path": "vendor/cava/cavandroid/gradlew",
+      "bytes": 5766,
+      "sha256": "63135287117a1e6d12c84580f1f49c61d1ba02218ecd28660605e97f976e7d65"
+    },
+    {
+      "path": "vendor/cava/cavandroid/gradlew.bat",
+      "bytes": 2763,
+      "sha256": "af835f98787e9269af5a046edcb821a592fed372139df7b947b471a63cfc236b"
+    },
+    {
+      "path": "vendor/cava/cavandroid/keystore.jks",
+      "bytes": 2500,
+      "sha256": "771790f8267d0bfc69a914985c3aa1c2b15fc1c957ba586e3377b899d30ae325"
+    },
+    {
+      "path": "vendor/cava/cavandroid/settings.gradle.kts",
+      "bytes": 323,
+      "sha256": "042e0228dc5f58fd4a0156bdbe4b4f910a595efd5acf9f35f1980d411e822130"
+    },
+    {
+      "path": "vendor/cava/config.c",
+      "bytes": 49528,
+      "sha256": "507df0e12d62f454013fe920fb099c0cd88b9183e2d872e450e29ec001f7e978"
+    },
+    {
+      "path": "vendor/cava/config.h",
+      "bytes": 3698,
+      "sha256": "c1fe3b0585e8ff651c86171bc6d5e4a2f5eea9a7f07f7c4f4c1f29ddfb45cc6e"
+    },
+    {
+      "path": "vendor/cava/configure.ac",
+      "bytes": 15157,
+      "sha256": "56906b3cd05f887ec0b344edfc26a8c19ac1732e56bf9d0dbb6106f02dead954"
+    },
+    {
+      "path": "vendor/cava/example_files/bit_error_issue.jpg",
+      "bytes": 61099,
+      "sha256": "408852f0af916dd21bcfe22463764f626281eee15721da126b3c1140e15f6da8"
+    },
+    {
+      "path": "vendor/cava/example_files/cava.gif",
+      "bytes": 70114,
+      "sha256": "6d55033542beee118543f31f690456caeb837b8e0bbcd4fd5510b0159f9d6d19"
+    },
+    {
+      "path": "vendor/cava/example_files/config",
+      "bytes": 12867,
+      "sha256": "e2ce7edf971a0ebcac9063d818211e8915eb758d3cf548d0e97f98ecf9dd08ac"
+    },
+    {
+      "path": "vendor/cava/example_files/etc/asound.conf",
+      "bytes": 545,
+      "sha256": "509614478172e66d5621adcf970c4a108742082bd7ed055b20eaa859d6523869"
+    },
+    {
+      "path": "vendor/cava/example_files/etc/asound_dmix.conf",
+      "bytes": 1506,
+      "sha256": "96fbd2e374e731d2278ba315f6f71af95ab829aea313e0f95ba3017f9100ea02"
+    },
+    {
+      "path": "vendor/cava/example_files/etc/modprobe.d/alsa-aloop.conf",
+      "bytes": 64,
+      "sha256": "3bdbd1d9fb7fc61bf7266c17643c296ef883899b426e2f54e03a8301afb930d1"
+    },
+    {
+      "path": "vendor/cava/example_files/font_terminal_issue.jpg",
+      "bytes": 74108,
+      "sha256": "bf5cdfc34f2989167a029da82403f099be7fb4dfa0b8d51c2bfad65625de5396"
+    },
+    {
+      "path": "vendor/cava/example_files/terminal.gif",
+      "bytes": 2923724,
+      "sha256": "34f96e41e7f6e8cc963d28e95d886cc07639e1d0444fb00bca14d4bd67cbcfe7"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/alsa_zero_test",
+      "bytes": 306,
+      "sha256": "5e6eefcdc3b1b1a416e86fd45bfa9d076296d41ed2312c17c21ae9fa5cd3435f"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/fifo_zero_test",
+      "bytes": 233,
+      "sha256": "e5057f8de286285bc6738b2c12da666c7f6958fa0c6d6c715129852f393f60d1"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/non_zero_test",
+      "bytes": 242,
+      "sha256": "3f2575d06d8bafb9883b8e61b5f17a540adb034aac718b8d4b91e693130fa7f6"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/pipewire_zero_test",
+      "bytes": 240,
+      "sha256": "e8e6fffa4c6f7689f849566dc8ba5b1a83cc2aef6cdf28bcd8f29f7d3eaebc27"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/portaudio_zero_test",
+      "bytes": 189,
+      "sha256": "cfb4686b66c40305a206d7f7eb47fb18931e95aed7116746d9fe6cf83f6b693f"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/pulse_zero_test",
+      "bytes": 237,
+      "sha256": "9fd9a1320c64a143701da67fa9fc7ea68427bce53285daf3cc0d5f1c46eb8224"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/shmem_zero_test",
+      "bytes": 313,
+      "sha256": "bbce7e70592280e475edc5be6f009a9887bf76463a0fd5d718374de3358511a8"
+    },
+    {
+      "path": "vendor/cava/example_files/test_configs/sndio_zero_test",
+      "bytes": 188,
+      "sha256": "73c0bf98e063e05787d15b2f109daba7adff5493ee9f8386b0750a329fe9ac1e"
+    },
+    {
+      "path": "vendor/cava/input/alsa.c",
+      "bytes": 3312,
+      "sha256": "1e9df509916270e3f6219fe384ca48f2bea5f5240ae96dca87afd374d0a86dd7"
+    },
+    {
+      "path": "vendor/cava/input/alsa.h",
+      "bytes": 84,
+      "sha256": "0a2e7785c08b365a51619649b324886df542c453ce95815dae84999b3a654115"
+    },
+    {
+      "path": "vendor/cava/input/common.c",
+      "bytes": 2261,
+      "sha256": "798a8f7665a38d636680deb4f142bfd3a3b7d046d3c361eea2cd36132b846ff5"
+    },
+    {
+      "path": "vendor/cava/input/common.h",
+      "bytes": 1569,
+      "sha256": "76e3a6d9e2fafd953cdf623d4d5bec81af7bd1a60839b5847aff1ee73f9346cb"
+    },
+    {
+      "path": "vendor/cava/input/coreaudio.c",
+      "bytes": 16473,
+      "sha256": "f1a5b08c21120c62dcc161a5385fba83e7fa74bf82903f7129a0f47ca4a04898"
+    },
+    {
+      "path": "vendor/cava/input/coreaudio.h",
+      "bytes": 94,
+      "sha256": "2356f69b621b8f2cacca4183f92d8cab35049b4aebfacadc36e0333398f5e7bc"
+    },
+    {
+      "path": "vendor/cava/input/coreaudio_tap.h",
+      "bytes": 157,
+      "sha256": "5ea881408c322d8ce1f92f2a3617f5aa7019cbdc3ed2eab103d9944c446fb77c"
+    },
+    {
+      "path": "vendor/cava/input/coreaudio_tap.m",
+      "bytes": 13711,
+      "sha256": "ce5d13b7b864d296640868c67fcc2a147edf69b8f2c52c4fdea84552df66720c"
+    },
+    {
+      "path": "vendor/cava/input/fifo.c",
+      "bytes": 1708,
+      "sha256": "95a6e27720d5680d1b19718ac39e87fbc544f32ca7ba18b0d6feda110c4637a2"
+    },
+    {
+      "path": "vendor/cava/input/fifo.h",
+      "bytes": 84,
+      "sha256": "4e8ae66408a63cb31f65d02e3bfeb966c31e7c092a54e25ca6b4b717e460f980"
+    },
+    {
+      "path": "vendor/cava/input/jack.c",
+      "bytes": 12497,
+      "sha256": "4e68109caaa2537aa79c08defa20ae57fbae3acd4553d002748f0e6f733b04dd"
+    },
+    {
+      "path": "vendor/cava/input/jack.h",
+      "bytes": 84,
+      "sha256": "2e304e68c1220e541fbcabe163e92d506f4dcebecbe58cdfc967d5372698482c"
+    },
+    {
+      "path": "vendor/cava/input/oss.c",
+      "bytes": 5406,
+      "sha256": "c25e47e0bde73d87271be74db2343c9dbdabe36646359817776f13acbd336701"
+    },
+    {
+      "path": "vendor/cava/input/oss.h",
+      "bytes": 82,
+      "sha256": "6c4cfa9434334078247a8d83b6f21f5258b7a73aac6edaa12eae8f46f5b8ae45"
+    },
+    {
+      "path": "vendor/cava/input/pipewire.c",
+      "bytes": 8337,
+      "sha256": "79cfca0b865abb86318c0ef27ed48262900c56ac575c74d66dac9fb27b90aa15"
+    },
+    {
+      "path": "vendor/cava/input/pipewire.h",
+      "bytes": 91,
+      "sha256": "731c1dfdcb441fc0f7e2448aa8220260f1474be69bb73ebca84f13ec9887a6a2"
+    },
+    {
+      "path": "vendor/cava/input/portaudio.c",
+      "bytes": 7236,
+      "sha256": "69a99f5dcc96d54254e7aec9126277b12342af24094cbc9b9a13d0abc59c3dbf"
+    },
+    {
+      "path": "vendor/cava/input/portaudio.h",
+      "bytes": 54,
+      "sha256": "cd6e894a31d045856f2b5acbd2a0c090324fd6906c970d85cd02726c90253697"
+    },
+    {
+      "path": "vendor/cava/input/pulse.c",
+      "bytes": 4552,
+      "sha256": "1374ee7e08af86d51eb5c4e1dbb1c150d3469e2ca9d0652884bf299265d31698"
+    },
+    {
+      "path": "vendor/cava/input/pulse.h",
+      "bytes": 124,
+      "sha256": "6458d0d73a87908138b6349b43c1d8478d87d3191dc93dc3b199a5dff2c4e2db"
+    },
+    {
+      "path": "vendor/cava/input/shmem.c",
+      "bytes": 3264,
+      "sha256": "e5d937f2dd2705d6ab360ab69780f44d99e36cb97a37431632a1bb2033357d4f"
+    },
+    {
+      "path": "vendor/cava/input/shmem.h",
+      "bytes": 86,
+      "sha256": "14fd5e3bb8fad993198411b5029b6237ac3de8317e8f604e9cf8e4202a5084cc"
+    },
+    {
+      "path": "vendor/cava/input/sndio.c",
+      "bytes": 2993,
+      "sha256": "72cd01fee6bd6dc0bee2d21f0aab2359303a26ef829926b3dc81c3bc12166eaa"
+    },
+    {
+      "path": "vendor/cava/input/sndio.h",
+      "bytes": 86,
+      "sha256": "fdb9543134ce96bb16832ccf50d7498bd0edaff408d3a8bcc440a7eb8d5f3179"
+    },
+    {
+      "path": "vendor/cava/input/winscap.c",
+      "bytes": 24244,
+      "sha256": "ad1feb1bbce48a41d15ab35d14a758b87982741cbc97bfd08f6573c82ab8d1bc"
+    },
+    {
+      "path": "vendor/cava/input/winscap.h",
+      "bytes": 172,
+      "sha256": "6ae1f7ee93eb136847a17084816ef769f64eda073f3a7e26080d48066333e88d"
+    },
+    {
+      "path": "vendor/cava/output/noritake.c",
+      "bytes": 1486,
+      "sha256": "6d7a13fce24430c4aaf35aa55676d95698161e0e1adc91b6e8caf0c2a536420f"
+    },
+    {
+      "path": "vendor/cava/output/noritake.h",
+      "bytes": 335,
+      "sha256": "b83185bebf26ef5a675d311fda4a3dd3d4add7d846c7db178954db946d02ce87"
+    },
+    {
+      "path": "vendor/cava/output/raw.c",
+      "bytes": 2274,
+      "sha256": "69cdb8c9f6a5d34c3cdbaacbfb49aebbfa06f93f5e2edbb4d8436d3ee768c218"
+    },
+    {
+      "path": "vendor/cava/output/raw.h",
+      "bytes": 371,
+      "sha256": "aad676fd2676c3dc84378576ca3cac8d6d4a94e835e3e295c412a15cce4b88dd"
+    },
+    {
+      "path": "vendor/cava/output/sdl_cava.c",
+      "bytes": 6937,
+      "sha256": "c8679a2693ce136bd838c2214412a88f42d39459916c3a6094ad66b99a1b4fd3"
+    },
+    {
+      "path": "vendor/cava/output/sdl_cava.h",
+      "bytes": 555,
+      "sha256": "329a0a2f29b45d806bb1a6674bba3f44e7f096ece425b5ed42106d5a1288a9e5"
+    },
+    {
+      "path": "vendor/cava/output/sdl_glsl.c",
+      "bytes": 13559,
+      "sha256": "732db51046f4e63ec7a6f5e03e1b876a0b88a0803b2cee2ef9b156f39ee5fc54"
+    },
+    {
+      "path": "vendor/cava/output/sdl_glsl.h",
+      "bytes": 637,
+      "sha256": "9ff2f14a0bbdc015aed13236ae5fa3b816913decb19f960e5ff154b6264ef4e4"
+    },
+    {
+      "path": "vendor/cava/output/shaders/bar_spectrum.frag",
+      "bytes": 2524,
+      "sha256": "93b37f029b0107200598bfc3da3b7eeafeb84709a26372856281c67eb68e3917"
+    },
+    {
+      "path": "vendor/cava/output/shaders/eye_of_phi.frag",
+      "bytes": 4459,
+      "sha256": "6c8cdc5f402dd03b30fbf608892b93583cbc79cb7b11dc1d3c5fca85a71a50ab"
+    },
+    {
+      "path": "vendor/cava/output/shaders/northern_lights.frag",
+      "bytes": 1009,
+      "sha256": "6f1db345afb41b08d1dc91e2b5624bdf2779c35a12efac5e2ab7c0b324360971"
+    },
+    {
+      "path": "vendor/cava/output/shaders/orion_circle.frag",
+      "bytes": 3775,
+      "sha256": "2690453531d3720b3a3dc7574c5b7f6a9551a3550fcae553a0f2aa7c24f693c6"
+    },
+    {
+      "path": "vendor/cava/output/shaders/orion_circle_rotate.frag",
+      "bytes": 4308,
+      "sha256": "a314078479590518ce4d6dfef2ad98c7e2f41b5e673e00adb803197a6de6d9c8"
+    },
+    {
+      "path": "vendor/cava/output/shaders/orion_saturn_core.frag",
+      "bytes": 4570,
+      "sha256": "5e97a9c2cf39ed5575da36b23f991fb574f091cc7e6cfb22b96f5423d1208222"
+    },
+    {
+      "path": "vendor/cava/output/shaders/orion_saturn_subring.frag",
+      "bytes": 4655,
+      "sha256": "7dbc9e2a393ddad057ce8dfed31fbbab80a9c12efc6ee904fb47d7666ae42468"
+    },
+    {
+      "path": "vendor/cava/output/shaders/pass_through.vert",
+      "bytes": 350,
+      "sha256": "d9e701d971a32a1c8a459c0f08e2e0c7fbedb3eccd9bfe428bd7e60160cf1c77"
+    },
+    {
+      "path": "vendor/cava/output/shaders/spectrogram.frag",
+      "bytes": 1665,
+      "sha256": "b4a2397328ce5d085059335428147667d4d626c4a99c54a2f7ff0421e5d74b0a"
+    },
+    {
+      "path": "vendor/cava/output/shaders/winamp_line_style_spectrum.frag",
+      "bytes": 2878,
+      "sha256": "8f303c908f8396a9cde55e6290e49359755f6bad6c200f22d53f22a912e6660b"
+    },
+    {
+      "path": "vendor/cava/output/terminal_bcircle.c",
+      "bytes": 1970,
+      "sha256": "0e1ae9d9c2dd7dff8ea99873fb674145f17d2b94a1d308220e8f72e894553a0d"
+    },
+    {
+      "path": "vendor/cava/output/terminal_bcircle.h",
+      "bytes": 214,
+      "sha256": "72ebe742f5f6c6121a6f42addf8521ca671e11dca33a96c666f9f5824c00010c"
+    },
+    {
+      "path": "vendor/cava/output/terminal_ncurses.c",
+      "bytes": 11848,
+      "sha256": "4f8ba40db7dc170d302cc9e1805900e3eb5a981c4e99cc83a72b1fcd4e489699"
+    },
+    {
+      "path": "vendor/cava/output/terminal_ncurses.h",
+      "bytes": 699,
+      "sha256": "2baf94261c20b2582488b0a3d96fe3dd7cd4084793af8b2bcb9e95eee2cfa1ec"
+    },
+    {
+      "path": "vendor/cava/output/terminal_noncurses.c",
+      "bytes": 35851,
+      "sha256": "5cc5c086690c32afffeefea3b1eb852a9a3c9dd7171c2bb5b55e44c8c4d0d4a4"
+    },
+    {
+      "path": "vendor/cava/output/terminal_noncurses.h",
+      "bytes": 767,
+      "sha256": "608ddc1ef7e0ec54b7f969d5b8b5cb816b1f8b652bb5123444c240d260be22a6"
+    },
+    {
+      "path": "vendor/cava/output/themes/solarized_dark",
+      "bytes": 323,
+      "sha256": "e07846878c0d8693073efa988ccbf9f60ded9b9971df971a374ad954f7ad3314"
+    },
+    {
+      "path": "vendor/cava/output/themes/tricolor",
+      "bytes": 351,
+      "sha256": "92b06d28df0d91174ab85e89d2c2aceb91eebd66bd793ffac9f0bbe97666505c"
+    },
+    {
+      "path": "vendor/cava/run_all_tests.sh",
+      "bytes": 428,
+      "sha256": "09b53b0d2b4dacf68d4e3bc5b138e4738c7ecc61ee5cbca62995322729cad669"
+    },
+    {
+      "path": "vendor/cava/third_party/incbin.h",
+      "bytes": 16030,
+      "sha256": "0eb54921230342492b072f1057d60587b6105a0e3841fcba1441b15d353f2d7f"
+    },
+    {
+      "path": "vendor/cava/todo",
+      "bytes": 231,
+      "sha256": "3ce804300116e6d85faa8f0216bf92b549f161fa1d38788452b44085f23f1af2"
+    },
+    {
+      "path": "vendor/cava/util.h",
+      "bytes": 644,
+      "sha256": "2397ea0495f5fdc51df47e79c4ad30e920b2ecc279cc91e7e73c86308b8f5b3c"
+    },
+    {
+      "path": "vendor/cava/vcpkg-configuration.json",
+      "bytes": 166,
+      "sha256": "bbdb4245e9e2bf3ce19f7b47f8774c1956b2c19546afb445aa351695c9c25438"
+    },
+    {
+      "path": "vendor/cava/vcpkg.json",
+      "bytes": 361,
+      "sha256": "b3fe1146109f68cffc75573160696b1cb23a06b559101d817060ab72044fffbf"
+    },
+    {
+      "path": "vendor/eframe/Cargo.toml",
+      "bytes": 14282,
+      "sha256": "a88a29be79089724fe032de712a45c73940659f9b832b22cc50cbdd5ad7243cf"
+    },
+    {
+      "path": "vendor/eframe/ENTROPY_PATCH.md",
+      "bytes": 774,
+      "sha256": "3131b53a936c1d927545d288fb0dcca4be485fe6eea6ede2b6b05580e3e0368f"
+    },
+    {
+      "path": "vendor/eframe/LICENSE-APACHE",
+      "bytes": 11048,
+      "sha256": "7cfd738c53d61c79f07e348f622bf7707c9084237054d37fbe07788a75f5881c"
+    },
+    {
+      "path": "vendor/eframe/LICENSE-MIT",
+      "bytes": 1083,
+      "sha256": "2e50129a624185afc15510b990f179e027ca591d0c7707d1547f23500d055909"
+    },
+    {
+      "path": "vendor/eframe/README.md",
+      "bytes": 4518,
+      "sha256": "7767159df0bd3e4cc9787d8792891ea2c37bdd830cbafc7f13859787a9057c7e"
+    },
+    {
+      "path": "vendor/eframe/data/icon.png",
+      "bytes": 12052,
+      "sha256": "9e076c34e32a0b0ef35c62ebf6be8b5594a4601e7bcd478b681e9eff1f327973"
+    },
+    {
+      "path": "vendor/eframe/src/epi.rs",
+      "bytes": 38565,
+      "sha256": "1907ba1a08d699c837a714e89a68a8388a46bb5d69fe19067848f50adfb9dff6"
+    },
+    {
+      "path": "vendor/eframe/src/icon_data.rs",
+      "bytes": 1800,
+      "sha256": "4f36f3f533d5c499c43117f8600205bcccdd1859f89199047a0c5395a6e3c390"
+    },
+    {
+      "path": "vendor/eframe/src/lib.rs",
+      "bytes": 21273,
+      "sha256": "10733256e27137b8201e7010f179784bd887de55331c8a1607fd0c8d36bd4677"
+    },
+    {
+      "path": "vendor/eframe/src/native/app_icon.rs",
+      "bytes": 11858,
+      "sha256": "35ac364b67aa518e7945410ddf7cf89503e4e100c7708616b9ced1f1f9df27ca"
+    },
+    {
+      "path": "vendor/eframe/src/native/epi_integration.rs",
+      "bytes": 14236,
+      "sha256": "bb594dbf5cc007600000e7c2e84a7a55addeb2f7cf030bd9bd03ad9854c81830"
+    },
+    {
+      "path": "vendor/eframe/src/native/event_loop_context.rs",
+      "bytes": 1848,
+      "sha256": "3a5c3f2d2016832a7dc475b2b223af8b1dca6f680825e9000990d5e583e11aeb"
+    },
+    {
+      "path": "vendor/eframe/src/native/file_storage.rs",
+      "bytes": 9067,
+      "sha256": "86280d2d9eaf3cf0968284d52cae37ba435331d3f41ecb73d82f973aceab6a55"
+    },
+    {
+      "path": "vendor/eframe/src/native/glow_integration.rs",
+      "bytes": 65808,
+      "sha256": "87bdfc81d0612975c74604f1423a3f2d4cdd3b91cf7d861df7440c316d2482fc"
+    },
+    {
+      "path": "vendor/eframe/src/native/macos.rs",
+      "bytes": 2767,
+      "sha256": "876e79ea1c71ae0611434bf586490b0336ccee968d63a0f36a9f1fa5f304636b"
+    },
+    {
+      "path": "vendor/eframe/src/native/mod.rs",
+      "bytes": 403,
+      "sha256": "8d57aab2e531341f55f02b38149c168bf82c6596fb858bb4c69097483c304058"
+    },
+    {
+      "path": "vendor/eframe/src/native/run.rs",
+      "bytes": 21945,
+      "sha256": "52d22d486d5c3da52fc59e81aa21f6ef091160283e02f844d8d3946a9f94c32d"
+    },
+    {
+      "path": "vendor/eframe/src/native/wgpu_integration.rs",
+      "bytes": 44459,
+      "sha256": "fdbfe4ab541912d0149314272f6c8ad65612f56b1c732cef5136ddfe26f1fb02"
+    },
+    {
+      "path": "vendor/eframe/src/native/winit_integration.rs",
+      "bytes": 6564,
+      "sha256": "e99fa093c44d6f400c3685205b764c6293e6566ecc2678532ebee2bd0620a178"
+    },
+    {
+      "path": "vendor/eframe/src/stopwatch.rs",
+      "bytes": 1270,
+      "sha256": "5e91ebf6dd57d192d922818e2fafadb2ec5349316dc73e27b78a9ad4960a3bcd"
+    },
+    {
+      "path": "vendor/eframe/src/web/app_runner.rs",
+      "bytes": 15368,
+      "sha256": "c331219449f4e28c5f48c764045aeca648cfad620a29f2e1dc3cdf97854ea1cd"
+    },
+    {
+      "path": "vendor/eframe/src/web/backend.rs",
+      "bytes": 6801,
+      "sha256": "1522086fda616550b7aedaa7a7b50643367964dbd012230ce0b1402197f95c43"
+    },
+    {
+      "path": "vendor/eframe/src/web/events.rs",
+      "bytes": 46828,
+      "sha256": "0e0bdc61f746e93c6c63e6f68b537cccbbec0c08ed62871fe972242f1a8b78f0"
+    },
+    {
+      "path": "vendor/eframe/src/web/input.rs",
+      "bytes": 6471,
+      "sha256": "676229d135760605f9e4caa8448798f11d8caefd2d6403a70435e7110584e0b1"
+    },
+    {
+      "path": "vendor/eframe/src/web/mod.rs",
+      "bytes": 12635,
+      "sha256": "31050286eddb2f65fe3a9a7f95e4b1a8d0f95d63044ff7bb41fbaab42a97d97b"
+    },
+    {
+      "path": "vendor/eframe/src/web/panic_handler.rs",
+      "bytes": 2637,
+      "sha256": "d33da9a196aed491393afa8e401a416f7aab5f91c9cb424418b48cf8e4ce4328"
+    },
+    {
+      "path": "vendor/eframe/src/web/screen_reader.rs",
+      "bytes": 665,
+      "sha256": "4a56299964f4a34f2acecf55ae0a78810146066d3766ad3af4b84998b41194d4"
+    },
+    {
+      "path": "vendor/eframe/src/web/storage.rs",
+      "bytes": 1352,
+      "sha256": "09acf7ba236fe6c2961481c087884f5afc6507ce29a9d92095129ffe1676a512"
+    },
+    {
+      "path": "vendor/eframe/src/web/text_agent.rs",
+      "bytes": 7682,
+      "sha256": "2a483a4e7920f41057a657788e7273f719d3d4a027e6742dc6274726e6d2ec2e"
+    },
+    {
+      "path": "vendor/eframe/src/web/web_logger.rs",
+      "bytes": 4658,
+      "sha256": "1c6f88ea1c212324039cdc492c77f422ec7c62dd9e2bfe03a07835e1d801a04e"
+    },
+    {
+      "path": "vendor/eframe/src/web/web_painter.rs",
+      "bytes": 1326,
+      "sha256": "79986206c09d0d1f09caf3361055d93197974973f95595cf84af57089031338e"
+    },
+    {
+      "path": "vendor/eframe/src/web/web_painter_glow.rs",
+      "bytes": 6474,
+      "sha256": "32b5945b91745fe480bdc309f1440a13fada1e0713c8f9c8424610a7e2188120"
+    },
+    {
+      "path": "vendor/eframe/src/web/web_painter_wgpu.rs",
+      "bytes": 15232,
+      "sha256": "bd659fac349e99c046111c5526d4d002781191b53e6f2df207e1f1dca80d99c0"
+    },
+    {
+      "path": "vendor/eframe/src/web/web_runner.rs",
+      "bytes": 11080,
+      "sha256": "f298c9c6d747a52674d40f61e292132c42e8a0009c326236c670d07b7820347d"
+    }
+  ]
+}

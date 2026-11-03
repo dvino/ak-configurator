@@ -28,11 +28,18 @@ pub(crate) enum InstallRequest {
         provenance: RecoveryProvenance,
     },
 }
-fn preserved_nvm(
+pub(crate) fn preserved_nvm(
     source_kind: SnapshotKind,
     source: &[u8],
     target: ProfileId,
+    target_image: crate::ak820::ImageContract,
 ) -> BackupResult<Vec<u8>> {
+    if matches!(target_image, crate::ak820::ImageContract::Beta5(_)) {
+        return preserved_beta5_nvm(source_kind, source, target, target_image);
+    }
+    if !matches!(target_image, crate::ak820::ImageContract::Beta3(p) if p == target) {
+        return Err("Selected image does not authorize saved settings preservation".into());
+    }
     let source_profile = match source_kind {
         SnapshotKind::Project(crate::ak820::ImageContract::Beta3(p)) => p,
         _ => return Err("Project settings preservation requires a verified beta.3 source; select defaults otherwise".into()),
@@ -63,15 +70,227 @@ fn preserved_nvm(
     .expected_nvm()
     .to_vec())
 }
+
+/// Preview metadata for an already successful `preserved_nvm` derivation.
+/// The returned NVM and payload digests bind the actual materialized bytes.
+pub(crate) fn preservation_materializes_beta4_qs(
+    source_kind: SnapshotKind,
+    source: &[u8],
+    target_image: crate::ak820::ImageContract,
+) -> bool {
+    matches!(
+        source_kind,
+        SnapshotKind::Project(crate::ak820::ImageContract::Beta4(_))
+    ) && matches!(target_image, crate::ak820::ImageContract::Beta5(_))
+        && source
+            .get(0xc700 + 0x6a8..0xc700 + 0x6c0)
+            .is_some_and(|qs| qs.iter().all(|&b| b == 0) || qs.iter().all(|&b| b == 0xff))
+}
+/// Validate the exact source and target contracts before preserving schema03
+/// bytes. This is installer preflight, not a restore plan or write authority.
+fn preserved_beta5_nvm(
+    source_kind: SnapshotKind,
+    source: &[u8],
+    target: ProfileId,
+    target_image: crate::ak820::ImageContract,
+) -> BackupResult<Vec<u8>> {
+    use crate::ak820::ImageContract::{Beta4, Beta5};
+    use crate::ak820_settings_model::{
+        exact_qs_format, settings_from_nvm_for_formats_offline, OfflineSettingsCapabilities,
+    };
+    use crate::app::ak820_beta1_profiles::KeycodeSource;
+    let source_image = match source_kind {
+        SnapshotKind::Project(image @ (Beta4(_) | Beta5(_))) => image,
+        _ => return Err("Beta.5 preservation requires an exact beta.4.1 or beta.5 source".into()),
+    };
+    if target_image != Beta5(target) {
+        return Err("Preservation target differs from selected image".into());
+    }
+    let capture = crate::ak820_backup_capture::CapturedBackup::from_rom(
+        source_image.profile().ok_or("Missing source profile")?,
+        source.to_vec(),
+        false,
+    )?;
+    if capture.image() != source_image {
+        return Err("Captured source image differs from observed image".into());
+    }
+    let original = capture.nvm();
+    let mut candidate = original.to_vec();
+    // Beta.4's erased record selects QSID22 = 0; beta.5 selects 1.
+    // Materialize the exact old default only for uniformly erased storage.
+    if preservation_materializes_beta4_qs(source_kind, source, target_image) {
+        let default = crate::ak820_qs_versioned_offline::SettingsRecord::defaults(
+            crate::ak820_qs_versioned_offline::RecordVersion::V2,
+        )?
+        .encode();
+        candidate[0x6a8..0x6c0].copy_from_slice(&default);
+    }
+    let nvm = candidate.as_slice();
+    let src = source_image
+        .matrix_profile()
+        .ok_or("Missing source contract")?;
+    let dst = target_image
+        .matrix_profile()
+        .ok_or("Missing target contract")?;
+    let source_mode = source_image
+        .saved_rgb_mode(nvm[24] >> 2)
+        .ok_or("Unknown source saved RGB mode")?;
+    let target_mode = target_image
+        .saved_rgb_mode(nvm[24] >> 2)
+        .ok_or("Unsupported target saved RGB mode")?;
+    if source_mode != target_mode {
+        return Err("Saved RGB mode has different target semantics".into());
+    }
+    let rgb = [
+        if nvm[24] & 3 == 1 { source_mode } else { 0 },
+        0,
+        nvm[28],
+        nvm[25],
+        nvm[26],
+        nvm[27],
+    ];
+    let decode =
+        |image: crate::ak820::ImageContract, bytes: &[u8]| -> BackupResult<serde_json::Value> {
+            let row = image.matrix_profile().ok_or("Missing settings contract")?;
+            let exact = row
+                .settings_identity
+                .as_ref()
+                .ok_or("Missing exact settings identity")?;
+            let format = exact_qs_format(image)?;
+            settings_from_nvm_for_formats_offline(
+                bytes,
+                &rgb,
+                row.capabilities.dynamic_entries.combos > 0,
+                format,
+                format,
+                OfflineSettingsCapabilities {
+                    combo_media: exact.combo_media,
+                },
+            )
+        };
+    let before = decode(source_image, original)?;
+    let after = decode(target_image, nvm)?;
+    for id in &src.capabilities.runtime_qmk_settings_ids {
+        let key = id.to_string();
+        if !dst.capabilities.runtime_qmk_settings_ids.contains(id)
+            || before["extensions"]["qmk_settings"][key.as_str()]
+                != after["extensions"]["qmk_settings"][key.as_str()]
+        {
+            return Err(format!("QSID {id} changes under target image"));
+        }
+    }
+    for id in &dst.capabilities.runtime_qmk_settings_ids {
+        if !src.capabilities.runtime_qmk_settings_ids.contains(id) {
+            // The exact beta.5 image supplies Leader's 300 ms default for an
+            // older record. Its image version does not rewrite the QS bytes.
+            if *id != 23 || after["extensions"]["qmk_settings"]["23"].as_u64() != Some(300) {
+                return Err(format!("Newly active QSID {id} has no qualified default"));
+            }
+        }
+    }
+    let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm)?;
+    for (i, entry) in extensions.tap_dance.iter().enumerate() {
+        if *entry != Default::default()
+            && (i >= src.capabilities.dynamic_entries.tap_dance as usize
+                || i >= dst.capabilities.dynamic_entries.tap_dance as usize)
+        {
+            return Err("Nonempty Tap Dance is not usable in both images".into());
+        }
+    }
+    for (i, entry) in extensions.key_overrides.iter().enumerate() {
+        if *entry != Default::default()
+            && (i >= src.capabilities.dynamic_entries.key_overrides as usize
+                || i >= dst.capabilities.dynamic_entries.key_overrides as usize)
+        {
+            return Err("Nonempty Key Override is not usable in both images".into());
+        }
+    }
+    for (i, raw) in nvm[0x658..0x6a8].chunks_exact(10).enumerate() {
+        if raw.iter().all(|&b| b == 0) {
+            continue;
+        }
+        if i >= src.capabilities.dynamic_entries.combos as usize
+            || i >= dst.capabilities.dynamic_entries.combos as usize
+        {
+            return Err("Nonempty Combo is not usable in both images".into());
+        }
+        let word = |at| u16::from_le_bytes([raw[at], raw[at + 1]]);
+        let supports = |image: crate::ak820::ImageContract| {
+            let output = word(8);
+            image.valid_combo([word(0), word(2), 0, 0], output)
+                || ((0xa8..=0xc2).contains(&output)
+                    && image
+                        .matrix_profile()
+                        .and_then(|r| r.settings_identity.as_ref())
+                        .is_some_and(|i| i.combo_media)
+                    && image.valid_combo([word(0), word(2), 0, 0], 4))
+        };
+        if !supports(source_image) || !supports(target_image) {
+            return Err("Combo action is unsupported by source or target".into());
+        }
+    }
+    for (field, kind) in [
+        ("keys", KeycodeSource::Matrix),
+        ("encoders", KeycodeSource::Encoder),
+    ] {
+        for item in before[field].as_array().ok_or("Missing assignments")? {
+            let code = item["keycode"].as_u64().ok_or("Invalid assignment")? as u16;
+            if !source_image.supports_keycode(code, kind)
+                || !target_image.supports_keycode(code, kind)
+            {
+                return Err(format!("Unsupported {field} keycode {code:#06x}"));
+            }
+        }
+    }
+    for commands in before["macros"]["commands"]
+        .as_array()
+        .ok_or("Missing macros")?
+    {
+        for command in commands.as_array().ok_or("Invalid macro")? {
+            let kind = match command["command"].as_str().unwrap_or("") {
+                "tap" | "tap16" => KeycodeSource::MacroTap,
+                "down" | "down16" => KeycodeSource::MacroDown,
+                "up" | "up16" => KeycodeSource::MacroUp,
+                _ => continue,
+            };
+            let hex = command["operands_hex"]
+                .as_str()
+                .ok_or("Invalid macro operands")?;
+            let bytes = (0..hex.len())
+                .step_by(2)
+                .map(|i| {
+                    u8::from_str_radix(&hex[i..i + 2], 16)
+                        .map_err(|_| "Invalid macro operands".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut code = match bytes.as_slice() {
+                [a] => *a as u16,
+                [a, b] => u16::from_le_bytes([*a, *b]),
+                _ => return Err("Invalid macro operand width".into()),
+            };
+            if bytes.len() == 2 && code > 0xff00 {
+                code = (code & 255) << 8;
+            }
+            if !source_image.supports_keycode(code, kind)
+                || !target_image.supports_keycode(code, kind)
+            {
+                return Err(format!("Unsupported macro keycode {code:#06x}"));
+            }
+        }
+    }
+    Ok(nvm.to_vec())
+}
+
 fn require_install_transition(
     source: SnapshotKind,
     target: crate::ak820::ImageContract,
 ) -> BackupResult<()> {
-    use crate::ak820::ImageContract::{Beta3, Beta4};
+    use crate::ak820::ImageContract::{Beta3, Beta4, Beta5};
     match (source, target) {
         (SnapshotKind::Oem, Beta3(_) | Beta4(_))
         | (SnapshotKind::Project(Beta3(_)), Beta3(_) | Beta4(_))
-        | (SnapshotKind::Project(Beta4(_)), Beta4(_)) => Ok(()),
+        | (SnapshotKind::Project(Beta4(_)), Beta4(_) | Beta5(_))
+        | (SnapshotKind::Project(Beta5(_)), Beta5(_)) => Ok(()),
         _ => Err("Firmware update blocked: no approved exact source-to-target installation transition is available".into()),
     }
 }
@@ -201,7 +420,7 @@ impl PreparedInstallation {
                     if matches!(image, crate::ak820::ImageContract::Beta4(_)) {
                         return Err("Beta.4.1 does not authorize preserving saved settings".into());
                     }
-                    let nvm = preserved_nvm(source_kind, &source, profile)?;
+                    let nvm = preserved_nvm(source_kind, &source, profile, image)?;
                     if sha256(&nvm) != *nvm_sha256 {
                         return Err(
                             "Prepared settings NVM pin differs from the checked preservation plan"
@@ -303,9 +522,21 @@ impl PreparedInstallation {
                         if sha256(&payload[0xc700 - APP_START..0xef00 - APP_START]) != nvm_sha256 {
                             return Err("Prepared settings NVM pin differs".into());
                         }
-                        let preserved = preserved_nvm(source_kind, &source, profile)?;
+                        let preserved = preserved_nvm(source_kind, &source, profile, image)?;
                         if payload[0xc700 - APP_START..0xef00 - APP_START] != preserved {
                             return Err("Payload settings do not match the checked source/target preservation plan".into());
+                        }
+                        if matches!(image, crate::ak820::ImageContract::Beta5(_)) {
+                            let mut candidate = source.clone();
+                            candidate[APP_START..APP_END].copy_from_slice(&payload);
+                            let verified = crate::ak820_backup_capture::CapturedBackup::from_rom(
+                                profile, candidate, false,
+                            )?;
+                            if verified.image() != image || verified.nvm() != preserved {
+                                return Err(
+                                    "Packed target failed exact image and NVM validation".into()
+                                );
+                            }
                         }
                         InstallSettingsOutcome::PreparedImageSettingsVerified
                     }
@@ -525,17 +756,134 @@ mod tests {
         }
     }
     #[test]
+    #[ignore = "requires AK820_PRIVATE_ROM_MODEL, a qualified offline full-ROM model"]
+    fn beta5_preservation_keeps_exact_bytes_and_rejects_bad_records() {
+        use crate::ak820::ImageContract::{Beta4, Beta5};
+        let path = std::env::var("AK820_PRIVATE_ROM_MODEL")
+            .expect("set AK820_PRIVATE_ROM_MODEL for this explicit offline test");
+        let model = std::fs::read(path).expect("read the offline ROM model");
+        assert_eq!(
+            sha256(&model),
+            "abdb30dedac76e3221024cb901e92e36c2d2ebfffd8985b6685486fc0c15a260"
+        );
+        let profile = ProfileId::Main;
+        let admission = crate::ak820_release::ReleaseAdmission::beta4_1(profile, true).unwrap();
+        let defaults = crate::ak820_release::bundled_defaults_for_image(Beta4(profile)).unwrap();
+        let payload =
+            crate::ak820_release::bundled_payload_from_project(&admission, &model, Some(&defaults))
+                .unwrap();
+        let mut source = model.clone();
+        source[APP_START..APP_END].copy_from_slice(&payload);
+        let actual = preserved_nvm(
+            SnapshotKind::Project(Beta4(profile)),
+            &source,
+            profile,
+            Beta5(profile),
+        )
+        .unwrap();
+        assert!(actual[..0x6a8] == defaults[..0x6a8]);
+        assert!(actual[0x6c0..] == defaults[0x6c0..]);
+        // Literal pinned beta.4.1 C default and official Python V2 vector.
+        let source_default = [
+            0x51, 0x53, 0x02, 0x0f, 0x7f, 0, 0x28, 0, 0xc8, 0, 0, 0, 0x50, 0, 0xaf, 0, 1, 0, 0, 0,
+            0, 0, 0x8e, 0x61,
+        ];
+        assert!(actual[0x6a8..0x6c0] == source_default);
+        assert!(preservation_materializes_beta4_qs(
+            SnapshotKind::Project(Beta4(profile)),
+            &source,
+            Beta5(profile)
+        ));
+        let mut persisted = source.clone();
+        persisted[0xc700 + 0x6a8..0xc700 + 0x6c0]
+            .copy_from_slice(&model[0xc700 + 0x6a8..0xc700 + 0x6c0]);
+        assert!(persisted[0xc700 + 0x6aa] == 2);
+        let persisted_nvm = preserved_nvm(
+            SnapshotKind::Project(Beta4(profile)),
+            &persisted,
+            profile,
+            Beta5(profile),
+        )
+        .unwrap();
+        assert!(persisted_nvm == persisted[0xc700..0xef00]);
+        assert!(!preservation_materializes_beta4_qs(
+            SnapshotKind::Project(Beta4(profile)),
+            &persisted,
+            Beta5(profile)
+        ));
+        let mut cross_compatible = false;
+        for row in &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles {
+            if row.profile != profile
+                && preserved_nvm(
+                    SnapshotKind::Project(Beta4(profile)),
+                    &source,
+                    row.profile,
+                    Beta5(row.profile),
+                )
+                .is_ok()
+            {
+                cross_compatible = true;
+            }
+        }
+        assert!(
+            cross_compatible,
+            "at least one cross-profile target must preserve compatible data"
+        );
+        let mut bad = source.clone();
+        bad[0xc700 + 0x6a8] ^= 0x80;
+        assert!(preserved_nvm(
+            SnapshotKind::Project(Beta4(profile)),
+            &bad,
+            profile,
+            Beta5(profile)
+        )
+        .is_err());
+        bad = source.clone();
+        bad[0xc700 + 24] = (63 << 2) | 1;
+        assert!(preserved_nvm(
+            SnapshotKind::Project(Beta4(profile)),
+            &bad,
+            profile,
+            Beta5(profile)
+        )
+        .is_err());
+        let admission5 = crate::ak820_release::ReleaseAdmission::selected(
+            crate::ak820_release::InstallerRelease::Beta5,
+            profile,
+            true,
+        )
+        .unwrap();
+        let payload5 =
+            crate::ak820_release::bundled_payload_from_project(&admission5, &source, Some(&actual))
+                .unwrap();
+        let mut source5 = source.clone();
+        source5[APP_START..APP_END].copy_from_slice(&payload5);
+        assert!(
+            preserved_nvm(
+                SnapshotKind::Project(Beta5(profile)),
+                &source5,
+                profile,
+                Beta5(profile)
+            )
+            .unwrap()
+                == actual
+        );
+        assert_eq!(actual[0x6aa], 2, "the persisted QS record remains V2");
+    }
+    #[test]
     fn directed_project_install_transitions_cover_all_profiles() {
-        use crate::ak820::ImageContract::{Alpha3, Beta2, Beta3, Beta4};
+        use crate::ak820::ImageContract::{Alpha3, Beta2, Beta3, Beta4, Beta5};
         for source in crate::app::ak820_beta1_profiles::profiles() {
             for target in crate::app::ak820_beta1_profiles::profiles() {
                 let s = source.profile;
                 let t = target.profile;
-                for from in [Alpha3, Beta2(s), Beta3(s), Beta4(s)] {
-                    for to in [Alpha3, Beta2(t), Beta3(t), Beta4(t)] {
+                for from in [Alpha3, Beta2(s), Beta3(s), Beta4(s), Beta5(s)] {
+                    for to in [Alpha3, Beta2(t), Beta3(t), Beta4(t), Beta5(t)] {
                         let allowed = matches!(
                             (from, to),
-                            (Beta3(_), Beta3(_) | Beta4(_)) | (Beta4(_), Beta4(_))
+                            (Beta3(_), Beta3(_) | Beta4(_))
+                                | (Beta4(_), Beta4(_) | Beta5(_))
+                                | (Beta5(_), Beta5(_))
                         );
                         assert_eq!(
                             require_install_transition(SnapshotKind::Project(from), to).is_ok(),
@@ -550,6 +898,36 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn beta5_admits_exactly_two_hundred_directed_profile_pairs() {
+        use crate::ak820::ImageContract::{Beta3, Beta4, Beta5};
+        let rows = &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles;
+        let mut allowed = 0;
+        for source in rows {
+            for target in rows {
+                for image in [Beta4(source.profile), Beta5(source.profile)] {
+                    assert!(require_install_transition(
+                        SnapshotKind::Project(image),
+                        Beta5(target.profile)
+                    )
+                    .is_ok());
+                    allowed += 1;
+                }
+                assert!(require_install_transition(
+                    SnapshotKind::Project(Beta3(source.profile)),
+                    Beta5(target.profile)
+                )
+                .is_err());
+                assert!(require_install_transition(
+                    SnapshotKind::Project(Beta5(source.profile)),
+                    Beta4(target.profile)
+                )
+                .is_err());
+            }
+        }
+        assert_eq!(allowed, 200);
     }
 
     #[test]
@@ -834,7 +1212,13 @@ mod tests {
             Some(vec![])
         )
         .is_err());
-        assert!(preserved_nvm(SnapshotKind::Oem, &source, ProfileId::Main).is_err());
+        assert!(preserved_nvm(
+            SnapshotKind::Oem,
+            &source,
+            ProfileId::Main,
+            crate::ak820::ImageContract::Beta3(ProfileId::Main)
+        )
+        .is_err());
         let request = InstallRequest::BundledFirmware {
             profile: ProfileId::Main,
             image: crate::ak820::ImageContract::Beta3(ProfileId::Main),

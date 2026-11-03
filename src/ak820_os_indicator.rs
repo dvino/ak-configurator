@@ -35,14 +35,14 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    pub(crate) fn mode(&self, layout: Option<&str>) -> Mode {
+    pub(crate) fn mode(&self, layout: Option<&str>) -> Option<Mode> {
         if !self.enabled {
-            return Mode::Normal;
+            return Some(Mode::Normal);
         }
-        layout
-            .and_then(|l| self.layouts.get(l))
-            .copied()
-            .unwrap_or_default()
+        match layout {
+            Some(key @ ("en" | "ru")) => self.layouts.get(key).copied(),
+            _ => None,
+        }
     }
 }
 
@@ -163,12 +163,18 @@ mod tests {
         let mut s = Settings::default();
         s.layouts.insert("en".into(), Mode::Off);
         s.layouts.insert("ru".into(), Mode::Off);
-        assert_eq!(s.mode(Some("en")), Mode::Normal);
+        assert_eq!(s.mode(Some("en")), Some(Mode::Normal));
         s.enabled = true;
-        assert_eq!(s.mode(Some("ru")), Mode::Off);
-        assert_eq!(s.mode(Some("fr")), Mode::Normal);
-        assert_eq!(s.mode(None), Mode::Normal);
+        assert_eq!(s.mode(Some("ru")), Some(Mode::Off));
+        s.layouts.insert("fr".into(), Mode::On);
+        assert_eq!(s.mode(Some("fr")), None);
+        assert_eq!(s.mode(None), None);
+        s.layouts.remove("ru");
+        assert_eq!(s.mode(Some("ru")), None);
+        s.layouts.insert("ru".into(), Mode::Normal);
+        assert_eq!(s.mode(Some("ru")), Some(Mode::Normal));
         let round: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
-        assert_eq!(round.mode(Some("en")), Mode::Off);
+        assert_eq!(round.mode(Some("en")), Some(Mode::Off));
+        assert_eq!(round.layouts.get("fr"), Some(&Mode::On));
     }
 }

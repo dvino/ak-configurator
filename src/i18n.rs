@@ -326,11 +326,15 @@ pub enum Key {
     CloseToTrayLabel,
     #[cfg(not(target_os = "linux"))]
     CloseToTrayTooltip,
+    #[cfg(target_os = "linux")]
     RunInBackgroundLabel,
+    #[cfg(target_os = "linux")]
     RunInBackgroundTooltip,
     LaunchAtStartupLabel,
     LaunchAtStartupTooltip,
+    #[cfg(not(target_os = "windows"))]
     LaunchMinimizedLabel,
+    #[cfg(not(target_os = "windows"))]
     LaunchMinimizedTooltip,
     #[cfg(target_os = "windows")]
     LaunchInTrayLabel,
@@ -425,11 +429,15 @@ impl Key {
             Key::CloseToTrayLabel => "ui.close_to_tray_label",
             #[cfg(not(target_os = "linux"))]
             Key::CloseToTrayTooltip => "ui.close_to_tray_tooltip",
+            #[cfg(target_os = "linux")]
             Key::RunInBackgroundLabel => "ui.run_in_background_label",
+            #[cfg(target_os = "linux")]
             Key::RunInBackgroundTooltip => "ui.run_in_background_tooltip",
             Key::LaunchAtStartupLabel => "ui.launch_at_startup_label",
             Key::LaunchAtStartupTooltip => "ui.launch_at_startup_tooltip",
+            #[cfg(not(target_os = "windows"))]
             Key::LaunchMinimizedLabel => "ui.launch_minimized_label",
+            #[cfg(not(target_os = "windows"))]
             Key::LaunchMinimizedTooltip => "ui.launch_minimized_tooltip",
             #[cfg(target_os = "windows")]
             Key::LaunchInTrayLabel => "ui.launch_in_tray_label",

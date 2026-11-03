@@ -7,11 +7,16 @@ on:
         description: Git ref to build and package
         required: true
         type: string
+    secrets:
+      AK_WINDOWS_CODE_SIGN_PFX_BASE64:
+        required: true
+      AK_WINDOWS_CODE_SIGN_PFX_PASSWORD:
+        required: true
   workflow_dispatch:
   push:
-    branches: [desktop-dev]
+    branches: [desktop-dev, desktop, 'handoff/c02-windows', 'codex/**']
   pull_request:
-    branches: [desktop-dev]
+    branches: [desktop-dev, desktop]
 
 permissions:
   contents: read
@@ -66,10 +71,10 @@ jobs:
         with:
           ref: ${{ inputs.candidate_ref || github.ref }}
 
-      - name: Install Rust 1.97.0
+      - name: Install Rust 1.94.1
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.97.0
+          toolchain: 1.94.1
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -77,6 +82,10 @@ jobs:
       - name: Test audio dependency setup (offline)
         shell: bash
         run: python scripts/test_build_cava_helper.py
+
+      - name: Test Windows installer CI guards (offline)
+        if: startsWith(matrix.platform, 'windows-')
+        run: python scripts/test_windows_installer_ci.py
 
       - name: Install macOS Rust target
         if: startsWith(matrix.os, 'macos-')
@@ -116,6 +125,7 @@ jobs:
         if: startsWith(matrix.platform, 'windows-')
         shell: pwsh
         run: |
+          Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -Force -ErrorAction Stop
           & "$env:GITHUB_WORKSPACE/target/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VCPKG_ROOT=$env:GITHUB_WORKSPACE/target/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -124,6 +134,7 @@ jobs:
         if: startsWith(matrix.platform, 'windows-')
         shell: pwsh
         run: |
+          Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -Force -ErrorAction Stop
           $pkgconf = python scripts/build_cava_helper.py --prepare-windows-pkgconf target/pkgconf
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "PKG_CONFIG=$pkgconf" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -155,11 +166,11 @@ jobs:
 
       - name: Build development binary (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
-        run: cargo build --locked --release
+        run: cargo build --locked --release --features mcp
 
       - name: Build development binary (macOS)
         if: matrix.platform == 'macos-arm64' || matrix.platform == 'macos-x86_64'
-        run: cargo build --locked --release --target ${{ matrix.target }}
+        run: cargo build --locked --release --features mcp --target ${{ matrix.target }}
 
       - name: Test optional MCP contracts (x86_64 Linux and Windows only)
         if: matrix.platform == 'linux-x86_64' || matrix.platform == 'windows-x86_64'
@@ -227,6 +238,7 @@ jobs:
         env:
           BINARY: ${{ matrix.binary }}
         run: |
+          Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -Force -ErrorAction Stop
           $hash = (Get-FileHash $env:BINARY -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $(Split-Path $env:BINARY -Leaf)" | Set-Content -Encoding ascii (Join-Path (Split-Path $env:BINARY) 'SHA256SUMS')
 
@@ -239,13 +251,47 @@ jobs:
           "$CANDIDATE_BINARY" --self-check --output target/candidate/runtime-self-check.json
 
       - name: Package unsigned desktop alpha candidate
+        if: runner.os != 'Windows'
         shell: bash
         env:
           CANDIDATE_BINARY: ${{ matrix.binary }}
           CANDIDATE_PLATFORM: ${{ matrix.platform }}
         run: python scripts/package_ak820_candidate.py --binary "$CANDIDATE_BINARY" --platform "$CANDIDATE_PLATFORM" --output-dir target/candidate --runtime-check target/candidate/runtime-self-check.json --cava-helper "target/audio-helper/cava$([[ "$CANDIDATE_PLATFORM" == windows-* ]] && echo .exe || true)"
 
+      - name: Bootstrap pinned Inno Setup and locate Windows SDK SignTool
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -Force -ErrorAction Stop
+          $inno = python scripts/bootstrap_inno_setup.py --destination "$env:RUNNER_TEMP/ak-inno-7.1.1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $compiler = ($inno | ConvertFrom-Json).compiler
+          "AK_CI_ISCC=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'Windows SDK SignTool not found' }
+          "AK_CI_SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build and exercise Windows GUI installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AK_WINDOWS_CODE_SIGN_PFX_BASE64: ${{ github.repository == 'dvino/ak-configurator' && github.event_name != 'pull_request' && secrets.AK_WINDOWS_CODE_SIGN_PFX_BASE64 || '' }}
+          AK_WINDOWS_CODE_SIGN_PFX_PASSWORD: ${{ github.repository == 'dvino/ak-configurator' && github.event_name != 'pull_request' && secrets.AK_WINDOWS_CODE_SIGN_PFX_PASSWORD || '' }}
+          AK_WINDOWS_CODE_SIGN_THUMBPRINT: ${{ vars.AK_WINDOWS_CODE_SIGN_THUMBPRINT }}
+          AK_WINDOWS_CODE_SIGN_MODE: ${{ vars.AK_WINDOWS_CODE_SIGN_MODE }}
+          TRUSTED_SIGNING: ${{ github.repository == 'dvino/ak-configurator' && github.event_name != 'pull_request' }}
+        run: |
+          $build = @('scripts/build_windows_ci_candidate.py', '--platform', '${{ matrix.platform }}', '--binary', '${{ matrix.binary }}', '--runtime-check', 'target/candidate/runtime-self-check.json', '--cava-helper', 'target/audio-helper/cava.exe', '--output-dir', 'target/candidate', '--iscc', $env:AK_CI_ISCC)
+          if ($env:TRUSTED_SIGNING -eq 'true') {
+            python scripts/windows_signing_ci.py --public-cert assets/windows/ak-configurator-development.cer -- python @build --signed --signtool $env:AK_CI_SIGNTOOL --timestamp-url http://timestamp.digicert.com
+          } else {
+            Write-Host 'Untrusted pull request: building an unsigned development installer.'
+            python @build
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Install, execute, and uninstall candidate on native runner
+        if: runner.os != 'Windows'
         shell: bash
         env:
           CANDIDATE_PLATFORM: ${{ matrix.platform }}
@@ -273,6 +319,10 @@ jobs:
             target/candidate/*.zip
             target/candidate/*.tar.gz
             target/candidate/*.sha256
+            target/candidate/*-setup.exe
+            target/candidate/*-setup.exe.build.json
+            target/candidate/*-setup.exe.build.p7s
+            target/candidate/setup-smoke-${{ matrix.platform }}.json
             target/candidate/install-smoke-${{ matrix.platform }}.json
             target/candidate/runtime-smoke-${{ matrix.platform }}.json
           if-no-files-found: error

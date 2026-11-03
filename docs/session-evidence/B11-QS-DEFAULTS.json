@@ -1,0 +1,25 @@
+{
+  "scope": "Pinned C source default-record comparison, not physical or installed evidence",
+  "source_path": "qmk-8051-ak820/keyboards/ajazz/ak820/ak820_settings.c",
+  "sources": [
+    {
+      "commit": "7adcfccf265a7a445f84daee420d323eece93c5a",
+      "git_blob": "f3a29e68e85aa9370591ab541b39985cd370b9db",
+      "source_sha256": "f09e27570988c8c08e0437f4e6c0b2425182675de37b47b90cc77e88b19395af",
+      "default_qsid22_byte17": 0,
+      "default_record_template_version": 2
+    },
+    {
+      "commit": "dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd",
+      "git_blob": "faabe68cbe25973d329521257bc0368393eaa9fb",
+      "source_sha256": "cdf433dfedcca1c7e8c9eb7ae56f506cb82f37f868a610f6ed627f73bd13c6c0",
+      "default_qsid22_byte17": 1,
+      "default_record_template_version": 2
+    }
+  ],
+  "compatibility_rule": "Materialize the old V2 default only for uniformly erased Beta4 QS before Beta5 install; valid persisted records remain byte-identical; target logical equality remains required.",
+  "limits": [
+    "The C default array is an initialization template, not proof of a persisted NVM version.",
+    "Beta5 source normalizes legacy records in RAM at startup; this is source evidence, not a device write/readback observation."
+  ]
+}

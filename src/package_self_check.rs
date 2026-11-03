@@ -27,12 +27,24 @@ fn parse_request(args: &[OsString]) -> Result<Option<Option<PathBuf>>, &'static 
 }
 
 fn report() -> Result<serde_json::Value, String> {
+    let catalog_sha256 = sha256(include_bytes!("../assets/ak820/beta5-release-catalog.json"));
+    if catalog_sha256 != "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d" {
+        return Err("Bundled beta.5 release catalog differs from its pin".into());
+    }
     let mut profiles = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
     for image in beta::profiles() {
         let id = image.profile;
-        let (ihx, map) = crate::ak820_release::bundled_sources(id)
+        // Retain the separately pinned historical source contract as well.
+        crate::ak820_release::bundled_sources(id)
+            .map_err(|error| format!("{} beta.3 sources: {error}", id.as_str()))?;
+        if !seen.insert(id.as_str()) {
+            return Err("Duplicate bundled profile".into());
+        }
+        let image_contract = crate::ak820::ImageContract::Beta5(id);
+        let (ihx, map) = crate::ak820_release::sources_for_image(image_contract)
             .map_err(|error| format!("{}: {error}", id.as_str()))?;
-        let defaults = crate::ak820_release::bundled_defaults(id)
+        let defaults = crate::ak820_release::defaults_for_image(image_contract)
             .map_err(|error| format!("{} defaults: {error}", id.as_str()))?;
         if defaults.len() != 0x2800 || image.settings_schema != 0x082003 {
             return Err(format!("Unexpected settings contract for {}", id.as_str()));
@@ -63,8 +75,8 @@ fn report() -> Result<serde_json::Value, String> {
         "format": "ak-configurator-self-check-1",
         "application_version": env!("CARGO_PKG_VERSION"),
         "platform": format!("{}-{architecture}", std::env::consts::OS),
-        "firmware_release": beta::BETA_RELEASE,
-        "catalog_sha256": beta::SOURCE_CATALOG_SHA256,
+        "firmware_release": beta::BETA5_RELEASE,
+        "catalog_sha256": catalog_sha256,
         "profiles": profiles,
         "hardware_access": false,
         "network_access": false,
@@ -155,10 +167,27 @@ mod tests {
         let expected: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/ak820-beta3-defaults.json"))
                 .unwrap();
+        for profile in beta::profiles() {
+            assert_eq!(
+                sha256(&crate::ak820_release::bundled_defaults(profile.profile).unwrap()),
+                expected[profile.profile.as_str()].as_str().unwrap()
+            );
+        }
+        assert_eq!(result["firmware_release"], beta::BETA5_RELEASE);
+        assert_eq!(
+            result["catalog_sha256"],
+            "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d"
+        );
+        // Derived from the app's installer defaults with the pinned V2
+        // migration record, not an official fixture or erased-QS C defaults.
+        let beta5: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/ak820-beta5-installer-defaults.json"
+        ))
+        .unwrap();
         for profile in result["profiles"].as_array().unwrap() {
             assert_eq!(
                 profile["default_settings_sha256"],
-                expected[profile["profile"].as_str().unwrap()]
+                beta5[profile["profile"].as_str().unwrap()]
             );
         }
     }

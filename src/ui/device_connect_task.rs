@@ -1,5 +1,17 @@
 use super::*;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn classify_open_failure(error: &anyhow::Error) -> ConnectTaskMessage {
+    if error
+        .downcast_ref::<crate::hid_ownership::LeaseBusy>()
+        .is_some()
+    {
+        ConnectTaskMessage::LeaseBusy
+    } else {
+        ConnectTaskMessage::OpenFailed(format!("Open failed: {error:#}"))
+    }
+}
+
 /// QSID numbers are firmware-local: RMK BT colors overlap Macropad RGB.
 pub(super) fn load_selected_display_settings(
     device: &crate::device::Device,
@@ -571,6 +583,7 @@ impl EntropyApp {
         device_idx: usize,
         reconnect: Option<BluetoothReconnectState>,
     ) {
+        self.connection_failure = None;
         let previous_selected_device = self
             .selected_device
             .and_then(|index| self.device_manager.devices().get(index))
@@ -771,6 +784,7 @@ impl EntropyApp {
         let test_hid = self.test_connect_hid.take();
 
         std::thread::spawn(move || {
+            let mut open_failure = None;
             let progress = |message: &str| -> Result<(), String> {
                 if cancel.load(std::sync::atomic::Ordering::Relaxed) {
                     return Err("Connect cancelled".to_owned());
@@ -793,7 +807,18 @@ impl EntropyApp {
                 let opened = open_test_connect_hid(test_hid);
                 #[cfg(not(test))]
                 let opened = HidDevice::open_fresh_for(&dev);
-                let dev_conn = opened.map_err(|e| format!("Open failed: {e:#}"))?;
+                #[cfg(not(test))]
+                let dev_conn = opened.map_err(|e| {
+                    let text = format!("Open failed: {e:#}");
+                    open_failure = Some(classify_open_failure(&e));
+                    text
+                })?;
+                #[cfg(test)]
+                let dev_conn = opened.map_err(|e| {
+                    let text = format!("Open failed: {e:#}");
+                    open_failure = Some(ConnectTaskMessage::OpenFailed(text.clone()));
+                    text
+                })?;
                 if dev.is_ak820() {
                     return super::ak820_connection::load_ak820(&dev, dev_conn, progress);
                 }
@@ -1644,7 +1669,11 @@ impl EntropyApp {
                 })
             })();
 
-            let _ = tx.send(ConnectTaskMessage::Done(Box::new(result)));
+            let message = match open_failure {
+                Some(message) => message,
+                None => ConnectTaskMessage::Done(Box::new(result)),
+            };
+            let _ = tx.send(message);
         });
     }
 

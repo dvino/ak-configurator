@@ -60,6 +60,8 @@ enum ConnectTaskChannelState {
     Empty,
     Progress(String),
     Done(Box<Result<ConnectResult, String>>),
+    LeaseBusy,
+    OpenFailed(String),
     Disconnected,
 }
 
@@ -71,6 +73,10 @@ fn drain_connect_task_messages(rx: &mpsc::Receiver<ConnectTaskMessage>) -> Conne
             Ok(ConnectTaskMessage::Progress(message)) => latest_progress = Some(message),
             Ok(ConnectTaskMessage::Done(result)) => {
                 return ConnectTaskChannelState::Done(result);
+            }
+            Ok(ConnectTaskMessage::LeaseBusy) => return ConnectTaskChannelState::LeaseBusy,
+            Ok(ConnectTaskMessage::OpenFailed(error)) => {
+                return ConnectTaskChannelState::OpenFailed(error)
             }
             Err(mpsc::TryRecvError::Empty) => {
                 return latest_progress
@@ -117,6 +123,101 @@ mod tests {
             instance_token: name.to_owned(),
             firmware: FirmwareProtocol::Vial,
         }
+    }
+
+    #[test]
+    fn typed_startup_failure_is_scoped_to_current_connection() {
+        use super::super::vial_hid_task::{CaptureAvailability, CaptureFailure};
+        let (mut app, ctx, requests) = connection_app();
+        app.start_connect(0);
+        let (_, tx) = requests.try_recv().unwrap();
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::OperationBusy)
+        );
+        tx.send(ConnectTaskMessage::LeaseBusy).unwrap();
+        app.poll_connect(&ctx);
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::LeaseBusy)
+        );
+        app.start_connect(1);
+        let (_, tx) = requests.try_recv().unwrap();
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::OperationBusy)
+        );
+        tx.send(ConnectTaskMessage::OpenFailed(
+            "timed out or disconnected".into(),
+        ))
+        .unwrap();
+        app.poll_connect(&ctx);
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::Failed)
+        );
+        app.clear_connected_keyboard_state("Disconnected");
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::Disconnected)
+        );
+    }
+
+    #[test]
+    fn obsolete_lease_failure_does_not_replace_new_selection() {
+        use super::super::vial_hid_task::{CaptureAvailability, CaptureFailure};
+        let (mut app, ctx, requests) = connection_app();
+        app.start_connect(0);
+        let (_, old) = requests.try_recv().unwrap();
+        app.start_connect(1);
+        old.send(ConnectTaskMessage::LeaseBusy).unwrap();
+        app.poll_connect(&ctx);
+        let (_, _new) = requests.try_recv().unwrap();
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::OperationBusy)
+        );
+        assert!(app.connection_failure.is_none());
+    }
+
+    #[test]
+    fn contended_lease_roundtrips_to_capture_without_opening_hid() {
+        use super::super::vial_hid_task::{CaptureAvailability, CaptureFailure};
+        let denial = crate::hid_ownership::test_contended_lease_error();
+        let error = crate::hid::test_startup_error_roundtrip(denial);
+        let message = super::super::device_connect_task::classify_open_failure(&error);
+        let (mut app, ctx, requests) = connection_app();
+        app.start_connect(0);
+        let (_, tx) = requests.try_recv().unwrap();
+        tx.send(message).unwrap();
+        app.poll_connect(&ctx);
+        assert!(app.hid_device.is_none());
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::LeaseBusy)
+        );
+        let same_text = anyhow::anyhow!("Keyboard is busy in another AK Configurator process");
+        assert!(matches!(
+            super::super::device_connect_task::classify_open_failure(&same_text),
+            ConnectTaskMessage::OpenFailed(_)
+        ));
+    }
+
+    #[test]
+    fn post_open_load_failure_is_not_a_disconnect() {
+        use super::super::vial_hid_task::{CaptureAvailability, CaptureFailure};
+        let (mut app, ctx, requests) = connection_app();
+        app.start_connect(0);
+        let (_, tx) = requests.try_recv().unwrap();
+        tx.send(ConnectTaskMessage::Done(Box::new(Err(
+            "metadata unavailable".into(),
+        ))))
+        .unwrap();
+        app.poll_connect(&ctx);
+        assert_eq!(
+            app.capture_availability(),
+            CaptureAvailability::Unavailable(CaptureFailure::Failed)
+        );
     }
 
     fn connection_result(name: &str) -> ConnectResult {
@@ -1087,6 +1188,8 @@ impl EntropyApp {
                     false
                 }
                 ConnectTaskChannelState::Disconnected => false,
+                ConnectTaskChannelState::LeaseBusy => false,
+                ConnectTaskChannelState::OpenFailed(_) => false,
                 ConnectTaskChannelState::Progress(_) | ConnectTaskChannelState::Empty => true,
             });
         if !self.retiring_connects.is_empty() {
@@ -1139,7 +1242,7 @@ impl EntropyApp {
             }
         }
 
-        let (result, reconnect, obsolete) = match &mut self.connect_state {
+        let (result, startup_failure, reconnect, obsolete) = match &mut self.connect_state {
             ConnectState::Loading {
                 device,
                 rx,
@@ -1157,6 +1260,7 @@ impl EntropyApp {
                 let obsolete = cancel.load(std::sync::atomic::Ordering::Relaxed)
                     || self.pending_device_connect.is_some()
                     || !selected_matches_owner;
+                let mut startup_failure = None;
                 let result = match drain_connect_task_messages(rx) {
                     ConnectTaskChannelState::Progress(message) => {
                         if !obsolete && reconnect.is_none() {
@@ -1170,6 +1274,17 @@ impl EntropyApp {
                         return;
                     }
                     ConnectTaskChannelState::Done(result) => *result,
+                    ConnectTaskChannelState::LeaseBusy => {
+                        startup_failure = Some(ConnectionFailure::LeaseBusy);
+                        Err(
+                            "Open failed: Keyboard is busy in another AK Configurator process"
+                                .to_owned(),
+                        )
+                    }
+                    ConnectTaskChannelState::OpenFailed(error) => {
+                        startup_failure = Some(ConnectionFailure::Failed);
+                        Err(error)
+                    }
                     ConnectTaskChannelState::Empty => {
                         #[cfg(not(target_os = "windows"))]
                         ctx.request_repaint_after(CONNECT_POLL_INTERVAL);
@@ -1177,7 +1292,7 @@ impl EntropyApp {
                     }
                     ConnectTaskChannelState::Disconnected => Err("Connect thread died".to_owned()),
                 };
-                (result, reconnect.clone(), obsolete)
+                (result, startup_failure, reconnect.clone(), obsolete)
             }
             ConnectState::Idle | ConnectState::SelectingDevice | ConnectState::Reconnecting(_) => {
                 return;
@@ -1198,6 +1313,13 @@ impl EntropyApp {
                 self.selected_device = None;
                 self.start_device_scan();
             }
+            return;
+        }
+
+        if let Some(failure) = startup_failure {
+            self.selected_device = None;
+            self.clear_connected_keyboard_state(result.err().unwrap_or_default());
+            self.connection_failure = Some((self.connection_generation, failure));
             return;
         }
 
@@ -1563,9 +1685,13 @@ impl EntropyApp {
                 if is_hid_open_failure(&e) {
                     self.selected_device = None;
                     self.clear_connected_keyboard_state(e);
+                    self.connection_failure =
+                        Some((self.connection_generation, ConnectionFailure::Failed));
                     return;
                 }
 
+                self.connection_failure =
+                    Some((self.connection_generation, ConnectionFailure::Failed));
                 self.status_msg = e;
                 log::error!("{}", connect_apply_error_log(&self.status_msg));
             }

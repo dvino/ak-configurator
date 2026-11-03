@@ -6,7 +6,7 @@
 //! No production caller, identity admission, transport or persistence is provided.
 #![allow(dead_code)]
 
-use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
+use crate::ak820_qs_versioned_offline::{ImageFormat, ImageVersion, RecordVersion, SettingsRecord};
 
 const NVM_SIZE: usize = 0x2800;
 const QS_START: usize = 0x6a8;
@@ -42,6 +42,19 @@ pub(crate) fn prepare_qs_nvm_for_image(
 ) -> Result<Vec<u8>, String> {
     validate_carrier(nvm)?;
     let record = SettingsRecord::decode_for_image(&nvm[QS_START..QS_END], source, target)?;
+    Ok(with_record(nvm, record))
+}
+
+/// Model target firmware startup in a separate payload using explicit markers.
+/// This does not assert the modeled RAM state is already persisted or grant
+/// image admission, restore authority, or device write access.
+pub(crate) fn prepare_qs_nvm_for_formats(
+    nvm: &[u8],
+    source: ImageFormat,
+    target: ImageFormat,
+) -> Result<Vec<u8>, String> {
+    validate_carrier(nvm)?;
+    let record = SettingsRecord::decode_for_formats(&nvm[QS_START..QS_END], source, target)?;
     Ok(with_record(nvm, record))
 }
 
@@ -83,8 +96,30 @@ mod tests {
     }
 
     #[test]
+    fn marker_bound_startup_model_preserves_carrier_and_rejects_corruption() {
+        let source = ImageFormat::new(ImageVersion::V1, None).unwrap();
+        let target = ImageFormat::new(ImageVersion::V3, Some(300)).unwrap();
+        for raw in [[255; 24], SettingsRecord::defaults(V1).unwrap().encode()] {
+            let input = carrier(&raw);
+            let snapshot = input.clone();
+            let output = prepare_qs_nvm_for_formats(&input, source, target).unwrap();
+            assert_eq!(input, snapshot);
+            assert_opaque_unchanged(&input, &output);
+            let result =
+                SettingsRecord::decode_for_formats(&output[QS_START..QS_END], target, target)
+                    .unwrap();
+            assert_eq!(result.get(23).unwrap(), 300);
+            assert_eq!(result.get(22).unwrap(), u16::from(raw[0] == 255));
+        }
+        let mut input = carrier(&SettingsRecord::defaults(V1).unwrap().encode());
+        input[QS_START + 6] ^= 1;
+        assert!(prepare_qs_nvm_for_formats(&input, source, target).is_err());
+        assert!(prepare_qs_nvm_for_formats(&carrier(&[255; 24]), target, source).is_err());
+    }
+
+    #[test]
     fn forward_conversion_preserves_values_opaque_bytes_and_input() {
-        let mut old = SettingsRecord::defaults(V1);
+        let mut old = SettingsRecord::defaults(V1).unwrap();
         for (id, value) in [(1, 15), (2, 913), (4, 996), (7, 1), (18, 99), (19, 100)] {
             old.set(id, value).unwrap();
         }
@@ -120,7 +155,7 @@ mod tests {
                 assert_opaque_unchanged(&input, &output);
                 assert_eq!(
                     &output[QS_START..QS_END],
-                    SettingsRecord::defaults(target).encode()
+                    SettingsRecord::defaults(target).unwrap().encode()
                 );
                 if target == V2 {
                     assert_eq!(&output[QS_START..QS_END], v2);
@@ -137,7 +172,7 @@ mod tests {
             assert!(prepare_qs_nvm(&vec![0; size], V1, V2).is_err());
         }
         for source in [V1, V2] {
-            let input = carrier(&SettingsRecord::defaults(source).encode());
+            let input = carrier(&SettingsRecord::defaults(source).unwrap().encode());
             let other = if source == V1 { V2 } else { V1 };
             assert!(prepare_qs_nvm(&input, other, V2).is_err());
             for index in [0, 1, 37, 38, 39].into_iter().chain(QS_START..QS_END) {
@@ -153,7 +188,7 @@ mod tests {
     #[test]
     fn image_contract_accepts_retained_v1_and_preserves_input_and_opaque_bytes() {
         use ImageVersion::{V1 as I1, V2 as I2};
-        let mut saved = SettingsRecord::defaults(V1);
+        let mut saved = SettingsRecord::defaults(V1).unwrap();
         saved.set(2, 913).unwrap();
         saved.set(19, 99).unwrap();
         let input = carrier(&saved.encode());
@@ -182,7 +217,7 @@ mod tests {
                 assert_opaque_unchanged(&input, &output);
                 assert_eq!(
                     &output[QS_START..QS_END],
-                    SettingsRecord::defaults(record).encode()
+                    SettingsRecord::defaults(record).unwrap().encode()
                 );
             }
             assert!(prepare_qs_nvm_for_image(&input, I2, I1).is_err());
@@ -197,7 +232,7 @@ mod tests {
             assert!(prepare_qs_nvm_for_image(&vec![0; size], I2, I2).is_err());
         }
         for version in [V1, V2] {
-            let input = carrier(&SettingsRecord::defaults(version).encode());
+            let input = carrier(&SettingsRecord::defaults(version).unwrap().encode());
             for index in [0, 1, 37, 38, 39].into_iter().chain(QS_START..QS_END) {
                 let mut bad = input.clone();
                 bad[index] ^= 1;

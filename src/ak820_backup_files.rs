@@ -4,7 +4,8 @@
 //! at firmware revision `bef20f89d3da01d770767919bc7c8fc3c3a1a808`. This module
 //! handles local bytes only: it does not capture a device or perform HID I/O.
 use crate::ak820_settings_backup::{
-    canonical, sha256, BackupResult, ImageIdentity, ValidatedArchive, FILES, FORMAT, FORMAT_V2,
+    canonical, parse_json, sha256, BackupResult, ImageIdentity, ValidatedArchive, FILES, FORMAT,
+    FORMAT_V2, FORMAT_V3,
 };
 use crate::ak820_settings_model::{
     profile_image_for_identity, validate_historical_archive, validate_image_archive,
@@ -13,7 +14,7 @@ use crate::ak820_settings_model::{
 use crate::app::ak820_beta1_profiles::{historical_settings_identity, ProfileId};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -38,6 +39,23 @@ pub(crate) struct LoadedBackup {
     source_profile: Option<ProfileId>,
 }
 impl LoadedBackup {
+    /// Synthetic UI state only; this bypasses validation and proves no ROM trust.
+    #[cfg(test)]
+    pub(crate) fn untrusted_ui_fixture() -> Self {
+        let snapshot = crate::ak820_backup_capture::CapturedBackup::untrusted_ui_fixture();
+        let archive = ValidatedArchive {
+            manifest_sha256: "fixture".into(),
+            manifest: json!({"created_utc":"fixture"}),
+            settings: json!({}),
+            source: snapshot.identity().clone(),
+        };
+        Self {
+            archive: Arc::new(archive),
+            manifest_raw: Arc::new(b"{}".to_vec()),
+            files: Arc::new(snapshot.files().clone()),
+            source_profile: Some(ProfileId::Main),
+        }
+    }
     pub(crate) fn archive(&self) -> &ValidatedArchive {
         &self.archive
     }
@@ -500,7 +518,7 @@ fn read_directory(_path: &Path) -> BackupResult<BackupDirectoryContents> {
 /// Read and validate an exact firmware-compatible backup directory.
 /// All file names and lengths are bounded before allocation; errors omit paths
 /// and file contents because ROM and macro bytes are private.
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub fn read_validated_archive(path: &Path, profile: ProfileId) -> BackupResult<ValidatedArchive> {
     let (manifest, files) = read_directory(path)?;
     validate_profile_archive(&manifest, &files, profile, None)
@@ -520,14 +538,45 @@ const PROFILES: [ProfileId; 10] = [
     ProfileId::Multios,
 ];
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BackupInspectionError {
+    Image,
+    Version,
+    Policy,
+    Invalid,
+    Io,
+    Changed,
+}
+
+impl BackupInspectionError {
+    fn message(self) -> &'static str {
+        match self {
+            Self::Image => "Unsupported backup image",
+            Self::Version => "Unsupported backup version or schema",
+            Self::Policy => "Backup is denied by image policy",
+            Self::Invalid => "Backup validation failed",
+            Self::Io => "Invalid or inaccessible backup directory",
+            Self::Changed => "Backup manifest changed",
+        }
+    }
+}
+
 /// Reopen and fully validate a current-profile or exact historical backup.
 /// The optional digest pins the manifest across catalog listing and use.
 pub(crate) fn read_backup_auto(
     path: &Path,
     expected_manifest: Option<&str>,
 ) -> BackupResult<LoadedBackup> {
-    let (raw, files) = read_directory(path)?;
-    validate_loaded_bytes(raw, files, expected_manifest)
+    read_backup_inspection(path, expected_manifest).map_err(|e| e.message().to_owned())
+}
+
+/// Preflight denials are unverified claims; success requires the trusted validator.
+pub(crate) fn read_backup_inspection(
+    path: &Path,
+    expected_manifest: Option<&str>,
+) -> Result<LoadedBackup, BackupInspectionError> {
+    let (raw, files) = read_directory(path).map_err(|_| BackupInspectionError::Io)?;
+    inspect_loaded_bytes(raw, files, expected_manifest)
 }
 
 fn validate_loaded_bytes(
@@ -535,17 +584,45 @@ fn validate_loaded_bytes(
     files: BTreeMap<String, Vec<u8>>,
     expected_manifest: Option<&str>,
 ) -> BackupResult<LoadedBackup> {
-    let manifest: Value = serde_json::from_slice(&raw).map_err(|_| invalid())?;
-    let fields = manifest.as_object().ok_or_else(invalid)?;
-    let text_field = |key: &str| fields.get(key).and_then(Value::as_str).ok_or_else(invalid);
+    inspect_loaded_bytes(raw, files, expected_manifest).map_err(|e| e.message().to_owned())
+}
+
+fn inspect_loaded_bytes(
+    raw: Vec<u8>,
+    files: BTreeMap<String, Vec<u8>>,
+    expected_manifest: Option<&str>,
+) -> Result<LoadedBackup, BackupInspectionError> {
+    use BackupInspectionError as E;
+    if expected_manifest.is_some_and(|expected| expected != sha256(&raw)) {
+        return Err(E::Changed);
+    }
+    if raw.len() > MANIFEST_LIMIT {
+        return Err(E::Invalid);
+    }
+    let manifest = parse_json(&raw).map_err(|_| E::Invalid)?;
+    let fields = manifest.as_object().ok_or(E::Invalid)?;
+    let text_field = |key: &str| fields.get(key).and_then(Value::as_str).ok_or(E::Invalid);
     let schema = fields
         .get("nvm_schema")
         .and_then(Value::as_u64)
         .and_then(|v| u32::try_from(v).ok())
-        .ok_or_else(invalid)?;
+        .ok_or(E::Invalid)?;
+    let format = text_field("format")?;
     let ihx = text_field("source_ihx_sha256")?;
     let code = text_field("code_sha256")?;
     let definition = text_field("definition_sha256")?;
+    if !matches!(schema, 0x082002 | 0x082003)
+        || !matches!(format, FORMAT | FORMAT_V2 | FORMAT_V3)
+        || (format != FORMAT_V3
+            && format
+                != if schema == 0x082003 {
+                    FORMAT_V2
+                } else {
+                    FORMAT
+                })
+    {
+        return Err(E::Version);
+    }
     let mut found: Option<(ValidatedArchive, Option<ProfileId>)> = None;
     let identity = ImageIdentity {
         ihx_sha256: ihx.into(),
@@ -554,19 +631,23 @@ fn validate_loaded_bytes(
         schema,
     };
     for profile in PROFILES {
-        if matches!(
-            profile_image_for_identity(profile, &identity),
-            Some(crate::ak820::ImageContract::Beta3(_) | crate::ak820::ImageContract::Beta4(_))
-        ) {
+        if let Some(
+            image @ (crate::ak820::ImageContract::Beta3(_)
+            | crate::ak820::ImageContract::Beta4(_)
+            | crate::ak820::ImageContract::Beta5(_)),
+        ) = profile_image_for_identity(profile, &identity)
+        {
+            if matches!(image, crate::ak820::ImageContract::Beta5(_)) && format != FORMAT_V3 {
+                return Err(E::Policy);
+            }
             let archive = validate_profile_archive(&raw, &files, profile, expected_manifest)
-                .map_err(|_| "Backup validation failed".to_owned())?;
+                .map_err(|_| E::Invalid)?;
             found = Some((archive, Some(profile)));
             break;
         }
     }
     if found.is_none() {
-        let historical = historical_settings_identity(ihx, code, schema)
-            .ok_or_else(|| "Backup validation failed".to_owned())?;
+        let historical = historical_settings_identity(ihx, code, schema).ok_or(E::Image)?;
         let identity = ImageIdentity {
             ihx_sha256: historical.ihx_sha256.into(),
             code_sha256: historical.code_sha256.into(),
@@ -574,7 +655,7 @@ fn validate_loaded_bytes(
             schema,
         };
         let archive = validate_historical_archive(&raw, &files, &identity, expected_manifest)
-            .map_err(|_| "Backup validation failed".to_owned())?;
+            .map_err(|_| E::Invalid)?;
         found = Some((archive, None));
     }
     let (archive, source_profile) = found.expect("validated branch sets result");
@@ -671,8 +752,12 @@ fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> Backu
             )
         })
         .collect();
-    let manifest = json!({
-        "format": if schema == 0x082003 { FORMAT_V2 } else { FORMAT },
+    let versioned = matches!(
+        image,
+        crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)
+    );
+    let mut manifest = json!({
+        "format": if versioned { FORMAT_V3 } else if schema == 0x082003 { FORMAT_V2 } else { FORMAT },
         "created_utc": chrono::Utc::now().to_rfc3339(),
         "device": {"vid": 0x320f, "pid": 0x505b, "vial_uid": "0470ff9001b915d3"},
         "definition_sha256": identity.definition_sha256,
@@ -685,6 +770,12 @@ fn make_manifest(profile: ProfileId, files: &BTreeMap<String, Vec<u8>>) -> Backu
         "scope": "saved supported settings and exposed RGB values; not all current RAM",
         "files": records,
     });
+    if versioned {
+        manifest["metadata"] = crate::ak820_settings_backup::versioned_metadata(
+            image,
+            files.get("saved-nvm.bin").ok_or("Missing saved NVM")?,
+        )?;
+    }
     canonical(&manifest)
 }
 
@@ -696,13 +787,151 @@ pub(crate) fn validate_captured(
     validate_image_archive(&manifest, capture.files(), capture.image(), None)
 }
 
+/// Encode the exact native manifest and files in a private, versioned payload.
+#[cfg(feature = "mcp")]
+pub(crate) fn encode_private_capture(
+    capture: &crate::ak820_backup_capture::CapturedBackup,
+) -> BackupResult<(Vec<u8>, ValidatedArchive)> {
+    use base64::Engine as _;
+    let manifest = make_manifest(capture.profile(), capture.files())?;
+    let archive = validate_image_archive(&manifest, capture.files(), capture.image(), None)?;
+    let files: serde_json::Map<String, Value> = capture
+        .files()
+        .iter()
+        .map(|(name, data)| {
+            (
+                name.clone(),
+                Value::String(base64::engine::general_purpose::STANDARD.encode(data)),
+            )
+        })
+        .collect();
+    let payload = canonical(
+        &json!({"format":"ak820.mcp.backup-payload/v1", "manifest":base64::engine::general_purpose::STANDARD.encode(manifest), "files":files}),
+    )?;
+    Ok((payload, archive))
+}
+
+#[cfg(feature = "mcp")]
+#[allow(dead_code)]
+pub(crate) fn decode_private_capture(
+    payload: &[u8],
+    image: crate::ak820::ImageContract,
+) -> BackupResult<ValidatedArchive> {
+    let loaded = decode_private_loaded_capture(payload, image)?;
+    let archive = loaded.archive();
+    Ok(ValidatedArchive {
+        manifest_sha256: archive.manifest_sha256.clone(),
+        manifest: archive.manifest.clone(),
+        settings: archive.settings.clone(),
+        source: archive.source.clone(),
+    })
+}
+
+#[cfg(feature = "mcp")]
+pub(crate) fn decode_private_loaded_capture(
+    payload: &[u8],
+    image: crate::ak820::ImageContract,
+) -> BackupResult<LoadedBackup> {
+    use base64::Engine as _;
+    if payload.len() > 16 * 1024 * 1024 {
+        return Err("Oversized private backup".into());
+    }
+    let value = crate::ak820_settings_backup::parse_json(payload)?;
+    let root = value.as_object().ok_or("Invalid private backup")?;
+    if root.len() != 3 || value["format"] != "ak820.mcp.backup-payload/v1" {
+        return Err("Unknown private backup format".into());
+    }
+    let decode = |v: &Value| -> BackupResult<Vec<u8>> {
+        base64::engine::general_purpose::STANDARD
+            .decode(v.as_str().ok_or("Invalid private backup bytes")?)
+            .map_err(|_| "Invalid private backup encoding".into())
+    };
+    let manifest = decode(&value["manifest"])?;
+    let entries = value["files"]
+        .as_object()
+        .ok_or("Invalid private backup files")?;
+    if entries.len() != crate::ak820_settings_backup::FILES.len() {
+        return Err("Invalid private backup file count".into());
+    }
+    let mut files = BTreeMap::new();
+    for (name, max) in crate::ak820_settings_backup::FILES {
+        let bytes = decode(entries.get(name).ok_or("Missing private backup file")?)?;
+        if bytes.len() > max {
+            return Err("Oversized private backup file".into());
+        }
+        files.insert(name.to_owned(), bytes);
+    }
+    let archive = validate_image_archive(&manifest, &files, image, None)?;
+    Ok(LoadedBackup {
+        archive: Arc::new(archive),
+        manifest_raw: Arc::new(manifest),
+        files: Arc::new(files),
+        source_profile: image.profile(),
+    })
+}
+
+#[cfg(all(test, feature = "mcp"))]
+#[test]
+fn mcp_backup_private_container_rejects_unknown_and_duplicate_schema() {
+    let image = crate::ak820::ImageContract::Beta5(ProfileId::Main);
+    for payload in [
+        br#"{"format":"unknown","manifest":"","files":{}}"#.as_slice(),
+        br#"{"format":"ak820.mcp.backup-payload/v1","format":"other","manifest":"","files":{}}"#
+            .as_slice(),
+        br#"{"format":"ak820.mcp.backup-payload/v1","manifest":"","files":{},"extra":true}"#
+            .as_slice(),
+    ] {
+        assert!(decode_private_capture(payload, image).is_err());
+    }
+}
+
+#[cfg(all(test, feature = "mcp"))]
+#[test]
+#[ignore = "requires private trusted 65536-byte ROM in AK820_C03_FULL_ROM_PATH"]
+fn mcp_backup_private_exact_fixture_matches_native_files() {
+    use base64::Engine as _;
+    let path = std::env::var_os("AK820_C03_FULL_ROM_PATH").expect("private full ROM path required");
+    let rom = std::fs::read(path).expect("cannot read private ROM");
+    assert_eq!(rom.len(), 65536);
+    let capture = crate::ak820_backup_capture::CapturedBackup::from_rom(ProfileId::Main, rom, true)
+        .expect("trusted exact ROM required");
+    assert!(matches!(
+        capture.image(),
+        crate::ak820::ImageContract::Beta5(ProfileId::Main)
+    ));
+    let (payload, native) = encode_private_capture(&capture).unwrap();
+    let value = crate::ak820_settings_backup::parse_json(&payload).unwrap();
+    let decode = |value: &Value| {
+        base64::engine::general_purpose::STANDARD
+            .decode(value.as_str().unwrap())
+            .unwrap()
+    };
+    let raw_manifest = decode(&value["manifest"]);
+    assert_eq!(sha256(&raw_manifest), native.manifest_sha256);
+    for (name, bytes) in capture.files() {
+        assert_eq!(&decode(&value["files"][name]), bytes);
+    }
+    assert_eq!(
+        decode_private_capture(&payload, capture.image())
+            .unwrap()
+            .manifest_sha256,
+        native.manifest_sha256
+    );
+    assert_eq!(native.manifest["metadata"]["qs"]["image_version"], 3);
+    assert!(native.manifest["metadata"]["qs"]["runtime_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|id| id == 23));
+}
+
 /// Durable complete ROM safety copy for installation, including OEM sources.
 /// This separate format is never misrepresented as a restorable settings archive.
 #[derive(Clone, Debug)]
 pub(crate) struct InstallSnapshotReceipt {
     // The durable manifest always contains this digest. Only regression tests
     // also need it returned separately from the manifest identity.
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) rom_sha256: String,
     pub(crate) manifest_sha256: String,
 }
@@ -747,7 +976,7 @@ pub(crate) fn publish_install_snapshot(
         #[cfg(not(target_os = "windows"))]
         stage.parent.sync_all().map_err(|_| invalid())?;
         Ok(InstallSnapshotReceipt {
-            #[cfg(test)]
+            #[cfg(all(test, target_os = "linux"))]
             rom_sha256: digest,
             manifest_sha256: sha256(&manifest),
         })
@@ -931,6 +1160,92 @@ pub fn publish_validated_archive(
         #[cfg(not(target_os = "windows"))]
         stage.parent.sync_all().map_err(|_| invalid())?;
         Ok(verified)
+    }
+}
+
+#[cfg(test)]
+mod inspection_tests {
+    use super::*;
+
+    #[test]
+    fn ak820_backup_inspection_legacy_denials_are_bounded() {
+        use crate::ak820::ImageContract;
+        let identity = ImageContract::Beta3(ProfileId::Main)
+            .matrix_profile()
+            .unwrap()
+            .settings_identity
+            .as_ref()
+            .unwrap();
+        let mut files = BTreeMap::new();
+        files.insert("settings.json".to_owned(), b"{}\n".to_vec());
+        files.insert("before-full-rom.bin".to_owned(), vec![0; 65536]);
+        files.insert("saved-nvm.bin".to_owned(), vec![0; 0x2800]);
+        files.insert("read-log.jsonl".to_owned(), Vec::new());
+        files.insert(".gitignore".to_owned(), b"*\n".to_vec());
+        let records: serde_json::Map<String, Value> = files
+            .iter()
+            .map(|(k, v)| (k.clone(), json!({"size": v.len(), "sha256": sha256(v)})))
+            .collect();
+        let manifest = json!({"format":FORMAT_V2,"created_utc":"2026-10-25T09:00:00+00:00",
+            "scope":"saved supported settings and exposed RGB values; not all current RAM",
+            "device":{"vid":0x320f,"pid":0x505b,"vial_uid":"0470ff9001b915d3"},
+            "definition_sha256":identity.definition_sha256,"nvm_schema":identity.nvm_schema,
+            "source_build_id":identity.nvm_schema,"source_ihx_sha256":identity.ihx_sha256,
+            "code_sha256":identity.code_sha256,"counts":{"layers":6,"physical_keys":83,
+            "assignments":498,"encoder_assignments":12,"macros":16,"macro_capacity":8192},"files":records});
+        let dir = tempfile::tempdir().unwrap();
+        for (name, bytes) in &files {
+            std::fs::write(dir.path().join(name), bytes).unwrap();
+        }
+        let check = |raw: &[u8], expected| {
+            std::fs::write(dir.path().join(MANIFEST), raw).unwrap();
+            assert!(matches!(read_backup_inspection(dir.path(), None), Err(e) if e == expected));
+        };
+        let raw = canonical(&manifest).unwrap();
+        check(&raw, BackupInspectionError::Invalid); // Qualified identity does not authorize fake ROM.
+        let mut changed = manifest.clone();
+        changed["code_sha256"] = json!("00".repeat(32));
+        check(&canonical(&changed).unwrap(), BackupInspectionError::Image);
+        let beta5 = ImageContract::Beta5(ProfileId::Main)
+            .matrix_profile()
+            .unwrap()
+            .settings_identity
+            .as_ref()
+            .unwrap();
+        changed = manifest.clone();
+        changed["source_ihx_sha256"] = json!(beta5.ihx_sha256);
+        changed["code_sha256"] = json!(beta5.code_sha256);
+        changed["definition_sha256"] = json!(beta5.definition_sha256);
+        changed["nvm_schema"] = json!(beta5.nvm_schema);
+        check(&canonical(&changed).unwrap(), BackupInspectionError::Policy);
+        for (field, value) in [
+            ("format", json!("ak820-settings-backup-99")),
+            ("format", json!(FORMAT)),
+            ("nvm_schema", json!(0x082099)),
+        ] {
+            changed = manifest.clone();
+            changed[field] = value;
+            check(
+                &canonical(&changed).unwrap(),
+                BackupInspectionError::Version,
+            );
+        }
+        check(b"{", BackupInspectionError::Invalid);
+        check(
+            br#"{"format":"ak820-settings-backup-2","format":"x"}"#,
+            BackupInspectionError::Invalid,
+        );
+        changed = manifest.clone();
+        changed["files"]["settings.json"]["sha256"] = json!("00".repeat(32));
+        check(
+            &canonical(&changed).unwrap(),
+            BackupInspectionError::Invalid,
+        );
+        std::fs::write(dir.path().join(MANIFEST), &raw).unwrap();
+        assert!(matches!(
+            read_backup_inspection(dir.path(), Some(&"00".repeat(32))),
+            Err(BackupInspectionError::Changed)
+        ));
     }
 }
 

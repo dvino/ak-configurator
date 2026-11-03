@@ -21,3 +21,6 @@ entropy-v*-macos-*
 
 # Local design notes
 DESIGN_LANGUAGE.md
+
+# Local MCP interoperability dependencies
+/scripts/mcp-interop/node_modules/

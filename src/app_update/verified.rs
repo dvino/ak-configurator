@@ -193,7 +193,7 @@ fn select_release(bytes: &[u8], channel: Channel) -> Result<Release, String> {
         .filter(|r| !r.draft && (channel == Channel::IncludePrereleases || !r.prerelease))
         .filter_map(|r| {
             let v = canonical_version(&r.tag_name)?;
-            if r.prerelease != !v.pre.is_empty()
+            if r.prerelease == v.pre.is_empty()
                 || r.html_url != format!("{BASE}/tag/{}", r.tag_name)
                 || r.assets.len() > 64
             {

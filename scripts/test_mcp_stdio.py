@@ -14,7 +14,7 @@ import threading
 import time
 
 VERSIONS = ("2025-11-25", "2026-07-28")
-TOOLS = {"ak820_devices", "ak820_session", "ak820_read", "ak820_tests", "ak820_trace", "ak820_operation"}
+TOOLS = {"ak820_devices", "ak820_session", "ak820_read", "ak820_tests", "ak820_trace", "ak820_operation", "ak820_backup", "ak820_prepare"}
 
 
 class Client:
@@ -82,7 +82,7 @@ class Client:
             raise AssertionError(f"Non-JSON-RPC stdout: {message!r}")
         return message
 
-    def request(self, method, params):
+    def request(self, method, params, reject_unrelated=False):
         self.next_id += 1
         ident = self.next_id
         if self.modern:
@@ -102,6 +102,8 @@ class Client:
             if line is None:
                 raise AssertionError(f"Server closed while awaiting {method}: {''.join(self.stderr)[-4096:]}")
             message = self.decode(line)
+            if reject_unrelated and message.get("id") != ident:
+                raise AssertionError(f"Unexpected response to discarded frame: {message}")
             if message.get("id") == ident:
                 if "error" in message:
                     raise AssertionError(f"{method} JSON-RPC error: {message['error']}")
@@ -200,12 +202,18 @@ def exercise(binary, version):
         # rmcp 3.8's bounded transport discards malformed/oversize lines and
         # continues. Verify recovery, not an invented JSON-RPC parse-error reply.
         client.raw('{"unterminated":\n')
-        assert len(client.request("tools/list", {})["tools"]) == 6
+        assert len(client.request("tools/list", {})["tools"]) == len(TOOLS)
+        client.raw('{"jsonrpc":"2.0","id":-101,"id":-102,"method":"tools/list"}\n')
+        client.raw('{"jsonrpc":"2.0","id":-103,"method":"tools/call",'
+                   '"params":{"name":"ak820_devices","arguments":{"refresh":false,"refresh":true}}}\n')
+        client.raw('{"jsonrpc":"2.0","id":-104,"method":"tools/call",'
+                   '"params":{"name":"ak820_devices","arguments":{"refresh":false,"\\u0072efresh":true}}}\n')
+        assert len(client.request("tools/list", {}, reject_unrelated=True)["tools"]) == len(TOOLS)
         client.raw("x" * 65537 + "\n")
-        assert len(client.request("tools/list", {})["tools"]) == 6
+        assert len(client.request("tools/list", {})["tools"]) == len(TOOLS)
         assert client.request_error("unknown/method", {})["code"] == -32601
         client.notify("notifications/cancelled", {"requestId": 999999, "reason": "contract test"})
-        assert len(client.request("tools/list", {})["tools"]) == 6
+        assert len(client.request("tools/list", {})["tools"]) == len(TOOLS)
         client.tool("ak820_nonexistent", {}, "INVALID_ARGUMENT")
         client.tool("ak820_devices", {"refresh": "yes"}, "INVALID_ARGUMENT")
         client.tool("ak820_devices", {"refresh": False, "raw_path": "/forbidden"}, "INVALID_ARGUMENT")
@@ -224,6 +232,32 @@ def exercise(binary, version):
             assert time.monotonic() < deadline, "Open operation deadline exceeded"
             time.sleep(0.01)
         session = opened["device_session_id"]
+        generation = opened["session_generation"]
+        prepare = {"device_session_id": session, "expected_generation": generation, "backup_artifact_id": "unknown", "target_release": "v0.6.0-beta.5", "target_profile": "main", "settings_mode": "defaults", "prerelease_opt_in": True}
+        client.tool("ak820_prepare", {**prepare, "path": "forbidden"}, "INVALID_ARGUMENT")
+        preparation = client.tool("ak820_prepare", prepare)
+        prepare_id = preparation["data"]["operation_id"]
+        deadline = time.monotonic() + 5
+        while True:
+            prepare_state = client.tool("ak820_operation", {"action": "status", "operation_id": prepare_id})["data"]
+            if prepare_state["state"] != "running":
+                assert prepare_state["state"] == "failed"
+                assert prepare_state["result"]["error"]["code"] == "BACKUP_INVALID"
+                break
+            assert time.monotonic() < deadline, "Prepare operation deadline exceeded"
+            time.sleep(0.01)
+        client.tool("ak820_backup", {"device_session_id": session, "expected_generation": generation, "path": "forbidden"}, "INVALID_ARGUMENT")
+        backup = client.tool("ak820_backup", {"device_session_id": session, "expected_generation": generation})
+        backup_id = backup["data"]["operation_id"]
+        deadline = time.monotonic() + 5
+        while True:
+            backup_state = client.tool("ak820_operation", {"action": "status", "operation_id": backup_id})["data"]
+            if backup_state["state"] != "running":
+                assert backup_state["state"] == "failed"
+                assert backup_state["result"]["error"]["code"] == "UNSUPPORTED_FEATURE"
+                break
+            assert time.monotonic() < deadline, "Backup operation deadline exceeded"
+            time.sleep(0.01)
         assert client.tool("ak820_session", {"action": "status", "device_session_id": session})["data"]["state"] == "diagnostic"
         assert client.tool("ak820_read", {"device_session_id": session, "section": "identity"})["image"]["status"] == "synthetic"
         suites = client.tool("ak820_tests", {"action": "list"})["data"]["suites"]

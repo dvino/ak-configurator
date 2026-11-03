@@ -1,5 +1,6 @@
 //! Discovery while a Bluetooth owner is active. Never send VIA/Vial requests,
 //! open a Bluetooth HID endpoint, or invoke the BlueZ discovery/cache pipeline.
+#[cfg(any(target_os = "linux", not(test)))]
 use super::*;
 
 #[cfg(target_os = "linux")]
@@ -67,22 +68,25 @@ fn windows_usb_ancestry(ids: impl IntoIterator<Item = String>) -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 pub(super) fn scan() -> Result<Vec<Device>, String> {
     windows_usb::scan()
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 pub(super) fn scan() -> Result<Vec<Device>, String> {
     super::macos_usb_discovery::scan()
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+#[cfg(all(
+    not(test),
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
+))]
 pub(super) fn scan() -> Result<Vec<Device>, String> {
     Err("USB-only discovery is not available on this platform; Bluetooth protection remains enabled".into())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 mod windows_usb {
     use super::*;
     use std::{

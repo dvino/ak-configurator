@@ -6,7 +6,7 @@ use crate::ak820_image_pack::{validate_native_revision, APP_END, APP_START};
 use crate::ak820_loader::{checksum, PayloadReports};
 use crate::ak820_settings_backup::{sha256, BackupResult, ImageIdentity};
 use crate::ak820_settings_model::decode_trusted_rom_for_image;
-use crate::app::ak820_beta1_profiles::{matrix_profile, ProfileId};
+use crate::app::ak820_beta1_profiles::ProfileId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SnapshotKind {
@@ -184,9 +184,9 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
     if rom.len() != 65536 {
         return Err("Snapshot must contain exactly 65536 bytes".into());
     }
-    if validate_native_revision(rom).is_ok() {
-        return Ok(SnapshotKind::Oem);
-    }
+    let mut found = validate_native_revision(rom)
+        .is_ok()
+        .then_some(SnapshotKind::Oem);
     for profile in [
         ProfileId::Main,
         ProfileId::Game,
@@ -199,42 +199,127 @@ pub(crate) fn classify_snapshot(rom: &[u8]) -> BackupResult<SnapshotKind> {
         ProfileId::Shortcuts,
         ProfileId::Multios,
     ] {
-        let contract = matrix_profile(profile);
-        let Some(exact) = contract.settings_identity.as_ref() else {
-            continue;
-        };
-        let identity = ImageIdentity {
-            ihx_sha256: exact.ihx_sha256.clone(),
-            code_sha256: exact.code_sha256.clone(),
-            definition_sha256: exact.definition_sha256.clone(),
-            schema: exact.nvm_schema,
-        };
-        let image = crate::ak820::ImageContract::Beta3(profile);
-        if decode_trusted_rom_for_image(rom, &rom[0xc700..0xef00], &identity, image).is_ok() {
-            return Ok(SnapshotKind::Project(image));
+        for image in [
+            crate::ak820::ImageContract::Beta3(profile),
+            crate::ak820::ImageContract::Beta4(profile),
+            crate::ak820::ImageContract::Beta5(profile),
+        ] {
+            let Some(exact) = image
+                .matrix_profile()
+                .and_then(|row| row.settings_identity.as_ref())
+            else {
+                continue;
+            };
+            let identity = ImageIdentity {
+                ihx_sha256: exact.ihx_sha256.clone(),
+                code_sha256: exact.code_sha256.clone(),
+                definition_sha256: exact.definition_sha256.clone(),
+                schema: exact.nvm_schema,
+            };
+            if decode_trusted_rom_for_image(rom, &rom[0xc700..0xef00], &identity, image).is_ok() {
+                if found.is_some() {
+                    return Err("Snapshot matches more than one supported identity".into());
+                }
+                found = Some(SnapshotKind::Project(image));
+            }
         }
     }
-    for row in &crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles {
-        let Some(exact) = row.settings_identity.as_ref() else {
-            continue;
-        };
-        let identity = ImageIdentity {
-            ihx_sha256: exact.ihx_sha256.clone(),
-            code_sha256: exact.code_sha256.clone(),
-            definition_sha256: exact.definition_sha256.clone(),
-            schema: exact.nvm_schema,
-        };
-        let image = crate::ak820::ImageContract::Beta4(row.profile);
-        if decode_trusted_rom_for_image(rom, &rom[0xc700..0xef00], &identity, image).is_ok() {
-            return Ok(SnapshotKind::Project(image));
-        }
-    }
-    Err("Snapshot is neither a supported OEM revision nor an exact supported project image".into())
+    found.ok_or_else(|| {
+        "Snapshot is neither a supported OEM revision nor an exact supported project image".into()
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires private AK820_C03_FULL_ROM_PATH fixture"]
+    fn beta5_project_fixture_packs_and_checks_complete_reinstall() {
+        let source =
+            std::fs::read(std::env::var_os("AK820_C03_FULL_ROM_PATH").expect("fixture path"))
+                .expect("full ROM fixture");
+        let image = crate::ak820::ImageContract::Beta5(ProfileId::Main);
+        assert_eq!(
+            classify_snapshot(&source).unwrap(),
+            SnapshotKind::Project(image)
+        );
+        let admission = crate::ak820_release::ReleaseAdmission::selected(
+            crate::ak820_release::InstallerRelease::Beta5,
+            ProfileId::Main,
+            true,
+        )
+        .unwrap();
+        let payload = crate::ak820_release::bundled_payload_from_project(
+            &admission,
+            &source,
+            Some(&source[0xc700..0xef00]),
+        )
+        .unwrap();
+        assert!(payload == source[APP_START..APP_END]);
+        let package = CheckedLocalPackage::prepare_with_optional_recovery(
+            ProfileId::Main,
+            &payload,
+            &source,
+            None,
+            image,
+        )
+        .unwrap();
+        package.verify_full_readback(&source).unwrap();
+        for offset in [0, 0x2830, 0xc700, 0xef00, 0xefc0, 65535] {
+            let mut changed = source.clone();
+            changed[offset] ^= 1;
+            assert!(package.verify_full_readback(&changed).is_err());
+        }
+        assert!(classify_snapshot(&source[..65535]).is_err());
+        let mut corrupt = source.clone();
+        corrupt[0x2830] ^= 1;
+        assert!(classify_snapshot(&corrupt).is_err());
+        assert!(CheckedLocalPackage::prepare_with_optional_recovery(
+            ProfileId::Main,
+            &source,
+            &source,
+            None,
+            image,
+        )
+        .is_err());
+        for row in &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles {
+            let target = row.profile;
+            let target_image = crate::ak820::ImageContract::Beta5(target);
+            let target_admission = crate::ak820_release::ReleaseAdmission::selected(
+                crate::ak820_release::InstallerRelease::Beta5,
+                target,
+                true,
+            )
+            .unwrap();
+            let defaults = crate::ak820_release::bundled_defaults_for_image(target_image).unwrap();
+            let target_payload = crate::ak820_release::bundled_payload_from_project(
+                &target_admission,
+                &source,
+                None,
+            )
+            .unwrap();
+            assert!(target_payload[0xc700 - APP_START..0xef00 - APP_START] == defaults);
+            let target_package = CheckedLocalPackage::prepare_with_optional_recovery(
+                target,
+                &target_payload,
+                &source,
+                None,
+                target_image,
+            )
+            .unwrap();
+            let mut expected = source.clone();
+            expected[APP_START..APP_END].copy_from_slice(&target_payload);
+            assert!(expected[..APP_START] == source[..APP_START]);
+            assert!(expected[APP_END..] == source[APP_END..]);
+            assert_eq!(
+                classify_snapshot(&expected).unwrap(),
+                SnapshotKind::Project(target_image)
+            );
+            target_package.verify_full_readback(&expected).unwrap();
+            expected[0xefc0] ^= 1;
+            assert!(target_package.verify_full_readback(&expected).is_err());
+        }
+    }
     // Synthetic private data tests representation only, not preparation or admission.
     fn synthetic_package() -> CheckedLocalPackage {
         let snapshot = vec![0x5a; 65536];

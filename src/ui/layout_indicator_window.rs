@@ -440,7 +440,7 @@ fn sticky_layout_should_bring_window_forward(
     was_always_on_top: bool,
     is_always_on_top: bool,
 ) -> bool {
-    (window_opening && is_always_on_top) || (!was_always_on_top && is_always_on_top)
+    (window_opening || !was_always_on_top) && is_always_on_top
 }
 
 impl EntropyApp {

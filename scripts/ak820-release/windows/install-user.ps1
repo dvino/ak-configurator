@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+# Use this host's built-in module even when a parent process supplies another module path.
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -Force
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifestPath = Join-Path $source 'manifest.json'
 $sumsPath = Join-Path $source 'SHA256SUMS'

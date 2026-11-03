@@ -883,8 +883,8 @@ impl DeviceApplicationLayouts {
                             | "pycharm"
                             | "discord"
                     );
-                    if !is_new
-                        && !(preset.id == "adobe_photoshop"
+                    if !(is_new
+                        || preset.id == "adobe_photoshop"
                             && self.builtin_presets_catalog_revision < 2)
                     {
                         continue;
@@ -4434,7 +4434,7 @@ mod tests {
         );
         assert!(!settings.remove_category("other"));
         let id = settings.create_category("Work").expect("new category");
-        assert!(!settings.create_category("  work ").is_some());
+        assert!(settings.create_category("  work ").is_none());
         assert!(settings.set_layout_category_id(&firefox, &id));
         assert!(settings.rename_category(&id, "Projects"));
         let json = serde_json::to_string(&settings).unwrap();

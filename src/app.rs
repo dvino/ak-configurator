@@ -81,6 +81,8 @@ pub(crate) use runtime_smoke_app::{smoke_result, RuntimeSmokeApp};
 
 #[path = "app_storage.rs"]
 mod app_storage;
+#[cfg(all(feature = "mcp", not(test)))]
+pub(crate) use app_storage::read_release_observation;
 use app_storage::*;
 
 #[cfg(test)]

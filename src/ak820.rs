@@ -6,7 +6,9 @@
 
 pub const VID: u16 = 0x320F;
 pub const PID: u16 = 0x505B;
+#[cfg(any(feature = "mcp", test))]
 pub const RAW_HID_USAGE_PAGE: u16 = 0xFF60;
+#[cfg(any(feature = "mcp", test))]
 pub const RAW_HID_USAGE: u16 = 0x0061;
 pub const REPORT_SIZE: usize = 32;
 pub const VIAL_UID: u64 = 0xD315B90190FF7004;
@@ -82,6 +84,7 @@ pub(crate) enum ImageContract {
     Beta2(crate::app::ak820_beta1_profiles::ProfileId),
     Beta3(crate::app::ak820_beta1_profiles::ProfileId),
     Beta4(crate::app::ak820_beta1_profiles::ProfileId),
+    Beta5(crate::app::ak820_beta1_profiles::ProfileId),
 }
 
 impl ImageContract {
@@ -94,6 +97,13 @@ impl ImageContract {
             Self::Beta2(p) => Some(beta::previous_matrix_profile(p)),
             Self::Beta3(p) => Some(beta::matrix_profile(p)),
             Self::Beta4(p) => Some(beta::beta4_1_matrix_profile(p)),
+            Self::Beta5(p) => Some(
+                beta::beta5_firmware_matrix()
+                    .profiles
+                    .iter()
+                    .find(|r| r.profile == p)
+                    .expect("beta.5 profile"),
+            ),
         }
     }
     pub(crate) fn valid_combo_record(self, record: &[u8]) -> bool {
@@ -125,14 +135,17 @@ impl ImageContract {
     pub(crate) fn schema(self) -> u32 {
         match self {
             Self::Alpha3 => 0x082002,
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => 0x082003,
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => 0x082003,
         }
     }
 
     pub(crate) fn profile(self) -> Option<crate::app::ak820_beta1_profiles::ProfileId> {
         match self {
             Self::Alpha3 => None,
-            Self::Beta2(profile) | Self::Beta3(profile) | Self::Beta4(profile) => Some(profile),
+            Self::Beta2(profile)
+            | Self::Beta3(profile)
+            | Self::Beta4(profile)
+            | Self::Beta5(profile) => Some(profile),
         }
     }
 
@@ -141,8 +154,13 @@ impl ImageContract {
             Self::Alpha3 => "v0.6.0-alpha.3 / full".into(),
             Self::Beta2(profile) => format!("v0.6.0-beta.2 / {}", profile.as_str()),
             Self::Beta3(profile) => format!("v0.6.0-beta.3 / {}", profile.as_str()),
-            Self::Beta4(profile) => format!(
+            Self::Beta5(profile) => format!(
                 "{} / {}",
+                crate::app::ak820_beta1_profiles::BETA5_RELEASE,
+                profile.as_str()
+            ),
+            Self::Beta4(profile) => format!(
+                "{} / beta.4.1 (byte-identical) / {}",
                 crate::app::ak820_beta1_profiles::BETA4_RELEASE,
                 profile.as_str()
             ),
@@ -152,7 +170,7 @@ impl ImageContract {
     pub(crate) fn rgb_modes(self) -> &'static [u8] {
         match self {
             Self::Alpha3 => CAPABILITIES.rgb_modes,
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => {
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => {
                 let row = self.matrix_profile().unwrap();
                 if row.capabilities.optional_modules.get("vialrgb-direct") == Some(&true) {
                     &[0, 1, 2, 6, 13, 14, 31]
@@ -166,7 +184,7 @@ impl ImageContract {
     pub(crate) fn qsid_ids(self) -> &'static [u16] {
         match self {
             Self::Alpha3 => &[],
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => {
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => {
                 &self
                     .matrix_profile()
                     .unwrap()
@@ -179,7 +197,7 @@ impl ImageContract {
     pub(crate) fn saved_rgb_mode(self, saved: u8) -> Option<u8> {
         let modes: &[(u8, u16)] = match self {
             Self::Alpha3 => &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)],
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => {
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => {
                 if self.has_feature("vialrgb-direct") {
                     &[(1, 2), (2, 6), (3, 13), (4, 14), (5, 1), (6, 31)]
                 } else {
@@ -195,7 +213,7 @@ impl ImageContract {
     pub(crate) fn dynamic_counts(self) -> (u8, u8, u8, u8, u8) {
         match self {
             Self::Alpha3 => (0, 8, 0, 0, 1),
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => {
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => {
                 let counts = &self.matrix_profile().unwrap().capabilities.dynamic_entries;
                 (counts.tap_dance, counts.combos, counts.key_overrides, 0, 1)
             }
@@ -209,7 +227,7 @@ impl ImageContract {
     ) -> bool {
         match self {
             Self::Alpha3 => supports_keycode(code),
-            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) => {
+            Self::Beta2(_) | Self::Beta3(_) | Self::Beta4(_) | Self::Beta5(_) => {
                 crate::app::ak820_beta1_profiles::supports_keycode_for_row(
                     self.matrix_profile().unwrap(),
                     code,
@@ -228,49 +246,51 @@ impl ImageContract {
     }
 }
 
+fn unique_contract(matches: impl IntoIterator<Item = ImageContract>) -> Option<ImageContract> {
+    let mut result = None;
+    for item in matches {
+        if result.is_some_and(|previous| previous != item) {
+            return None;
+        }
+        result = Some(item);
+    }
+    result
+}
+
 pub(crate) fn contract_for_hash(schema: u32, code_hash: &str) -> Option<ImageContract> {
+    use crate::app::ak820_beta1_profiles as beta;
+    let mut matches = Vec::new();
     if schema == 0x082002 && code_hash == CODE_SHA256 {
-        return Some(ImageContract::Alpha3);
+        matches.push(ImageContract::Alpha3);
     }
-    if schema != 0x082003 {
-        return None;
+    for (matrix, make) in [
+        (
+            beta::previous_firmware_matrix(),
+            ImageContract::Beta2 as fn(_) -> _,
+        ),
+        (beta::firmware_matrix(), ImageContract::Beta3 as fn(_) -> _),
+        (
+            beta::beta4_firmware_matrix(),
+            ImageContract::Beta4 as fn(_) -> _,
+        ),
+        (
+            beta::beta4_1_firmware_matrix(),
+            ImageContract::Beta4 as fn(_) -> _,
+        ),
+        (
+            beta::beta5_firmware_matrix(),
+            ImageContract::Beta5 as fn(_) -> _,
+        ),
+    ] {
+        for row in &matrix.profiles {
+            if row.settings_identity.as_ref().is_some_and(|identity| {
+                identity.nvm_schema == schema && identity.code_sha256 == code_hash
+            }) {
+                matches.push(make(row.profile));
+            }
+        }
     }
-    if let Some(row) = crate::app::ak820_beta1_profiles::previous_firmware_matrix()
-        .profiles
-        .iter()
-        .find(|r| {
-            r.settings_identity
-                .as_ref()
-                .is_some_and(|i| i.nvm_schema == schema && i.code_sha256 == code_hash)
-        })
-    {
-        return Some(ImageContract::Beta2(row.profile));
-    }
-    if let Some(row) = crate::app::ak820_beta1_profiles::firmware_matrix()
-        .profiles
-        .iter()
-        .find_map(|row| {
-            row.settings_identity
-                .as_ref()
-                .filter(|identity| {
-                    identity.nvm_schema == schema && identity.code_sha256 == code_hash
-                })
-                .map(|_| ImageContract::Beta3(row.profile))
-        })
-    {
-        return Some(row);
-    }
-    crate::app::ak820_beta1_profiles::beta4_firmware_matrix()
-        .profiles
-        .iter()
-        .find_map(|row| {
-            row.settings_identity
-                .as_ref()
-                .filter(|identity| {
-                    identity.nvm_schema == schema && identity.code_sha256 == code_hash
-                })
-                .map(|_| ImageContract::Beta4(row.profile))
-        })
+    unique_contract(matches)
 }
 
 pub(crate) fn identify_image(
@@ -430,6 +450,89 @@ mod tests {
             .collect()
     }
     #[test]
+    fn beta5_exact_identity_and_capabilities() {
+        use crate::app::ak820_beta1_profiles::{beta5_firmware_matrix, ProfileId};
+        let matrix = beta5_firmware_matrix();
+        assert_eq!(matrix.profiles.len(), 10);
+        let reconstruction: serde_json::Value = serde_json::from_str(include_str!(
+            "../docs/session-evidence/B01-WINDOWS-RECONSTRUCTION.json"
+        ))
+        .unwrap();
+        let reconstructed = reconstruction["profiles"].as_array().unwrap();
+        assert_eq!(reconstructed.len(), 10);
+        let mut qsid23_count = 0;
+        for row in &matrix.profiles {
+            let identity = row.settings_identity.as_ref().unwrap();
+            let packed = reconstructed
+                .iter()
+                .find(|p| p["profile"] == row.profile.as_str())
+                .unwrap();
+            assert_eq!(
+                identity.code_sha256,
+                packed["code_sha256"].as_str().unwrap()
+            );
+            assert_eq!(identity.ihx_sha256, packed["ihx_sha256"].as_str().unwrap());
+            assert_eq!(
+                row.identity.map_sha256,
+                packed["map_sha256"].as_str().unwrap()
+            );
+            let image = ImageContract::Beta5(row.profile);
+            assert_eq!(
+                contract_for_hash(identity.nvm_schema, &identity.code_sha256),
+                Some(image)
+            );
+            assert_eq!(
+                image.qsid_ids().contains(&23),
+                !matches!(row.profile, ProfileId::Game | ProfileId::Mmo)
+            );
+            qsid23_count += usize::from(image.qsid_ids().contains(&23));
+            let counts = &row.capabilities.dynamic_entries;
+            assert_eq!(
+                image.dynamic_counts(),
+                (counts.tap_dance, counts.combos, counts.key_overrides, 0, 1)
+            );
+            let expected = match row.profile {
+                ProfileId::Main | ProfileId::Game => (0, 8, 8, 0, 1),
+                ProfileId::Mmo | ProfileId::Onehand | ProfileId::Creative => (8, 8, 0, 0, 1),
+                _ => (8, 8, 8, 0, 1),
+            };
+            assert_eq!(image.dynamic_counts(), expected);
+            assert_eq!(identity.leader_default.as_ref().unwrap().milliseconds, 300);
+            let digest = decode(&identity.code_sha256);
+            let mut manifest = manifest();
+            manifest[12..16].copy_from_slice(&identity.nvm_schema.to_le_bytes());
+            manifest[16..48].copy_from_slice(&digest);
+            let digest: [u8; 32] = digest.try_into().unwrap();
+            assert_eq!(identify_image(&manifest, &digest), Some(image));
+            let mut wrong = digest;
+            wrong[0] ^= 1;
+            assert_eq!(identify_image(&manifest, &wrong), None);
+        }
+        assert_eq!(qsid23_count, 8);
+        assert_eq!(contract_for_hash(0x082003, &"00".repeat(32)), None);
+        for row in &crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix().profiles {
+            let exact = row.settings_identity.as_ref().unwrap();
+            assert_eq!(
+                contract_for_hash(exact.nvm_schema, &exact.code_sha256),
+                Some(ImageContract::Beta4(row.profile))
+            );
+        }
+        assert_eq!(
+            unique_contract([
+                ImageContract::Beta4(ProfileId::Main),
+                ImageContract::Beta4(ProfileId::Main)
+            ]),
+            Some(ImageContract::Beta4(ProfileId::Main))
+        );
+        assert_eq!(
+            unique_contract([
+                ImageContract::Beta4(ProfileId::Main),
+                ImageContract::Beta5(ProfileId::Main)
+            ]),
+            None
+        );
+    }
+    #[test]
     fn beta3_capabilities_are_not_attributed_to_beta2() {
         use crate::app::ak820_beta1_profiles::{KeycodeSource, ProfileId};
         let old = ImageContract::Beta2(ProfileId::Main);
@@ -506,7 +609,10 @@ mod tests {
         let main = ImageContract::Beta4(ProfileId::Main);
         assert!(main.qsid_ids().contains(&3));
         assert!(main.qsid_ids().contains(&6));
-        assert_eq!(main.label(), format!("{BETA4_RELEASE} / main"));
+        assert_eq!(
+            main.label(),
+            format!("{BETA4_RELEASE} / beta.4.1 (byte-identical) / main")
+        );
     }
     #[test]
     fn image_pin_requires_manifest_and_code() {

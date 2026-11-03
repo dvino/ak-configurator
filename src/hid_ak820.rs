@@ -44,6 +44,8 @@ pub(crate) enum Ak820RgbStreamResult {
 pub(super) struct Ak820Session {
     image: Option<ImageContract>,
     loaded: bool,
+    #[cfg(feature = "mcp")]
+    diagnostic_verified: bool,
     failure: Option<String>,
     rgb_owner: Option<std::sync::Arc<()>>,
 }
@@ -290,6 +292,7 @@ fn allowed_request(p: &[u8; MSG_LEN], image: Option<ImageContract>) -> Result<bo
         Some(ImageContract::Beta4(profile)) => {
             crate::app::ak820_beta1_profiles::beta4_settings_writes_authorized(profile)
         }
+        Some(ImageContract::Beta5(_)) => false,
         _ => true,
     };
     ensure!(
@@ -450,34 +453,33 @@ fn capture_reconcile_getters(
             "Captured macro getter differs"
         );
     }
-    let (qs_values, tap_dance, key_overrides) = if matches!(image, ImageContract::Beta4(_)) {
-        use crate::ak820_qs_versioned_offline::{ImageVersion, SettingsRecord};
-        let qs = SettingsRecord::decode_for_image(
-            &nvm[0x6a8..0x6c0],
-            ImageVersion::V2,
-            ImageVersion::V2,
-        )
-        .map_err(anyhow::Error::msg)?;
-        let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm)
-            .map_err(anyhow::Error::msg)?;
-        let values = image
-            .qsid_ids()
-            .iter()
-            .map(|&id| qs.get(id).map(|value| (id, value)))
-            .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
-            .map_err(anyhow::Error::msg)?;
-        (values, extensions.tap_dance, extensions.key_overrides)
-    } else {
-        let extensions =
-            crate::ak820_typed_storage::Extensions::decode_nvm(nvm).map_err(anyhow::Error::msg)?;
-        let values = image
-            .qsid_ids()
-            .iter()
-            .map(|&id| extensions.settings.get(id).map(|value| (id, value)))
-            .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
-            .map_err(anyhow::Error::msg)?;
-        (values, extensions.tap_dance, extensions.key_overrides)
-    };
+    let (qs_values, tap_dance, key_overrides) =
+        if matches!(image, ImageContract::Beta4(_) | ImageContract::Beta5(_)) {
+            use crate::ak820_qs_versioned_offline::SettingsRecord;
+            let format =
+                crate::ak820_settings_model::exact_qs_format(image).map_err(anyhow::Error::msg)?;
+            let qs = SettingsRecord::decode_for_formats(&nvm[0x6a8..0x6c0], format, format)
+                .map_err(anyhow::Error::msg)?;
+            let extensions = crate::ak820_typed_storage::NonQsExtensions::decode_nvm(nvm)
+                .map_err(anyhow::Error::msg)?;
+            let values = image
+                .qsid_ids()
+                .iter()
+                .map(|&id| qs.get(id).map(|value| (id, value)))
+                .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
+                .map_err(anyhow::Error::msg)?;
+            (values, extensions.tap_dance, extensions.key_overrides)
+        } else {
+            let extensions = crate::ak820_typed_storage::Extensions::decode_nvm(nvm)
+                .map_err(anyhow::Error::msg)?;
+            let values = image
+                .qsid_ids()
+                .iter()
+                .map(|&id| extensions.settings.get(id).map(|value| (id, value)))
+                .collect::<std::result::Result<std::collections::BTreeMap<_, _>, _>>()
+                .map_err(anyhow::Error::msg)?;
+            (values, extensions.tap_dance, extensions.key_overrides)
+        };
     for &id in &contract.capabilities.runtime_qmk_settings_ids {
         let reply = send(&[0xfe, 10, id as u8, (id >> 8) as u8])?;
         let actual = if matches!(id, 1 | 3 | 22) {
@@ -553,6 +555,10 @@ impl HidDevice {
             .image
             .context("Exact image required for OS indication")?;
         ensure!(
+            !matches!(image, ImageContract::Beta5(_)),
+            "Beta.5 writes are not authorized"
+        );
+        ensure!(
             image.has_feature("os-indicators"),
             "Image has no OS indicator module"
         );
@@ -571,11 +577,37 @@ impl HidDevice {
         cancel: &AtomicBool,
         progress: &std::sync::atomic::AtomicU32,
     ) -> Result<crate::ak820_backup_capture::CapturedBackup> {
+        self.ak820_capture_backup_inner(cancel, progress, false)
+    }
+
+    #[cfg(feature = "mcp")]
+    pub(crate) fn ak820_capture_diagnostic_backup(
+        &self,
+        cancel: &AtomicBool,
+        progress: &std::sync::atomic::AtomicU32,
+    ) -> Result<crate::ak820_backup_capture::CapturedBackup> {
+        self.ak820_capture_backup_inner(cancel, progress, true)
+    }
+
+    fn ak820_capture_backup_inner(
+        &self,
+        cancel: &AtomicBool,
+        progress: &std::sync::atomic::AtomicU32,
+        diagnostic: bool,
+    ) -> Result<crate::ak820_backup_capture::CapturedBackup> {
         progress.store(0, Ordering::Release);
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        #[cfg(feature = "mcp")]
+        let diagnostic_admitted =
+            diagnostic && self.read_only.is_some() && state.diagnostic_verified;
+        #[cfg(not(feature = "mcp"))]
+        let diagnostic_admitted = {
+            let _ = diagnostic;
+            false
+        };
         ensure!(
-            state.loaded && state.failure.is_none(),
+            (state.loaded || diagnostic_admitted) && state.failure.is_none(),
             "Read complete AK820 settings before backup"
         );
         let image = state.image.context("AK820 image is not verified")?;
@@ -588,9 +620,11 @@ impl HidDevice {
                 capture_check_cancel(cancel)?;
                 // Only fixed read-only requests are constructed below. Keep the
                 // session lock across the whole snapshot to exclude setters.
-                let reply = self
-                    .usb_send_traced(request)
-                    .map_err(|_| anyhow::anyhow!("Backup capture read failed"))?;
+                let reply = match &self.read_only {
+                    Some(session) => session.send(request, || self.usb_send_traced(request)),
+                    None => self.usb_send_traced(request),
+                }
+                .context("Backup capture read failed")?;
                 ensure!(
                     super::response_matches_command(request, &reply),
                     "Backup capture reply differs"
@@ -726,6 +760,10 @@ impl HidDevice {
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
         ensure!(
+            !matches!(state.image, Some(ImageContract::Beta5(_))),
+            "Beta.5 writes are not authorized"
+        );
+        ensure!(
             state.image.is_some_and(|i| i.direct_protocol() == Some(1))
                 && state.loaded
                 && state.failure.is_none(),
@@ -812,6 +850,10 @@ impl HidDevice {
         let state = self.ak820.as_ref().context("Not an AK820 session")?;
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
         let image = state.image.context("AK820 image is not verified")?;
+        ensure!(
+            !matches!(image, ImageContract::Beta5(_)),
+            "Beta.5 writes are not authorized"
+        );
         ensure!(
             image.profile().is_some() && image.rgb_modes().contains(&1),
             "Direct RGB is unavailable in this exact image"
@@ -960,6 +1002,9 @@ impl HidDevice {
             return Ok(OwnershipLost);
         };
         let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(state.image, Some(ImageContract::Beta5(_))) {
+            return Ok(OwnershipLost);
+        }
         if !state.loaded
             || state.failure.is_some()
             || state.image != Some(stream.image)
@@ -1057,6 +1102,10 @@ impl HidDevice {
 
     pub(super) fn ak820_set_macro_buffer(&self, data: &[u8]) -> Result<()> {
         let image = self.ak820_image().context("AK820 image is not verified")?;
+        ensure!(
+            !matches!(image, ImageContract::Beta5(_)),
+            "Beta.5 writes are not authorized"
+        );
         let logical = validate_macro_upload(data, image)?;
         // Only the complete logical stream is published. No padding can cause
         // a later chunk to be mistaken for a new upload after terminator 16.
@@ -1251,6 +1300,15 @@ impl HidDevice {
             self.ak820_failure().is_none(),
             "AK820 diagnostic session is stopped"
         );
+        #[cfg(feature = "mcp")]
+        {
+            self.ak820
+                .as_ref()
+                .unwrap()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .diagnostic_verified = false;
+        }
         let started = std::time::Instant::now();
         let boundary = || -> Result<(), String> {
             if cancel.load(Ordering::Acquire) {
@@ -1264,8 +1322,8 @@ impl HidDevice {
         let result = (|| {
             let image = self.ak820_identify_code(|_| boundary())?;
             ensure!(
-                matches!(image, ImageContract::Beta3(_)),
-                "Diagnostic bootstrap supports exact beta.3 images only"
+                matches!(image, ImageContract::Beta3(_) | ImageContract::Beta5(_)),
+                "Diagnostic bootstrap requires an exact image with a reviewed FD01 contract"
             );
             self.ak820
                 .as_ref()
@@ -1300,14 +1358,28 @@ impl HidDevice {
         if let Err(error) = &result {
             self.ak820_fail(error);
         }
+        #[cfg(feature = "mcp")]
+        if let Ok((_, status)) = &result {
+            if status.ensure_ready().is_ok() {
+                self.ak820
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .diagnostic_verified = true;
+            }
+        }
         result
     }
 
     #[cfg(any(feature = "mcp", test))]
     pub(crate) fn ak820_diagnostic_status(&self) -> Result<crate::ak820_diagnostics::Status> {
         ensure!(
-            matches!(self.ak820_image(), Some(ImageContract::Beta3(_))),
-            "FD01 diagnostics require an exact beta.3 image"
+            matches!(
+                self.ak820_image(),
+                Some(ImageContract::Beta3(_) | ImageContract::Beta5(_))
+            ),
+            "FD01 diagnostics require an exact image with a reviewed contract"
         );
         ensure!(
             self.ak820_failure().is_none(),
@@ -1322,7 +1394,107 @@ impl HidDevice {
         result
     }
 
+    fn rgb_packet(mode: u16, speed: u8, hue: u8, saturation: u8, brightness: u8) -> [u8; MSG_LEN] {
+        let mut p = [0; MSG_LEN];
+        p[..2].copy_from_slice(&[7, 0x41]);
+        p[2..4].copy_from_slice(&mode.to_le_bytes());
+        p[4..8].copy_from_slice(&[speed, hue, saturation, brightness]);
+        p
+    }
+
+    pub(crate) fn ak820_validate_rgb_image(
+        image: ImageContract,
+        mode: u16,
+        speed: u8,
+        hue: u8,
+        saturation: u8,
+        brightness: u8,
+        save: bool,
+    ) -> Result<()> {
+        ensure!(
+            allowed_request(
+                &Self::rgb_packet(mode, speed, hue, saturation, brightness),
+                Some(image)
+            )?,
+            "RGB SET is not admitted"
+        );
+        if save {
+            ensure!(
+                allowed_request(&padded_request(&[9]), Some(image))?,
+                "RGB SAVE is not admitted"
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ak820_prevalidate_rgb(
+        &self,
+        mode: u16,
+        speed: u8,
+        hue: u8,
+        saturation: u8,
+        brightness: u8,
+        save: bool,
+    ) -> Result<()> {
+        ensure!(
+            self.read_only.is_none(),
+            "Read-only HID session refused RGB write"
+        );
+        let state = self
+            .ak820
+            .as_ref()
+            .context("AK820 identity is not verified")?
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        ensure!(state.failure.is_none(), "AK820 operation stopped");
+        ensure!(
+            state.loaded,
+            "AK820 settings remain read-only until the complete device state is read"
+        );
+        Self::ak820_validate_rgb_image(
+            state.image.context("AK820 image is not verified")?,
+            mode,
+            speed,
+            hue,
+            saturation,
+            brightness,
+            save,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn ak820_set_rgb_guarded(
+        &self,
+        mode: u16,
+        speed: u8,
+        hue: u8,
+        saturation: u8,
+        brightness: u8,
+        save: bool,
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        self.ak820_prevalidate_rgb(mode, speed, hue, saturation, brightness, save)?;
+        let packet = Self::rgb_packet(mode, speed, hue, saturation, brightness);
+        let send = |data: &[u8]| match &self.read_only {
+            Some(session) => session.send(data, || self.ak820_send_cancellable(data, Some(cancel))),
+            None => self.ak820_send_cancellable(data, Some(cancel)),
+        };
+        send(&packet)?;
+        if save {
+            send(&[9])?;
+        }
+        Ok(())
+    }
+
     pub(super) fn ak820_send_or_passthrough(&self, data: &[u8]) -> Result<[u8; MSG_LEN]> {
+        self.ak820_send_cancellable(data, None)
+    }
+
+    fn ak820_send_cancellable(
+        &self,
+        data: &[u8],
+        cancel: Option<&AtomicBool>,
+    ) -> Result<[u8; MSG_LEN]> {
         let Some(state) = &self.ak820 else {
             return self.usb_send_traced(data);
         };
@@ -1343,10 +1515,17 @@ impl HidDevice {
                 "AK820 settings remain read-only until the complete device state is read"
             );
         }
+        let send = |data: &[u8]| {
+            ensure!(
+                !cancel.is_some_and(|flag| flag.load(Ordering::Acquire)),
+                "AK820 RGB operation cancelled; state may be uncertain"
+            );
+            self.usb_send_traced(data)
+        };
         let operation = (|| {
             let unlock = p[0] == 0xFE && (6..=8).contains(&p[1]);
             if write && !unlock {
-                storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+                storage_ready(&send(&[0xFD, 1])?)?;
             }
             let expected_nvm = if write && typed_setter(&p) {
                 let image = state.image.context("AK820 image is not verified")?;
@@ -1363,14 +1542,14 @@ impl HidDevice {
             } else {
                 None
             };
-            let reply = self.usb_send_traced(data)?;
+            let reply = send(data)?;
             if !super::response_matches_command(data, &reply) {
                 bail!("AK820 reply does not match the request");
             }
             if write {
-                self.ak820_verify_write(&p, &reply, state.image.unwrap())?;
+                self.ak820_verify_write_cancellable(&p, &reply, state.image.unwrap(), cancel)?;
                 if !unlock {
-                    storage_ready(&self.usb_send_traced(&[0xFD, 1])?)?;
+                    storage_ready(&send(&[0xFD, 1])?)?;
                 }
                 if let Some(expected) = expected_nvm {
                     let actual = self.ak820_read_rom_traced(0xC700, 0x2800)?;
@@ -1380,6 +1559,10 @@ impl HidDevice {
                     );
                 }
             }
+            ensure!(
+                !cancel.is_some_and(|flag| flag.load(Ordering::Acquire)),
+                "AK820 RGB operation cancelled; state may be uncertain"
+            );
             Ok(reply)
         })();
         if let Err(error) = &operation {
@@ -1413,6 +1596,23 @@ impl HidDevice {
         reply: &[u8; MSG_LEN],
         image: ImageContract,
     ) -> Result<()> {
+        self.ak820_verify_write_cancellable(p, reply, image, None)
+    }
+
+    fn ak820_verify_write_cancellable(
+        &self,
+        p: &[u8; MSG_LEN],
+        reply: &[u8; MSG_LEN],
+        image: ImageContract,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<()> {
+        let send = |data: &[u8]| {
+            ensure!(
+                !cancel.is_some_and(|flag| flag.load(Ordering::Acquire)),
+                "AK820 RGB operation cancelled; state may be uncertain"
+            );
+            self.usb_send_traced(data)
+        };
         match (p[0], p[1]) {
             (0x03, 2) => {
                 ensure!(reply == p, "AK820 layout setter was rejected");
@@ -1461,7 +1661,7 @@ impl HidDevice {
             }
             (0x07, 0x41) => {
                 ensure!(reply == p, "AK820 RGB setter was rejected");
-                let actual = self.usb_send_traced(&[8, 0x41])?;
+                let actual = send(&[8, 0x41])?;
                 ensure!(
                     actual[..2] == [8, 0x41] && actual[2..8] == p[2..8],
                     "AK820 RGB readback differs"
@@ -1469,8 +1669,9 @@ impl HidDevice {
             }
             (0x09, _) => {
                 ensure!(reply == p, "AK820 RGB save was rejected");
-                let actual = self.usb_send_traced(&[8, 0x41])?;
-                let saved = self.usb_send_traced(&[0xFD, 0, 0xC7, 0x18, 8])?;
+                let actual = send(&[8, 0x41])?;
+                ensure!(actual[..2] == [8, 0x41], "AK820 RGB readback reply differs");
+                let saved = send(&[0xFD, 0, 0xC7, 0x18, 8])?;
                 ensure!(
                     saved[..5] == [0xFD, 0, 0xC7, 0x18, 8],
                     "AK820 saved RGB reply differs"
@@ -1502,9 +1703,18 @@ impl HidDevice {
         hid.ak820 = Some(Box::new(std::sync::Mutex::new(Ak820Session {
             image: ready.then_some(ImageContract::Alpha3),
             loaded: ready,
+            #[cfg(feature = "mcp")]
+            diagnostic_verified: false,
             failure: None,
             rgb_owner: None,
         })));
+        (hid, recorder)
+    }
+
+    #[cfg(all(test, feature = "mcp"))]
+    pub(crate) fn test_read_only_ak820_device() -> (Self, super::TestHidRecorder) {
+        let (mut hid, recorder) = Self::test_ak820_device(false);
+        hid.read_only = Some(super::ReadOnlyHidSession::default());
         (hid, recorder)
     }
 
@@ -1545,6 +1755,32 @@ mod beta4_write_policy_tests {
     use super::*;
 
     #[test]
+    fn beta5_stale_rgb_restore_never_sends_packets() {
+        let (hid, log) = HidDevice::test_ak820_device(true);
+        let owner = std::sync::Arc::new(());
+        let image = ImageContract::Beta5(crate::app::ak820_beta1_profiles::ProfileId::Main);
+        {
+            let mut state = hid.ak820.as_ref().unwrap().lock().unwrap();
+            state.image = Some(image);
+            state.rgb_owner = Some(owner.clone());
+        }
+        let stream = Ak820RgbStream {
+            mode: [0; MSG_LEN],
+            previous: Some([0; MSG_LEN]),
+            image,
+            owner,
+            direct_previous: None,
+            direct_generation: None,
+        };
+        assert_eq!(
+            hid.ak820_restore_rgb_stream(&stream, &AtomicBool::new(false))
+                .unwrap(),
+            Ak820RgbRestoreResult::OwnershipLost
+        );
+        assert!(log.requests().is_empty());
+    }
+
+    #[test]
     fn beta4_release_metadata_never_authorizes_hid_writes() {
         let image = ImageContract::Beta4(crate::app::ak820_beta1_profiles::ProfileId::Main);
         for packet in [
@@ -1559,6 +1795,22 @@ mod beta4_write_policy_tests {
         let mut read = [0; MSG_LEN];
         read[..4].copy_from_slice(&[0xFE, 10, 22, 0]);
         assert!(!allowed_request(&read, Some(image)).unwrap());
+    }
+
+    #[test]
+    fn beta5_write_requests_are_blocked_for_every_profile() {
+        for row in &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles {
+            let image = ImageContract::Beta5(row.profile);
+            for packet in [
+                [0xFE, 11, 1, 0, 2, 0],
+                [0x05, 0, 0, 0, 0, 4],
+                [0xFE, 6, 0, 0, 0, 0],
+            ] {
+                let mut request = [0; MSG_LEN];
+                request[..packet.len()].copy_from_slice(&packet);
+                assert!(allowed_request(&request, Some(image)).is_err());
+            }
+        }
     }
 }
 
@@ -1740,13 +1992,14 @@ mod tests {
 
 #[cfg(test)]
 #[path = "hid_ak820_backup_tests.rs"]
-mod backup_tests;
+pub(crate) mod backup_tests;
 
 #[path = "ak820_restore_executor.rs"]
 mod restore_executor;
 
 #[path = "hid_ak820_install.rs"]
 mod install;
+#[cfg(any(not(test), unix))]
 pub(crate) use install::usb_port;
 #[cfg(not(test))]
 pub(crate) use install::InstallUsb;

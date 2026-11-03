@@ -2,7 +2,7 @@
 //! Offline backup settings derivation, ported from firmware bef20f89's
 //! settings_backup.py and pack_ak820.py. No HID, OEM bytes or write operations.
 //! NVM-only parsing proves storage structure, not a running firmware identity.
-use crate::ak820_qs_versioned_offline::{ImageVersion, RecordVersion, SettingsRecord};
+use crate::ak820_qs_versioned_offline::{ImageFormat, ImageVersion, RecordVersion, SettingsRecord};
 use crate::ak820_settings_backup::{
     macro_logical_length, rgb_wire, rgb_wire_for_profile, sha256, BackupResult, ImageIdentity,
 };
@@ -243,8 +243,43 @@ pub(crate) fn settings_from_nvm_for_image_with_capabilities_offline(
         !capabilities.combo_media || source == ImageVersion::V2,
         "Media Combo capability requires a source V2 image contract",
     )?;
+    settings_from_nvm_for_formats_offline(
+        nvm,
+        rgb_mode,
+        combos,
+        ImageFormat::new(source, None)?,
+        ImageFormat::new(target, None)?,
+        capabilities,
+    )
+}
+
+/// Marker-bound offline settings derivation; format assumptions grant no device access.
+pub(crate) fn settings_from_nvm_for_formats_offline(
+    nvm: &[u8],
+    rgb_mode: &[u8],
+    combos: bool,
+    source: ImageFormat,
+    target: ImageFormat,
+    capabilities: OfflineSettingsCapabilities,
+) -> BackupResult<Value> {
+    require(
+        !capabilities.combo_media
+            || matches!(source.version(), ImageVersion::V2 | ImageVersion::V3),
+        "Media Combo capability requires a source V2 or V3 image contract",
+    )?;
     let layout = validate_nvm_structure(nvm, SCHEMA)?;
-    let record = SettingsRecord::decode_for_image(&nvm[0x6a8..0x6c0], source, target)?;
+    let record = SettingsRecord::decode_for_formats(&nvm[0x6a8..0x6c0], source, target)?;
+    settings_from_versioned_record(nvm, rgb_mode, combos, capabilities, layout, record)
+}
+
+fn settings_from_versioned_record(
+    nvm: &[u8],
+    rgb_mode: &[u8],
+    combos: bool,
+    capabilities: OfflineSettingsCapabilities,
+    layout: NvmLayout,
+    record: SettingsRecord,
+) -> BackupResult<Value> {
     let non_qs = NonQsExtensions::decode_nvm(nvm)?;
     let meta = layout.validate_macros(nvm)?;
     derive_settings(
@@ -255,10 +290,10 @@ pub(crate) fn settings_from_nvm_for_image_with_capabilities_offline(
         meta,
         || {
             let mut settings = Map::new();
-            let ids: &[u16] = if record.version() == RecordVersion::V2 {
-                &[1, 2, 4, 7, 18, 19, 3, 6, 22]
-            } else {
-                &[1, 2, 4, 7, 18, 19]
+            let ids: &[u16] = match record.version() {
+                RecordVersion::V1 => &[1, 2, 4, 7, 18, 19],
+                RecordVersion::V2 => &[1, 2, 4, 7, 18, 19, 3, 6, 22],
+                RecordVersion::V3 => &[1, 2, 4, 7, 18, 19, 3, 6, 22, 23],
             };
             for &id in ids {
                 settings.insert(id.to_string(), json!(record.get(id)?));
@@ -435,7 +470,10 @@ fn decode_catalog_rom(
         "Journal header is not empty",
     )?;
     require(&rom[0xc700..0xef00] == nvm, "Saved NVM differs from ROM")?;
-    if !matches!(image, Some(crate::ak820::ImageContract::Beta4(_))) {
+    if !matches!(
+        image,
+        Some(crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_))
+    ) {
         validate_nvm(nvm, identity.schema)?;
     }
     let historical_profile =
@@ -479,23 +517,41 @@ fn decode_catalog_rom(
     apply_image_limitations(&mut settings, identity);
     Ok(settings)
 }
+pub(crate) fn exact_qs_format(image: crate::ak820::ImageContract) -> BackupResult<ImageFormat> {
+    match image {
+        crate::ak820::ImageContract::Beta4(_) => ImageFormat::new(ImageVersion::V2, None),
+        crate::ak820::ImageContract::Beta5(_) => {
+            let marker = image
+                .matrix_profile()
+                .and_then(|row| row.settings_identity.as_ref())
+                .and_then(|identity| identity.leader_default.as_ref())
+                .ok_or("Missing exact image Leader marker")?;
+            ImageFormat::new(ImageVersion::V3, Some(marker.milliseconds))
+        }
+        _ => ImageFormat::new(ImageVersion::V1, None),
+    }
+}
+
 fn settings_from_nvm_for_contract(
     nvm: &[u8],
     rgb: &[u8],
     combos: bool,
     image: Option<crate::ak820::ImageContract>,
 ) -> BackupResult<Value> {
-    if let Some(image @ crate::ak820::ImageContract::Beta4(_)) = image {
+    if let Some(
+        image @ (crate::ak820::ImageContract::Beta4(_) | crate::ak820::ImageContract::Beta5(_)),
+    ) = image
+    {
         let exact = image
             .matrix_profile()
             .and_then(|row| row.settings_identity.as_ref())
             .ok_or("Image lacks qualified packed CODE identity")?;
-        settings_from_nvm_for_image_with_capabilities_offline(
+        settings_from_nvm_for_formats_offline(
             nvm,
             rgb,
             combos,
-            ImageVersion::V2,
-            ImageVersion::V2,
+            exact_qs_format(image)?,
+            exact_qs_format(image)?,
             OfflineSettingsCapabilities {
                 combo_media: exact.combo_media,
             },
@@ -512,6 +568,11 @@ pub(crate) fn apply_image_limitations(settings: &mut Value, identity: &ImageIden
         .iter()
         .chain(
             crate::app::ak820_beta1_profiles::beta4_1_firmware_matrix()
+                .profiles
+                .iter(),
+        )
+        .chain(
+            crate::app::ak820_beta1_profiles::beta5_firmware_matrix()
                 .profiles
                 .iter(),
         )
@@ -689,6 +750,49 @@ mod tests {
         settings_from_nvm_for_image_offline(nvm, &[0; 6], combos, source, target)
     }
     #[test]
+    fn marker_bound_v3_settings_are_derived_without_legacy_writer() {
+        let mut nvm = modeled_nvm(SCHEMA);
+        let v1 = ImageFormat::new(ImageVersion::V1, None).unwrap();
+        let v3 = ImageFormat::new(ImageVersion::V3, Some(300)).unwrap();
+        let original = nvm.clone();
+        let settings = settings_from_nvm_for_formats_offline(
+            &nvm,
+            &[0; 6],
+            false,
+            v1,
+            v3,
+            OfflineSettingsCapabilities::default(),
+        )
+        .unwrap();
+        assert_eq!(settings["extensions"]["qmk_settings"]["22"], 1);
+        assert_eq!(settings["extensions"]["qmk_settings"]["23"], 300);
+        assert_eq!(nvm, original);
+        nvm[0x6a8..0x6c0].copy_from_slice(
+            &SettingsRecord::defaults(RecordVersion::V1)
+                .unwrap()
+                .encode(),
+        );
+        let settings = settings_from_nvm_for_formats_offline(
+            &nvm,
+            &[0; 6],
+            false,
+            v1,
+            v3,
+            OfflineSettingsCapabilities::default(),
+        )
+        .unwrap();
+        assert_eq!(settings["extensions"]["qmk_settings"]["22"], 0);
+        assert_eq!(settings["extensions"]["qmk_settings"]["23"], 300);
+        assert!(settings_from_nvm_for_image_offline(
+            &nvm,
+            &[0; 6],
+            false,
+            ImageVersion::V1,
+            ImageVersion::V3
+        )
+        .is_err());
+    }
+    #[test]
     fn provisional_media_combo_requires_explicit_source_capability() {
         let capable = OfflineSettingsCapabilities { combo_media: true };
         for output in [0xa7u16, 0xa8, 0xc2, 0xc3, 0x01a8, 0x01c2, 0x1fa8, 0x20a8] {
@@ -814,7 +918,7 @@ mod tests {
                 let mut nvm = modeled_nvm(SCHEMA);
                 nvm[0x6a8..0x6c0].fill(blank);
                 if let Some(version) = persisted {
-                    let mut record = SettingsRecord::defaults(version);
+                    let mut record = SettingsRecord::defaults(version).unwrap();
                     record.set(4, 321).unwrap();
                     if version == RecordVersion::V2 {
                         record.set(3, 29).unwrap();
@@ -880,7 +984,8 @@ mod tests {
                 RecordVersion::V1
             } else {
                 RecordVersion::V2
-            });
+            })
+            .unwrap();
             baseline[0x6a8..0x6c0].copy_from_slice(&record.encode());
             for (at, value) in [
                 (0, 0),

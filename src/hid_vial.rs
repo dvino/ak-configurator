@@ -133,15 +133,27 @@ impl HidDevice {
 
     /// Poll unlock status — returns (unlocked, in_progress)
     /// Returns (unlocked, in_progress, counter)
+    #[cfg(test)]
     pub fn unlock_poll(&self) -> Result<(bool, bool, u8)> {
+        self.unlock_poll_guarded(|| Ok(()))
+    }
+
+    /// Check the caller's cancellation and deadline before each packet, including
+    /// the confirmation GET that can follow a successful-looking poll.
+    pub(crate) fn unlock_poll_guarded(
+        &self,
+        mut before_packet: impl FnMut() -> Result<()>,
+    ) -> Result<(bool, bool, u8)> {
         if self
             .unlock_confirmation_pending
             .load(std::sync::atomic::Ordering::Acquire)
         {
+            before_packet()?;
             let (unlocked, in_progress, _) = self.get_unlock_status_with_progress()?;
             return Ok((unlocked, in_progress, 0));
         }
 
+        before_packet()?;
         let resp = self
             .usb_send(&[CMD_VIA_VIAL_PREFIX, CMD_VIAL_UNLOCK_POLL])
             .context("failed to poll Vial unlock status")?;
@@ -160,6 +172,7 @@ impl HidDevice {
             // out, every retry must remain status-only until the result is known.
             self.unlock_confirmation_pending
                 .store(true, std::sync::atomic::Ordering::Release);
+            before_packet()?;
             let (confirmed_unlocked, confirmed_in_progress, _) =
                 self.get_unlock_status_with_progress()?;
             unlocked = confirmed_unlocked;

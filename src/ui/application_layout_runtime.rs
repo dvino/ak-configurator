@@ -4310,148 +4310,151 @@ mod tests {
         settings.layouts.insert(bid, twin);
         let mut cursor = 0usize;
         let mut trace = String::new();
-        let mut route = |app: &mut EntropyApp,
-                         foreground: Option<crate::application_layouts::DetectedApplication>,
-                         suffix: &str,
-                         force: bool| {
-            app.update_application_layout_runtime_with(
-                crate::app_discovery::ApplicationDiscoverySnapshot {
-                    foreground: foreground.clone(),
-                    foreground_status: crate::app_discovery::ForegroundStatus {
-                        backend: "injected OS".into(),
-                        state: foreground
-                            .map(crate::app_discovery::ForegroundState::Focused)
-                            .unwrap_or(crate::app_discovery::ForegroundState::NoFocusedWindow),
+        {
+            let mut route = |app: &mut EntropyApp,
+                             foreground: Option<
+                crate::application_layouts::DetectedApplication,
+            >,
+                             suffix: &str,
+                             force: bool| {
+                app.update_application_layout_runtime_with(
+                    crate::app_discovery::ApplicationDiscoverySnapshot {
+                        foreground: foreground.clone(),
+                        foreground_status: crate::app_discovery::ForegroundStatus {
+                            backend: "injected OS".into(),
+                            state: foreground
+                                .map(crate::app_discovery::ForegroundState::Focused)
+                                .unwrap_or(crate::app_discovery::ForegroundState::NoFocusedWindow),
+                        },
+                        ..Default::default()
                     },
-                    ..Default::default()
-                },
-            );
-            if force {
-                app.qmk_hid_hosts[&device.path].force_application_layout_resend();
-            }
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
-            loop {
-                let requests = packets.requests();
-                if let Some(end) = requests[cursor..].iter().position(|p| p[0] == 0xe3) {
-                    for p in &requests[cursor..=cursor + end] {
-                        if matches!(p[0],0xe1..=0xe5|0xe7..=0xea) {
-                            trace.push('P');
-                            for byte in &p[..32] {
-                                trace.push_str(&format!(" {byte:02x}"));
-                            }
-                            trace.push('\n');
-                        }
-                    }
-                    cursor += end + 1;
-                    break;
-                }
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "worker must commit semantic profile transition"
                 );
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            trace.push_str(suffix);
-            if suffix == "N\n" {
-                // Capture an actual worker heartbeat, not a hand-built packet.
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                if force {
+                    app.qmk_hid_hosts[&device.path].force_application_layout_resend();
+                }
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
                 loop {
                     let requests = packets.requests();
-                    if let Some(p) = requests[cursor..].iter().find(|p| p[0] == 0xe5) {
-                        trace.push('P');
-                        for byte in &p[..32] {
-                            trace.push_str(&format!(" {byte:02x}"));
+                    if let Some(end) = requests[cursor..].iter().position(|p| p[0] == 0xe3) {
+                        for p in &requests[cursor..=cursor + end] {
+                            if matches!(p[0],0xe1..=0xe5|0xe7..=0xea) {
+                                trace.push('P');
+                                for byte in &p[..32] {
+                                    trace.push_str(&format!(" {byte:02x}"));
+                                }
+                                trace.push('\n');
+                            }
                         }
-                        trace.push_str("\nN\n");
-                        cursor = requests.len();
+                        cursor += end + 1;
                         break;
                     }
                     assert!(
                         std::time::Instant::now() < deadline,
-                        "worker heartbeat missing"
+                        "worker must commit semantic profile transition"
                     );
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-            }
-            if let Ok(path) = std::env::var("MACROPAD_WAKE_TRACE") {
-                std::fs::write(path, &trace).unwrap();
-            }
-            use std::io::Write;
-            let mut child = std::process::Command::new(&exe)
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-                .unwrap();
-            child
-                .stdin
-                .take()
+                trace.push_str(suffix);
+                if suffix == "N\n" {
+                    // Capture an actual worker heartbeat, not a hand-built packet.
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                    loop {
+                        let requests = packets.requests();
+                        if let Some(p) = requests[cursor..].iter().find(|p| p[0] == 0xe5) {
+                            trace.push('P');
+                            for byte in &p[..32] {
+                                trace.push_str(&format!(" {byte:02x}"));
+                            }
+                            trace.push_str("\nN\n");
+                            cursor = requests.len();
+                            break;
+                        }
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "worker heartbeat missing"
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                }
+                if let Ok(path) = std::env::var("MACROPAD_WAKE_TRACE") {
+                    std::fs::write(path, &trace).unwrap();
+                }
+                use std::io::Write;
+                let mut child = std::process::Command::new(&exe)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                child
+                    .stdin
+                    .take()
+                    .unwrap()
+                    .write_all(trace.as_bytes())
+                    .unwrap();
+                let output = child.wait_with_output().unwrap();
+                println!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert!(
+                    output.status.success(),
+                    "production firmware standby regression: {}",
+                    output.status
+                );
+            };
+            // Establish initial state, then sleep before the reported transition.
+            route(&mut app, None, "S\n", true);
+            route(&mut app, Some(a.clone()), "W\nS\n", false);
+            // Repeated full synchronizations must not reset standby.
+            route(&mut app, Some(a.clone()), "N\n", true);
+            route(&mut app, Some(b.clone()), "W\nS\n", false);
+            let active = app
+                .app_settings
+                .application_layouts
+                .get_mut(&key)
                 .unwrap()
-                .write_all(trace.as_bytes())
+                .active_layout_id
+                .clone();
+            let edited = app
+                .app_settings
+                .application_layouts
+                .get_mut(&key)
+                .unwrap()
+                .layouts
+                .get_mut(&active)
                 .unwrap();
-            let output = child.wait_with_output().unwrap();
-            println!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
+            edited.name.push_str(" renamed");
+            edited.bump_revision();
+            route(&mut app, Some(b.clone()), "N\n", false);
+            route(&mut app, None, "W\nS\nD\n", false);
+            route(&mut app, Some(a.clone()), "N\nE\nN\nR\nV\nK\nS\nX\n", false);
+            route(&mut app, Some(b.clone()), "W\nS\nO\n", true);
+            route(&mut app, Some(a.clone()), "F\nK\nS\n", false);
+            // UI selection changes ownership, not the foreground's Default identity.
+            route(&mut app, None, "W\nS\n", false);
+            app.selected_device = None;
+            route(&mut app, None, "N\n", true);
+            let background = app.qmk_hid_hosts[&device.path].test_application_layout_snapshot();
             assert!(
-                output.status.success(),
-                "production firmware standby regression: {}",
-                output.status
+                !background.active,
+                "no authority to replay a cached firmware Default"
             );
-        };
-        // Establish initial state, then sleep before the reported transition.
-        route(&mut app, None, "S\n", true);
-        route(&mut app, Some(a.clone()), "W\nS\n", false);
-        // Repeated full synchronizations must not reset standby.
-        route(&mut app, Some(a.clone()), "N\n", true);
-        route(&mut app, Some(b.clone()), "W\nS\n", false);
-        let active = app
-            .app_settings
-            .application_layouts
-            .get_mut(&key)
-            .unwrap()
-            .active_layout_id
-            .clone();
-        let edited = app
-            .app_settings
-            .application_layouts
-            .get_mut(&key)
-            .unwrap()
-            .layouts
-            .get_mut(&active)
-            .unwrap();
-        edited.name.push_str(" renamed");
-        edited.bump_revision();
-        route(&mut app, Some(b.clone()), "N\n", false);
-        route(&mut app, None, "W\nS\nD\n", false);
-        route(&mut app, Some(a.clone()), "N\nE\nN\nR\nV\nK\nS\nX\n", false);
-        route(&mut app, Some(b.clone()), "W\nS\nO\n", true);
-        route(&mut app, Some(a.clone()), "F\nK\nS\n", false);
-        // UI selection changes ownership, not the foreground's Default identity.
-        route(&mut app, None, "W\nS\n", false);
-        app.selected_device = None;
-        route(&mut app, None, "N\n", true);
-        let background = app.qmk_hid_hosts[&device.path].test_application_layout_snapshot();
-        assert!(
-            !background.active,
-            "no authority to replay a cached firmware Default"
-        );
-        assert_eq!(
-            background.profile_id.as_deref(),
-            Some(crate::application_layouts::DEFAULT_APPLICATION_LAYOUT_ID),
-            "background Default must retain semantic identity"
-        );
-        app.selected_device = Some(0);
-        route(&mut app, None, "N\n", true);
-        app.selected_device = None;
-        route(&mut app, Some(a), "W\nG\n", false);
-        route(&mut app, Some(b.clone()), "Z\n", false);
-        // A real application -> background firmware-owned Default must wake.
-        route(&mut app, None, "W\nS\nT\n", false);
-        route(&mut app, Some(b), "W\nY\n", false);
-        drop(route);
+            assert_eq!(
+                background.profile_id.as_deref(),
+                Some(crate::application_layouts::DEFAULT_APPLICATION_LAYOUT_ID),
+                "background Default must retain semantic identity"
+            );
+            app.selected_device = Some(0);
+            route(&mut app, None, "N\n", true);
+            app.selected_device = None;
+            route(&mut app, Some(a), "W\nG\n", false);
+            route(&mut app, Some(b.clone()), "Z\n", false);
+            // A real application -> background firmware-owned Default must wake.
+            route(&mut app, None, "W\nS\nT\n", false);
+            route(&mut app, Some(b), "W\nY\n", false);
+        }
         if let Ok(path) = std::env::var("MACROPAD_WAKE_TRACE") {
             std::fs::write(path, &trace).unwrap();
         }

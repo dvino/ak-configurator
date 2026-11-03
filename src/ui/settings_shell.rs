@@ -63,7 +63,10 @@ impl EntropyApp {
                 self.draw_matrix_tester_settings(ui, layout, content_rect, dark);
                 false
             }
-            #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+            #[cfg(any(
+                all(test, target_os = "linux"),
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             SettingsTab::TextExpanderSetup => {
                 self.draw_text_expander_setup_page(ui, content_rect);
                 false
@@ -229,7 +232,10 @@ impl EntropyApp {
         self.main_menu_tab = MainMenuTab::Advanced;
     }
 
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(super) fn open_text_expander_setup_page(&mut self) {
         self.settings_tab = SettingsTab::TextExpanderSetup;
         self.main_menu_tab = MainMenuTab::Advanced;

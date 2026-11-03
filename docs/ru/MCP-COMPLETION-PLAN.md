@@ -96,7 +96,7 @@ L принимает только artifact ID, не arbitrary path. Скрыва
 
 **Файлы:** существующие `src/mcp/{mod,backend,dto,mock,trace}.rs`, `src/hid.rs`, `src/hid_ak820.rs`, `scripts/test_mcp_stdio.py`, `docs/MCP*`. Расширять inline unit tests и subprocess script, не придумывать library/integration targets. Команды выполняются в собственном checkout с изолированным `CARGO_TARGET_DIR`; на Windows binary имеет суффикс `.exe`.
 
-1. Добавить positive beta.5 full packed bootstrap fixture из финальных pinned inputs после stage 0 beta.5 plan. Не использовать synthetic fixture как production trust.
+1. **Выполнено в рамках ограниченной офлайн-области C01:** положительная full packed bootstrap fixture beta.5 по официальному рецепту проверена на host. C01 фиксирует точные identity входов и fixture. Установленный образ и физическое поведение не квалифицированы; одни synthetic FD01 fixtures не подтверждают production trust.
 2. Проверить FD00→FD01 fallback, отсутствие probe других VID/PID, ambiguous identity denial и exact CODE admission.
 3. Исправить только воспроизведённые gaps live ownership, helper failure, cancellation и disconnect. Тесты должны доказать отсутствие concurrent read/write и завершение операции.
 4. Расширить report безопасными timings/stages/error identity; payload trace оставить выключенным.
@@ -114,9 +114,13 @@ cargo clippy --locked --all-targets --features mcp-mock -- -D warnings
 
 Для mock denial отдельно собрать binary с feature `mcp` без `mcp-mock`, в другом `CARGO_TARGET_DIR`, и передать его script через `--production-binary`. `CARGO_TARGET_DIR` задаётся явно для сессии; ноль совпавших filtered tests — не PASS.
 
-**Gate:** P0 нельзя считать завершённым без positive exact fixture и Windows/macOS/Linux stdio results. Пока доступна только Linux, зафиксировать остальные как pending, но продолжать offline M1 можно.
+**Gate:** Положительная exact host-fixture принята в C01. Весь P0 остаётся частичным до результатов Linux/Windows/macOS STDIO и оставшихся live/platform проверок; недоступные платформы указывать как pending. Offline M1 можно продолжать.
 
 ## 5. Этап M1 — общий snapshot/backup для beta.5
+
+**Состояние C03 (2026-11-03):** `ak820_backup` реализован как седьмой инструмент MCP и использует общий native reconciler и store C02. Заявлено об успешном завершении целевых mock-тестов, mock STDIO для обоих поколений протокола и проверок official SDK/Inspector на mock. Production-сборка и объединённый production STDIO прошли для обеих версий протокола; metadata tools прошли, mock backend ожидаемо отклонён в production. Независимый review `c03_backup_review` принял ограниченную офлайн-область C03 после проверки исходников/документации и 71 хеша; сообщённые тесты/build/stdio/SDK не запускались повторно. Поведение устройства и связь source с binary не квалифицированы; см. [отчёт C03](session-evidence/C03.md).
+
+**Состояние C04 (2026-11-03):** `ak820_prepare` реализован как восьмой tool и использует native install-prepare builder и архив C03 только для фиксированной install preview. Settings-restore plans не поддерживаются; `settings_writes_authorized` остаётся false. Текущая полная Windows mock-feature suite прошла: 2 015 passed, 18 ignored, 288,93 s; три ignored C04 fixtures прошли в отдельных запусках, остальные ignored cases не квалифицированы. Целевая `mcp_prepare`, strict Clippy/format, mock/production builds, combined STDIO и official SDK/Inspector checks прошли. Reviewer `c04_final_review` проверил inventory из 103 файлов и source/patch/report/binary hashes, закрыл четыре документационных finding и принял limited offline Windows C04 scope. Inventory разреженный; source-to-binary attestation, three-platform/GUI/device qualification не заявляются. См. [отчёт C04](../session-evidence/C04.md). Это limited Windows acceptance, не полное MCP завершение.
 
 **Зависимости:** stage 2 beta.5 execution plan. **Файлы:** общий backup engine, `src/mcp/backend.rs`, `src/mcp/dto.rs`, artifact-store module/tests.
 

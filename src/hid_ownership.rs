@@ -5,6 +5,48 @@
 use anyhow::Context;
 use anyhow::{bail, Result};
 
+#[derive(Debug)]
+pub(crate) struct LeaseBusy;
+impl std::fmt::Display for LeaseBusy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Keyboard is busy in another AK Configurator process")
+    }
+}
+impl std::error::Error for LeaseBusy {}
+
+#[cfg(all(test, target_os = "windows"))]
+pub(crate) fn test_contended_lease_error() -> anyhow::Error {
+    let key = format!(
+        "fixture-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    );
+    let _lease = DeviceLease::named(&key).unwrap();
+    DeviceLease::named(&key)
+        .err()
+        .expect("second lease must contend")
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn test_contended_lease_error() -> anyhow::Error {
+    let path = std::env::temp_dir().join(format!(
+        "ak-lease-fixture-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::create_dir(&path).unwrap();
+    let directory = std::fs::File::open(&path).unwrap();
+    let lease = DeviceLease::at(&directory, "fixture").unwrap();
+    let error = DeviceLease::at(&directory, "fixture")
+        .err()
+        .expect("second lease must contend");
+    drop(lease);
+    std::fs::remove_file(path.join("ak-configurator-hid-fixture.lock")).unwrap();
+    std::fs::remove_dir(path).unwrap();
+    error
+}
+
+#[cfg(any(not(test), unix))]
 fn key(device: &crate::device::Device) -> Result<String> {
     use sha2::{Digest, Sha256};
     if !device.is_ak820() || device.path.is_empty() {
@@ -75,7 +117,11 @@ impl DeviceLease {
             bail!("Device ownership file is not trustworthy");
         }
         if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            bail!("Keyboard is busy in another AK Configurator process");
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::WouldBlock {
+                return Err(LeaseBusy.into());
+            }
+            return Err(error.into());
         }
         // Never unlink a lock: another process may already be waiting on this
         // inode. Closing the handle releases the advisory lock after a crash too.
@@ -90,7 +136,7 @@ pub(crate) struct DeviceLease(*mut core::ffi::c_void);
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn CreateMutexW(
-        attributes: *const core::ffi::c_void,
+        attributes: *mut core::ffi::c_void,
         initial_owner: i32,
         name: *const u16,
     ) -> *mut core::ffi::c_void;
@@ -100,6 +146,7 @@ unsafe extern "system" {
 
 #[cfg(target_os = "windows")]
 impl DeviceLease {
+    #[cfg(not(test))]
     pub(crate) fn acquire(device: &crate::device::Device) -> Result<Self> {
         Self::named(&key(device)?)
     }
@@ -111,13 +158,13 @@ impl DeviceLease {
             .collect();
         unsafe {
             // Object lifetime, not thread-affine mutex ownership, is the lease.
-            let handle = CreateMutexW(std::ptr::null(), 0, name.as_ptr());
+            let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
             if handle.is_null() {
                 bail!("Cannot establish exclusive device ownership");
             }
             if GetLastError() == 183 {
                 CloseHandle(handle);
-                bail!("Keyboard is busy in another AK Configurator process");
+                return Err(LeaseBusy.into());
             }
             Ok(Self(handle))
         }

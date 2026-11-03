@@ -879,3 +879,69 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="320f", ATTRS{idProduct
         assert!(ak820_udev_rule_is_current(packaged));
     }
 }
+
+#[cfg(test)]
+mod b09_language_tests {
+    use super::*;
+
+    #[test]
+    fn app_settings_render_labels_and_hover_explanations() {
+        use crate::i18n::{tr_catalog, Language};
+        use egui_kittest::{kittest::Queryable, Harness};
+        for lang in [Language::English, Language::Russian] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = lang;
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1400.0, 1600.0))
+                .build_ui_state(
+                    |ui, app: &mut EntropyApp| {
+                        let rect = ui.max_rect();
+                        app.draw_app_settings_page(ui, rect);
+                    },
+                    app,
+                );
+            harness.run();
+            for (label_key, tooltip_key) in [
+                ("ui.import_app_settings", "ui.import_app_settings_tooltip"),
+                ("ui.export_app_settings", "ui.export_app_settings_tooltip"),
+            ] {
+                let label = tr_catalog(lang, label_key);
+                harness.get_by_label(label).hover();
+                harness.run_steps(60);
+                let tooltip = tr_catalog(lang, tooltip_key);
+                assert!(tooltip.contains("AK820"));
+                harness.get_by_label(tooltip);
+            }
+            let middle_label = tr_catalog(lang, "ui.middle_click_transparent_label");
+            let label_pos = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == middle_label => {
+                        Some(text.pos + egui::vec2(5.0, text.galley.size().y / 2.0))
+                    }
+                    _ => None,
+                })
+                .expect("middle-click label is painted in the settings page");
+            harness.hover_at(label_pos);
+            harness.run_steps(60);
+            let tooltip =
+                tr_catalog(lang, "ui.middle_click_transparent_tooltip").trim_end_matches('.');
+            assert!(tooltip.contains("KC_TRNS"));
+            harness.get_by_label(tooltip);
+            for old in [
+                "Import Entropy",
+                "Export Entropy",
+                "Middle click → Transparent",
+                "Импорт Entropy",
+                "Экспорт Entropy",
+                "Средний клик → Transparent",
+            ] {
+                assert!(harness.query_by_label(old).is_none());
+            }
+            assert!(harness.state().hid_device.is_none());
+        }
+    }
+}

@@ -1,7 +1,7 @@
 # AK Configurator: исполнительный план beta.5
 
-Статус: утверждённый к исполнению порядок работ; реализация ещё не начата.
-Дата снимка: 2026-11-01. Основная ветка: `desktop-dev`.
+Статус: этап 0 принят; реализация B02 этапа 1 выполняется.
+Дата снимка: 2026-11-03. Основная ветка: `desktop-dev`.
 Исходная точка кода: `936a989a8fd7d8e24cbd70ddba0e768e3107494b` плюс восстановленные артефакты предыдущей сессии.
 
 Происхождение переноса и сопоставление issue с кодом зафиксированы в [RECOVERY-REVIEW-2026-11-01.md](RECOVERY-REVIEW-2026-11-01.md).
@@ -46,9 +46,9 @@ enum InstallerRelease { Beta3, Beta4_1, Beta5 }
 
 ### 2.3 QS v3: версия записи и default образа разделены
 
-В `ak820_qs_versioned_offline.rs` добавить `RecordVersion::V3`, `ImageVersion::V3`, QSID 23 и десятое значение. Заголовок v3: `51 53 03 13 9f`; поле 23: offset 20, width 2, little-endian, range 1–1000. `FIELDS` остаётся одной таблицей; `field_count(V3)=10`.
+В `ak820_qs_versioned_offline.rs` добавить `RecordVersion::V3`, `ImageVersion::V3`, QSID 23 и десятое значение. Заголовок v3: `51 53 03 11 ff`; запись длиной 24 байта. CRC-16/CCITT охватывает байты 0–21 и хранится little-endian в байтах 22–23. QSID 23: offset 20, width 2, little-endian, range 1–1000. `FIELDS` остаётся одной таблицей; `field_count(V3)=10`. Пустые defaults firmware C задают QSID 22 в byte 17 равным 1, а официальный Python v3 golden vector — 0. Обновление непустой v1 сохраняет byte 17 (для v1 это 0); v2 сохраняет существующее значение. Image marker в bytes 20–21 равен 300 у всех десяти профилей. Различающиеся defaults должны оставаться явными в golden vectors; не считать их одинаковыми. Подробности: [аудит контракта B02](../session-evidence/B02-CONTRACT-AUDIT.json).
 
-Не оставлять `SettingsRecord::defaults(version)` с неявным Leader default. Изменить API на `defaults(version, leader_timeout_default)` и передавать 300 для beta.5 из exact profile contract. Для v1/v2 сохранить прежний defaults-совместимый wrapper только если он нужен существующим вызовам; v3 обязан получать default явно. V3 принимает v1/v2/v3; V2 не принимает V3; downgrade запрещён. Нормализация v1/v2→v3 добавляет QSID 23 с default текущего образа и пересчитывает CRC. Это offline model, не разрешение записи.
+Не оставлять неявный Leader default. **Актуальная реализация:** fallible `SettingsRecord::defaults(version)` сохранён для V1/V2; legacy wrapper делегирует общему marker API. Для V3 marker формата образа передаётся явно в `decode_for_formats`; при отсутствующем V3 marker/default возвращается `Err`. Не проводить marker V3 через общий timeout-default parameter. Сохранить приём V3 из v1/v2/v3, отказ V2 разбирать V3, добавление marker выбранного образа при нормализации v1/v2→v3, пересчёт CRC и запрет downgrade. Это offline model, не разрешение записи.
 
 В connection reconciliation QSID 23 читать через `get_qmk_setting_u16`, как QSID 2/4/7/18/19/6. Не добавлять 23 в список u8 `1 | 3 | 22`.
 
@@ -69,6 +69,16 @@ Ready | OperationBusy | LeaseBusy | Disconnected | Failed(reason)
 Beta.5 connection сначала допускает точный образ к read-only reconciliation и backup. UI записи новых Tap Dance, NKRO и Dynamic Macros не включать. Их новые keycodes появляются только в offline editor при соответствующем `keycode_source`; live UI получает capabilities только после отдельной авторизации прошивкой. Отсутствие QSID 23 в редакторе настроек на этом этапе — осознанное ограничение, а не ошибка.
 
 ## 3. Этап 0 — заморозить финальные входы beta.5
+
+**Принят 2026-11-03.** Этап 0 B01 принят по результатам `b01_pins_review` и `b01_reconstruction_review`. Официальный выпуск — [v0.6.0-beta.5](https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.5), tag object `1d960eabb5fd9abf078e6815b0c5c01bfb13a803`, указывающий на commit `dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd`. Успешные run публикации/firmware CI: [41351933676](https://github.com/dvino/ak820/actions/runs/41351933676) и [41349097405](https://github.com/dvino/ak820/actions/runs/41349097405).
+
+Закреплены четыре catalog assets и bundle: [capability-catalog.json](https://github.com/dvino/ak820/releases/download/v0.6.0-beta.5/capability-catalog.json), [firmware-matrix.json](https://github.com/dvino/ak820/releases/download/v0.6.0-beta.5/firmware-matrix.json), [module-descriptions.json](https://github.com/dvino/ak820/releases/download/v0.6.0-beta.5/module-descriptions.json), [release-catalog.json](https://github.com/dvino/ak820/releases/download/v0.6.0-beta.5/release-catalog.json) и [firmware-bundle.zip](https://github.com/dvino/ak820/releases/download/v0.6.0-beta.5/firmware-bundle.zip). CAT прошёл за 0,099 секунды и подтвердил все 200 разрешённых directed pairs; флаг разрешения записи остаётся false. В отчёте Windows reconstruction записаны фактический результат pack 10/10 и хэши IHX/map/CODE/permanent каждого профиля: [JSON evidence](session-evidence/B01-WINDOWS-RECONSTRUCTION.json). Принятый handoff B01: [B01](session-evidence/B01.md).
+
+На reconstruction review независимо пересчитаны metadata трёх private inputs и десяти публичных IHX/map pairs, проверены blob официального packer и границы CODE, исследован скрипт хэширования фактических outputs. Сырые результаты packer удалены после сохранения metadata; reviewer не повторял pack, а историческое происхождение private inputs независимо не установлено. В pins review независимо повторены CAT, проверены sizes/hashes assets через GitHub API и соответствие tag/commit. Отдельная загрузка публичного bundle завершилась `IncompleteRead`; его идентичность указана в reconstruction report. Эта приёмка относится только к B01 stage 0; она не подтверждает physical behavior, установленный образ или runtime compatibility.
+
+**Далее:** интеграция beta.5 profiles в B03. Приёмка офлайн-реализации B02 и её ограничения описаны в [evidence B02](session-evidence/B02.md). Источник wire-контракта: [B02-CONTRACT-AUDIT.json](../session-evidence/B02-CONTRACT-AUDIT.json).
+
+**Следующие пункты ниже — исходные инструкции до публикации (2026-11-01), сохранены как история; stage 0 закрыт.**
 
 **Зависимости:** завершение firmware CI и повторная публикация release assets.
 **Владелец:** release-inputs; файлы `assets/ak820/beta5-*`, `.github/scripts/test_beta5_catalog.py`, отчёт проверки.
@@ -93,8 +103,10 @@ python3 .github/scripts/test_beta5_catalog.py
 **Зависимости:** этап 0. **Issue:** базовый контракт для #2 и всех live операций.
 **Файлы:** `src/ak820_qs_versioned_offline.rs`, `src/ak820_settings_model.rs`, `src/ak820_typed_storage.rs`, `src/ak820_restore_plan.rs`, `src/ak820_settings_backup.rs`, `src/ak820.rs`, `src/ak820_beta1_profiles.rs`, новые offline tests.
 
+**Текущее состояние (2026-11-03):** офлайн-реализация B02 принята независимым reviewer `b02_code_review` на основе static review и сообщённых результатов тестов/lint без повторных запусков. Прошли целевые Windows offline-группы: codec — 8, settings model — 16, NVM migration — 7, versioned backup — 6, restore plan — 13; итоговая regression settings model — 16/16 и regression для invalid QSID 23 — 8/8. Strict all-target Clippy и `cargo fmt --check` прошли. Приёмка не квалифицирует runtime-поддержку firmware, image admission, установленный образ или поведение устройства. Counts и ограничения указаны в [отчёте B02](session-evidence/B02.md); wire-контракт — в [B02-CONTRACT-AUDIT.json](../session-evidence/B02-CONTRACT-AUDIT.json).
+
 1. Реализовать решения 2.1–2.3 без изменения live writer.
-2. Добавить golden v3 defaults и maxima, рассчитанные независимым firmware Python reference из pinned commit; зафиксировать происхождение vectors. Проверить Leader=1,300,1000; 0,1001,65535 reject.
+2. Добавить отдельные golden vectors firmware C и official Python. Сохранить различие пустого QSID 22 default (C=1, Python=0), проверить v1 preservation byte 17 = 0 и v2 preservation; image marker 300 использовать для всех десяти профилей. Зафиксировать происхождение vectors. Проверить Leader=1,300,1000; 0,1001,65535 reject.
 3. Добавить roundtrip v1/v2/v3, erased 0x00/0xFF, v1/v2→v3, запрет v3→v2/v1, CRC/header/reserved corruption и property/fuzz decode. Восстановление offline v2→v3 проверить на synthetic backup; production restore не включать.
 4. Проверить 10/10 module profiles и точное соответствие matrix/capabilities. Tap Dance 8, Combo 8, Key Override 20, 6 layers, encoder и RGB limits взять из финальных файлов, не из предположений.
 5. Команды:
@@ -133,14 +145,15 @@ cargo test --bin ak-configurator ui::
 
 ## 6. Этап 3 — асинхронный RGB без повторов (#3)
 
-**Зависимости:** этап 2. **Файлы:** `src/ui/rgb_settings.rs`, `src/ui/vial_hid_task.rs`, `src/hid_ak820.rs` только для диагностики, RGB UI tests.
+**Зависимости:** этап 2. **Файлы:** `src/ui/rgb_settings.rs`, `src/ui/vial_hid_task.rs`, `src/ui/app_state.rs`; узкий cancellation hook в существующем transport/guard пути `src/hid.rs` / `src/hid_ak820.rs`; transaction и RGB tests. Переиспользовать существующие guard/readback; второй engine не создавать.
 
 1. Убрать прямые вызовы `hid.set_vialrgb_mode` из `set_rgb_effect`, `set_rgb_brightness`, `set_rgb_color`, `set_rgb_speed`. Добавить один `VialHidOperation::Ak820RgbWrite` с полным снимком `{effect,speed,hue,saturation,brightness}`, request ID, generation и old value.
-2. До submit валидировать exact Beta5 image, writable authorization и supported effect/ranges. Хранить ровно одну submitted command и не более одного unsent coalesced draft: новое UI-изменение заменяет только unsent draft; после его submit более новое изменение может стать единственным новым draft. Не создавать бесконечную очередь, не отменять и не дублировать отправленную команду.
-3. Worker выполняет ровно один `set_vialrgb_mode`, затем существующий обязательный readback там, где он уже предусмотрен. Timeout/error/readback mismatch завершает операцию; UI оставляет значение неопределённым/старым и не делает autosave повторно.
-4. Отключить RGB controls на время submitted operation, но не блокировать repaint всего окна. Scene stop остаётся перед постановкой команды.
-5. Тесты с fake delayed HID: 5-секундная задержка не останавливает frame progress; rapid changes создают не более одной submitted команды и одного coalesced draft; timeout не порождает retry; stale generation не меняет новую сессию.
-6. Команды:
+2. До submit валидировать exact Beta5 image, writable authorization и supported effect/ranges. Хранить одну submitted command и не более одного unsent coalesced draft: новое UI-изменение заменяет только unsent draft; после его submit более новое изменение может стать единственным новым draft. Не создавать бесконечную очередь, не replay/retry отправленную команду.
+3. Переиспользовать существующий FD01 guard до и после операции и `ak820_verify_write` SET/GET, SAVE/GET и NVM readback. Не добавлять дублирующий GET или второй engine. Сохранять один SET и не более одного SAVE на logical submission, а также предусмотренные verification/status packets.
+4. UI worker может отменить действие до dispatch метода, но выход worker не прекращает внутренние packets после dispatch. Добавить узкий cancellation hook на границах packets внутри существующего transport/guard. Если cancel/exit происходит до границы packet, больше packets не посылать и вернуть fail-stop uncertain result. Не ослаблять authorization guard или beta.5 write denial.
+5. Отключать RGB controls во время submitted operation, но не блокировать repaint. Scene stop делать до постановки команды. Exit неблокирующий, с ограниченным ожиданием in-flight work и без будущих packets или queued draft. Общее поведение non-AK820 и Wasm не менять.
+6. Fake delayed-HID tests: пятисекундная задержка не останавливает frames; rapid changes дают не больше одной submitted command и одного unsent draft; cancellation до и между внутренними packet boundaries предотвращает последующие packets; timeout без retry; stale generation игнорируется.
+7. Команды:
 
 ```bash
 cargo test --bin ak-configurator rgb
@@ -148,7 +161,7 @@ cargo test --bin ak-configurator vial_hid_task
 cargo test --bin ak-configurator ui::
 ```
 
-7. **Приёмка:** headless доказывает отсутствие sync wait/retry и safe Quit/window close при delayed/failed worker completion, без новых команд на exit. Для #3 записать chosen effect, exact image/candidate, active owner, request/result или timeout и close behavior без private payloads. Windows issue #3 остаётся open до physical evidence; каждое live RGB действие требует fresh write authorization.
+8. **Приёмка:** offline tests подтверждают отсутствие sync wait/retry, fail-stop cancellation на существующих packet boundaries и безопасный Quit/window close при delayed/failed worker completion; после exit не отправляются следующие packets или draft. Для #3 записать chosen effect, exact image/candidate, active owner, request/result или timeout и close behavior без private payloads. Windows issue #3 остаётся open до physical evidence; каждое live RGB действие требует fresh write authorization. Это обновление плана не заявляет готовую реализацию или результаты тестов.
 
 ## 7. Этап 4 — конечный unlock (#4)
 
@@ -178,20 +191,24 @@ cargo test --bin ak-configurator ui::
 
 **Файлы:** `src/ui/ak820_status.rs`, `src/ui/settings_shell.rs`, `src/ui/layout_settings_dropdown.rs`, `src/ui/app_settings.rs`, `src/ui/ak820_backup_inspection.rs`, `src/ui/ak820_offline_extensions.rs`, `src/ui/ak820_install_files.rs`, `src/ui/ak820_install.rs`, EN/RU catalogs/docs. Сохранить native pages. Матрица ниже — готовый контракт исполнения, не поручение заново проектировать навигацию.
 
+**Статус B09 (2026-11-03):** ограниченная офлайн-область принята независимым reviewer `b09_matrix_review` после review source и EN/RU evidence, проверки inventory из 96 файлов и независимой сверки aggregate results. Заявленные тесты/lint повторно не запускались. См. [evidence B09](../session-evidence/B09.md). Проверки ниже относятся к offline UI/model и source evidence. Работа native OS window, hardware, Wasm build и закрытие физических issue не подтверждены. Beta5 default/prerelease admission остаётся зависимостью B11; restore сохранённых настроек заблокирован.
+
 | Требование issue | Что выполнено / пробел | Конкретное изменение | Проверка |
 |---|---|---|---|
-| Постоянные firmware/install, backup/restore, app settings pages | Native routing есть в `ak820_status.rs`; installer/files/backups интегрированы `936a989`; `settings_shell.rs::open_app_settings_page` открывает AppSettings. | Сохранить routes/state; убрать только оставшиеся modal-only duplicate entry points. | Каждый пункт меню открывает main-window page со стабильными ID/state при Back/reopen, keyboard focus, без нового top-level window. |
-| Выбранное устройство и проверенные source/target | Есть source ROM SHA и target profile; Beta4 recognition не различает byte-identical пакеты beta.4/4.1. | Постоянные строки `Подключённое устройство / Исходная прошивка` и `Выбранная цель установки`: canonical observed image/profile/CODE, alias beta.4/4.1 и отдельно receipt provenance при наличии. Не выводить source package из target. Unknown source блокирует install. Beta.5 default по stage 8; beta.3 явно alternate только для supported pairs. | Одинаковые beta.4/4.1 bytes дают одну observed identity и alias; receipt меняет только provenance; beta.5 target не меняет source; supported beta.3 alternate; unknown denial. |
-| Первый шаг restore и safety | Capture/inspection есть; restore блокируется release policy. | Над backup actions: `1. Открыть существующую копию → 2. Проверить источник и совместимость → 3. Просмотреть условия восстановления`. Для beta.5: `Восстановление недоступно: запись сохранённых настроек не разрешена для этого выпуска`; inspection доступен. Не добавлять live restore shortcut. | Existing/corrupt backup, no device, incompatible source, blocked beta.5 restore; inspection не вызывает writer/loader. |
-| Prerequisites/consequences, Back/Cancel, blocked reasons | Busy/confirmation есть; stage 2 исправляет domain causes. | Использовать reasons stage 2 и preflight summary; Back до submit, точная stop semantics после, без обещания rollback. | Ready/busy/lease/disconnected/unverified; cancel до/после submit, Tab/Shift-Tab, repaint. |
-| Дублирование Application settings | Native duplicate уже устранён: `src/ui/ak820_status.rs` содержит постоянную service-navigation кнопку AppSettings. Settings-dropdown entry и sizing label в `src/ui/layout_settings_dropdown.rs` — Wasm-only; неиспользуемый match arm не означает видимый пункт меню. | Сохранить native service navigation и Wasm-only dropdown; не удалять их и не создавать вымышленный application-menu entry. Новый код удаления native duplicate не нужен. | Отрисовать native EN/RU navigation и проверить один предусмотренный AppSettings route к той же постоянной странице; контекстные поясняющие ссылки не считать дубликатами меню. |
-| Непонятные русские подписи | `app_settings.rs` использует `ui.middle_click_transparent_label`/tooltip и app import/export keys; literal legacy wording здесь уже нет, улучшения сохранить. | RU: `Средняя кнопка мыши: назначать прозрачную клавишу`; tooltip — назначение `KC_TRNS` в редакторе, не прозрачность клавиатуры/LED. `Импорт настроек приложения` / `Экспорт настроек приложения`: local app preferences, не AK820 firmware backup/restore. EN имеет тот же scope; formats не менять. | Обе локали; нет `Middle click → Transparent` / `Import/Export Entropy` и намёка на firmware writes; import/export roundtrip не изменён. |
+| Постоянные firmware/install, backup/restore, app settings pages | Native service routes сохраняются в main shell. | Navigation redesign и замена top-level window не выполнялись. | `service_buttons_open_persistent_pages_in_both_languages`; full-shell reopen tests для installer с выбранной целью, состояния backup inspection и AppSettings в root viewport. Только headless UI/model evidence; native window и keyboard focus не подтверждены. |
+| Выбранное устройство и проверенные source/target | Если candidate отсутствует или недопустим, Device предлагает выбрать устройство, а CODE показывает unknown. Если выбранный candidate отличается от candidate в editor, Device показывает имя выбранного candidate, а CODE остаётся unknown. При совпадении пути и токена CODE отображается только при наличии проверенного наблюдения; строка Device показывает имя выбранного кандидата. Beta4 alias остаётся observation; смена target его не меняет. Receipt provenance недоступен и не выводится. | Зафиксированный checkpoint B09 (2026-11-03): rendering fixtures отражали target state beta.3/beta.4.1 на том checkpoint. Текущий installer выбирает beta.5 по умолчанию с явным prerelease opt-in; beta.3 остаётся catalog-denied. См. [актуальное evidence B11](../session-evidence/B11.md). | `candidate_observation_requires_matching_path_and_instance`, `candidate_selection_renders_only_matching_observation`, `beta4_alias_render_stays_observed_when_target_changes`, `installer_distinguishes_unverified_source_from_selected_target`. Rendering fixtures не подтверждают full-ROM, receipt или preflight SHA. |
+| Первый шаг restore и safety | Inspection доступен; restore настроек остаётся заблокированным. Новые инструкции ограничены входом в inspection. | Сохранить inspection и явный blocked-restore state; не добавлять writer или loader route. | Backup extended-viewport render и strict manifest checks, с существующими corrupt/stale cases; restore/write path не запускался. |
+| Prerequisites/consequences, Back/Cancel, blocked reasons | Существующие prerequisite и stop models сохранены. Cancel доступен только до erase; submitted/executing operation не подразумевает rollback. | Сохранить текущее safety behavior и точные stop states. | `executing_cancel_is_available_only_before_erase` и executor safety-failure/stop-model tests. Физических операций не было. |
+| Дублирование Application settings | `ak820_status.rs` содержит постоянный native service route. Dropdown entry и sizing label остаются Wasm-only. | Сохранить единственный native route и Wasm-only behavior. Wasm build не выполнялся. | Native EN/RU full-shell tests открывают и повторно открывают ту же страницу AppSettings; source inspection подтверждает Wasm configuration guard. |
+| Непонятные русские подписи | Labels, explanations и editor behavior AppSettings проверены на фактически отрисованной странице и hover text в двух локалях. | Отделять import/export app preferences от firmware backup/restore и пояснять `KC_TRNS` как назначение в editor. Форматы не менялись. | AppSettings render/hover tests, backup instructions/action render в заданном viewport и существующие middle-click `KC_TRNS` и import persistence tests. |
 
-1. Выполнить только изменения матрицы, по regression на строку; сохранить close/reopen/stale-capture tests.
-2. Выполнить `cargo test --bin ak-configurator ui::`, включая affected menu/settings/backup regressions; open→close→capture→cancel→reread→exit без disconnect loops.
-3. Приложить commit/test evidence по строкам. Закрыть #6 только после всех строк; RGB/unlock fixes отдельными коммитами.
+1. Ограниченная офлайн-область B09 принята `b09_matrix_review`; reviewer не запускал повторно заявленные tests/lint. Закрытие физических issue остаётся задачей H01.
+2. Заявленные Windows checks: `cargo test --locked --bin ak-configurator ui:: -- --test-threads=1` (219 passed, 2 ignored, 1754 filtered); installer tests (49 passed), backup tests (39 passed). Итоговый source state скомпилирован и focused executable checks прошли, но это не native-window или hardware tests.
+3. Строгий LINT-N0 и форматирование всего дерева прошли после финальной test-only очистки; source inventory из 96 файлов записан в evidence B09. Оставить физический issue #6 открытым до H01; UI evidence не закрывает issue #5. Ограничения и hashes по строкам приведены в отчёте evidence.
 
 ## 10. Этап 7 — разделить OS detection и LED mapping (#7)
+
+**Статус B10 (2026-11-03):** Ограниченная офлайн-область принята `b10_semantic_review` после review source/EN-RU, проверки hashes всех 97 перечисленных файлов и aggregate inventory result; заявленные тесты/lint повторно не запускались. Общий resolver возвращает выбор только для enabled, распознанной раскладки с заданным сопоставлением; `None` приостанавливает scheduler и не допускает нового перехода. Явный `Normal` и отключённая настройка с `Some(Normal)` сохраняют прежнее поведение; неизвестные импортированные сопоставления сохраняются. Отрисовка не задаёт незаполненное сопоставление; явный выбор сохраняет настройку приложения без немедленной HID-команды. Итоговый `N(ak820_os_indicator)` прошёл: 26 tests (1954 filtered, 9.12 s); `ui::` прошёл с результатом 219 и 2 ignored на production-коде без изменений до test-only обновления helper API. Строгий LINT-N0 и форматирование всего дерева `cargo fmt --check` прошли. См. [evidence B10](../session-evidence/B10.md) и [source inventory B10](../session-evidence/B10-SOURCE.json). Приёмка B10 не закрывает issue #7; точное наблюдение физического LED beta.5 остаётся условием H01. Более поздние изменения рабочей копии не входят в принятый checkpoint.
 
 **Файлы:** `src/ui/ak820_os_indicator.rs` (settings rows, `status_label`, `mode_label`, tests), `src/ui/app_settings.rs`, EN/RU text. Issue не о геометрии клавиатуры, encoder order или split layout. Fixing commit не установлен; не приписывать исправление `936a989`.
 
@@ -203,6 +220,8 @@ cargo test --bin ak-configurator ui::
 6. Закрыть #7 только с wording/state tests и exact-firmware read-only mapping/LED evidence. Иначе `UI clarification complete; firmware/LED observation pending`, issue open. Тесты 65/75/100 или encoder не заменяют эти критерии.
 
 ## 11. Этап 8 — beta.5 installer без write authorization
+
+**Текущее состояние (2026-11-03):** Ограниченная офлайн-область B11 принята независимым reviewer `b11_independent_review`; см. [отчёт B11](../session-evidence/B11.md). Default beta.5 требует явного prerelease opt-in; точный набор 200 canonical pairs, pin/denial и preservation behavior записаны в отчёте. Операций с устройством и physical flash не было. Приёмка не подтверждает установленный образ, source-to-binary linkage, готовность релиза или физическое поведение.
 
 **Зависимости:** этапы 0–2. **Файлы:** `src/ak820_release.rs`, `src/ui/ak820_install.rs`, `src/ak820_install_executor.rs`, installer tests, `docs/INSTALL*`, help EN/RU.
 

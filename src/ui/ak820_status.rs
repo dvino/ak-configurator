@@ -6,6 +6,153 @@ fn text(language: crate::i18n::Language, key: &'static str) -> &'static str {
     crate::i18n::tr_catalog(language, key)
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod b09_navigation_tests {
+    use super::*;
+    use egui_kittest::{kittest::Queryable, Harness};
+
+    #[test]
+    fn full_shell_opens_and_reopens_app_settings_in_root_viewport() {
+        for (language, settings, import, editor) in [
+            (
+                crate::i18n::Language::English,
+                "Application settings",
+                "Import app settings",
+                "Editor",
+            ),
+            (
+                crate::i18n::Language::Russian,
+                "Настройки приложения",
+                "Импорт настроек приложения",
+                "Редактор",
+            ),
+        ] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1400.0, 1000.0))
+                .build_ui_state(
+                    |ui, state: &mut (EntropyApp, eframe::Frame, Option<egui::Context>)| {
+                        state.2 = Some(ui.ctx().clone());
+                        eframe::App::ui(&mut state.0, ui, &mut state.1);
+                    },
+                    (app, eframe::Frame::_new_kittest(), None),
+                );
+            harness.run();
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            harness.get_by_label(settings).click();
+            harness.run();
+            harness.get_by_label(import);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            assert!(harness.state().0.settings_tab == SettingsTab::AppSettings);
+            harness.get_by_label(editor).click();
+            harness.run();
+            assert!(harness.query_by_label(import).is_none());
+            harness.get_by_label(settings).click();
+            harness.run();
+            harness.get_by_label(import);
+            assert!(harness
+                .output()
+                .viewport_output
+                .keys()
+                .all(|id| *id == egui::ViewportId::ROOT));
+            assert_eq!(
+                harness.state().2.as_ref().unwrap().viewport_id(),
+                egui::ViewportId::ROOT
+            );
+            assert!(harness.state().0.hid_device.is_none());
+        }
+    }
+
+    #[test]
+    fn service_buttons_open_persistent_pages_in_both_languages() {
+        for language in [
+            crate::i18n::Language::English,
+            crate::i18n::Language::Russian,
+        ] {
+            let cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+            let mut app = EntropyApp::new_ak820_demo(&cc);
+            app.app_settings.language = language;
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1500.0, 300.0))
+                .build_ui_state(
+                    |ui, state: &mut (EntropyApp, Option<egui::Context>)| {
+                        state.1 = Some(ui.ctx().clone());
+                        state.0.draw_service_navigation(ui);
+                    },
+                    (app, None),
+                );
+            harness.run();
+            let editor = if language == crate::i18n::Language::Russian {
+                "Редактор"
+            } else {
+                "Editor"
+            };
+            harness.get_by_label(editor).focus();
+            harness.run();
+            harness.key_press(egui::Key::Tab);
+            harness.run();
+            assert!(harness
+                .get_by_label(text(language, "ak820_ui.install"))
+                .is_focused());
+            harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+            harness.run();
+            assert!(harness.get_by_label(editor).is_focused());
+            for (key, id) in [
+                ("ak820_ui.install", super::super::ak820_install::OPEN_ID),
+                (
+                    "ak820_ui.backups",
+                    super::super::ak820_backup_inspection::OPEN_ID,
+                ),
+            ] {
+                harness.get_by_label(text(language, key)).click();
+                harness.run();
+                let ctx = harness.state().1.as_ref().unwrap();
+                assert_eq!(
+                    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(id))),
+                    Some(true)
+                );
+                harness
+                    .get_by_label(if language == crate::i18n::Language::Russian {
+                        "Редактор"
+                    } else {
+                        "Editor"
+                    })
+                    .click();
+                harness.run();
+                let ctx = harness.state().1.as_ref().unwrap();
+                assert_eq!(
+                    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(id))),
+                    Some(false)
+                );
+                harness.get_by_label(text(language, key)).click();
+                harness.run();
+                let ctx = harness.state().1.as_ref().unwrap();
+                assert_eq!(
+                    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(id))),
+                    Some(true)
+                );
+            }
+            harness
+                .get_by_label(text(language, "ak820_ui.app_settings"))
+                .click();
+            harness.run();
+            assert!(harness.state().0.settings_tab == SettingsTab::AppSettings);
+            assert!(harness.state().0.main_menu_tab == MainMenuTab::Settings);
+            assert!(harness.state().0.hid_device.is_none());
+        }
+    }
+}
+
 pub(super) fn utility_window_open(_ctx: &egui::Context) -> bool {
     false
 }
@@ -33,57 +180,60 @@ impl EntropyApp {
         let language = self.app_settings.language;
         let russian = language == crate::i18n::Language::Russian;
         let enabled = !utility_window_open(&ctx) && !self.service_navigation_busy(&ctx);
-        egui::ScrollArea::horizontal()
-            .id_salt("ak820_service_navigation")
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (action, label) in [
-                        (
-                            "editor",
-                            if russian {
-                                "Редактор"
-                            } else {
-                                "Editor"
-                            },
-                        ),
-                        ("install", text(language, "ak820_ui.install")),
-                        ("backups", text(language, "ak820_ui.backups")),
-                        ("files", text(language, "ak820_ui.check_files")),
-                        ("settings", text(language, "ak820_ui.app_settings")),
-                        ("help", text(language, "ak820_ui.help")),
-                    ] {
-                        #[cfg(target_arch = "wasm32")]
-                        if action == "install" {
-                            continue;
-                        }
-                        if ui
-                            .add_enabled(enabled || action == "help", egui::Button::new(label))
-                            .clicked()
-                        {
-                            if action == "help" {
-                                super::ak820_help_ui::open(&ctx);
+        ui.scope(|ui| {
+            ui.style_mut().spacing.scroll.floating = false;
+            egui::ScrollArea::horizontal()
+                .id_salt("ak820_service_navigation")
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for (action, label) in [
+                            (
+                                "editor",
+                                if russian {
+                                    "Редактор"
+                                } else {
+                                    "Editor"
+                                },
+                            ),
+                            ("install", text(language, "ak820_ui.install")),
+                            ("backups", text(language, "ak820_ui.backups")),
+                            ("files", text(language, "ak820_ui.check_files")),
+                            ("settings", text(language, "ak820_ui.app_settings")),
+                            ("help", text(language, "ak820_ui.help")),
+                        ] {
+                            #[cfg(target_arch = "wasm32")]
+                            if action == "install" {
                                 continue;
                             }
-                            self.close_hover_top_dropdowns(&ctx);
-                            leave_service_pages(&ctx);
-                            match action {
-                                "editor" => self.main_menu_tab = MainMenuTab::Keyboard,
-                                "settings" => self.open_app_settings_page(),
-                                _ => {
-                                    let id = match action {
-                                        #[cfg(not(target_arch = "wasm32"))]
-                                        "install" => super::ak820_install::OPEN_ID,
-                                        "backups" => super::ak820_backup_inspection::OPEN_ID,
-                                        _ => super::ak820_install_files::OPEN_ID,
-                                    };
-                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), true));
+                            if ui
+                                .add_enabled(enabled || action == "help", egui::Button::new(label))
+                                .clicked()
+                            {
+                                if action == "help" {
+                                    super::ak820_help_ui::open(&ctx);
+                                    continue;
+                                }
+                                self.close_hover_top_dropdowns(&ctx);
+                                leave_service_pages(&ctx);
+                                match action {
+                                    "editor" => self.main_menu_tab = MainMenuTab::Keyboard,
+                                    "settings" => self.open_app_settings_page(),
+                                    _ => {
+                                        let id = match action {
+                                            #[cfg(not(target_arch = "wasm32"))]
+                                            "install" => super::ak820_install::OPEN_ID,
+                                            "backups" => super::ak820_backup_inspection::OPEN_ID,
+                                            _ => super::ak820_install_files::OPEN_ID,
+                                        };
+                                        ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), true));
+                                    }
                                 }
                             }
                         }
-                    }
+                    });
                 });
-            });
+        });
     }
 
     pub(super) fn service_navigation_busy(&self, ctx: &egui::Context) -> bool {
@@ -346,6 +496,12 @@ impl EntropyApp {
             .hid_device
             .as_ref()
             .and_then(crate::hid::HidDevice::ak820_failure);
+        let image = self
+            .hid_device
+            .as_ref()
+            .and_then(crate::hid::HidDevice::ak820_image);
+        #[cfg(not(target_arch = "wasm32"))]
+        let image = image.or_else(|| self.ak820_os_indicator_display_image());
         let label = if failure.is_some() {
             text(lang, "ak820_ui.stopped").to_owned()
         } else if self.ak820_demo {
@@ -356,11 +512,7 @@ impl EntropyApp {
                     .map(|p| p.as_str())
                     .unwrap_or("main")
             )
-        } else if let Some(image) = self
-            .hid_device
-            .as_ref()
-            .and_then(crate::hid::HidDevice::ak820_image)
-        {
+        } else if let Some(image) = image {
             format!("AK820 · {}", image.label())
         } else {
             text(lang, "ak820_ui.disconnected").to_owned()

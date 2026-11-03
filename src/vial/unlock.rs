@@ -2,7 +2,6 @@
 use super::vial_hid_task::VialHidTaskStart;
 use super::*;
 
-const VIAL_UNLOCK_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 const VIAL_UNLOCK_PROGRESS_ANIMATION_TIME: f32 = 0.16;
 
 impl EntropyApp {
@@ -54,6 +53,7 @@ impl EntropyApp {
         match self.start_vial_unlock(ctx) {
             VialHidTaskStart::Started => {
                 self.vial_unlock_session_started = true;
+                self.vial_unlocked = None;
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             VialHidTaskStart::Busy => {
@@ -145,14 +145,14 @@ impl EntropyApp {
         ));
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     pub(super) fn fail_vial_unlock_poll(&mut self, error: String) {
-        log::warn!("Vial unlock poll failed; retrying: {error}");
-        self.status_msg = crate::i18n::tr_catalog_format(
+        self.vial_unlocked = Some(false);
+        self.stop_vial_unlock_with_status(crate::i18n::tr_catalog_format(
             self.app_settings.language,
-            "status_messages.unlock_poll_retry",
+            "status_messages.unlock_start_failed",
             &[("error", &error)],
-        );
+        ));
     }
 
     pub(super) fn draw_vial_unlock_overlay(&mut self, ctx: &egui::Context) {
@@ -164,32 +164,10 @@ impl EntropyApp {
                 return;
             }
 
-            // Match Vial's polling cadence. Vial QMK resets the unlock counter whenever
-            // UNLOCK_POLL arrives before its internal ~100ms timer has elapsed, even if the
-            // correct keys are held. Polling too fast makes progress stick near zero.
-            // The overlay still repaints independently for smooth progress animation.
-            if self.vial_unlock_polling {
-                let now = std::time::Instant::now();
-                let should_poll = self
-                    .vial_unlock_last_poll
-                    .map(|last_poll| now.duration_since(last_poll) >= VIAL_UNLOCK_POLL_INTERVAL)
-                    .unwrap_or(true);
-                if should_poll {
-                    match self.start_vial_unlock_poll(ctx) {
-                        VialHidTaskStart::Started => {
-                            self.vial_unlock_last_poll = Some(now);
-                        }
-                        VialHidTaskStart::Busy => {}
-                        VialHidTaskStart::NoDevice => {
-                            self.stop_vial_unlock_with_status(crate::i18n::tr_catalog(
-                                self.app_settings.language,
-                                "status_messages.unlock_cancelled_disconnected",
-                            ));
-                            return;
-                        }
-                    }
-                }
-                ctx.request_repaint_after(std::time::Duration::from_millis(16));
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.vial_unlock_session_started {
+                self.observe_vial_unlock();
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
             }
             // Fullscreen overlay with layout and highlighted keys
             let unlock_keys = self.vial_unlock_keys.clone();
@@ -246,6 +224,35 @@ impl EntropyApp {
                     };
 
                     // Title
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if !preflight {
+                        crate::ui_style::allocate_ui_at_rect(
+                            ui,
+                            egui::Rect::from_center_size(
+                                egui::pos2(center_x, screen.max.y - 24.0),
+                                egui::vec2(220.0, 36.0),
+                            ),
+                            |ui| {
+                                let label = if self.app_settings.language
+                                    == crate::i18n::Language::Russian
+                                {
+                                    "Прекратить ожидание"
+                                } else {
+                                    "Stop waiting"
+                                };
+                                if crate::ui_style::modern_button(
+                                    ui,
+                                    label,
+                                    egui::vec2(220.0, 34.0),
+                                    true,
+                                )
+                                .clicked()
+                                {
+                                    self.cancel_vial_unlock_wait();
+                                }
+                            },
+                        );
+                    }
                     ui.painter().text(
                         egui::pos2(center_x, top_y),
                         egui::Align2::CENTER_CENTER,
@@ -569,7 +576,11 @@ mod tests {
     fn start_submits_hid_work_and_cannot_be_dismissed_afterward() {
         let ctx = egui::Context::default();
         let mut app = EntropyApp::new_inert_for_test();
-        let (hid, _) = crate::hid::HidDevice::test_device();
+        let (hid, recorder) = crate::hid::HidDevice::test_device();
+        let device = crate::device::test_usb_device("3-1", 1, 0x42);
+        recorder.bind_device(device.clone());
+        app.device_manager.replace_devices(vec![device]);
+        app.selected_device = Some(0);
         app.hid_device = Some(hid);
         app.firmware = FirmwareProtocol::Vial;
         app.unlock_open = true;

@@ -633,8 +633,8 @@ impl EntropyApp {
         }) {
             self.deferred_device_load.defer_background_for_user_input();
         }
-        !(self.main_menu_tab == MainMenuTab::Settings
-            && self.settings_tab == SettingsTab::MatrixTester)
+        (self.main_menu_tab != MainMenuTab::Settings
+            || self.settings_tab != SettingsTab::MatrixTester)
             && !self.keycode_picker.open
             && self.keycode_picker.result.is_none()
             && self.editing_layer.is_none()

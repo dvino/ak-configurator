@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-#[cfg(any(target_os = "windows", target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test))]
 use crate::text_expander::TextExpansionEngine;
 use crate::text_expander::{TextExpansionConfig, TextExpansionRule};
 use std::sync::{Mutex, OnceLock, RwLock};
@@ -28,7 +28,7 @@ pub(crate) fn native_open_window_app_candidates() -> Vec<TextExpanderAppCandidat
 }
 
 static TEXT_EXPANDER_CONFIG: OnceLock<RwLock<TextExpansionConfig>> = OnceLock::new();
-#[cfg(any(target_os = "windows", target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test))]
 static TEXT_EXPANDER_ENGINE: OnceLock<Mutex<TextExpansionEngine>> = OnceLock::new();
 static RECENT_FOREGROUND_APPS: OnceLock<Mutex<Vec<TextExpanderAppCandidate>>> = OnceLock::new();
 
@@ -36,7 +36,7 @@ fn text_expander_config() -> &'static RwLock<TextExpansionConfig> {
     TEXT_EXPANDER_CONFIG.get_or_init(|| RwLock::new(TextExpansionConfig::default()))
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test))]
 fn text_expander_engine() -> &'static Mutex<TextExpansionEngine> {
     TEXT_EXPANDER_ENGINE.get_or_init(|| Mutex::new(TextExpansionEngine::default()))
 }
@@ -53,7 +53,7 @@ fn current_process_name_lower() -> Option<String> {
         .and_then(|name| name.to_str().map(|name| name.to_ascii_lowercase()))
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "macos", all(target_os = "windows", test)))]
 pub(crate) fn remember_foreground_app(candidate: TextExpanderAppCandidate) {
     let exe = candidate.exe.trim().to_ascii_lowercase();
     if exe.is_empty() {
@@ -103,7 +103,7 @@ pub fn set_text_expander_config(
     if let Ok(mut guard) = text_expander_config().write() {
         *guard = config;
     }
-    #[cfg(any(target_os = "windows", target_os = "macos", test))]
+    #[cfg(any(target_os = "macos", test))]
     {
         if let Ok(mut engine) = text_expander_engine().lock() {
             engine.set_rules(rules);
@@ -111,7 +111,7 @@ pub fn set_text_expander_config(
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test))]
 fn text_expander_enabled() -> bool {
     text_expander_config()
         .read()
@@ -119,7 +119,7 @@ fn text_expander_enabled() -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn text_expander_suppressed_for_context() -> bool {
     text_expander_config()
         .read()
@@ -127,7 +127,7 @@ fn text_expander_suppressed_for_context() -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 fn foreground_app_blacklisted(app_blacklist: &[String]) -> bool {
     smart_input_windows::foreground_app_blacklisted(app_blacklist)
 }
@@ -156,11 +156,6 @@ pub fn platform_open_window_candidates() -> Vec<TextExpanderAppCandidate> {
 #[cfg(target_os = "linux")]
 pub fn text_expander_runs_outside_entropy_process() -> bool {
     linux_input_method_env().contains("ibus")
-}
-
-#[cfg(not(target_os = "linux"))]
-pub fn text_expander_runs_outside_entropy_process() -> bool {
-    false
 }
 
 #[cfg(target_os = "linux")]
@@ -320,12 +315,26 @@ fn refresh_ibus_registry() {
         .status();
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", test))]
 pub fn start() {
-    if crate::isolated_runtime() {
-        return;
+    start_with(crate::isolated_runtime(), smart_input_windows::start);
+}
+
+#[cfg(all(target_os = "windows", test))]
+fn start_with(isolated: bool, dispatch: impl FnOnce()) {
+    if !isolated {
+        dispatch();
     }
-    smart_input_windows::start();
+}
+
+#[cfg(all(target_os = "windows", test))]
+#[test]
+fn isolated_windows_start_does_not_dispatch_hook() {
+    let dispatched = std::cell::Cell::new(false);
+    assert!(crate::isolated_runtime());
+    start_with(crate::isolated_runtime(), || dispatched.set(true));
+    assert!(!dispatched.get());
+    start();
 }
 
 #[cfg(target_os = "macos")]

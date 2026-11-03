@@ -207,6 +207,107 @@ pub(super) fn storage_config_dir() -> Option<std::path::PathBuf> {
     crate::config_dir()
 }
 
+/// Read the persisted block-only release observation without loading the GUI
+/// settings or triggering its migrations. Missing settings mean unknown status;
+/// unreadable or malformed existing settings fail closed.
+#[cfg(all(feature = "mcp", not(test)))]
+pub(crate) fn read_release_observation(
+) -> Result<Option<crate::ak820_release::ReleaseObservation>, String> {
+    let path = storage_config_dir()
+        .ok_or("Settings directory unavailable")?
+        .join(crate::APP_ID)
+        .join("app_settings.json");
+    read_release_observation_at(&path)
+}
+
+#[cfg(feature = "mcp")]
+fn read_release_observation_at(
+    path: &std::path::Path,
+) -> Result<Option<crate::ak820_release::ReleaseObservation>, String> {
+    use std::io::Read;
+    const LIMIT: u64 = 16 * 1024 * 1024;
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("Settings observation unavailable".into()),
+    };
+    if !metadata.file_type().is_file() || metadata.len() > LIMIT {
+        return Err("Settings observation is not a bounded regular file".into());
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("Settings observation unavailable".into()),
+    };
+    let opened = file
+        .metadata()
+        .map_err(|_| "Settings observation unavailable")?;
+    if !opened.is_file() || opened.len() > LIMIT {
+        return Err("Settings observation is not a bounded regular file".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if opened.file_attributes() & 0x400 != 0 {
+            return Err("Settings observation is a reparse point".into());
+        }
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "Settings observation unavailable")?;
+    if bytes.len() as u64 > LIMIT {
+        return Err("Settings observation exceeds limit".into());
+    }
+    let value = crate::ak820_settings_backup::parse_json(&bytes)?;
+    let object = value.as_object().ok_or("Invalid settings observation")?;
+    match object.get("ak820_release_observation") {
+        None => Ok(None),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(Some)
+            .map_err(|_| "Invalid settings observation".into()),
+    }
+}
+
+#[cfg(all(test, feature = "mcp"))]
+#[test]
+fn mcp_prepare_release_observation_read_is_bounded_and_fail_closed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("missing").join("settings.json");
+    assert!(read_release_observation_at(&path).unwrap().is_none());
+    assert!(!path.parent().unwrap().exists());
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, br#"{"ak820_release_observation":{"release":"v0.6.0-beta.5","catalog_sha256":"9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d","published":true,"checked_at":null,"blocked":true,"reason":null}}"#).unwrap();
+    let observation = read_release_observation_at(&path).unwrap().unwrap();
+    assert!(observation.blocks_selected(crate::ak820_release::InstallerRelease::Beta5));
+    std::fs::write(&path, br#"{"ak820_release_observation":{"release":"v0.6.0-beta.3","catalog_sha256":"other","published":false,"checked_at":null,"blocked":false,"reason":null,"blocked_pins":{"v0.6.0-beta.5":"9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d"}}}"#).unwrap();
+    assert!(read_release_observation_at(&path)
+        .unwrap()
+        .unwrap()
+        .blocks_selected(crate::ak820_release::InstallerRelease::Beta5));
+    std::fs::write(
+        &path,
+        br#"{"ak820_release_observation":{},"ak820_release_observation":{}}"#,
+    )
+    .unwrap();
+    assert!(read_release_observation_at(&path).is_err());
+    std::fs::write(&path, br#"{"ak820_release_observation":{"unknown":true}}"#).unwrap();
+    assert!(read_release_observation_at(&path).is_err());
+    assert!(read_release_observation_at(dir.path()).is_err());
+}
+
 /// Sanitize a device name into a filesystem-safe slug.
 pub(super) fn device_id_slug(device_name: &str) -> String {
     device_name
@@ -502,11 +603,11 @@ pub(super) fn open_path_in_system_editor(path: &std::path::Path) -> bool {
     }
     #[cfg(target_os = "windows")]
     {
-        return std::process::Command::new("cmd")
+        std::process::Command::new("cmd")
             .args(["/C", "start", "", &path.to_string_lossy()])
             .status()
             .map(|status| status.success())
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(target_os = "macos")]
     {

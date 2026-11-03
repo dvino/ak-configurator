@@ -1073,7 +1073,7 @@ impl EntropyApp {
             } else {
                 "Demo preview sends no device data."
             });
-            if !scene_validation.is_ok() {
+            if scene_validation.is_err() {
                 ui.colored_label(
                     Color32::LIGHT_RED,
                     if ru {
@@ -1112,7 +1112,7 @@ impl EntropyApp {
             {
                 self.ak820_rgb_scene_start(e.scene.clone());
             }
-            if !scene_validation.is_ok() {
+            if scene_validation.is_err() {
                 ui.colored_label(
                     Color32::LIGHT_RED,
                     if ru {

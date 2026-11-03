@@ -2,7 +2,13 @@
 
 # Desktop adaptation and review
 
-## Beta.4.1 exact-image install admission — 2026-10-28
+## B12 Windows alpha candidate — 2026-11-04
+
+The release executable (SHA256 `85ab88ffa3bc025bc6d68f6c4a4cbfd164ba81201175138d9f82df725c108d8d`) passed the Beta5 release self-check and isolated native GUI smoke using fresh settings with live HID forbidden. The smoke covered 17 frames, window creation, RGB/settings navigation and tray hide/show with rendering resumed. The production MCP STDIO check passed both protocol generations; metadata-only SDK/Inspector validation reported eight tools and zero schema errors. No hardware tool was requested. The 57 SDK portability warnings remain; they are not a strict portability certification. The time from process entry to first editor-frame submission was 630.7362 ms; time to visible-window presentation was not measured.
+
+The integrated Windows suite passed 1,978 tests with 10 ignored in 289.53 s; the Beta5 catalog test passed. Package scripts passed 8/8 strict tests and three synthetic verifier cases using fake executable headers. Strict LINT-N and LINT-C passed with zero warnings; formatting passed. The unsigned x86_64 GUI setup passed isolated install, self-check, same-version reinstall and uninstall. Reviewers `b12_package_review`, `windows_delivery_review` and `delivery_native_followup_review` reported no blocker in their scoped reviews. The setup review does not cover a previous-version upgrade, visual wizard inspection, real settings or the final signed installer. Current-user Root/Publisher trust and signing CI remain pending. Windows ARM64 package/CI is configured but untested on ARM hardware; actual ARM64 execution is unverified. Linux and macOS are outside this milestone. B12 is not accepted, and `0.1.0-alpha.1` remains unpublished. No keyboard operation occurred. See [B12 evidence](session-evidence/B12.md).
+
+## Historical beta.4.1 exact-image install admission — 2026-10-28
 
 The official beta.4.1 release catalog and firmware matrix are pinned to SHA256 `5ec2dbddfb2d66d2afa13a408f0365d2474d8f94866f700d65d124eeb13f05c1` and `7b38153e68d168718d04c5c8c8502daad875ca63298bf0e79c20a39c4648c570`. Their ten image bindings are checked against the beta.4.1 capability catalog, local linked IHX/map files, and packed-CODE identities. Release metadata authorizes flashing but leaves `hardware_validated` and `settings_writes_authorized` false. The installer selects beta.4.1 by default, retains beta.3 as an alternate, and requires prerelease opt-in. It uses only its exact release defaults and retains the existing safety backup, fresh confirmation, single loader attempt and full readback. Generic device settings writes and restore remain blocked. Physical tests were not run.
 
@@ -17,6 +23,8 @@ The optimized Linux x86_64 binary was built with Rust 1.97.0 on Debian 12 (glibc
 ## Historical packaged candidate checkpoint — 2026-10-27
 
 Final CI [40556287408](https://github.com/dvino/ak-configurator/actions/runs/40556287408) completed successfully on all six OS/CPU targets for PR head `b3ecae13d17e6f2f9be7312183d8ab454cf23ed7` merged with `desktop-dev` at `ef30da6e254a1b358a54cc937d93bc7ee01c0e60` (CI merge `d5617334d685f4bba5004cb5beae25c121e8fc94`). Downloaded archives, external SHA256 files, package manifests, executable-bound runtime reports and install/upgrade/uninstall reports were checked for all six candidates; user-data preservation checks passed. These are unsigned CI candidates, not a published application release. Earlier checkpoints below describe their own source and date, and do not override this result.
+
+This 2026-10-27 result belongs to that earlier source snapshot and does not qualify current B12. The current Windows ARM64 package/CI lane has not been executed; current B12 runtime evidence is limited to x86_64.
 
 The exact Linux x86_64 release executable from that CI run started and rendered on isolated Weston 13 with X11 `DISPLAY` unset; an external compositor scene graph showed the window. This does not test tray hiding/restoration, a real desktop panel, device behavior or physical input. On Wayland/unknown backends the current application deliberately keeps the window visible because its pinned winit backend cannot safely hide and restore it. Full Wayland tray work is deferred. The final sentence in the 2026-10-27 checkpoint described the pre-release beta.4 preparation and is superseded by the beta.4.1 admission documented above.
 
@@ -92,7 +100,7 @@ Retained evidence: [all-test summary](verification/2026-10-27-mcp/unit-tests.jso
 
 The candidate workflow now runs actual native GUI/tray smoke on all six configured Linux/Windows/macOS targets and the verifier requires a matching platform/version/executable-hash report. Linux CI uses an isolated D-Bus host fixture. Configuring this workflow does not establish that its new Windows/macOS jobs have run. The user requires Windows/Linux runtime before even an alpha; no release, tag, push, installation or hardware command was performed here.
 
-The basic agent diagnostic path is usable in the exercised Linux subprocess. P0 as a whole remains partial: the positive complete packed CODE fixture, broader replay/report acceptance and live helper/lease checks remain open. The synthetic FD01 backend is not a successful full bootstrap fixture. MCP does not manipulate an existing GUI, change settings, back up/restore or flash a device. P1/P2 have not started; UI lifecycle checks use the separate native runner. Reports/traces are bounded and process-local. A `protocol.smoke` pass explicitly skips physical behavior.
+**Current MCP status, 2026-11-03:** C01 accepted the exact official-recipe beta.5 packed-image/bootstrap fixture for the limited host scope; installed-image and physical-device behavior remain unqualified. C03 adds verified read-only backup capture into the private store, returning metadata and an artifact ID only. P0 remains partial pending required platform STDIO and live helper/lease qualification. The synthetic FD01 backend alone is not a successful full bootstrap fixture. MCP does not control an existing GUI, change saved settings, restore settings, or flash a device. Reports/traces are bounded and process-local. A `protocol.smoke` pass explicitly skips physical behavior.
 
 ## MCP implementation plan — 2026-10-27
 
@@ -633,7 +641,7 @@ The inherited helper tests can time out under parallel suite contention; the wor
 
 ### Remaining release evidence
 
-There is no positive released packed-image/full-ROM fixture: public Intel HEX lacks the OEM erase-helper bytes required by the packer. Private OEM data is excluded. Synthetic verified sessions and digest-admission tests establish host rules, not acceptance of a physical keyboard. No hardware writes, reset, loader transition or flashing were performed. HID timing, retention, physical input, real backup/restore and installer execution remain open. Direct palettes have no getter or persistence and are not included in firmware backup data.
+At the 2026-10-27 release checkpoint, no positive released packed-image/full-ROM fixture was available: public Intel HEX lacked the OEM erase-helper bytes required by the packer. This is historical release/package evidence. On 2026-11-03, C01 accepted an exact official-recipe beta.5 packed-image bootstrap fixture for the limited host scope; C03 separately checked a private full-ROM backup model. Neither result qualifies an installed image or physical device. Private OEM data remains excluded. No hardware writes, reset, loader transition or flashing were performed; HID timing, retention, physical input and installer execution remain open. Direct palettes have no getter or persistence and are not included in firmware backup data.
 
 The workflow and package script cover six architecture targets; this session built and launched Linux x86_64 only. Windows, macOS, arm64 runtime checks, current-tree six-target CI, installers and signing remain open. The Linux binary uses the Ubuntu 24.04 runtime; older Debian compatibility is not implied. Candidate packaging is not a fully qualified first release.
 

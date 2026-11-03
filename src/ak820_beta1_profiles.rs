@@ -15,6 +15,7 @@ pub(crate) const SOURCE_MATRIX_SHA256: &str =
     "d07cbc6bb562e84193f6de121733d13e21aceb129b653e9ff97ae954da36920c";
 pub(crate) const SOURCE_MODULE_DESCRIPTIONS_SHA256: &str =
     "2947032a7f53c43d906c3ab909a7fb0beb31d83bae4e44368db422ef18afffc6";
+pub(crate) const BETA5_RELEASE: &str = "v0.6.0-beta.5";
 pub(crate) const BETA4_RELEASE: &str = "v0.6.0-beta.4";
 pub(crate) const BETA4_1_RELEASE: &str = "v0.6.0-beta.4.1";
 // Historical archive pin is exercised by catalog regression tests; release
@@ -171,6 +172,8 @@ pub(crate) struct MatrixCapabilities {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SettingsIdentity {
     #[serde(default)]
+    pub(crate) leader_default: Option<LeaderDefault>,
+    #[serde(default)]
     pub(crate) direct_protocol: Option<u8>,
     #[serde(default)]
     pub(crate) macro_layer_tap: bool,
@@ -191,6 +194,92 @@ pub(crate) struct SettingsIdentity {
     pub(crate) compact_controls_version: Option<u8>,
     #[serde(default)]
     pub(crate) combo_media: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LeaderDefault {
+    pub(crate) format: String,
+    pub(crate) milliseconds: u16,
+}
+
+pub(crate) fn beta5_firmware_matrix() -> &'static FirmwareMatrix {
+    static MATRIX: OnceLock<FirmwareMatrix> = OnceLock::new();
+    MATRIX.get_or_init(|| {
+        let source = include_str!("../assets/ak820/beta5-profiles.json");
+        assert_sha256(
+            source,
+            "96f0a928f75dab71a612fbd2ca422fc66d81b37d516d2261d177d13d76567e95",
+            "beta.5 profiles",
+        );
+        let official = include_str!("../assets/ak820/beta5-firmware-matrix.json");
+        assert_sha256(
+            official,
+            "12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb",
+            "beta.5 official matrix",
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(source).unwrap(),
+            serde_json::from_str::<serde_json::Value>(official).unwrap()
+        );
+        let capability = include_str!("../assets/ak820/beta5-capability-catalog.json");
+        assert_sha256(
+            capability,
+            "a1b489026fced8135d424069bb1ed80f6e975468804a2a2cec5aae72047dda91",
+            "beta.5 capability catalog",
+        );
+        let catalog: CapabilityCatalog =
+            serde_json::from_str(capability).expect("pinned beta.5 capability catalog");
+        assert!(!catalog.hardware_validated && !catalog.settings_writes_authorized);
+        let matrix: FirmwareMatrix = serde_json::from_str(source).expect("pinned beta.5 matrix");
+        assert_eq!(matrix.profiles.len(), 10);
+        assert_eq!(
+            matrix
+                .profiles
+                .iter()
+                .map(|r| r.profile.as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            10
+        );
+        assert_eq!(catalog.images.len(), 10);
+        assert_eq!(
+            catalog
+                .images
+                .iter()
+                .map(|r| r.profile.as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            10
+        );
+        for row in &matrix.profiles {
+            let image = catalog
+                .images
+                .iter()
+                .find(|i| i.profile == row.profile)
+                .expect("beta.5 capability row");
+            assert!(!image.hardware_validated && !image.settings_writes_authorized);
+            assert_eq!(row.identity.ihx_sha256, image.build_identity.ihx_sha256);
+            assert_eq!(row.identity.map_sha256, image.build_identity.map_sha256);
+            let qsid: Vec<u16> = image
+                .runtime_qmk_settings
+                .iter()
+                .map(|id| u16::try_from(id.as_u64().expect("QSID integer")).expect("QSID range"))
+                .collect();
+            assert_eq!(row.capabilities.runtime_qmk_settings_ids, qsid);
+            let identity = row.settings_identity.as_ref().expect("beta.5 identity");
+            let leader = identity
+                .leader_default
+                .as_ref()
+                .expect("beta.5 leader marker");
+            assert_eq!(leader.format, "ak820-leader-default-1");
+            assert_eq!(leader.milliseconds, 300);
+            assert!((1..=1000).contains(&leader.milliseconds));
+            assert_eq!(identity.nvm_schema, 0x082003);
+            assert_eq!(identity.settings_record_version, Some(3));
+        }
+        matrix
+    })
 }
 
 #[derive(Debug, Deserialize)]

@@ -1217,6 +1217,15 @@ pub(crate) struct ConnectResult {
 pub(crate) enum ConnectTaskMessage {
     Progress(String),
     Done(Box<Result<ConnectResult, String>>),
+    LeaseBusy,
+    OpenFailed(String),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConnectionFailure {
+    LeaseBusy,
+    Failed,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3575,7 +3584,10 @@ pub(crate) enum SettingsTab {
     OsIndicator,
     ApplicationLayouts,
     MatrixTester,
-    #[cfg(any(test, not(any(target_os = "linux", target_os = "windows"))))]
+    #[cfg(any(
+        all(test, target_os = "linux"),
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     TextExpanderSetup,
     TextExpander,
     TypingTrainer,
@@ -5434,6 +5446,8 @@ pub struct EntropyApp {
     /// device changed while a file dialog was open.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) connection_generation: u64,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) connection_failure: Option<(u64, ConnectionFailure)>,
     /// Raw handles of the main window, cached each frame so file dialogs can be
     /// parented to it — otherwise the native picker can open behind the window.
     #[cfg(not(target_arch = "wasm32"))]
@@ -5511,6 +5525,12 @@ pub struct EntropyApp {
     /// Serialized live Vial read/control operation. Owns the HID handle while active.
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) vial_hid_task: Option<VialHidTask>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) rgb_draft: Option<vial_hid_task::Ak820RgbWrite>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) rgb_uncertain: Option<u64>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) rgb_request_id: u64,
     /// Undo intent captured while a low-priority Bluetooth layer read owns the
     /// HID handle. It is started before another automatic layer read.
     #[cfg(not(target_arch = "wasm32"))]
@@ -5644,6 +5664,10 @@ pub struct EntropyApp {
     pub(crate) force_close_requested: bool,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) exit_after_hid_write: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) rgb_exit_pending: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) rgb_exit_ready: bool,
     pub(crate) main_menu_tab: MainMenuTab,
     pub(crate) combo_entries: Vec<ComboEntry>,
     pub(crate) combo_synced_entries: Vec<ComboEntry>,

@@ -93,6 +93,21 @@ pub(crate) struct RestorePlan {
     final_extensions: Option<Extensions>,
 }
 impl RestorePlan {
+    /// Synthetic UI binding only; this is not a validated or executable plan.
+    #[cfg(test)]
+    pub(crate) fn untrusted_ui_fixture() -> Self {
+        let snapshot = crate::ak820_backup_capture::CapturedBackup::untrusted_ui_fixture();
+        Self {
+            source: snapshot.identity().clone(),
+            target: snapshot.identity().clone(),
+            before: snapshot.nvm().to_vec(),
+            expected: snapshot.nvm().to_vec(),
+            steps: vec![],
+            preconditions: vec![],
+            final_getters: json!({}),
+            final_extensions: None,
+        }
+    }
     #[cfg(test)]
     pub(crate) fn preconditions(&self) -> &[RestorePrecondition] {
         &self.preconditions
@@ -165,6 +180,10 @@ fn target_contract(
 ) -> BackupResult<&'static crate::app::ak820_beta1_profiles::MatrixProfile> {
     let image = crate::ak820::contract_for_hash(id.schema, &id.code_sha256)
         .ok_or("Unknown exact target image")?;
+    require(
+        !matches!(image, crate::ak820::ImageContract::Beta5(_)),
+        "Beta.5 restore is not supported",
+    )?;
     let row = image
         .matrix_profile()
         .ok_or("Target lacks profile settings contract")?;
@@ -854,6 +873,19 @@ mod tests {
             );
             assert!(!plan.steps().is_empty());
             assert!(plan.requires_fresh_physical_unlock());
+        }
+    }
+    #[test]
+    fn beta5_targets_are_blocked_before_restore_planning() {
+        for row in &crate::app::ak820_beta1_profiles::beta5_firmware_matrix().profiles {
+            let exact = row.settings_identity.as_ref().unwrap();
+            let id = ImageIdentity {
+                ihx_sha256: exact.ihx_sha256.clone(),
+                code_sha256: exact.code_sha256.clone(),
+                definition_sha256: exact.definition_sha256.clone(),
+                schema: exact.nvm_schema,
+            };
+            assert!(target_contract(row.profile, &id).is_err());
         }
     }
     #[test]

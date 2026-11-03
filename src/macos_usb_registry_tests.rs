@@ -235,8 +235,9 @@ unsafe extern "C" fn IOObjectConformsTo(o: u32, n: *const c_char) -> u32 {
     OS.with(|s| {
         let s = s.borrow();
         u32::from(
-            (o == 11 && s.case != 3 && n == b"IOUSBHostInterface")
-                || (o == 11 && s.case == 3 && n == b"IOBluetoothDevice"),
+            o == 11
+                && ((s.case != 3 && n == b"IOUSBHostInterface")
+                    || (s.case == 3 && n == b"IOBluetoothDevice")),
         )
     })
 }

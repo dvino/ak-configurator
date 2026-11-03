@@ -4,10 +4,16 @@ use anyhow::{bail, Context, Result};
 #[cfg(not(test))]
 use std::path::Path;
 use std::path::PathBuf;
+#[cfg(any(not(test), target_os = "linux"))]
 use std::time::Duration;
 
 #[path = "hid_proxy.rs"]
 mod hid_proxy;
+
+#[cfg(test)]
+pub(crate) fn test_startup_error_roundtrip(error: anyhow::Error) -> anyhow::Error {
+    hid_proxy::test_startup_error_roundtrip(error)
+}
 #[cfg(not(test))]
 pub(crate) use hid_proxy::claim_open_target;
 pub use hid_proxy::run_hid_proxy_if_requested;
@@ -106,6 +112,7 @@ const PICTOGRAM_SLOT_COMMIT_READ_TIMEOUT_MS: i32 = 2_500;
 const WINDOWS_BLE_READ_TIMEOUT_MS: i32 = 2_500;
 #[cfg(not(test))]
 const WINDOWS_BLE_READ_SLICE_MS: i32 = 250;
+#[cfg(any(not(test), target_os = "linux"))]
 const WINDOWS_BLE_SETTLE_DELAY: Duration = Duration::from_millis(12);
 #[cfg(target_os = "linux")]
 #[cfg(not(test))]
@@ -339,6 +346,7 @@ type TestOutputHook = Box<dyn FnMut(&[u8]) + Send>;
 #[cfg(test)]
 #[derive(Clone)]
 pub(crate) struct TestHidRecorder {
+    bound_device: std::sync::Arc<std::sync::Mutex<Option<crate::device::Device>>>,
     host_output: std::sync::Arc<crate::qmk_hid_host::HostOutputOwner>,
     pictogram_backup_directory: std::sync::Arc<std::sync::Mutex<Option<PathBuf>>>,
     requests: std::sync::Arc<std::sync::Mutex<Vec<[u8; MSG_LEN]>>>,
@@ -350,6 +358,9 @@ pub(crate) struct TestHidRecorder {
 
 #[cfg(test)]
 impl TestHidRecorder {
+    pub(crate) fn bind_device(&self, device: crate::device::Device) {
+        *self.bound_device.lock().unwrap() = Some(device);
+    }
     pub(crate) fn on_output(&self, hook: impl FnMut(&[u8]) + Send + 'static) {
         *self.output_hook.lock().unwrap() = Some(Box::new(hook));
     }
@@ -479,12 +490,13 @@ enum HidTransport {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HidWriteFraming {
     ReportIdPrefixed(u8),
+    #[cfg(any(target_os = "linux", test))]
     LinuxBluetoothUnnumbered,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl HidWriteFraming {
-    #[cfg(not(test))]
+    #[cfg(all(target_os = "linux", not(test)))]
     fn report_id(self) -> Option<u8> {
         match self {
             Self::ReportIdPrefixed(report_id) => Some(report_id),
@@ -502,6 +514,42 @@ impl HidTransport {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl HidDevice {
+    pub(crate) fn is_bound_to(&self, target: &crate::device::Device) -> bool {
+        match &self.backend {
+            HidBackend::Proxy(proxy) => proxy.is_bound_to(target),
+            #[cfg(test)]
+            HidBackend::Test { recorder, .. } => recorder
+                .bound_device
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+                .is_some_and(|bound| {
+                    bound.path == target.path
+                        && bound.instance_token == target.instance_token
+                        && bound.permits_hid_target(target)
+                }),
+            #[cfg(not(test))]
+            _ => false,
+        }
+    }
+    #[cfg(all(test, feature = "mcp"))]
+    pub(crate) fn test_helper_serial() -> std::sync::MutexGuard<'static, ()> {
+        hid_proxy::tests::serial_test()
+    }
+    #[cfg(all(test, feature = "mcp"))]
+    pub(crate) fn test_helper_wait_released() {
+        hid_proxy::tests::empty_registry();
+    }
+    #[cfg(all(test, feature = "mcp"))]
+    pub(crate) fn test_ak820_real_helper(device: &crate::device::Device) -> Result<Self> {
+        let proxy = hid_proxy::tests::start_bootstrap(device)?;
+        Ok(Self {
+            unlock_confirmation_pending: std::sync::atomic::AtomicBool::new(false),
+            read_only: None,
+            ak820: Some(Default::default()),
+            backend: HidBackend::Proxy(std::sync::Arc::new(proxy)),
+        })
+    }
     pub fn is_bluetooth_transport(&self) -> bool {
         match &self.backend {
             #[cfg(not(test))]
@@ -700,6 +748,7 @@ impl HidDevice {
         fault_after_requests: Option<(usize, TestHidFault)>,
     ) -> (Self, TestHidRecorder) {
         let recorder = TestHidRecorder {
+            bound_device: Default::default(),
             host_output: Default::default(),
             pictogram_backup_directory: Default::default(),
             requests: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
@@ -1319,6 +1368,11 @@ fn usb_send_max_attempts(transport: HidTransport, data: &[u8]) -> usize {
     // safe fallbacks, so an unsupported probe must not hold up the whole
     // connection retry budget.
     if transport.is_bluetooth()
+        || (data.first() == Some(&CMD_VIA_VIAL_PREFIX)
+            && matches!(
+                data.get(1),
+                Some(&CMD_VIAL_GET_UNLOCK_STATUS | &CMD_VIAL_UNLOCK_START | &CMD_VIAL_UNLOCK_POLL)
+            ))
         || is_optional_firmware_version_request(data)
         || is_optional_qmk_settings_query(data)
         || is_qmk_settings_get(data)
@@ -1398,7 +1452,7 @@ fn usb_send_local(
     transport: HidTransport,
     write_framing: HidWriteFraming,
     path: Option<&Path>,
-    input_report_polling: &std::sync::atomic::AtomicBool,
+    _input_report_polling: &std::sync::atomic::AtomicBool,
     data: &[u8],
 ) -> Result<[u8; MSG_LEN]> {
     ensure_hid_path_present(path)?;
@@ -1454,7 +1508,7 @@ fn usb_send_local(
 
         #[cfg(target_os = "linux")]
         if transport.is_bluetooth()
-            && input_report_polling.load(std::sync::atomic::Ordering::Relaxed)
+            && _input_report_polling.load(std::sync::atomic::Ordering::Relaxed)
         {
             match read_response_via_input_report(device, write_framing, data, read_timeout_ms) {
                 Ok(resp) => return Ok(resp),
@@ -1479,7 +1533,7 @@ fn usb_send_local(
             };
             match read_response_via_input_report(device, write_framing, data, read_timeout_ms) {
                 Ok(response) => {
-                    input_report_polling.store(true, std::sync::atomic::Ordering::Relaxed);
+                    _input_report_polling.store(true, std::sync::atomic::Ordering::Relaxed);
                     static LOG_INPUT_REPORT_FALLBACK_ONCE: std::sync::Once = std::sync::Once::new();
                     LOG_INPUT_REPORT_FALLBACK_ONCE.call_once(|| {
                         log::info!(
@@ -1530,6 +1584,7 @@ fn local_hid_write_frame(
             write_buf[0] = report_id;
             write_buf
         }
+        #[cfg(any(target_os = "linux", test))]
         HidWriteFraming::LinuxBluetoothUnnumbered => &write_buf[1..],
     }
 }
@@ -1567,6 +1622,7 @@ fn detect_hid_write_framing(
                     BLUETOOTH_HID_PLATFORM
                 );
             }
+            #[cfg(any(target_os = "linux", test))]
             HidWriteFraming::LinuxBluetoothUnnumbered => {
                 log::info!(
                     "Using 32-byte unnumbered HOGP framing for {} Bluetooth HID",
@@ -1832,6 +1888,7 @@ fn decode_hid_response(
         (HidWriteFraming::ReportIdPrefixed(0), length) if length == MSG_LEN => {
             resp.copy_from_slice(&read_buf[..MSG_LEN]);
         }
+        #[cfg(any(target_os = "linux", test))]
         (HidWriteFraming::LinuxBluetoothUnnumbered, length) if length == MSG_LEN => {
             resp.copy_from_slice(&read_buf[..MSG_LEN]);
         }
@@ -2577,6 +2634,24 @@ mod tests {
         assert_eq!(
             usb_send_max_attempts(HidTransport::Usb, &[CMD_VIA_GET_KEYCODE, 0, 0, 0]),
             1
+        );
+    }
+
+    #[test]
+    fn unlock_commands_are_never_replayed_on_usb() {
+        for command in [
+            CMD_VIAL_GET_UNLOCK_STATUS,
+            CMD_VIAL_UNLOCK_START,
+            CMD_VIAL_UNLOCK_POLL,
+        ] {
+            assert_eq!(
+                usb_send_max_attempts(HidTransport::Usb, &[CMD_VIA_VIAL_PREFIX, command]),
+                1
+            );
+        }
+        assert_eq!(
+            usb_send_max_attempts(HidTransport::Usb, &[CMD_VIA_VIAL_PREFIX, CMD_VIAL_LOCK]),
+            VIAL_GUI_USB_RETRIES
         );
     }
 

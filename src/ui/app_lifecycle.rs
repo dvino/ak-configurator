@@ -205,7 +205,7 @@ impl EntropyApp {
     // OS policy is explicit so foreign admission can be exercised through the
     // complete production tick without pretending Linux is a native Mac.
     #[cfg(not(target_arch = "wasm32"))]
-    fn update_native_background_for_platform(
+    pub(super) fn update_native_background_for_platform(
         &mut self,
         ctx: &egui::Context,
         now: f64,
@@ -213,6 +213,11 @@ impl EntropyApp {
         selected_device_is_bluetooth: bool,
         discovery_platform: &str,
     ) {
+        if self.rgb_exit_pending {
+            self.poll_vial_hid_task(ctx);
+            self.finish_deferred_exit_after_hid_write(ctx);
+            return;
+        }
         self.poll_ak820_install(ctx);
         if self.ak820_install_runtime.owns_hid() {
             ctx.request_repaint_after(std::time::Duration::from_millis(40));
@@ -1748,7 +1753,7 @@ impl eframe::App for EntropyApp {
             return;
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if !self.hid_write_task_active() {
+        if !self.rgb_exit_pending && !self.hid_write_task_active() {
             self.flush_pending_tap_hold_numeric_writes();
             self.fallback_entropy_display_presets_before_exit();
         }
@@ -1761,6 +1766,12 @@ impl eframe::App for EntropyApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.rgb_exit_pending {
+            self.handle_close_to_tray(ctx);
+            self.update_native_background(ctx, ctx.input(|i| i.time), false, false);
+            return;
+        }
         // Application-only update jobs also run in the offline keyboard demo.
         // Poll before its device-work early return; starting a job remains explicit.
         #[cfg(not(target_arch = "wasm32"))]
@@ -1793,6 +1804,10 @@ impl eframe::App for EntropyApp {
             #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             self.handle_tray_restore_request(ctx);
             self.handle_close_to_tray(ctx);
+            if self.rgb_exit_pending {
+                self.update_native_background(ctx, ctx.input(|i| i.time), false, false);
+                return;
+            }
             #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             self.poll_tray_events(ctx);
             #[cfg(target_os = "macos")]
@@ -1860,6 +1875,20 @@ impl eframe::App for EntropyApp {
     fn ui(&mut self, root_ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx_owned = root_ui.ctx().clone();
         let ctx = &ctx_owned;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.rgb_exit_pending {
+            egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                ui.label(
+                    if self.app_settings.language == crate::i18n::Language::Russian {
+                        "Завершение операции с клавиатурой и закрытие…"
+                    } else {
+                        "Finishing keyboard operation and closing…"
+                    },
+                );
+            });
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+            return;
+        }
         self.apply_ui_scale(ctx);
         self.handle_ui_scale_shortcuts(ctx);
         self.remember_main_window_size(ctx);
@@ -1951,6 +1980,10 @@ impl eframe::App for EntropyApp {
                 || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Q)
         }) {
             self.request_explicit_quit(ctx);
+            if self.rgb_exit_pending {
+                ctx.request_repaint();
+                return;
+            }
         }
 
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
@@ -1962,8 +1995,16 @@ impl eframe::App for EntropyApp {
 
         // Persistent navigation stays available while service pages replace the editor canvas.
         egui::Panel::top("ak820_service_navigation_panel").show_inside(root_ui, |ui| {
-            self.draw_service_navigation(ui);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(concat!("AK Configurator ", env!("CARGO_PKG_VERSION")));
+                self.draw_service_navigation(ui);
+            });
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.rgb_exit_pending {
+            ctx.request_repaint();
+            return;
+        }
 
         // Main canvas
         egui::CentralPanel::default().show_inside(root_ui, |ui| {
@@ -2337,6 +2378,11 @@ impl eframe::App for EntropyApp {
         }
 
         self.draw_close_to_tray_prompt(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.rgb_exit_pending {
+            ctx.request_repaint();
+            return;
+        }
 
         // Keycode picker modal
         self.draw_vial_unlock_overlay(ctx);
@@ -2686,41 +2732,61 @@ mod ak820_navigation_tests {
     use egui_kittest::{kittest::Queryable, Harness};
 
     #[test]
-    fn backups_menu_opens_main_page_and_close_returns_to_canvas() {
+    fn backups_navigation_opens_main_page_and_close_returns_to_canvas() {
         let _config = ScopedTempConfig::new();
-        let mut app = EntropyApp::new_inert_for_test();
-        app.app_settings.language = crate::i18n::Language::English;
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(800.0, 500.0))
-            .build_ui_state(
-                |ui, app: &mut EntropyApp| {
-                    eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
-                },
-                app,
-            );
-        harness.run();
-        harness.get_by_label("Menu").click();
-        harness.run();
-        harness.get_by_label("Backups and restore…").click();
-        harness.run();
-        assert!(harness.query_by_label("AK820 backups").is_some());
-        harness.event(egui::Event::PointerMoved(egui::pos2(400.0, 300.0)));
-        harness.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, -500.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: egui::Modifiers::NONE,
-        });
-        harness.run();
-        let close_rect = harness.get_by_label("Close").rect();
-        assert!(
-            close_rect.min.y >= 0.0 && close_rect.max.y <= 500.0,
-            "{close_rect:?}"
-        );
-        harness.get_by_label("Close").click();
-        harness.run();
-        assert!(harness.query_by_label("AK820 backups").is_none());
-        assert!(harness.state().hid_device.is_none());
+        for (language, navigation, heading, close) in [
+            (
+                crate::i18n::Language::English,
+                "Backups and restore…",
+                "AK820 backups",
+                "Close",
+            ),
+            (
+                crate::i18n::Language::Russian,
+                "Резервные копии…",
+                "Резервные копии AK820",
+                "Закрыть",
+            ),
+        ] {
+            for width in [800.0, 1400.0] {
+                let mut app = EntropyApp::new_inert_for_test();
+                app.app_settings.language = language;
+                let mut harness = Harness::builder()
+                    .with_size(egui::vec2(width, 500.0))
+                    .build_ui_state(
+                        |ui, app: &mut EntropyApp| {
+                            eframe::App::ui(app, ui, &mut eframe::Frame::_new_kittest());
+                        },
+                        app,
+                    );
+                harness.run();
+                harness.get_by_label(navigation).scroll_to_me();
+                harness.run();
+                harness.get_by_label(navigation).click();
+                harness.run();
+                assert!(
+                    harness.query_by_label(heading).is_some(),
+                    "{navigation}, width {width}"
+                );
+                harness.event(egui::Event::PointerMoved(egui::pos2(width / 2.0, 300.0)));
+                harness.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -500.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run();
+                let close_rect = harness.get_by_label(close).rect();
+                assert!(
+                    close_rect.min.y >= 0.0 && close_rect.max.y <= 500.0,
+                    "{close_rect:?}"
+                );
+                harness.get_by_label(close).click();
+                harness.run();
+                assert!(harness.query_by_label(heading).is_none());
+                assert!(harness.state().hid_device.is_none());
+            }
+        }
     }
 
     #[test]

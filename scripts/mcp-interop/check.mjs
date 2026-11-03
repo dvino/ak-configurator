@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 assert.equal(process.argv.length, 4, 'usage: check.mjs --binary <mock-binary>');
 assert.equal(process.argv[2], '--binary');
 const binary = resolve(process.argv[3]);
-const expected = ['ak820_devices', 'ak820_session', 'ak820_read', 'ak820_tests', 'ak820_trace', 'ak820_operation'].sort();
+const expected = ['ak820_devices', 'ak820_session', 'ak820_read', 'ak820_tests', 'ak820_trace', 'ak820_operation', 'ak820_backup', 'ak820_prepare'].sort();
 class RecordingTransport extends StdioClientTransport {
   setProtocolVersion(version) { this.negotiatedVersion = version; }
 }

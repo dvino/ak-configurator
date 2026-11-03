@@ -5053,64 +5053,65 @@ mod tests {
             values[base + 2] = 47;
             let initial = values;
             let mut changed = Vec::new();
-            let mut run = |events: Vec<egui::Event>| {
-                ctx.run_ui(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(
-                            egui::Pos2::ZERO,
-                            egui::vec2(700.0, 900.0),
-                        )),
-                        events,
-                        ..Default::default()
-                    },
-                    |root_ui| {
-                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                            sm62_display_controls(ui, side, &mut values, &mut changed, false);
-                        });
-                    },
-                )
-            };
-            let click = |pos| {
-                vec![
-                    egui::Event::PointerMoved(pos),
-                    egui::Event::PointerButton {
-                        pos,
-                        button: egui::PointerButton::Primary,
-                        pressed: true,
-                        modifiers: Default::default(),
-                    },
-                    egui::Event::PointerButton {
-                        pos,
-                        button: egui::PointerButton::Primary,
-                        pressed: false,
-                        modifiers: Default::default(),
-                    },
-                ]
-            };
-            let position = |output: &egui::FullOutput, label: &str| {
-                output
-                    .shapes
-                    .iter()
-                    .find_map(|s| match &s.shape {
-                        egui::Shape::Text(t) if t.galley.job.text == label => {
-                            Some(t.pos + t.galley.size() / 2.0)
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or_else(|| panic!("missing {label}"))
-            };
-            let output = run(vec![]);
-            run(click(position(&output, "No animation")));
-            // Let the animated popup become fully laid out before selecting.
-            run(vec![]);
-            let output = run(vec![]);
-            run(click(position(&output, "10 seconds")));
-            let output = run(vec![]);
-            run(click(position(&output, "10 seconds")));
-            run(vec![]);
-            let output = run(vec![]);
-            run(click(position(&output, "No animation")));
-            drop(run);
+            {
+                let mut run = |events: Vec<egui::Event>| {
+                    ctx.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(700.0, 900.0),
+                            )),
+                            events,
+                            ..Default::default()
+                        },
+                        |root_ui| {
+                            egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                                sm62_display_controls(ui, side, &mut values, &mut changed, false);
+                            });
+                        },
+                    )
+                };
+                let click = |pos| {
+                    vec![
+                        egui::Event::PointerMoved(pos),
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed: true,
+                            modifiers: Default::default(),
+                        },
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            modifiers: Default::default(),
+                        },
+                    ]
+                };
+                let position = |output: &egui::FullOutput, label: &str| {
+                    output
+                        .shapes
+                        .iter()
+                        .find_map(|s| match &s.shape {
+                            egui::Shape::Text(t) if t.galley.job.text == label => {
+                                Some(t.pos + t.galley.size() / 2.0)
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| panic!("missing {label}"))
+                };
+                let output = run(vec![]);
+                run(click(position(&output, "No animation")));
+                // Let the animated popup become fully laid out before selecting.
+                run(vec![]);
+                let output = run(vec![]);
+                run(click(position(&output, "10 seconds")));
+                let output = run(vec![]);
+                run(click(position(&output, "10 seconds")));
+                run(vec![]);
+                let output = run(vec![]);
+                run(click(position(&output, "No animation")));
+            }
             assert_eq!(values[base + 1], 0);
             assert_eq!(values[base + 2], 10);
             let other = (1 - side) * 5;
@@ -5189,59 +5190,62 @@ mod tests {
             let ctx = egui::Context::default();
             let mut values = [0, 0, 20, 1, 1, 0, 0, 20, 1, 1];
             let mut language = [1, 1];
-            let mut draw = |events| {
-                ctx.run_ui(
-                    egui::RawInput {
-                        events,
-                        ..Default::default()
+            {
+                let mut draw = |events| {
+                    ctx.run_ui(
+                        egui::RawInput {
+                            events,
+                            ..Default::default()
+                        },
+                        |root_ui| {
+                            egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                                sm62_shared_controls(
+                                    ui,
+                                    &mut values,
+                                    &mut Vec::new(),
+                                    false,
+                                    Sm62OptionalFields {
+                                        date: None,
+                                        hold: None,
+                                        language: Some(&mut language),
+                                        stars: None,
+                                        screens_off: None,
+                                    },
+                                );
+                            });
+                        },
+                    )
+                };
+                let output = draw(vec![]);
+                let pos = output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| match &s.shape {
+                        egui::Shape::Rect(r)
+                            if r.rect.width() == 46.0 && r.rect.height() == 24.0 =>
+                        {
+                            Some(r.rect.center())
+                        }
+                        _ => None,
+                    })
+                    .nth(1)
+                    .expect("language switch paint");
+                draw(vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
                     },
-                    |root_ui| {
-                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                            sm62_shared_controls(
-                                ui,
-                                &mut values,
-                                &mut Vec::new(),
-                                false,
-                                Sm62OptionalFields {
-                                    date: None,
-                                    hold: None,
-                                    language: Some(&mut language),
-                                    stars: None,
-                                    screens_off: None,
-                                },
-                            );
-                        });
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Default::default(),
                     },
-                )
-            };
-            let output = draw(vec![]);
-            let pos = output
-                .shapes
-                .iter()
-                .filter_map(|s| match &s.shape {
-                    egui::Shape::Rect(r) if r.rect.width() == 46.0 && r.rect.height() == 24.0 => {
-                        Some(r.rect.center())
-                    }
-                    _ => None,
-                })
-                .nth(1)
-                .expect("language switch paint");
-            draw(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: true,
-                    modifiers: Default::default(),
-                },
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Default::default(),
-                },
-            ]);
-            drop(draw);
+                ]);
+            }
             assert_eq!(language[side], 0);
             assert_eq!(language[1 - side], 0);
         }
@@ -5290,60 +5294,63 @@ mod tests {
             let mut language = [1, 1];
             let before = values;
             let mut changed = Vec::new();
-            let mut draw = |events| {
-                ctx.run_ui(
-                    egui::RawInput {
-                        events,
-                        ..Default::default()
+            {
+                let mut draw = |events| {
+                    ctx.run_ui(
+                        egui::RawInput {
+                            events,
+                            ..Default::default()
+                        },
+                        |root_ui| {
+                            egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                                sm62_shared_controls(
+                                    ui,
+                                    &mut values,
+                                    &mut changed,
+                                    false,
+                                    Sm62OptionalFields {
+                                        date: Some(&mut date),
+                                        hold: Some(&mut hold),
+                                        language: Some(&mut language),
+                                        stars: None,
+                                        screens_off: None,
+                                    },
+                                );
+                            });
+                        },
+                    )
+                };
+                let output = draw(vec![]);
+                let switches: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| match &s.shape {
+                        egui::Shape::Rect(r)
+                            if r.rect.width() == 46.0 && r.rect.height() == 24.0 =>
+                        {
+                            Some(r.rect.center())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(switches.len(), 5);
+                let pos = switches[index];
+                draw(vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
                     },
-                    |root_ui| {
-                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                            sm62_shared_controls(
-                                ui,
-                                &mut values,
-                                &mut changed,
-                                false,
-                                Sm62OptionalFields {
-                                    date: Some(&mut date),
-                                    hold: Some(&mut hold),
-                                    language: Some(&mut language),
-                                    stars: None,
-                                    screens_off: None,
-                                },
-                            );
-                        });
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Default::default(),
                     },
-                )
-            };
-            let output = draw(vec![]);
-            let switches: Vec<_> = output
-                .shapes
-                .iter()
-                .filter_map(|s| match &s.shape {
-                    egui::Shape::Rect(r) if r.rect.width() == 46.0 && r.rect.height() == 24.0 => {
-                        Some(r.rect.center())
-                    }
-                    _ => None,
-                })
-                .collect();
-            assert_eq!(switches.len(), 5);
-            let pos = switches[index];
-            draw(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: true,
-                    modifiers: Default::default(),
-                },
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Default::default(),
-                },
-            ]);
-            drop(draw);
+                ]);
+            }
             if index == 0 {
                 assert_eq!([values[4], values[9]], [0, 0]);
                 assert_eq!(changed, [4, 9]);
@@ -5372,60 +5379,61 @@ mod tests {
         let ctx = egui::Context::default();
         let mut values = [0, 0, 20, 1, 1, 0, 0, 20, 1, 1];
         let mut hold = [112, 333];
-        let mut draw = |events| {
-            ctx.run_ui(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
+        {
+            let mut draw = |events| {
+                ctx.run_ui(
+                    egui::RawInput {
+                        events,
+                        ..Default::default()
+                    },
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                            sm62_shared_controls(
+                                ui,
+                                &mut values,
+                                &mut Vec::new(),
+                                false,
+                                Sm62OptionalFields {
+                                    date: None,
+                                    hold: Some(&mut hold),
+                                    language: None,
+                                    stars: None,
+                                    screens_off: None,
+                                },
+                            );
+                        });
+                    },
+                )
+            };
+            let output = draw(vec![]);
+            let pos = output
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Text(t) if t.galley.job.text == "Mixed" => {
+                        Some(t.pos + t.galley.size() / 2.0)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            draw(vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
                 },
-                |root_ui| {
-                    egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                        sm62_shared_controls(
-                            ui,
-                            &mut values,
-                            &mut Vec::new(),
-                            false,
-                            Sm62OptionalFields {
-                                date: None,
-                                hold: Some(&mut hold),
-                                language: None,
-                                stars: None,
-                                screens_off: None,
-                            },
-                        );
-                    });
-                },
-            )
-        };
-        let output = draw(vec![]);
-        let pos = output
-            .shapes
-            .iter()
-            .find_map(|s| match &s.shape {
-                egui::Shape::Text(t) if t.galley.job.text == "Mixed" => {
-                    Some(t.pos + t.galley.size() / 2.0)
-                }
-                _ => None,
-            })
-            .unwrap();
-        draw(vec![
-            egui::Event::PointerMoved(pos),
-            egui::Event::PointerButton {
-                pos,
+            ]);
+            let moved = pos + egui::vec2(20.0, 0.0);
+            draw(vec![egui::Event::PointerMoved(moved)]);
+            draw(vec![egui::Event::PointerButton {
+                pos: moved,
                 button: egui::PointerButton::Primary,
-                pressed: true,
+                pressed: false,
                 modifiers: Default::default(),
-            },
-        ]);
-        let moved = pos + egui::vec2(20.0, 0.0);
-        draw(vec![egui::Event::PointerMoved(moved)]);
-        draw(vec![egui::Event::PointerButton {
-            pos: moved,
-            button: egui::PointerButton::Primary,
-            pressed: false,
-            modifiers: Default::default(),
-        }]);
-        drop(draw);
+            }]);
+        }
         assert_eq!(hold[0], hold[1]);
         assert_ne!(hold, [112, 333]);
     }
@@ -5435,83 +5443,84 @@ mod tests {
         let ctx = egui::Context::default();
         let mut values = [0, 0, 20, 1, 1, 0, 0, 20, 1, 1];
         let mut hold = [112, 333];
-        let mut draw = |events| {
-            ctx.run_ui(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
-                },
-                |root_ui| {
-                    egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                        sm62_shared_controls(
-                            ui,
-                            &mut values,
-                            &mut Vec::new(),
-                            false,
-                            Sm62OptionalFields {
-                                date: None,
-                                hold: Some(&mut hold),
-                                language: None,
-                                stars: None,
-                                screens_off: None,
-                            },
-                        );
-                    });
-                },
-            )
-        };
-        let output = draw(vec![]);
-        let pos = output
-            .shapes
-            .iter()
-            .find_map(|s| match &s.shape {
-                egui::Shape::Text(t) if t.galley.job.text == "Mixed" => {
-                    Some(t.pos + t.galley.size() / 2.0)
-                }
-                _ => None,
-            })
-            .unwrap();
-        for _ in 0..2 {
+        {
+            let mut draw = |events| {
+                ctx.run_ui(
+                    egui::RawInput {
+                        events,
+                        ..Default::default()
+                    },
+                    |root_ui| {
+                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                            sm62_shared_controls(
+                                ui,
+                                &mut values,
+                                &mut Vec::new(),
+                                false,
+                                Sm62OptionalFields {
+                                    date: None,
+                                    hold: Some(&mut hold),
+                                    language: None,
+                                    stars: None,
+                                    screens_off: None,
+                                },
+                            );
+                        });
+                    },
+                )
+            };
+            let output = draw(vec![]);
+            let pos = output
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Text(t) if t.galley.job.text == "Mixed" => {
+                        Some(t.pos + t.galley.size() / 2.0)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            for _ in 0..2 {
+                draw(vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
+                    },
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Default::default(),
+                    },
+                ]);
+            }
+            draw(vec![]);
+            let mods = egui::Modifiers {
+                ctrl: true,
+                command: true,
+                ..Default::default()
+            };
             draw(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
+                egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
                     pressed: true,
-                    modifiers: Default::default(),
+                    repeat: false,
+                    modifiers: mods,
                 },
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Default::default(),
-                },
+                egui::Event::Text("112".into()),
             ]);
-        }
-        draw(vec![]);
-        let mods = egui::Modifiers {
-            ctrl: true,
-            command: true,
-            ..Default::default()
-        };
-        draw(vec![
-            egui::Event::Key {
-                key: egui::Key::A,
+            draw(vec![egui::Event::Key {
+                key: egui::Key::Enter,
                 physical_key: None,
                 pressed: true,
                 repeat: false,
-                modifiers: mods,
-            },
-            egui::Event::Text("112".into()),
-        ]);
-        draw(vec![egui::Event::Key {
-            key: egui::Key::Enter,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: Default::default(),
-        }]);
-        drop(draw);
+                modifiers: Default::default(),
+            }]);
+        }
         assert_eq!(hold, [112, 112]);
     }
 
@@ -5634,59 +5643,62 @@ mod tests {
             let mut stars = [1, 1];
             let mut off = [0, 0];
             let mut changed = Vec::new();
-            let mut draw = |events| {
-                ctx.run_ui(
-                    egui::RawInput {
-                        events,
-                        ..Default::default()
+            {
+                let mut draw = |events| {
+                    ctx.run_ui(
+                        egui::RawInput {
+                            events,
+                            ..Default::default()
+                        },
+                        |root_ui| {
+                            egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                                sm62_shared_controls(
+                                    ui,
+                                    &mut values,
+                                    &mut changed,
+                                    false,
+                                    Sm62OptionalFields {
+                                        date: None,
+                                        hold: None,
+                                        language: None,
+                                        stars: Some(&mut stars),
+                                        screens_off: Some(&mut off),
+                                    },
+                                );
+                            });
+                        },
+                    )
+                };
+                let output = draw(vec![]);
+                let switches: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| match &s.shape {
+                        egui::Shape::Rect(r)
+                            if r.rect.width() == 46.0 && r.rect.height() == 24.0 =>
+                        {
+                            Some(r.rect.center())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                let pos = switches[index];
+                draw(vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
                     },
-                    |root_ui| {
-                        egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                            sm62_shared_controls(
-                                ui,
-                                &mut values,
-                                &mut changed,
-                                false,
-                                Sm62OptionalFields {
-                                    date: None,
-                                    hold: None,
-                                    language: None,
-                                    stars: Some(&mut stars),
-                                    screens_off: Some(&mut off),
-                                },
-                            );
-                        });
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: Default::default(),
                     },
-                )
-            };
-            let output = draw(vec![]);
-            let switches: Vec<_> = output
-                .shapes
-                .iter()
-                .filter_map(|s| match &s.shape {
-                    egui::Shape::Rect(r) if r.rect.width() == 46.0 && r.rect.height() == 24.0 => {
-                        Some(r.rect.center())
-                    }
-                    _ => None,
-                })
-                .collect();
-            let pos = switches[index];
-            draw(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: true,
-                    modifiers: Default::default(),
-                },
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Default::default(),
-                },
-            ]);
-            drop(draw);
+                ]);
+            }
             assert_eq!(values, before);
             assert!(changed.is_empty());
             assert_eq!(stars, if index == 3 { [0, 0] } else { [1, 1] });
@@ -5776,72 +5788,75 @@ mod tests {
                 );
                 ctx.set_fonts(fonts);
                 let mut full = egui::Rect::NOTHING;
-                let mut draw = || {
-                    ctx.run_ui(
-                        egui::RawInput {
-                            screen_rect: Some(egui::Rect::from_min_size(
-                                egui::Pos2::ZERO,
-                                egui::vec2(width, 650.0),
-                            )),
-                            ..Default::default()
-                        },
-                        |root_ui| {
-                            egui::CentralPanel::default().show_inside(root_ui, |ui| {
-                                full = ui.max_rect();
-                                app.draw_sm62_display_settings_page(ui, full);
-                            });
-                        },
-                    )
-                };
-                draw();
-                draw();
-                let top = draw();
                 let russian = language == crate::i18n::Language::Russian;
-                let left_label = if russian {
-                    "Левый экран"
-                } else {
-                    "Left display"
-                };
-                let center = top
-                    .shapes
-                    .iter()
-                    .find_map(|s| match &s.shape {
-                        egui::Shape::Text(t) if t.galley.job.text == left_label => {
-                            Some(t.pos.x + t.galley.rect.center().x)
-                        }
-                        _ => None,
-                    })
-                    .unwrap();
                 let expected_center = width / 2.0 - 9.0;
-                assert!((center-expected_center).abs()<2.0,"half heading must center within the bounded column: width={width}, got={center}");
-                if width >= 1000.0 {
-                    let frame = top
+                let bottom = {
+                    let mut draw = || {
+                        ctx.run_ui(
+                            egui::RawInput {
+                                screen_rect: Some(egui::Rect::from_min_size(
+                                    egui::Pos2::ZERO,
+                                    egui::vec2(width, 650.0),
+                                )),
+                                ..Default::default()
+                            },
+                            |root_ui| {
+                                egui::CentralPanel::default().show_inside(root_ui, |ui| {
+                                    full = ui.max_rect();
+                                    app.draw_sm62_display_settings_page(ui, full);
+                                });
+                            },
+                        )
+                    };
+                    draw();
+                    draw();
+                    let top = draw();
+                    let left_label = if russian {
+                        "Левый экран"
+                    } else {
+                        "Left display"
+                    };
+                    let center = top
                         .shapes
                         .iter()
                         .find_map(|s| match &s.shape {
-                            egui::Shape::Rect(r)
-                                if r.fill == Color32::from_rgb(7, 7, 5)
-                                    && r.stroke.color == Color32::from_gray(75) =>
-                            {
-                                Some(r.rect)
+                            egui::Shape::Text(t) if t.galley.job.text == left_label => {
+                                Some(t.pos.x + t.galley.rect.center().x)
                             }
                             _ => None,
                         })
                         .unwrap();
-                    assert!(
-                        (frame.left() - (width - 918.0) / 2.0).abs() < 2.0,
-                        "preview must align with centered block left: {frame:?}"
-                    );
-                }
-                let (id, max) = ctx
-                    .data(|d| d.get_temp::<(egui::Id, f32)>(egui::Id::new("sm62_scroll_fixture")))
-                    .unwrap();
-                let mut state = egui::scroll_area::State::load(&ctx, id).unwrap();
-                state.offset.y = max;
-                state.store(&ctx, id);
-                draw();
-                let bottom = draw();
-                drop(draw);
+                    assert!((center-expected_center).abs()<2.0,"half heading must center within the bounded column: width={width}, got={center}");
+                    if width >= 1000.0 {
+                        let frame = top
+                            .shapes
+                            .iter()
+                            .find_map(|s| match &s.shape {
+                                egui::Shape::Rect(r)
+                                    if r.fill == Color32::from_rgb(7, 7, 5)
+                                        && r.stroke.color == Color32::from_gray(75) =>
+                                {
+                                    Some(r.rect)
+                                }
+                                _ => None,
+                            })
+                            .unwrap();
+                        assert!(
+                            (frame.left() - (width - 918.0) / 2.0).abs() < 2.0,
+                            "preview must align with centered block left: {frame:?}"
+                        );
+                    }
+                    let (id, max) = ctx
+                        .data(|d| {
+                            d.get_temp::<(egui::Id, f32)>(egui::Id::new("sm62_scroll_fixture"))
+                        })
+                        .unwrap();
+                    let mut state = egui::scroll_area::State::load(&ctx, id).unwrap();
+                    state.offset.y = max;
+                    state.store(&ctx, id);
+                    draw();
+                    draw()
+                };
                 let shared = if russian {
                     "Общие настройки экранов"
                 } else {
