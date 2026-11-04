@@ -1,0 +1,102 @@
+﻿{
+    "application_version":  "0.1.0-alpha.1",
+    "arch":  "x86_64",
+    "error":  null,
+    "executable_sha256":  "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+    "exit_code":  0,
+    "format":  "ak820-runtime-smoke-harness-1",
+    "os":  "windows",
+    "runtime_smoke":  {
+                          "application_version":  "0.1.0-alpha.1",
+                          "arch":  "x86_64",
+                          "cases":  [
+                                        {
+                                            "detail":  "Native renderer completed at least three application frames",
+                                            "name":  "window_launch",
+                                            "status":  "passed"
+                                        },
+                                        {
+                                            "detail":  "Actual RGB settings page remained selected across rendered frames",
+                                            "name":  "rgb_navigation",
+                                            "status":  "passed"
+                                        },
+                                        {
+                                            "detail":  "Application settings rendered using private temporary preferences",
+                                            "name":  "settings_navigation",
+                                            "status":  "passed"
+                                        },
+                                        {
+                                            "detail":  "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+                                            "name":  "native_tray",
+                                            "status":  "passed"
+                                        },
+                                        {
+                                            "detail":  "Native application continued rendering after lifecycle exercise",
+                                            "name":  "render_after_navigation",
+                                            "status":  "passed"
+                                        }
+                                    ],
+                          "elapsed_ms":  731,
+                          "error":  null,
+                          "evidence":  "native_gui_offline_model",
+                          "exclusions":  [
+                                             "physical keyboard and LED behavior",
+                                             "actual tray mouse click routing",
+                                             "desktop panel rendering with synthetic tray host",
+                                             "Wayland qualification when run under Xvfb",
+                                             "live OS helper and HID latency"
+                                         ],
+                          "format":  "ak820-runtime-smoke-1",
+                          "isolated_settings":  true,
+                          "live_hid_allowed":  false,
+                          "os":  "windows",
+                          "physical_behavior_validated":  false,
+                          "rendered_frames":  17,
+                          "startup_timings":  {
+                                                  "display_fence_measured":  false,
+                                                  "phases":  [
+                                                                 {
+                                                                     "elapsed_ms":  413.67310000000003,
+                                                                     "phase":  "window_creator"
+                                                                 },
+                                                                 {
+                                                                     "elapsed_ms":  443.10949999999997,
+                                                                     "phase":  "splash_first_frame_submitted"
+                                                                 },
+                                                                 {
+                                                                     "elapsed_ms":  494.4898,
+                                                                     "phase":  "editor_initialization_started"
+                                                                 },
+                                                                 {
+                                                                     "elapsed_ms":  494.5778,
+                                                                     "phase":  "editor_fonts_configured"
+                                                                 },
+                                                                 {
+                                                                     "elapsed_ms":  592.3747999999999,
+                                                                     "phase":  "editor_initialization_finished"
+                                                                 },
+                                                                 {
+                                                                     "elapsed_ms":  601.8294,
+                                                                     "phase":  "editor_first_frame_submitted"
+                                                                 }
+                                                             ],
+                                                  "unit":  "milliseconds_from_process_entry"
+                                              },
+                          "status":  "passed",
+                          "tray_host":  "native_desktop"
+                      },
+    "status":  "passed",
+    "stderr_tail":  "2026-11-04T13:12:19.415+03:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on windows x86_64\n2026-11-04T13:12:19.416+03:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T13:12:19.828+03:00 INFO  ak_configurator::startup: Startup window_creator: 413.7 ms from process entry\n2026-11-04T13:12:19.857+03:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 443.1 ms from process entry\n2026-11-04T13:12:19.909+03:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 494.5 ms from process entry\n2026-11-04T13:12:19.909+03:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 494.6 ms from process entry\n2026-11-04T13:12:19.941+03:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T13:12:20.007+03:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 592.4 ms from process entry\n2026-11-04T13:12:20.016+03:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 601.8 ms from process entry\n",
+    "source_commit":  "65e1a90041c434b98401203bb160e8986c4f0a46",
+    "interpretation":  "Offline GUI demo rendered 17 frames. The logged Vial device is a synthetic demo entry created by EntropyApp::new_ak820_demo_for_context; frozen source rejects USB/HID discovery and isolated mode rejects HID opens. No actual device discovery or HID session is evidenced.",
+    "user_settings_hash_check":  {
+                                     "path":  "%APPDATA%\\ak-configurator\\app_settings.json",
+                                     "immediate_pre_smoke_sha256":  "not captured directly",
+                                     "prior_snapshot_sha256":  "D8BC21C0D3A57D308FAB7F32DDA819C066595184258B016A57E53A7248544D59",
+                                     "post_smoke_sha256":  "D8BC21C0D3A57D308FAB7F32DDA819C066595184258B016A57E53A7248544D59",
+                                     "prior_snapshot_and_post_match":  true,
+                                     "byte_length":  107161,
+                                     "prior_snapshot":  true,
+                                     "installed_state_report":  "existing_user_settings_and_codex_config_unchanged"
+                                 }
+}
