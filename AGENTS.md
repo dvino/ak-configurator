@@ -2,7 +2,8 @@
 
 # Working on AK Configurator
 
-@/home/danil/.codex/RTK.md
+Follow the host's RTK instructions when available. Prefix shell commands with
+`rtk`; keep host-specific instruction paths in local configuration.
 
 ## Project and branches
 

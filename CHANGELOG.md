@@ -5,12 +5,12 @@ is retained below. Russian candidate notes: [Изменения](docs/ru/CHANGEL
 
 ## v0.1.0-alpha.1 — Windows local candidate (unpublished)
 
-The first alpha candidate is prepared for Windows x86_64 and ARM64. The application release is unpublished; the ARM64 package/CI path is configured, but runtime execution has not been qualified. Linux and macOS remain outside this milestone.
+The first alpha candidate for Windows x86_64 and ARM64 is local and unpublished. Interactive ARM64 use is unverified. Linux qualification is pending; native macOS acceptance is outside this alpha's approved scope. Neither platform is qualified.
 
 - The installer selects AK820 firmware `v0.6.0-beta.5` by default and requires explicit prerelease opt-in. Its catalog describes ten exact profiles. Beta3 compatibility checks remain, but Beta3 installation is denied.
 - An optional MCP interface provides read-only metadata and a local installation preview. It does not provide settings writes, restore execution or firmware flashing.
-- A per-user GUI setup is the intended primary installation path, with a portable ZIP alternative. Final signing and publication remain pending.
-- This candidate is not qualified for complete keyboard configuration or physical-device behavior. The application release and package are not yet published.
+- A signed per-user GUI setup candidate and portable ZIP are the planned distribution paths. Final CRT-qualified packages and checksums are pending. The developer certificate is not a public CA and may require a trust decision in Windows.
+- Complete keyboard configuration and physical-device behavior are not qualified. The application release has not been published.
 
 ## v0.1.0-beta.2 — Historical unpublished desktop development baseline
 

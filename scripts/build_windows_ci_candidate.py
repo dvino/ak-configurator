@@ -8,6 +8,7 @@ import sys
 import tempfile
 import tomllib
 import zipfile
+from windows_runtime_dependencies import check_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,6 +40,7 @@ def main():
         package += ['--windows-signing-thumbprint', thumb, '--signtool', str(args.signtool), '--timestamp-url', args.timestamp_url]
         installer += ['--signing-thumbprint', thumb, '--signtool', str(args.signtool), '--timestamp-url', args.timestamp_url]
     subprocess.run(package, cwd=ROOT, check=True)
+    check_archive(args.output_dir / (base + '.zip'), base)
     # The release verifier binds GUI smoke to the actual packaged bytes, which
     # differ from the pre-signing binary. Extract only the named executable.
     with tempfile.TemporaryDirectory(prefix='ak-signed-smoke-') as temp:

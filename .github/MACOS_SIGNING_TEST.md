@@ -1,5 +1,7 @@
 # Maintainer-only macOS signing validation (PR #195)
 
+This document applies only to the imported upstream PR #195 procedure in `ergohaven/entropy`. It is not evidence or acceptance of an AK Configurator native macOS build; native macOS acceptance for this alpha is outside the approved scope.
+
 This is an **artifact-only test**, not a release. A maintainer with upstream write
 access must review the complete PR revision, fetch its **full commit SHA** from
 `D19ital/entropy`, and publish that exact commit (no cherry-pick, merge or rebase)

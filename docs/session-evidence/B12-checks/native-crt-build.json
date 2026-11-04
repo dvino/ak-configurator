@@ -1,0 +1,220 @@
+{
+  "format": "ak-configurator-native-crt-build-1",
+  "base_commit": "92411ceb6c8c6a557c4fc5f5ff4a6192a18fc8d2",
+  "checkout_dirty": true,
+  "command": "cargo build --release --locked --features mcp",
+  "flags_source": ".cargo/config.toml",
+  "target_feature": "+crt-static",
+  "environment_overrides_removed": [
+    "RUSTFLAGS",
+    "CARGO_ENCODED_RUSTFLAGS",
+    "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS",
+    "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS"
+  ],
+  "cargo_target_dir": "isolated task-owned directory",
+  "build_exit_code": 0,
+  "compiled_crates": 317,
+  "duration_seconds": 908,
+  "binary_bytes": 55011328,
+  "binary_sha256": "2979d560b5242ab19ae36736279f33c62595df9465390aa7cf4b0f9c81caca78",
+  "dumpbin_version": "14.44.35229.0",
+  "independent_import_parsers_agree": true,
+  "static_imports": [
+    "advapi32.dll",
+    "api-ms-win-core-synch-l1-2-0.dll",
+    "api-ms-win-core-winrt-l1-1-0.dll",
+    "bcrypt.dll",
+    "bcryptprimitives.dll",
+    "cfgmgr32.dll",
+    "combase.dll",
+    "comctl32.dll",
+    "dwmapi.dll",
+    "gdi32.dll",
+    "hid.dll",
+    "imm32.dll",
+    "kernel32.dll",
+    "ntdll.dll",
+    "ole32.dll",
+    "oleaut32.dll",
+    "opengl32.dll",
+    "shell32.dll",
+    "shlwapi.dll",
+    "uiautomationcore.dll",
+    "user32.dll",
+    "uxtheme.dll",
+    "ws2_32.dll"
+  ],
+  "self_check": {
+    "application_version": "0.1.0-alpha.1",
+    "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+    "firmware_release": "v0.6.0-beta.5",
+    "format": "ak-configurator-self-check-1",
+    "hardware_access": false,
+    "network_access": false,
+    "platform": "windows-x86_64",
+    "profiles": [
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+        "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+        "profile": "mmo"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+        "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+        "profile": "pointer"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+        "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+        "profile": "onehand"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+        "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+        "profile": "game"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+        "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+        "profile": "typing"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+        "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+        "profile": "code"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+        "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+        "profile": "shortcuts"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+        "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+        "profile": "creative"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+        "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+        "profile": "main"
+      },
+      {
+        "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+        "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+        "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+        "profile": "multios"
+      }
+    ],
+    "status": "passed"
+  },
+  "gui_smoke": {
+    "application_version": "0.1.0-alpha.1",
+    "arch": "x86_64",
+    "error": null,
+    "executable_sha256": "2979d560b5242ab19ae36736279f33c62595df9465390aa7cf4b0f9c81caca78",
+    "exit_code": 0,
+    "format": "ak820-runtime-smoke-harness-1",
+    "os": "windows",
+    "runtime_smoke": {
+      "application_version": "0.1.0-alpha.1",
+      "arch": "x86_64",
+      "cases": [
+        {
+          "detail": "Native renderer completed at least three application frames",
+          "name": "window_launch",
+          "status": "passed"
+        },
+        {
+          "detail": "Actual RGB settings page remained selected across rendered frames",
+          "name": "rgb_navigation",
+          "status": "passed"
+        },
+        {
+          "detail": "Application settings rendered using private temporary preferences",
+          "name": "settings_navigation",
+          "status": "passed"
+        },
+        {
+          "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+          "name": "native_tray",
+          "status": "passed"
+        },
+        {
+          "detail": "Native application continued rendering after lifecycle exercise",
+          "name": "render_after_navigation",
+          "status": "passed"
+        }
+      ],
+      "elapsed_ms": 717,
+      "error": null,
+      "evidence": "native_gui_offline_model",
+      "exclusions": [
+        "physical keyboard and LED behavior",
+        "actual tray mouse click routing",
+        "desktop panel rendering with synthetic tray host",
+        "Wayland qualification when run under Xvfb",
+        "live OS helper and HID latency"
+      ],
+      "format": "ak820-runtime-smoke-1",
+      "isolated_settings": true,
+      "live_hid_allowed": false,
+      "os": "windows",
+      "physical_behavior_validated": false,
+      "rendered_frames": 17,
+      "startup_timings": {
+        "display_fence_measured": false,
+        "phases": [
+          {
+            "elapsed_ms": 442.4512,
+            "phase": "window_creator"
+          },
+          {
+            "elapsed_ms": 471.6288,
+            "phase": "splash_first_frame_submitted"
+          },
+          {
+            "elapsed_ms": 533.3097,
+            "phase": "editor_initialization_started"
+          },
+          {
+            "elapsed_ms": 533.4029999999999,
+            "phase": "editor_fonts_configured"
+          },
+          {
+            "elapsed_ms": 608.5251000000001,
+            "phase": "editor_initialization_finished"
+          },
+          {
+            "elapsed_ms": 617.3345,
+            "phase": "editor_first_frame_submitted"
+          }
+        ],
+        "unit": "milliseconds_from_process_entry"
+      },
+      "status": "passed",
+      "tray_host": "native_desktop"
+    },
+    "status": "passed",
+    "stderr_tail": "2026-11-04T10:00:19.710+03:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on windows x86_64\n2026-11-04T10:00:19.711+03:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T10:00:20.152+03:00 INFO  ak_configurator::startup: Startup window_creator: 442.5 ms from process entry\n2026-11-04T10:00:20.181+03:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 471.6 ms from process entry\n2026-11-04T10:00:20.243+03:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 533.3 ms from process entry\n2026-11-04T10:00:20.243+03:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 533.4 ms from process entry\n2026-11-04T10:00:20.254+03:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T10:00:20.318+03:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 608.5 ms from process entry\n2026-11-04T10:00:20.327+03:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 617.3 ms from process entry\n"
+  },
+  "limits": "Local unsigned x64 build with uncommitted CRT changes; normal/delay imports only. Dynamic/transitive DLL loading, OS API availability, clean-PC launch, final signed packages and ARM64 CRT build remain separate.",
+  "gui_device_listing_evidence": {
+    "kind": "synthetic_demo_fixture",
+    "source": [
+      "src/main.rs:681",
+      "src/app_init.rs:99",
+      "src/device.rs:577",
+      "src/device.rs:670"
+    ],
+    "explanation": "The offline app inserts one demo Device through replace_devices, which emits the generic Found 1 Vial device(s) log. Native scan_devices rejects isolated runtime before discovery. This log is not physical-device enumeration evidence."
+  }
+}

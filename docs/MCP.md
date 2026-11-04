@@ -6,6 +6,10 @@ This is the first, **partial P0 implementation** of [the integration plan](MCP_I
 
 ## Build and connect
 
+The Windows GUI installer places the MCP-enabled application at
+`%LOCALAPPDATA%\Programs\AK Configurator\ak-configurator.exe`. Use its resolved
+absolute path in the MCP client. The source-build recipe below is an alternative.
+
 Build from this source with the pinned lockfile:
 
 ```sh

@@ -1,8 +1,7 @@
 # AK Configurator: beta.5 execution plan
 
-Status: stage 0 accepted; stage 1 B02 implementation is in progress.
-Snapshot: 2026-11-03. Branch: `desktop-dev`.
-Baseline: `936a989a8fd7d8e24cbd70ddba0e768e3107494b` plus the recovered uncommitted artifacts.
+Current state (2026-11-04): B01 stage 0 and the limited offline scopes through B11 have been accepted as recorded in [SESSION-EXECUTION-PLAN.md](SESSION-EXECUTION-PLAN.md). B12 integration and delivery remain in progress; the alpha is not accepted. The implementation stages below record the earlier execution plan and are not current assignments.
+Planning snapshot: 2026-11-03. Original baseline: `936a989a8fd7d8e24cbd70ddba0e768e3107494b` plus the recovered uncommitted artifacts; this is not the current checkout state.
 
 Recovery provenance and the issue-to-code audit are recorded in [RECOVERY-REVIEW-2026-11-01.md](RECOVERY-REVIEW-2026-11-01.md).
 

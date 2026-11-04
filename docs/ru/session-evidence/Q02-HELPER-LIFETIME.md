@@ -4,7 +4,7 @@ English: [EN](../../session-evidence/Q02-HELPER-LIFETIME.md).
 
 ## Текущие результаты
 
-**Исправление срока жизни helper прошло source review и целевые native-host tests; весь Q02 ожидает интеграции B12/C04.** Windows proxy теперь создаёт unnamed, non-inheritable Job Object с `KILL_ON_JOB_CLOSE` и хранит его в существующем slot. Child должен быть назначен в job до завершения stdin startup barrier, поэтому до назначения не может открыть HID. Ошибка назначения приводит к fail-closed. Ограничения nested jobs остаются совместимостным пределом.
+**Исправление срока жизни helper прошло source review и целевые native-host tests. Ограниченная офлайн-область C04 для Windows принята; B12 интегрируется, а Q02 в целом ожидает остальных проверок срока жизни процесса и платформ.** Windows proxy теперь создаёт unnamed, non-inheritable Job Object с `KILL_ON_JOB_CLOSE` и хранит его в существующем slot. Child должен быть назначен в job до завершения stdin startup barrier, поэтому до назначения не может открыть HID. Ошибка назначения приводит к fail-closed. Ограничения nested jobs остаются совместимостным пределом.
 
 Reviewer `helper_lifetime_review` выявил риск PID reuse в test fixture до запуска parent-death probe. Fixture заменён на дублирование действительного child process handle из сохранённого живого parent. Reviewer закрыл finding; process IDs не записываются.
 
@@ -21,6 +21,6 @@ Reviewer `helper_lifetime_review` выявил риск PID reuse в test fixtur
 
 Предыдущая exact-filter команда была запущена на устаревшем executable и нашла 0 тестов (1958 filtered); это не pass. Учитывается исправленный direct run на текущем test binary. Ранее проведённый 250 ms no-HID probe сохранён только как исторический: он не доказывал, что child вошёл в blocked I/O.
 
-Эти тесты проверяют намеренно задержанный fake child и cleanup process handle. Они не доказывают завершение при блокировке HID syscall или при обычном выходе GUI и не квалифицируют native window, физическое устройство, macOS или всю платформенную/артефактную часть Q02. HID packets и взаимодействия с устройством не было. Q02 ожидает интеграции B12/C04 и оставшихся платформенных проверок. User-specific paths и process IDs не включены.
+Эти тесты проверяют намеренно задержанный fake child и cleanup process handle. Они не доказывают завершение при блокировке HID syscall или при обычном выходе GUI и не квалифицируют native window, физическое устройство, macOS или всю платформенную/артефактную часть Q02. HID packets и взаимодействия с устройством не было. Ограниченная офлайн-область C04 принята; идёт интеграция B12, а Q02 ожидает оставшихся платформенных проверок и тестов срока жизни процесса. User-specific paths и process IDs не включены.
 
 Проверенный source snapshot и executable сохранены вне repository в private handoff checkpoint. Более поздние formatting/lint интегрированного snapshot не подтверждают обычный выход GUI, завершение при blocked HID syscall, завершение Q02 или поведение устройства.

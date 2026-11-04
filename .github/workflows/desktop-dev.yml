@@ -179,6 +179,23 @@ jobs:
         shell: bash
         run: python scripts/test_cava_helper.py --binary target/audio-helper/cava
 
+      - name: Guard Windows static CRT configuration
+        if: startsWith(matrix.platform, 'windows-')
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          for name in os.environ:
+              if (name in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_RUSTFLAGS')
+                      or (name.startswith('CARGO_TARGET_') and name.endswith('_RUSTFLAGS'))):
+                  raise SystemExit(f'{name} overrides Cargo config rustflags')
+          with open('.cargo/config.toml', 'rb') as config:
+              flags = tomllib.load(config)['target']['cfg(all(windows, target_env = "msvc"))']['rustflags']
+          if flags != ['-C', 'target-feature=+crt-static']:
+              raise SystemExit('Windows MSVC static CRT configuration is missing or changed')
+          PY
+
       - name: Test all targets (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         run: cargo test --locked --all-targets -- --test-threads=1
@@ -370,6 +387,10 @@ jobs:
           persist-credentials: false
       - name: Test package source line endings
         run: python3 scripts/test_package_line_endings.py
+      - name: Test Windows runtime dependency parser
+        run: python3 scripts/test_windows_runtime_dependencies.py
+      - name: Test offline package contracts
+        run: python3 scripts/test_ak820_release_workflow.py
       - uses: actions/download-artifact@v7
         with:
           pattern: desktop-candidate-*

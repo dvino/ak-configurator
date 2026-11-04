@@ -1,0 +1,19 @@
+{
+  "format": "ak-configurator-release-mcp-metadata-1",
+  "status": "passed",
+  "binary_sha256": "2979d560b5242ab19ae36736279f33c62595df9465390aa7cf4b0f9c81caca78",
+  "protocol": "2025-11-25",
+  "tools": [
+    "ak820_backup",
+    "ak820_devices",
+    "ak820_operation",
+    "ak820_prepare",
+    "ak820_read",
+    "ak820_session",
+    "ak820_tests",
+    "ak820_trace"
+  ],
+  "inspector_tools_list": "passed",
+  "hardware_tools_requested": 0,
+  "limits": "Metadata handshake and schemas only; no device/session/read/capture calls."
+}

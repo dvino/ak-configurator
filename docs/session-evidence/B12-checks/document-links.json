@@ -1,0 +1,17 @@
+{
+  "format": "ak-configurator-project-document-links-1",
+  "markdown_files": 97,
+  "english_docs": 41,
+  "russian_docs": 45,
+  "checked_root_mirrors": [
+    "AGENTS.md",
+    "BUILD.md",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "missing_ru": [],
+  "missing_en": [],
+  "broken_relative_links": [],
+  "case_sensitive_git_path_check": true,
+  "limits": "Static simple inline/reference relative path check only. Does not validate anchors, external URLs, HTML media, Markdown destinations with spaces, translated meaning, command execution or source semantics. Vendor and generated trees excluded."
+}

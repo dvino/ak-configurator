@@ -4,7 +4,7 @@ Russian: [RU](../ru/session-evidence/Q02-HELPER-LIFETIME.md).
 
 ## Current evidence
 
-**Helper-lifetime correction is source-reviewed and has focused native-host test evidence; Q02 as a whole remains pending B12/C04 integration.** The Windows proxy now creates an unnamed, non-inheritable Job Object with `KILL_ON_JOB_CLOSE` and stores it in the existing slot. The child must be assigned before it can complete the stdin startup barrier, so it cannot open HID before assignment. Assignment failure is fail-closed. Nested-job restrictions remain a compatibility limit.
+**Helper-lifetime correction is source-reviewed and has focused native-host test evidence. C04's limited offline Windows scope is accepted; B12 is in integration, while Q02 as a whole still awaits its remaining process-lifetime and platform qualification.** The Windows proxy now creates an unnamed, non-inheritable Job Object with `KILL_ON_JOB_CLOSE` and stores it in the existing slot. The child must be assigned before it can complete the stdin startup barrier, so it cannot open HID before assignment. Assignment failure is fail-closed. Nested-job restrictions remain a compatibility limit.
 
 Reviewer `helper_lifetime_review` identified a PID-reuse risk in the test fixture before any parent-death probe ran. The fixture now duplicates the actual child process handle from the retained live parent. The reviewer closed that finding; no process IDs are recorded.
 
@@ -21,6 +21,6 @@ Reviewer `helper_lifetime_review` identified a PID-reuse risk in the test fixtur
 
 An earlier exact-filter command used a stale executable and matched zero tests (1958 filtered); it is not a pass. The corrected direct run against the current test binary is the one counted above. The earlier bounded 250 ms no-HID probe is retained as historical only: it did not prove the child entered blocked I/O.
 
-These tests exercise a deliberately delayed fake child and process-handle cleanup. They do not prove termination during a blocked HID syscall or ordinary GUI exit, and they do not qualify native window behavior, physical device behavior, macOS, or the complete Q02 platform/artifact card. No HID packet or device interaction was performed. Q02 remains pending B12/C04 integration and its remaining platform checks. No user-specific paths or process IDs are included.
+These tests exercise a deliberately delayed fake child and process-handle cleanup. They do not prove termination during a blocked HID syscall or ordinary GUI exit, and they do not qualify native window behavior, physical device behavior, macOS, or the complete Q02 platform/artifact card. No HID packet or device interaction was performed. C04's limited offline scope is accepted; B12 integration is current, and Q02 still awaits the remaining platform and process-lifetime checks. No user-specific paths or process IDs are included.
 
 The tested source snapshot and executable are retained outside the repository in the private handoff checkpoint. The later integrated-snapshot formatting and lint passes do not establish ordinary GUI exit, termination during blocked HID syscalls, Q02 completion, or device behavior.

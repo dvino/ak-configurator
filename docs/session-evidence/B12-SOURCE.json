@@ -1,11 +1,38 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "3f2af3498af20ff2c3fc4ac0f3d285eafd430613",
+  "base_commit": "92411ceb6c8c6a557c4fc5f5ff4a6192a18fc8d2",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
-  "file_count": 711,
-  "aggregate_sha256": "9d32f4cad5e89189bf3c4cea90f422d0f4e04710e6acf280c491fc438f730826",
+  "selection": {
+    "command": "git ls-files -c -o --exclude-standard -z",
+    "ordering": "Unique paths sorted lexicographically",
+    "prefixes": [
+      "src/",
+      "scripts/",
+      ".github/",
+      ".cargo/",
+      "assets/",
+      "installer/",
+      "i18n/",
+      "vendor/"
+    ],
+    "files": [
+      "Cargo.toml",
+      "Cargo.lock",
+      "build.rs",
+      ".gitattributes",
+      ".gitignore"
+    ],
+    "aggregate_encoding": "SHA256 of UTF-8 json.dumps(files, sort_keys=True, separators=(comma, colon)); each entry contains path, bytes, sha256 of working-tree bytes"
+  },
+  "file_count": 714,
+  "aggregate_sha256": "aadcf0ddd52b63ba89d1398b2dd88a795c14088ca3e9a870ca5e0d3030d2aa59",
   "files": [
+    {
+      "path": ".cargo/config.toml",
+      "bytes": 101,
+      "sha256": "a12d8690aef5ef877ef81159289c7daa758a69ae46f8d7649299e56cd6feeff2"
+    },
     {
       "path": ".gitattributes",
       "bytes": 1385,
@@ -18,8 +45,8 @@
     },
     {
       "path": ".github/MACOS_SIGNING_TEST.md",
-      "bytes": 4166,
-      "sha256": "bc312a4c4a1943d873ca768109e1bfa01b184900481493f498bc5d958751b8bf"
+      "bytes": 4408,
+      "sha256": "6b064696352b8ff5cc2435e0554b09ba11b54f45862e2d55e361870211e0027e"
     },
     {
       "path": ".github/scripts/ci_policy.py",
@@ -53,8 +80,8 @@
     },
     {
       "path": ".github/workflows/desktop-dev.yml",
-      "bytes": 18388,
-      "sha256": "c7cede277433c62d564d332ae38e3ab5a208d629ce42aa448ee3c9e92c0360b1"
+      "bytes": 19457,
+      "sha256": "59fa83850be8de819273f3407a7a6c06f626191ee37172f998d20098d3bc2f13"
     },
     {
       "path": ".github/workflows/nix.yml",
@@ -1103,8 +1130,8 @@
     },
     {
       "path": "scripts/build_windows_ci_candidate.py",
-      "bytes": 3701,
-      "sha256": "10eb48f58b7ee908570ee5a73b12eb83e22a49485ca937824087f3b88b73d9dc"
+      "bytes": 3815,
+      "sha256": "09cfa942ee8d65637a43a3e05b1c672e3e3ca469584aa50068f09b6742b9c00a"
     },
     {
       "path": "scripts/build_windows_installer.ps1",
@@ -1203,8 +1230,8 @@
     },
     {
       "path": "scripts/test_ak820_release_workflow.py",
-      "bytes": 35421,
-      "sha256": "187b7c372a1e0beafd0679c7e668cc9333c204c7981bf43a700a6b5e91a794ce"
+      "bytes": 38148,
+      "sha256": "acd692ddb1719ef3d684312bcb64a83abdc7dee928647334c1f09e687157ac64"
     },
     {
       "path": "scripts/test_ak820_runtime_smoke.py",
@@ -1327,6 +1354,11 @@
       "sha256": "3b469aa5af1735f16331517205bcd0b8a7bf9ba3e35a6d5de90a6745547ace8c"
     },
     {
+      "path": "scripts/test_windows_runtime_dependencies.py",
+      "bytes": 1839,
+      "sha256": "44c24ef96a7bc0b5432e04300f02f998f0fd852f956336ae14f20baad0eeebd6"
+    },
+    {
       "path": "scripts/test_windows_signing.py",
       "bytes": 6502,
       "sha256": "896096b22d748f0d50b0c99e56baa53b52c3276785b1f54af96e7889ed17131a"
@@ -1355,6 +1387,11 @@
       "path": "scripts/verify_sha256.sh",
       "bytes": 909,
       "sha256": "e37a119f59471568d2df1f5bd581f7cb9b603cd834d577d5d4966a84d52a9878"
+    },
+    {
+      "path": "scripts/windows_runtime_dependencies.py",
+      "bytes": 4842,
+      "sha256": "b225f28f342db62238ff39adb6ee29d69adf71dcd7d3b082037587b30370de2f"
     },
     {
       "path": "scripts/windows_signing.py",

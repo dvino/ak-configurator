@@ -97,7 +97,10 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("if: always()", aggregate)
         self.assertIn("ref: ${{ inputs.candidate_ref || github.sha }}", aggregate)
         self.assertIn("python3 scripts/test_package_line_endings.py", aggregate)
+        self.assertIn("python3 scripts/test_ak820_release_workflow.py", aggregate)
         self.assertLess(aggregate.index("python3 scripts/test_package_line_endings.py"),
+                        aggregate.index("python3 scripts/verify_ak820_release_candidate.py"))
+        self.assertLess(aggregate.index("python3 scripts/test_windows_runtime_dependencies.py"),
                         aggregate.index("python3 scripts/verify_ak820_release_candidate.py"))
         self.assertIn("pattern: desktop-candidate-*", aggregate)
         self.assertIn("merge-multiple: true", aggregate)
@@ -112,6 +115,33 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         self.assertIn('signing+=(--require-windows-signing)', aggregate)
         self.assertIn('"${signing[@]}"', aggregate)
         self.assertNotIn('continue-on-error', aggregate)
+
+    def test_windows_static_crt_guard_precedes_cargo_and_fails_on_overrides(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        guard = workflow.split("      - name: Guard Windows static CRT configuration\n", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("if: startsWith(matrix.platform, 'windows-')", guard)
+        self.assertIn("'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_RUSTFLAGS'", guard)
+        self.assertIn("name.startswith('CARGO_TARGET_') and name.endswith('_RUSTFLAGS')", guard)
+        self.assertIn("raise SystemExit", guard)
+        self.assertIn("tomllib.load(config)", guard)
+        self.assertIn("target-feature=+crt-static", guard)
+        self.assertLess(workflow.index("Guard Windows static CRT configuration"),
+                        workflow.index("Test all targets (Linux and Windows)"))
+        code = guard.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        code = "\n".join(line.removeprefix("          ") for line in code.splitlines())
+        env = {name: value for name, value in os.environ.items()
+               if name not in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS")
+               and not (name.startswith("CARGO_TARGET_") and name.endswith("_RUSTFLAGS"))}
+        self.assertEqual(subprocess.run([os.sys.executable, "-c", code], cwd=ROOT, env=env,
+                                        capture_output=True).returncode, 0)
+        for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS",
+                     "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS",
+                     "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS"):
+            with self.subTest(name=name):
+                result = subprocess.run([os.sys.executable, "-c", code], cwd=ROOT,
+                                        env={**env, name: ""}, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name, result.stderr)
 
     def test_signing_preflight_gates_all_six_builds_and_skips_only_untrusted_events(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
@@ -312,7 +342,9 @@ class ReleaseVerificationTests(unittest.TestCase):
         report = verify(self.directory, VERSION, COMMIT)
         self.assertEqual(set(report["platforms"]), set(PLATFORMS))
         self.assertTrue(all(len(item["sha256"]) == 64 for item in report["platforms"].values()))
-        self.assertIn("unsigned desktop trial", report["status"])
+        self.assertIn("desktop trial", report["status"])
+        for platform in ("windows-x86_64", "windows-arm64"):
+            self.assertNotIn("windows_signing", report["platforms"][platform])
         index = report["app_update_index"]
         self.assertEqual(set(index), {"schema_version", "tag", "version", "prerelease", "assets"})
         self.assertEqual(index["schema_version"], 1)
@@ -323,6 +355,10 @@ class ReleaseVerificationTests(unittest.TestCase):
             self.assertEqual(set(asset), {"name", "target", "platform", "arch", "url", "sha256", "size"})
             self.assertEqual(asset["url"], f"https://github.com/dvino/ak-configurator/releases/download/v{VERSION}/{asset['name']}")
             self.assertEqual(asset["size"], (self.directory / asset["name"]).stat().st_size)
+
+    def test_signing_required_rejects_unsigned_windows_fixture(self):
+        with self.assertRaisesRegex(ValueError, "Windows signing is required"):
+            verify(self.directory, VERSION, COMMIT, require_windows_signing=True)
 
     def test_package_contains_platform_install_and_uninstall_helpers(self):
         for platform in EXPECTED:
