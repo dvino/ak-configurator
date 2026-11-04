@@ -1,0 +1,94 @@
+{
+  "format": "ak-configurator-firmware-release-recheck-1",
+  "observed_at": "2026-11-04 11:18:16 UTC",
+  "scope": "One-time public API identity recheck before alpha publication; matches previously reviewed official inputs. No device operation, new firmware build or binary-source attestation.",
+  "release_id": 430882407,
+  "release": "v0.6.0-beta.5",
+  "published_at": "2026-11-01T21:53:29Z",
+  "url": "https://github.com/dvino/ak820/releases/tag/v0.6.0-beta.5",
+  "tag_object": "1d960eabb5fd9abf078e6815b0c5c01bfb13a803",
+  "tag_commit": "dfd0770f9ef64bf5c7ab6d40e9f9e7b4354cd2cd",
+  "all_16_asset_sizes_and_digests_unchanged": true,
+  "assets": [
+    {
+      "name": "AK820-Beta5-Catalog.zip",
+      "bytes": 5119036,
+      "digest": "sha256:0f2a1c35b384ed2499493912bc1ba6cb07cf312ceab00086b49b2932a370b2c4"
+    },
+    {
+      "name": "AK820-Beta5-Catalog.zip.sha256",
+      "bytes": 90,
+      "digest": "sha256:9341f5812bec05827d100f61271c8bda07a059097a20efebe67ef2c737ac7c2d"
+    },
+    {
+      "name": "AK820-Linux-x86_64.tar.gz",
+      "bytes": 4312525,
+      "digest": "sha256:59b62f2238e8ffd77af700c2166f4b482d004ce1198e51ae34ad028a64a9bf67"
+    },
+    {
+      "name": "AK820-Linux-x86_64.tar.gz.sha256",
+      "bytes": 92,
+      "digest": "sha256:a26a96ac62157b97cce13d7aceed96d5ce7021d883a0f7e298b875c4706bfa29"
+    },
+    {
+      "name": "AK820-Windows.zip",
+      "bytes": 4460548,
+      "digest": "sha256:7db870fe4388f9443290565c359d8d4490b0db67e28da96fa7242ca852483019"
+    },
+    {
+      "name": "AK820-Windows.zip.sha256",
+      "bytes": 84,
+      "digest": "sha256:362737ddb9f466425ff380a5547462bbe039d28c0eee1ad89e252d2ffb68d870"
+    },
+    {
+      "name": "capability-catalog.json",
+      "bytes": 74704,
+      "digest": "sha256:a1b489026fced8135d424069bb1ed80f6e975468804a2a2cec5aae72047dda91"
+    },
+    {
+      "name": "firmware-bundle.zip",
+      "bytes": 2990062,
+      "digest": "sha256:497bc8b11dec6b43ee0b3a24b1df7856028d014d1d96497bdc486b419baeb4c0"
+    },
+    {
+      "name": "firmware-bundle.zip.sha256",
+      "bytes": 86,
+      "digest": "sha256:4ece6f9b26e81a95e8e5941cc96abeed2a784839d13256e07f879545b2799c92"
+    },
+    {
+      "name": "firmware-matrix.json",
+      "bytes": 1750531,
+      "digest": "sha256:12132c84d7779d7433c535c89eaf1a99ffc2f662ec2c8d93d2807d8afb2ad7cb"
+    },
+    {
+      "name": "INSTALL-en.md",
+      "bytes": 5520,
+      "digest": "sha256:5c41280aeba266f3fca7170f0b0ce79c3051d0e194d18d0e8704bc57c6b8e17d"
+    },
+    {
+      "name": "INSTALL-ru.md",
+      "bytes": 8625,
+      "digest": "sha256:096546deb4967ebc499f2eb900df353391867e3f03ba6232784a2318f423ce0e"
+    },
+    {
+      "name": "module-descriptions.json",
+      "bytes": 61695,
+      "digest": "sha256:52ee9cfc278ac3524b0da5f6757279cf479a17ccf84dcdf987b63e84b1b671a4"
+    },
+    {
+      "name": "release-catalog.json",
+      "bytes": 31614,
+      "digest": "sha256:9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d"
+    },
+    {
+      "name": "release-manifest.json",
+      "bytes": 29500,
+      "digest": "sha256:16f1585635fc63657987baa112ce7c91e19e4f123cf4cd0ef3db00c839934468"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 23679,
+      "digest": "sha256:31ac9eb4913d53968d48d990b14f3a15e4810b2f14c8dbbd31cd82b7aded2c7d"
+    }
+  ]
+}

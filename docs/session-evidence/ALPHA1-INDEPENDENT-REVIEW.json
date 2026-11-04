@@ -1,0 +1,22 @@
+{
+  "result": "pass",
+  "blocking_findings": [],
+  "scope": "Publication asset integrity and candidate verification for owner preview; not overall B12 acceptance",
+  "source_commit": "71abd382cbcefa554c87639635536e5f526be226",
+  "run_id": 41818771438,
+  "native_jobs": 6,
+  "publication_files": 37,
+  "candidate_files": 34,
+  "aggregate_checksum_entries": 36,
+  "manifest_index_equal_independent_verification": true,
+  "inventory_verified": true,
+  "verifier_exit_code": 0,
+  "verifier_command": "python scripts/verify_ak820_release_candidate.py --directory verified-inputs --version 0.1.0-alpha.1 --source-commit 71abd382cbcefa554c87639635536e5f526be226 --manifest independent-review/manifest.json --update-index independent-review/update-index.json --require-windows-signing",
+  "limits": [
+    "CI metadata and signing pair comparison do not establish source compilation attestation",
+    "Cryptographic signing verification does not qualify trust on the actual user account; Root and TrustedPublisher absent and UnknownError",
+    "macOS native B12 acceptance excluded; non-Windows experimental; ARM interactive clean-PC unqualified",
+    "No executable, installer, GUI, HID, trust import or security UI run during review",
+    "Static imports exclude dynamic and transitive loads"
+  ]
+}

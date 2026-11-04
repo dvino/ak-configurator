@@ -1,0 +1,52 @@
+{
+  "format": "ak-configurator-alpha1-ci-test-summary-1",
+  "source_commit": "71abd382cbcefa554c87639635536e5f526be226",
+  "run_id": 41818771438,
+  "workflow_source": "https://github.com/dvino/ak-configurator/blob/71abd382cbcefa554c87639635536e5f526be226/.github/workflows/desktop-dev.yml",
+  "scope": "One-time extraction of test-result and rustc-version lines from native Windows and aggregate job logs. Ignored cases, physical keyboard behavior, clean-PC use and macOS native acceptance are not qualified.",
+  "jobs": [
+    {
+      "platform": "windows-x86_64",
+      "job_id": 126536503051,
+      "test_results": [
+        "test result: ok. 1978 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 306.40s",
+        "test result: ok. 34 passed; 0 failed; 6 ignored; 0 measured; 1993 filtered out; finished in 2.69s"
+      ],
+      "python_results": [
+        "Ran 12 tests in 0.121s",
+        "Ran 14 tests in 2.549s",
+        "Ran 7 tests in 0.016s"
+      ],
+      "rust_versions": [
+        "rustc 1.94.1 (e408947bf 2026-03-25)"
+      ]
+    },
+    {
+      "platform": "windows-arm64",
+      "job_id": 126536503857,
+      "test_results": [
+        "test result: ok. 1978 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 399.91s",
+        "test result: ok. 34 passed; 0 failed; 6 ignored; 0 measured; 1993 filtered out; finished in 9.20s"
+      ],
+      "python_results": [
+        "Ran 12 tests in 0.129s",
+        "Ran 14 tests in 4.260s",
+        "Ran 7 tests in 0.014s"
+      ],
+      "rust_versions": [
+        "rustc 1.94.1 (e408947bf 2026-03-25)"
+      ]
+    },
+    {
+      "platform": "aggregate",
+      "job_id": 126549766798,
+      "test_results": [],
+      "python_results": [
+        "Ran 1 test in 0.108s",
+        "Ran 4 tests in 0.001s",
+        "Ran 32 tests in 176.403s"
+      ],
+      "rust_versions": []
+    }
+  ]
+}

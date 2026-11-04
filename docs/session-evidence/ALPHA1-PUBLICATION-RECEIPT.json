@@ -1,0 +1,250 @@
+{
+  "format": "ak-configurator-alpha1-publication-1",
+  "observed_at": "2026-11-04 12:18:26 UTC",
+  "release": {
+    "id": 433846095,
+    "tag": "v0.1.0-alpha.1",
+    "url": "https://github.com/dvino/ak-configurator/releases/tag/v0.1.0-alpha.1",
+    "published_at": "2026-11-04T12:16:16Z",
+    "draft": false,
+    "prerelease": true
+  },
+  "source_commit": "71abd382cbcefa554c87639635536e5f526be226",
+  "ci_run_id": 41818771438,
+  "asset_count": 37,
+  "windows_app_hashes": {
+    "x86_64": {
+      "bytes": 55023288,
+      "sha256": "b1ceb499c244bd71ac30971f00827bf5d73ebda4ea4bdc6f5b29ca59590bdcee"
+    },
+    "arm64": {
+      "bytes": 51303096,
+      "sha256": "502d468311c9b5125f3c4776a55142a2f1d20460849e1416c3c94aa47ac40124"
+    }
+  },
+  "assets": [
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz",
+      "bytes": 37598996,
+      "digest": "sha256:be2dd5504aa1f83b1d39fd041e693f9a0d9c0cab9c8bba4119aed3ffb90641db",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz.sha256",
+      "bytes": 115,
+      "digest": "sha256:0b4cdd6c81ceecf4c006e3f3b602546365e59c39400bb3f9223e0d429a0ee552",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz",
+      "bytes": 38335517,
+      "digest": "sha256:336b06f29c98e2559bdb990559821f03c32bb8788aef9d7d9acef90968ee2a0a",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz.sha256",
+      "bytes": 116,
+      "digest": "sha256:15a7a801e3816bcccbb12d0ec22e2cd01e130645ceb7093bf03bdae4f0082685",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip",
+      "bytes": 42398939,
+      "digest": "sha256:6b5fa50091509466d988cc5317fe2574cf84ffa987bc402327ca72f9d1469bb6",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip.sha256",
+      "bytes": 116,
+      "digest": "sha256:187e523c1287899c8905e2ffec259095d1ddcf55c8de02c9190b3c86b5acd570",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip",
+      "bytes": 42786746,
+      "digest": "sha256:c201c3708123c294d4c5b5c3fedad27344a9f63d917e5a108a2a1e7a04dcc7e2",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip.sha256",
+      "bytes": 117,
+      "digest": "sha256:76ce25ad6892c1d12b7f05e45b6286d586b26d6cc7914a6178de31698ccdd4eb",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe",
+      "bytes": 31589568,
+      "digest": "sha256:5044a9487bd870f1bd5dc0c4b7b14444e34190d5ec2094e8a2304853c27248f7",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.build.json",
+      "bytes": 1196,
+      "digest": "sha256:e5764d19a96b0cd3555446149354c759247364f3bae980984fcf1392973fb64e",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.build.json"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.build.p7s",
+      "bytes": 1637,
+      "digest": "sha256:9194711b9f589ad61591a3886c74136e2be23949e4b71676437b39c012647335",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.build.p7s"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.sha256",
+      "bytes": 120,
+      "digest": "sha256:8c70b7309614865e53ef099f47c8b2436e2f462b52896c0b8fc572c73c7fa302",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip",
+      "bytes": 39044448,
+      "digest": "sha256:26e6bcf9f30ff4e67b25d62f057b4d15a40ffe4755ba750f0b4e4bfc6b372f98",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64.zip"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip.sha256",
+      "bytes": 115,
+      "digest": "sha256:b5745e830903d5c50382fb7fea418a4a2e93b882619ddbaf80aeb4abb84e218c",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64.zip.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe",
+      "bytes": 32192752,
+      "digest": "sha256:a0972d90509298f3c106f3fd2341aae0615156b54feefe5675c5e6f9c6449f1b",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.build.json",
+      "bytes": 1199,
+      "digest": "sha256:7ee4f0c2c5c514f25f992cf1419710d2ced6bd220ab9c926f7d031697df5a145",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.build.json"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.build.p7s",
+      "bytes": 1637,
+      "digest": "sha256:56caf7532b4312f9e01c9d2a249f8d3b4637913af85db3cb3cbea4e5b6bfe832",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.build.p7s"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.sha256",
+      "bytes": 121,
+      "digest": "sha256:53f422d09fda63b6b1a023f90ea324dfa08e602d0e665ae94f9221e5098c5c4a",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe.sha256"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip",
+      "bytes": 39791324,
+      "digest": "sha256:4835a9c6e368e5b1ca6a4efec5f6f8d9cb9cb01263d2d1116e04757069ef473a",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64.zip"
+    },
+    {
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip.sha256",
+      "bytes": 116,
+      "digest": "sha256:a493c0a648265577fb3f440e158c44fed4d377d213663b156976290f506a92a3",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64.zip.sha256"
+    },
+    {
+      "name": "app-update-index.json",
+      "bytes": 2701,
+      "digest": "sha256:85605a388543853ecbeb0aff1a574eb7a0a078ffcc13bf38402e9bf333831cff",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/app-update-index.json"
+    },
+    {
+      "name": "install-smoke-linux-arm64.json",
+      "bytes": 4141,
+      "digest": "sha256:80ce0a580d4d06d89543b635f271a0e12e92c26f73181629cae302c518a2c2be",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-linux-arm64.json"
+    },
+    {
+      "name": "install-smoke-linux-x86_64.json",
+      "bytes": 4143,
+      "digest": "sha256:9d7c911b7ecf3338aa71998ba3b926f5db70989473efa163e60b71a926b6fb66",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-linux-x86_64.json"
+    },
+    {
+      "name": "install-smoke-macos-arm64.json",
+      "bytes": 4141,
+      "digest": "sha256:4d58760717d7eaf69d7386035263214a4f23b9adf7a876141fb66ff77255a60b",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-macos-arm64.json"
+    },
+    {
+      "name": "install-smoke-macos-x86_64.json",
+      "bytes": 4143,
+      "digest": "sha256:22566d1308fdae733857f2a7ae97ca340a919a8b5a7f35f8629304c6522c588e",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-macos-x86_64.json"
+    },
+    {
+      "name": "install-smoke-windows-arm64.json",
+      "bytes": 4228,
+      "digest": "sha256:a548bca7e538656df726a03b67bc560b3294190e87a48957b14914762216e06e",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-windows-arm64.json"
+    },
+    {
+      "name": "install-smoke-windows-x86_64.json",
+      "bytes": 4230,
+      "digest": "sha256:9b8b73e44200415b66f40a14e002ec27460ef2570afd80daf182d42c4ff1afee",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/install-smoke-windows-x86_64.json"
+    },
+    {
+      "name": "release-manifest.json",
+      "bytes": 115294,
+      "digest": "sha256:d2df5d1464c4090506ada929e7316ac028f7c6bf129aa58c712ffea9e9575336",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/release-manifest.json"
+    },
+    {
+      "name": "runtime-smoke-linux-arm64.json",
+      "bytes": 11198,
+      "digest": "sha256:d7976d63427bcf315d804b91328476e4e252b44f059074757caa500c514d68bd",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-linux-arm64.json"
+    },
+    {
+      "name": "runtime-smoke-linux-x86_64.json",
+      "bytes": 11184,
+      "digest": "sha256:9b4aaa2c2958678a8103014a61aec54e2b8be8024a2faccd8beb23f5d34c55d9",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-linux-x86_64.json"
+    },
+    {
+      "name": "runtime-smoke-macos-arm64.json",
+      "bytes": 3854,
+      "digest": "sha256:d1082e038baccdbf142c6325616f17ad89206781e604dfab7972a5efca479ddb",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-macos-arm64.json"
+    },
+    {
+      "name": "runtime-smoke-macos-x86_64.json",
+      "bytes": 3846,
+      "digest": "sha256:66cf33c2127a9747359045e62cc3ca9a446b418f5ead4bb1326562d12f81d3e9",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-macos-x86_64.json"
+    },
+    {
+      "name": "runtime-smoke-windows-arm64.json",
+      "bytes": 4852,
+      "digest": "sha256:f8462c50e62ed8356ebf678f32a9832df52db2fea1b215036c803937f86dce76",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-windows-arm64.json"
+    },
+    {
+      "name": "runtime-smoke-windows-x86_64.json",
+      "bytes": 4813,
+      "digest": "sha256:804699a512b467364e8c1d7b0ccd3728e3fa1aa7806ca55b3c413998a72154a6",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/runtime-smoke-windows-x86_64.json"
+    },
+    {
+      "name": "setup-smoke-windows-arm64.json",
+      "bytes": 4130,
+      "digest": "sha256:830c118b5ff48a2c098e7ee57ea758a16c429e9f9d31fb0c77289a6c90125e83",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/setup-smoke-windows-arm64.json"
+    },
+    {
+      "name": "setup-smoke-windows-x86_64.json",
+      "bytes": 4131,
+      "digest": "sha256:e89bc77406a6b40d70b0f8f2d4fef8337e4ec55ba3038769d56485dd602e1e27",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/setup-smoke-windows-x86_64.json"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 3997,
+      "digest": "sha256:9dddc76a30b3c533ff778d2202e99087f990a57a45483d07cb931dadf853a9b2",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/SHA256SUMS"
+    }
+  ],
+  "scope": "Owner-authorized experimental preview. B12 acceptance, local OS trust, interactive ARM, clean-PC and physical keyboard validation remain unqualified; macOS native acceptance excluded. The previously installed frozen65 copy was not replaced."
+}

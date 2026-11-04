@@ -1,0 +1,102 @@
+{
+  "source_commit": "71abd382cbcefa554c87639635536e5f526be226",
+  "raw_to_flat_files_verified": 34,
+  "all_release_asset_digests_match": true,
+  "windows": [
+    {
+      "architecture": "x86_64",
+      "unsigned_sha256": "9ece09d4d8352b9134b84c7852ce04d3aa4bde61948025a8d3bb0e443485bdd2",
+      "signature_only_difference": true,
+      "binaries": [
+        {
+          "name": "app",
+          "machine": "0x8664",
+          "sha256": "b1ceb499c244bd71ac30971f00827bf5d73ebda4ea4bdc6f5b29ca59590bdcee",
+          "static_imports": [
+            "advapi32.dll",
+            "api-ms-win-core-synch-l1-2-0.dll",
+            "api-ms-win-core-winrt-l1-1-0.dll",
+            "bcrypt.dll",
+            "bcryptprimitives.dll",
+            "cfgmgr32.dll",
+            "combase.dll",
+            "comctl32.dll",
+            "dwmapi.dll",
+            "gdi32.dll",
+            "hid.dll",
+            "imm32.dll",
+            "kernel32.dll",
+            "ntdll.dll",
+            "ole32.dll",
+            "oleaut32.dll",
+            "opengl32.dll",
+            "shell32.dll",
+            "shlwapi.dll",
+            "uiautomationcore.dll",
+            "user32.dll",
+            "uxtheme.dll",
+            "ws2_32.dll"
+          ]
+        },
+        {
+          "name": "cava",
+          "machine": "0x8664",
+          "sha256": "3be0acc32322d48818960a058e4b4a31072256bc062816c9ae066423f4d095a5",
+          "static_imports": [
+            "kernel32.dll",
+            "ole32.dll",
+            "shlwapi.dll"
+          ]
+        }
+      ]
+    },
+    {
+      "architecture": "arm64",
+      "unsigned_sha256": "79ffabb6992dd02cd2cca0419d95bffdf59972448a8bdc6565703e2e234fc33a",
+      "signature_only_difference": true,
+      "binaries": [
+        {
+          "name": "app",
+          "machine": "0xaa64",
+          "sha256": "502d468311c9b5125f3c4776a55142a2f1d20460849e1416c3c94aa47ac40124",
+          "static_imports": [
+            "advapi32.dll",
+            "api-ms-win-core-synch-l1-2-0.dll",
+            "api-ms-win-core-winrt-l1-1-0.dll",
+            "bcrypt.dll",
+            "bcryptprimitives.dll",
+            "cfgmgr32.dll",
+            "combase.dll",
+            "comctl32.dll",
+            "dwmapi.dll",
+            "gdi32.dll",
+            "hid.dll",
+            "imm32.dll",
+            "kernel32.dll",
+            "ntdll.dll",
+            "ole32.dll",
+            "oleaut32.dll",
+            "opengl32.dll",
+            "shell32.dll",
+            "shlwapi.dll",
+            "uiautomationcore.dll",
+            "user32.dll",
+            "uxtheme.dll",
+            "ws2_32.dll"
+          ]
+        },
+        {
+          "name": "cava",
+          "machine": "0xaa64",
+          "sha256": "8f41f19d57e515d484ddecfedc72aef1579ee608f1eed70a0bbd72645efbcc30",
+          "static_imports": [
+            "kernel32.dll",
+            "ole32.dll",
+            "shlwapi.dll"
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": "Static normal and delay imports; excludes dynamic and transitive loads, OS compatibility, execution and trust. Signing byte equivalence does not attest compilation from source."
+}

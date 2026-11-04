@@ -2,6 +2,8 @@
 
 # Desktop adaptation and review
 
+**Publication update, 2026-11-04:** Alpha.1 is published from tag `v0.1.0-alpha.1` at `71abd382cbcefa554c87639635536e5f526be226`. CI and independent review of all 37 assets passed. The installed copy remains frozen build 65; B12 remains unaccepted. See [publication evidence](session-evidence/ALPHA1-PUBLICATION.md).
+
 ## B12 Windows alpha candidate — updated 2026-11-04
 
 An earlier production executable (SHA256 `85ab88ffa3bc025bc6d68f6c4a4cbfd164ba81201175138d9f82df725c108d8d`) passed the Beta5 release self-check and isolated native GUI smoke using fresh settings with live HID forbidden. Its first editor-frame submission was measured at 630.7362 ms; visible-window presentation was not measured.
@@ -10,7 +12,7 @@ The earlier pre-CI x86_64 static-CRT production executable (55,011,328 bytes, SH
 
 Frozen software build `65e1a90041c434b98401203bb160e8986c4f0a46` passed CI [41794559734](https://github.com/dvino/ak-configurator/actions/runs/41794559734), including both signing preflights, six native jobs, aggregate package contract, four PE parser checks and full offline package-contract tests. The x86_64 and ARM64 static-CRT packages and signatures passed an independent final artifact review. Both downloaded Windows packages were inspected; only the x86_64 setup was installed on this computer and replaced the old installation after exact hash verification and backup. The installed app self-check passed all ten Beta5 profiles. Production MCP STDIO and SDK/Inspector checks passed against the installed binary; no device/session/read/capture tools were called.
 
-The installed app and helper imports were checked, but PE results do not prove dynamic/transitive dependency availability or minimum Windows compatibility. The signing certificate is local, not a public CA. Current-user Root and TrustedPublisher trust remain absent, and Windows reports `UnknownError` for all five installed signed items. Manual OS confirmation remains pending. The owner has authorized publication of the Windows alpha preview despite this unresolved gate; B12 remains unaccepted. A fresh release build from the exact tagged `main` commit and the required six-native plus aggregate verification remain pending. Linux remains unqualified, macOS is excluded, ARM interactive use is unproven, and no physical keyboard operation occurred. See [B12 evidence](session-evidence/B12.md).
+The installed app and helper imports were checked, but PE results do not prove dynamic/transitive dependency availability or minimum Windows compatibility. The signing certificate is local, not a public CA. Current-user Root and TrustedPublisher trust remain absent, and Windows reports `UnknownError` for all five installed signed items. Manual OS confirmation remains pending. The owner has authorized publication of the Windows alpha preview despite this unresolved gate; B12 remains unaccepted. The exact tagged-source build and its six-native plus aggregate verification are complete; B12 remains unaccepted for separate trust and live-acceptance gates. Linux remains unqualified, macOS is excluded, ARM interactive use is unproven, and no physical keyboard operation occurred. See [B12 evidence](session-evidence/B12.md).
 
 ## Historical beta.4.1 exact-image install admission — 2026-10-28
 
