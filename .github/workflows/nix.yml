@@ -22,6 +22,7 @@ permissions:
 jobs:
   plan:
     name: Select Nix coverage
+    if: github.repository == 'ergohaven/entropy'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -93,7 +94,7 @@ jobs:
   complete:
     name: Nix validation result
     needs: [plan, flake]
-    if: ${{ always() }}
+    if: ${{ always() && github.repository == 'ergohaven/entropy' }}
     runs-on: ubuntu-latest
     steps:
       - name: Require the selected coverage to complete

@@ -12,6 +12,8 @@ This document sets requirements for AK Configurator, maintained in the separate 
 
 The native desktop configurator is the first milestone. Browser requirements marked **Web** apply to a later stage that starts after the desktop editor is reasonably working. Standalone application requirements are marked **Desktop**. Each acceptance criterion is checked against the exact target image and stated keyboard model.
 
+**Owner-authorized alpha exception, 2026-11-04:** For the public Windows preview `v0.1.0-alpha.1` only, the release-blocking acceptance criterion in AKW-001 is deferred. The preview must disclose that complete keyboard configuration is not available, non-Windows packages (if offered) are experimental and unqualified, and interactive ARM use and physical keyboard behavior have not been verified. AKW-001 remains unmet; this exception does not waive exact device/image identity, authorization, settings-write or restore restrictions, firmware-operation gates, or any other device-safety requirement. All other requirements remain in force.
+
 ## 1. Goal and scope
 
 **AKW-001 · Web.** Users can configure a supported keyboard and install firmware directly from the website. A separate installer does not replace browser-based flashing. The first version includes all user-facing firmware features already implemented: layers, key and encoder mappings, macros, Combo, lighting, and other supported settings.

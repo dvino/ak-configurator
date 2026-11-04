@@ -89,6 +89,23 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_main_routes_full_desktop_validation_and_legacy_workflows_stay_upstream_only(self):
+        desktop = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        self.assertIn("push:\n    branches: [main, desktop-dev, desktop, 'handoff/c02-windows', 'codex/**']", desktop)
+        self.assertIn("pull_request:\n    branches: [main, desktop-dev, desktop]", desktop)
+        self.assertEqual(desktop.count("platform: "), 6)
+
+        for filename, terminal_job in (("build.yml", "plan, build, container, packages"),
+                                       ("nix.yml", "plan, flake")):
+            with self.subTest(workflow=filename):
+                workflow = (ROOT / ".github/workflows" / filename).read_text(encoding="utf-8")
+                next_job = "build" if filename == "build.yml" else "flake"
+                plan = workflow.split("  plan:\n", 1)[1].split(f"\n  {next_job}:\n", 1)[0]
+                complete = workflow.split("  complete:\n", 1)[1]
+                self.assertIn("if: github.repository == 'ergohaven/entropy'", plan)
+                self.assertIn("needs: [" + terminal_job + "]", complete)
+                self.assertIn("if: ${{ always() && github.repository == 'ergohaven/entropy' }}", complete)
+
     def test_installer_registry_guard_tests_run_on_windows_before_cargo(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         block = workflow.split("      - name: Test Windows installer registry guard\n", 1)[1].split("\n      - name:", 1)[0]

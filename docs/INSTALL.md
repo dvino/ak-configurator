@@ -2,20 +2,20 @@
 
 # Install and run
 
-AK Configurator `0.1.0-alpha.1` targets Windows x86_64 and ARM64. This local candidate is unpublished, with no public download. The native per-user GUI installer is the primary installation path; the portable ZIP is the alternative. Windows packages use a local development signing certificate, not a public-CA identity. Windows may display publisher warnings on a PC that does not trust it. Linux qualification is pending; native macOS acceptance is excluded from this alpha. See [Status](STATUS.md) for validation and known limits.
+AK Configurator `0.1.0-alpha.1` targets Windows x86_64 and ARM64. Download the per-user GUI installer or portable ZIP from the [GitHub release](https://github.com/dvino/ak-configurator/releases/tag/v0.1.0-alpha.1). The GUI installer is the primary path; the ZIP is the alternative. Windows packages use a local development signing certificate, not a public-CA identity. Windows may display publisher or trust warnings depending on the computer; the release makes no system-wide trust or SmartScreen claim. Non-Windows packages, if listed, are experimental and unqualified. Native macOS acceptance is outside this alpha's scope. See [Status](STATUS.md) for validation and known limits.
 
-## Candidate package
+## Windows package
 
-Choose the files for the Windows architecture:
+Choose the files for the Windows architecture from the release assets:
 
 | Architecture | GUI installer | Portable archive |
 |---|---|---|
 | x86_64 | `ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe` | `ak-configurator-0.1.0-alpha.1-windows-x86_64.zip` |
 | ARM64 | `ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe` | `ak-configurator-0.1.0-alpha.1-windows-arm64.zip` |
 
-Verify the external SHA256 and the archive's internal `SHA256SUMS` before extraction or launch. If a checksum is missing or differs, stop. The examples below use x86_64; use the corresponding ARM64 filenames for ARM64.
+Download the matching `.sha256` sidecar and verify the file's SHA256 before extraction or launch. For a ZIP, extract it only after the external check passes, then verify the archive's internal `SHA256SUMS` before launching any file. If a checksum is missing or differs, stop. The examples below use x86_64; use the corresponding ARM64 filenames for ARM64.
 
-Start the matching `*-setup.exe` from Explorer and follow its per-user setup wizard. The ARM64 package contains a native ARM64 app and audio helper; its Inno Setup bootstrap uses x64 emulation on Windows 11 ARM. Local certificate trust is a separate OS decision. See [Status](STATUS.md) for the checked installer behavior and remaining limits.
+Start the matching `*-setup.exe` from Explorer and follow its per-user setup wizard. The ARM64 package contains a native ARM64 app and audio helper; its Inno Setup bootstrap uses x64 emulation on Windows 11 ARM. Whether Windows trusts the local development certificate is an operating-system decision. See [Status](STATUS.md) for the checked installer behavior and remaining limits.
 
 PowerShell verification and extraction:
 

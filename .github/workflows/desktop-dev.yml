@@ -14,9 +14,9 @@ on:
         required: true
   workflow_dispatch:
   push:
-    branches: [desktop-dev, desktop, 'handoff/c02-windows', 'codex/**']
+    branches: [main, desktop-dev, desktop, 'handoff/c02-windows', 'codex/**']
   pull_request:
-    branches: [desktop-dev, desktop]
+    branches: [main, desktop-dev, desktop]
 
 permissions:
   contents: read

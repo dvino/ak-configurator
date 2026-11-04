@@ -3,18 +3,18 @@
 AK Configurator changes are recorded here. The inherited Entropy release history
 is retained below. Russian candidate notes: [Изменения](docs/ru/CHANGELOG.md).
 
-## v0.1.0-alpha.1 — Windows local candidate (unpublished)
+## v0.1.0-alpha.1 — Windows preview
 
-The first alpha candidate for Windows x86_64 and ARM64 is local and unpublished. Interactive ARM64 use is unverified. Linux qualification is pending; native macOS acceptance is outside this alpha's approved scope. Neither platform is qualified.
+The first public preview targets Windows x86_64 and ARM64. Non-Windows packages, if offered, are experimental and unqualified; native macOS acceptance is outside this alpha's scope. Interactive ARM64 use and physical keyboard behavior are not qualified.
 
-- The installer selects AK820 firmware `v0.6.0-beta.5` by default and requires explicit prerelease opt-in. Its catalog describes ten exact profiles. Beta3 compatibility checks remain, but Beta3 installation is denied.
+- The in-app firmware installation page defaults to AK820 firmware `v0.6.0-beta.5` and requires explicit prerelease opt-in; the Windows setup only installs the app. Its catalog describes ten exact profiles. Beta3 compatibility checks remain, but Beta3 installation is denied.
 - An optional MCP interface provides read-only metadata and a local installation preview. It does not provide settings writes, restore execution or firmware flashing.
-- A signed per-user GUI setup candidate and portable ZIP are the planned distribution paths. Final CRT-qualified packages and checksums are pending. The developer certificate is not a public CA and may require a trust decision in Windows.
-- Complete keyboard configuration and physical-device behavior are not qualified. The application release has not been published.
+- The Windows download includes a per-user GUI setup and a portable ZIP for each supported architecture. Windows signatures use a local development certificate, not a public CA; Windows trust and publisher warnings depend on the computer.
+- The app does not provide complete keyboard configuration, and behavior on a real keyboard has not been verified. Non-Windows packages, if offered, are experimental and unqualified; native macOS acceptance is outside this alpha's scope.
 
-## v0.1.0-beta.2 — Historical unpublished desktop development baseline
+## v0.1.0-beta.2 — Historical unpublished desktop development baseline (2026-10-26)
 
-This local candidate is prepared for AK Configurator's AK820 companion work. It is not a published public release.
+Historical note for the 2026-10-26 development checkpoint: this local candidate was prepared for AK Configurator's AK820 companion work and was not a published public release. This entry does not describe the current alpha.
 
 ### Main Features
 
