@@ -1,0 +1,110 @@
+{
+  "runId": 41810836009,
+  "repository": "dvino/ak-configurator",
+  "workflow": "Desktop development builds",
+  "workflowFile": "desktop-dev.yml",
+  "event": "push",
+  "branch": "codex/c02-windows",
+  "headSha": "a21069a71216cd1d4a813e43324cad8577920773",
+  "status": "completed",
+  "conclusion": "success",
+  "createdAt": "2026-11-04T09:56:09Z",
+  "updatedAt": "2026-11-04T10:26:31Z",
+  "url": "https://github.com/dvino/ak-configurator/actions/runs/41810836009",
+  "windowsJobs": [
+    {
+      "job": "Build (windows-arm64)",
+      "conclusion": "success",
+      "relevantSteps": [
+        {
+          "name": "Test Windows installer registry guard",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Build and exercise Windows GUI installer",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "conclusion": "skipped",
+          "number": 35
+        }
+      ]
+    },
+    {
+      "job": "Build (windows-x86_64)",
+      "conclusion": "success",
+      "relevantSteps": [
+        {
+          "name": "Test Windows installer registry guard",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Build and exercise Windows GUI installer",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "conclusion": "skipped",
+          "number": 35
+        }
+      ]
+    }
+  ],
+  "aggregateVerification": {
+    "job": "Verify all six desktop candidates",
+    "jobId": 126519657525,
+    "conclusion": "success",
+    "steps": [
+      {
+        "name": "Set up job",
+        "conclusion": "success",
+        "number": 1
+      },
+      {
+        "name": "Run actions/checkout@v7",
+        "conclusion": "success",
+        "number": 2
+      },
+      {
+        "name": "Test package source line endings",
+        "conclusion": "success",
+        "number": 3
+      },
+      {
+        "name": "Test Windows runtime dependency parser",
+        "conclusion": "success",
+        "number": 4
+      },
+      {
+        "name": "Test offline package contracts",
+        "conclusion": "success",
+        "number": 5
+      },
+      {
+        "name": "Run actions/download-artifact@v7",
+        "conclusion": "success",
+        "number": 6
+      },
+      {
+        "name": "Verify packages and provenance",
+        "conclusion": "success",
+        "number": 7
+      },
+      {
+        "name": "Post Run actions/checkout@v7",
+        "conclusion": "success",
+        "number": 14
+      },
+      {
+        "name": "Complete job",
+        "conclusion": "success",
+        "number": 15
+      }
+    ]
+  }
+}
