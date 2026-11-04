@@ -1,0 +1,18 @@
+{
+  "source_commit": "3f2af3498af20ff2c3fc4ac0f3d285eafd430613",
+  "qualification": "Actual CI app binary before/after signing byte comparison; not compiler attestation, CAVA comparison or local trust qualification",
+  "pairs": [
+    {
+      "architecture": "x86_64",
+      "unsigned_sha256": "0675b427a59af5889a56fe49361abaa40ace32f9323cae755202c39b8fda5b9a",
+      "signed_sha256": "2b6ab64c272be82299582ea1e3248c6537fd5b675a4f5876409cc856a2faa697",
+      "only_pe_signature_fields_changed": true
+    },
+    {
+      "architecture": "arm64",
+      "unsigned_sha256": "56c450b3b16addb198b94f5e981a0cb7c66f5ac17b091604c3aaea547d9d559e",
+      "signed_sha256": "b82ae60e76e31744e7879291084bb11ecd680be48446bcf5e9f9869eb5d30f2f",
+      "only_pe_signature_fields_changed": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "source_sha256": "f4d71eddd5cd20373f05db171d0177b804106514325a0e56c62435affdc6efa2",
+  "signed_sha256": "fcc19f19772457b1bcc51ced8d0a1afa945e5116bb284dd644a222edfcb54ec8",
+  "source_bytes": 5580,
+  "lf_source_preserved": true,
+  "authenticode": {
+    "Status": 1,
+    "signer": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+    "timestamp": true
+  },
+  "executed": false
+}

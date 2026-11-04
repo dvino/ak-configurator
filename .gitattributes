@@ -14,3 +14,13 @@ vendor/cava/example_files/test_configs/*_zero_test whitespace=-blank-at-eof
 vendor/cava/cavandroid/gradlew.bat whitespace=cr-at-eol
 vendor/cava/third_party/incbin.h whitespace=-blank-at-eol
 vendor/cava-dependencies/iniparser-4.2.6-LICENSE whitespace=-blank-at-eof
+# Raw application-owned package inputs must match across checkout platforms.
+/LICENSE text eol=lf
+/assets/FONT-LICENSES.txt text eol=lf
+/assets/LUCIDE-LICENSE.txt text eol=lf
+/scripts/build_cava_helper.py text eol=lf
+/scripts/ak820-release/**/*.sh text eol=lf
+/scripts/ak820-release/**/*.ps1 text eol=lf
+/vendor/cava-provenance.json text eol=lf
+/vendor/eframe/LICENSE-MIT text eol=lf
+/vendor/eframe/LICENSE-APACHE text eol=lf

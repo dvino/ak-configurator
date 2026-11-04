@@ -358,3 +358,38 @@ jobs:
             target/candidate/runtime-smoke-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: 7
+
+  verify_candidates:
+    name: Verify all six desktop candidates
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_ref || github.sha }}
+          persist-credentials: false
+      - name: Test package source line endings
+        run: python3 scripts/test_package_line_endings.py
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: desktop-candidate-*
+          path: candidate-artifacts
+          merge-multiple: true
+      - name: Verify packages and provenance
+        env:
+          TRUSTED_SIGNING: ${{ github.repository == 'dvino/ak-configurator' && github.event_name != 'pull_request' }}
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          source_commit="$(git rev-parse HEAD)"
+          signing=()
+          if [[ "$TRUSTED_SIGNING" == 'true' ]]; then
+            signing+=(--require-windows-signing)
+          else
+            echo 'Verifying unsigned development candidates from an untrusted event.'
+          fi
+          python3 scripts/verify_ak820_release_candidate.py \
+            --directory candidate-artifacts \
+            --version "$version" \
+            --source-commit "$source_commit" \
+            --manifest candidate-manifest.json \
+            "${signing[@]}"

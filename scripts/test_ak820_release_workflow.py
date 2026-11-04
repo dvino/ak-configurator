@@ -89,6 +89,30 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_desktop_aggregate_requires_six_built_candidates_and_matching_source(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        build, aggregate = workflow.split("\n  verify_candidates:\n", 1)
+        self.assertEqual(build.count("platform: "), 6)
+        self.assertIn("needs: build", aggregate)
+        self.assertNotIn("if: always()", aggregate)
+        self.assertIn("ref: ${{ inputs.candidate_ref || github.sha }}", aggregate)
+        self.assertIn("python3 scripts/test_package_line_endings.py", aggregate)
+        self.assertLess(aggregate.index("python3 scripts/test_package_line_endings.py"),
+                        aggregate.index("python3 scripts/verify_ak820_release_candidate.py"))
+        self.assertIn("pattern: desktop-candidate-*", aggregate)
+        self.assertIn("merge-multiple: true", aggregate)
+        self.assertIn('source_commit="$(git rev-parse HEAD)"', aggregate)
+        self.assertIn('tomllib.load(open("Cargo.toml", "rb"))["package"]["version"]', aggregate)
+        self.assertIn('python3 scripts/verify_ak820_release_candidate.py', aggregate)
+        self.assertIn('--directory candidate-artifacts', aggregate)
+        self.assertIn('--version "$version"', aggregate)
+        self.assertIn('--source-commit "$source_commit"', aggregate)
+        self.assertIn("github.repository == 'dvino/ak-configurator' && github.event_name != 'pull_request'", aggregate)
+        self.assertIn('if [[ "$TRUSTED_SIGNING" == \'true\' ]]', aggregate)
+        self.assertIn('signing+=(--require-windows-signing)', aggregate)
+        self.assertIn('"${signing[@]}"', aggregate)
+        self.assertNotIn('continue-on-error', aggregate)
+
     def test_signing_preflight_gates_all_six_builds_and_skips_only_untrusted_events(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         preflight = workflow.split("  windows_signing_preflight:\n", 1)[1].split("\n  build:\n", 1)[0]

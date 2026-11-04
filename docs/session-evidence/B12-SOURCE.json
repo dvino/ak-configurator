@@ -1,15 +1,15 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "41208ca3afe5210d800002474d08d5af1919b183",
+  "base_commit": "3f2af3498af20ff2c3fc4ac0f3d285eafd430613",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
-  "file_count": 710,
-  "aggregate_sha256": "4cdeaaac6c175f8a73c69634a83c2c0d73d20766f0941bcf7a2cf805a3b03087",
+  "file_count": 711,
+  "aggregate_sha256": "9d32f4cad5e89189bf3c4cea90f422d0f4e04710e6acf280c491fc438f730826",
   "files": [
     {
       "path": ".gitattributes",
-      "bytes": 949,
-      "sha256": "fa31f5a737027e46c7320e53c814c64d74106c79083649a9c945b410089b0e04"
+      "bytes": 1385,
+      "sha256": "77c06fb639212f596447a6fd0c8495eeccc9a5e78ac3be87711091b34d8d802a"
     },
     {
       "path": ".github/CI_POLICY.md",
@@ -53,8 +53,8 @@
     },
     {
       "path": ".github/workflows/desktop-dev.yml",
-      "bytes": 17354,
-      "sha256": "3e126090c74a4ac44fbf0e81d0dc15ea75138518514a3089654adef1f16461a3"
+      "bytes": 18388,
+      "sha256": "c7cede277433c62d564d332ae38e3ab5a208d629ce42aa448ee3c9e92c0360b1"
     },
     {
       "path": ".github/workflows/nix.yml",
@@ -138,8 +138,8 @@
     },
     {
       "path": "assets/FONT-LICENSES.txt",
-      "bytes": 74786,
-      "sha256": "e40982b50daec8652d260ed967a49bbf584284df00dbca0baf1e8f478070fbd4"
+      "bytes": 73453,
+      "sha256": "8d7c9dfc98fae0010ba8bbdfa9e5684c14bd118004c9aa34112107bfa34b3631"
     },
     {
       "path": "assets/FONTS.md",
@@ -148,8 +148,8 @@
     },
     {
       "path": "assets/LUCIDE-LICENSE.txt",
-      "bytes": 895,
-      "sha256": "c059ec5ba27c5876963f0678f63d2182a6fb6ce97d45ed8b6472ec0c2ec189bf"
+      "bytes": 880,
+      "sha256": "1e7290b35280a048667bbf0ebabac1c7fd52a75300e8b2946ac165715997f2bc"
     },
     {
       "path": "assets/Montserrat-Medium.ttf",
@@ -1043,33 +1043,33 @@
     },
     {
       "path": "scripts/ak820-release/linux/install-user.sh",
-      "bytes": 4161,
-      "sha256": "abda8066d6f7f0d736c937cef238793bb5f83ffd4b49f72061ea9ba33815cd25"
+      "bytes": 4094,
+      "sha256": "ba42c850b9292013b73aa70f0b8000e6d38f4b4227c656980438351a2f69ba58"
     },
     {
       "path": "scripts/ak820-release/linux/uninstall-user.sh",
-      "bytes": 927,
-      "sha256": "6010e3dcabfe54eb4c2f4c123854dd197b6f4006c5e37eac39ff05f314c91728"
+      "bytes": 910,
+      "sha256": "b20d939d83d2610850663195c2de1648366da6155a8aab821362873432d962da"
     },
     {
       "path": "scripts/ak820-release/macos/install-user.sh",
-      "bytes": 1863,
-      "sha256": "5d020cd2504073f05f632fb677cad36bde7ab32f6d41cbef3473851b15bd355d"
+      "bytes": 1827,
+      "sha256": "e397ee3ca8e0e68db1208157cfb266391f28d3467b1c1474acc89a84a18a2374"
     },
     {
       "path": "scripts/ak820-release/macos/uninstall-user.sh",
-      "bytes": 583,
-      "sha256": "65157d751e670b1ed19ae4030240b2165c907fe5cda4fbbd024e70e574832978"
+      "bytes": 574,
+      "sha256": "17dc3b7c0d121e49c0eeedac21730ca1ec193ffb9ba928c8c0a999dd4d7958ec"
     },
     {
       "path": "scripts/ak820-release/windows/install-user.ps1",
-      "bytes": 5670,
-      "sha256": "497f8ede391c09c658a09993154107e87df0068cc001338b62065e5b7e15e47e"
+      "bytes": 5580,
+      "sha256": "f4d71eddd5cd20373f05db171d0177b804106514325a0e56c62435affdc6efa2"
     },
     {
       "path": "scripts/ak820-release/windows/uninstall-user.ps1",
-      "bytes": 1911,
-      "sha256": "e527930cf68614d8f69afb9b0d185383a37fe11442dee80e616d2a571925f7c6"
+      "bytes": 1880,
+      "sha256": "41a9de414ca5e9c1f2e4c8586d360b64717a57c6ef7a39ada5bf48dfd242471a"
     },
     {
       "path": "scripts/ak820_package_metadata.py",
@@ -1088,8 +1088,8 @@
     },
     {
       "path": "scripts/build_cava_helper.py",
-      "bytes": 11815,
-      "sha256": "a26cc607adac88d5930b12522734839f4c656d2482f2834b9368a5f96599586e"
+      "bytes": 11592,
+      "sha256": "eb6797a58d4a98cfc3cd8d4fb39c696caa4ca97183c2c54a9cde628b43026db6"
     },
     {
       "path": "scripts/build_linux_appimage.sh",
@@ -1203,8 +1203,8 @@
     },
     {
       "path": "scripts/test_ak820_release_workflow.py",
-      "bytes": 33689,
-      "sha256": "0bb43ad11cc66c203fd1efa2cf230038f4c65cad96607454fb7d4bef0a186bff"
+      "bytes": 35421,
+      "sha256": "187b7c372a1e0beafd0679c7e668cc9333c204c7981bf43a700a6b5e91a794ce"
     },
     {
       "path": "scripts/test_ak820_runtime_smoke.py",
@@ -1280,6 +1280,11 @@
       "path": "scripts/test_package_ak820_candidate.py",
       "bytes": 11857,
       "sha256": "363ed49a2c98a1b8c57ed554c54a697d6d897d88bc815f649c3f970359fed7a6"
+    },
+    {
+      "path": "scripts/test_package_line_endings.py",
+      "bytes": 3071,
+      "sha256": "ee15835ff126f52839889891aba3abc05bd7a983cafda15463180c0185f44251"
     },
     {
       "path": "scripts/test_pkg_version.sh",
@@ -2608,8 +2613,8 @@
     },
     {
       "path": "vendor/cava-provenance.json",
-      "bytes": 1174,
-      "sha256": "4c8806888521521dc4159b9ed2b0b755ab6bb38feadcc53c811347a7dcb4572d"
+      "bytes": 1147,
+      "sha256": "66dbd871584ed5346e313d7a0854795b314015b7cd52f7fb83bb9526897281b7"
     },
     {
       "path": "vendor/cava/.clang-format",
@@ -3398,13 +3403,13 @@
     },
     {
       "path": "vendor/eframe/LICENSE-APACHE",
-      "bytes": 11048,
-      "sha256": "7cfd738c53d61c79f07e348f622bf7707c9084237054d37fbe07788a75f5881c"
+      "bytes": 10847,
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
     },
     {
       "path": "vendor/eframe/LICENSE-MIT",
-      "bytes": 1083,
-      "sha256": "2e50129a624185afc15510b990f179e027ca591d0c7707d1547f23500d055909"
+      "bytes": 1058,
+      "sha256": "c986bcdb83103d4ddf58aeb7b5302359782e54dc4eea14a0cc27c62dcbd50729"
     },
     {
       "path": "vendor/eframe/README.md",
