@@ -1,0 +1,39 @@
+﻿{
+    "format":  "ak-configurator-installed-windows-trust-observation-1",
+    "files":  [
+                  {
+                      "file":  "ak-configurator.exe",
+                      "windows_status":  "UnknownError",
+                      "signer_thumbprint":  "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+                      "timestamp_present":  true
+                  },
+                  {
+                      "file":  "audio\\cava.exe",
+                      "windows_status":  "UnknownError",
+                      "signer_thumbprint":  "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+                      "timestamp_present":  true
+                  },
+                  {
+                      "file":  "install-user.ps1",
+                      "windows_status":  "UnknownError",
+                      "signer_thumbprint":  "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+                      "timestamp_present":  true
+                  },
+                  {
+                      "file":  "uninstall-user.ps1",
+                      "windows_status":  "UnknownError",
+                      "signer_thumbprint":  "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+                      "timestamp_present":  true
+                  },
+                  {
+                      "file":  "unins000.exe",
+                      "windows_status":  "UnknownError",
+                      "signer_thumbprint":  "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+                      "timestamp_present":  true
+                  }
+              ],
+    "current_user_root_present":  false,
+    "current_user_publisher_present":  false,
+    "full_native_trust_verification":  "not passed; manual OS confirmation pending",
+    "policy_changed":  false
+}

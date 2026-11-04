@@ -1,0 +1,22 @@
+{
+  "format": "ak-configurator-installed-mcp-registration-1",
+  "server_name": "ak-configurator",
+  "transport": "stdio",
+  "enabled": true,
+  "installed_binary_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+  "args": [
+    "--mcp-stdio",
+    "--mcp-access=read-only"
+  ],
+  "existing_configuration_semantically_preserved": true,
+  "cli_normalizations": [
+    "Existing node_repl empty args=[] omitted in TOML; codex mcp get confirms its runtime args remain []"
+  ],
+  "private_config_backup_verified": true,
+  "existing_mcp_entries": 1,
+  "mcp_entries_after": 2,
+  "registration_exit_code": 0,
+  "codex_cli_get_verification": "passed",
+  "desktop_hot_reload": "not verified",
+  "hardware_tools_requested": 0
+}

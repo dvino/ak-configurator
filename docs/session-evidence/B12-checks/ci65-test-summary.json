@@ -1,0 +1,51 @@
+{
+  "format": "ak-configurator-ci65-test-summary-1",
+  "source_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
+  "run_id": 41794559734,
+  "origin": "Decoded job logs fetched once from GitHub after successful completion; summaries only, raw runner logs not published",
+  "aggregate": {
+    "job_id": 126469304369,
+    "lines": [
+      "2026-11-04T08:21:14.8459371Z ##[group]Run python3 scripts/test_package_line_endings.py",
+      "2026-11-04T08:21:15.0115875Z Ran 1 test in 0.105s",
+      "2026-11-04T08:21:15.0116188Z OK",
+      "2026-11-04T08:21:15.0340368Z ##[group]Run python3 scripts/test_windows_runtime_dependencies.py",
+      "2026-11-04T08:21:15.0901021Z Ran 4 tests in 0.001s",
+      "2026-11-04T08:21:15.0901560Z OK",
+      "2026-11-04T08:21:15.1019360Z ##[group]Run python3 scripts/test_ak820_release_workflow.py",
+      "2026-11-04T08:24:13.0204820Z Ran 30 tests in 177.813s",
+      "2026-11-04T08:24:13.0205176Z OK"
+    ]
+  },
+  "windows": [
+    {
+      "architecture": "x86_64",
+      "job_id": 126455832009,
+      "lines": [
+        "2026-11-04T07:48:29.4969149Z Ran 12 tests in 0.110s\r",
+        "2026-11-04T07:48:34.1837887Z Ran 14 tests in 4.012s\r",
+        "2026-11-04T07:52:42.8017897Z ##[group]Run cargo test --locked --all-targets -- --test-threads=1\r",
+        "2026-11-04T08:01:43.4656611Z test result: ok. 1978 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 321.45s\r",
+        "2026-11-04T08:10:09.8635463Z ##[group]Run cargo test --locked --features mcp-mock --bin ak-configurator 'mcp::' -- --test-threads=1\r",
+        "2026-11-04T08:12:07.0534436Z test result: ok. 34 passed; 0 failed; 6 ignored; 0 measured; 1993 filtered out; finished in 4.96s\r",
+        "2026-11-04T08:13:40.6166805Z ak-configurator.exe: checked imports: advapi32.dll, api-ms-win-core-synch-l1-2-0.dll, api-ms-win-core-winrt-l1-1-0.dll, bcrypt.dll, bcryptprimitives.dll, cfgmgr32.dll, combase.dll, comctl32.dll, dwmapi.dll, gdi32.dll, hid.dll, imm32.dll, kernel32.dll, ntdll.dll, ole32.dll, oleaut32.dll, opengl32.dll, shell32.dll, shlwapi.dll, uiautomationcore.dll, user32.dll, uxtheme.dll, ws2_32.dll\r",
+        "2026-11-04T08:13:40.6168236Z audio/cava.exe: checked imports: kernel32.dll, ole32.dll, shlwapi.dll\r"
+      ]
+    },
+    {
+      "architecture": "arm64",
+      "job_id": 126455831914,
+      "lines": [
+        "2026-11-04T07:49:11.0420583Z Ran 12 tests in 0.150s\r",
+        "2026-11-04T07:49:18.2012122Z Ran 14 tests in 6.559s\r",
+        "2026-11-04T07:54:32.9379495Z ##[group]Run cargo test --locked --all-targets -- --test-threads=1\r",
+        "2026-11-04T08:05:06.2895190Z test result: ok. 1978 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 409.20s\r",
+        "2026-11-04T08:13:22.8877361Z ##[group]Run cargo test --locked --features mcp-mock --bin ak-configurator 'mcp::' -- --test-threads=1\r",
+        "2026-11-04T08:15:39.9097554Z test result: ok. 34 passed; 0 failed; 6 ignored; 0 measured; 1993 filtered out; finished in 6.80s\r",
+        "2026-11-04T08:17:46.7313621Z ak-configurator.exe: checked imports: advapi32.dll, api-ms-win-core-synch-l1-2-0.dll, api-ms-win-core-winrt-l1-1-0.dll, bcrypt.dll, bcryptprimitives.dll, cfgmgr32.dll, combase.dll, comctl32.dll, dwmapi.dll, gdi32.dll, hid.dll, imm32.dll, kernel32.dll, ntdll.dll, ole32.dll, oleaut32.dll, opengl32.dll, shell32.dll, shlwapi.dll, uiautomationcore.dll, user32.dll, uxtheme.dll, ws2_32.dll\r",
+        "2026-11-04T08:17:46.7316601Z audio/cava.exe: checked imports: kernel32.dll, ole32.dll, shlwapi.dll\r"
+      ]
+    }
+  ],
+  "limits": "Ignored cases remain unqualified. Mock MCP tests are host models; neither compiler attestation nor physical keyboard or macOS acceptance."
+}

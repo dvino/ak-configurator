@@ -89,6 +89,14 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_installer_registry_guard_tests_run_on_windows_before_cargo(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        block = workflow.split("      - name: Test Windows installer registry guard\n", 1)[1].split("\n      - name:", 1)[0]
+        self.assertIn("if: startsWith(matrix.platform, 'windows-')", block)
+        self.assertIn("python scripts/test_windows_installer_registry.py", block)
+        self.assertLess(workflow.index("Test Windows installer registry guard"),
+                        workflow.index("Test all targets (Linux and Windows)"))
+
     def test_desktop_aggregate_requires_six_built_candidates_and_matching_source(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         build, aggregate = workflow.split("\n  verify_candidates:\n", 1)

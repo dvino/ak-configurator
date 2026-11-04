@@ -1,0 +1,1874 @@
+{
+  "app_update_index": {
+    "assets": [
+      {
+        "arch": "arm64",
+        "name": "ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz",
+        "platform": "linux",
+        "sha256": "f4ad99e79fe2b99670dbc24cf14de94aaf46c39b91519f28376ae722c921be97",
+        "size": 37592730,
+        "target": "aarch64-unknown-linux-gnu",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz"
+      },
+      {
+        "arch": "x86_64",
+        "name": "ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz",
+        "platform": "linux",
+        "sha256": "0aa17200e4e19882f391093be4e60b44c60f7ee9b18daaa337b8ff4e95d1fdfe",
+        "size": 38333649,
+        "target": "x86_64-unknown-linux-gnu",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz"
+      },
+      {
+        "arch": "arm64",
+        "name": "ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip",
+        "platform": "macos",
+        "sha256": "37ae784d3868713a1bb166dd30e9bb77f2ca72feb071c7fe04638a79923cd16c",
+        "size": 42395824,
+        "target": "aarch64-apple-darwin",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip"
+      },
+      {
+        "arch": "x86_64",
+        "name": "ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip",
+        "platform": "macos",
+        "sha256": "4c4a55264677958a678278b61235d99e6d3bcebe3751ba3d1ace919204262d27",
+        "size": 42783631,
+        "target": "x86_64-apple-darwin",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip"
+      },
+      {
+        "arch": "arm64",
+        "name": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip",
+        "platform": "windows",
+        "sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+        "size": 39041174,
+        "target": "aarch64-pc-windows-msvc",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64.zip"
+      },
+      {
+        "arch": "x86_64",
+        "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip",
+        "platform": "windows",
+        "sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+        "size": 39787548,
+        "target": "x86_64-pc-windows-msvc",
+        "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64.zip"
+      }
+    ],
+    "prerelease": true,
+    "schema_version": 1,
+    "tag": "v0.1.0-alpha.1",
+    "version": "0.1.0-alpha.1"
+  },
+  "application_version": "0.1.0-alpha.1",
+  "format": "ak-configurator-release-candidate-1",
+  "platforms": {
+    "linux-arm64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "aarch64",
+        "error": null,
+        "executable_sha256": "93618d98240ef60c0b2de5cdec17c36f335cdaf88de5781dcaab2d7276a2d480",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "linux",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "aarch64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Window restored after the isolated tray host disappeared",
+              "name": "native_tray_host_loss",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 793,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "linux",
+          "physical_behavior_validated": false,
+          "rendered_frames": 21,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 1148.492597,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 1172.302633,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 1390.285326,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 1390.367792,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 1434.880149,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 1455.639952,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "synthetic_status_notifier_host"
+        },
+        "status": "passed",
+        "stderr_tail": " primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 12, serial_num: 28 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:02:57.387+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 30, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetLayout\"), body: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 12, serial_num: 30 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:02:57.387+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 32, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetLayout\"), body: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 22, serial_num: 32 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:02:57.387+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 34, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetGroupProperties\"), body: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 40, serial_num: 34 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetGroupProperties\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 36, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 36 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 38, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 38 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 40, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"AboutToShowGroup\"), body: Array(Dynamic { child: I32 }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 16, serial_num: 40 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"AboutToShowGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Array(Dynamic { child: I32 }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 42, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"Event\"), body: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 28, serial_num: 42 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"Event\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 44, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"EventGroup\"), body: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 68, serial_num: 44 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"EventGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), unix_fds: None } }\n2026-11-04T08:02:57.388+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 46, sender: UniqueName(\":1.3\"), path: ObjectPath(\"/StatusNotifierItem\"), iface: InterfaceName(\"org.kde.StatusNotifierItem\"), member: MemberName(\"Activate\"), body: Structure(Dynamic { fields: [I32, I32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 8, serial_num: 46 }, fields: Fields { path: Some(ObjectPath(\"/StatusNotifierItem\")), interface: Some(InterfaceName(\"org.kde.StatusNotifierItem\")), member: Some(MemberName(\"Activate\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.4\")), sender: Some(UniqueName(\":1.3\")), signature: Structure(Dynamic { fields: [I32, I32] }), unix_fds: None } }\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "f4ad99e79fe2b99670dbc24cf14de94aaf46c39b91519f28376ae722c921be97",
+        "audio_helper_sha256": "84048ecc35ae8ee49e18f78cbb289b4414710e0acf1e38c53e8ef601d031e5e3",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "93618d98240ef60c0b2de5cdec17c36f335cdaf88de5781dcaab2d7276a2d480",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "linux-arm64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "linux-arm64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "linux-arm64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "f4ad99e79fe2b99670dbc24cf14de94aaf46c39b91519f28376ae722c921be97"
+    },
+    "linux-x86_64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "x86_64",
+        "error": null,
+        "executable_sha256": "d42b5d8e49509c18b4b08fb6c1bd419a64db2d7ea96eaacba8673ea605ef428d",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "linux",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "x86_64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Window restored after the isolated tray host disappeared",
+              "name": "native_tray_host_loss",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 880,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "linux",
+          "physical_behavior_validated": false,
+          "rendered_frames": 21,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 1298.4054469999999,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 1332.357474,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 1695.658608,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 1695.736144,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 1733.5507969999999,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 1755.019447,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "synthetic_status_notifier_host"
+        },
+        "status": "passed",
+        "stderr_tail": " primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 12, serial_num: 30 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:01:47.977+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 32, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetLayout\"), body: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 12, serial_num: 32 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:01:47.978+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 34, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetLayout\"), body: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 22, serial_num: 34 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetLayout\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32, Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:01:47.978+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 36, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetGroupProperties\"), body: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 40, serial_num: 36 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetGroupProperties\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [Array(Dynamic { child: I32 }), Array(Dynamic { child: Str })] }), unix_fds: None } }\n2026-11-04T08:01:47.978+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 38, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 38 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-11-04T08:01:47.978+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 40, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"GetProperty\"), body: Structure(Dynamic { fields: [I32, Str] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 14, serial_num: 40 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"GetProperty\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str] }), unix_fds: None } }\n2026-11-04T08:01:47.978+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 42, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"AboutToShowGroup\"), body: Array(Dynamic { child: I32 }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 16, serial_num: 42 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"AboutToShowGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Array(Dynamic { child: I32 }), unix_fds: None } }\n2026-11-04T08:01:47.979+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 44, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"Event\"), body: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 28, serial_num: 44 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"Event\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, Str, Variant, U32] }), unix_fds: None } }\n2026-11-04T08:01:47.979+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 46, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/MenuBar\"), iface: InterfaceName(\"com.canonical.dbusmenu\"), member: MemberName(\"EventGroup\"), body: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 68, serial_num: 46 }, fields: Fields { path: Some(ObjectPath(\"/MenuBar\")), interface: Some(InterfaceName(\"com.canonical.dbusmenu\")), member: Some(MemberName(\"EventGroup\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Array(Dynamic { child: Structure(Dynamic { fields: [I32, Str, Variant, U32] }) }), unix_fds: None } }\n2026-11-04T08:01:47.979+00:00 INFO  zbus::object_server: dispatch_call; msg=Msg { type: MethodCall, serial: 48, sender: UniqueName(\":1.2\"), path: ObjectPath(\"/StatusNotifierItem\"), iface: InterfaceName(\"org.kde.StatusNotifierItem\"), member: MemberName(\"Activate\"), body: Structure(Dynamic { fields: [I32, I32] }), fds: [] } hdr=Header { primary: PrimaryHeader { endian_sig: Little, msg_type: MethodCall, flags: BitFlags<Flags>(0b0), protocol_version: 1, body_len: 8, serial_num: 48 }, fields: Fields { path: Some(ObjectPath(\"/StatusNotifierItem\")), interface: Some(InterfaceName(\"org.kde.StatusNotifierItem\")), member: Some(MemberName(\"Activate\")), error_name: None, reply_serial: None, destination: Some(BusName::Unique(\":1.3\")), sender: Some(UniqueName(\":1.2\")), signature: Structure(Dynamic { fields: [I32, I32] }), unix_fds: None } }\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "0aa17200e4e19882f391093be4e60b44c60f7ee9b18daaa337b8ff4e95d1fdfe",
+        "audio_helper_sha256": "469fdff525a7bc281da00e72f47204804704160ccec4a3cbf569da578301cb3d",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "d42b5d8e49509c18b4b08fb6c1bd419a64db2d7ea96eaacba8673ea605ef428d",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "linux-x86_64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "linux-x86_64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "linux-x86_64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "0aa17200e4e19882f391093be4e60b44c60f7ee9b18daaa337b8ff4e95d1fdfe"
+    },
+    "macos-arm64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "aarch64",
+        "error": null,
+        "executable_sha256": "2a1c4defa751fe3bd0372de8b90d738e3518fde9e09d5f62a3fa63ca8f01dc07",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "macos",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "aarch64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 1495,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "macos",
+          "physical_behavior_validated": false,
+          "rendered_frames": 16,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 1595.3167499999997,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 1635.385458,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 2289.521542,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 2289.834875,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 2365.958083,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 2433.196875,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "native_desktop"
+        },
+        "status": "passed",
+        "stderr_tail": "2026-11-04T07:55:47.333+00:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on macos aarch64\n2026-11-04T07:55:47.334+00:00 INFO  ak_configurator::diagnostics: macOS runtime architecture: native arm64 Apple Silicon\n2026-11-04T07:55:47.334+00:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T07:55:48.928+00:00 INFO  ak_configurator::startup: Startup window_creator: 1595.3 ms from process entry\n2026-11-04T07:55:48.968+00:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 1635.4 ms from process entry\n2026-11-04T07:55:49.623+00:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 2289.5 ms from process entry\n2026-11-04T07:55:49.623+00:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 2289.8 ms from process entry\n2026-11-04T07:55:49.645+00:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T07:55:49.699+00:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 2366.0 ms from process entry\n2026-11-04T07:55:49.766+00:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 2433.2 ms from process entry\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "37ae784d3868713a1bb166dd30e9bb77f2ca72feb071c7fe04638a79923cd16c",
+        "audio_helper_sha256": "f54b5c64b0df417db14481fd5ca2e3012f8d27fec8248befdd1cbeee510482ca",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "2a1c4defa751fe3bd0372de8b90d738e3518fde9e09d5f62a3fa63ca8f01dc07",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "macos-arm64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "macos-arm64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "macos-arm64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "37ae784d3868713a1bb166dd30e9bb77f2ca72feb071c7fe04638a79923cd16c"
+    },
+    "macos-x86_64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "x86_64",
+        "error": null,
+        "executable_sha256": "2580b6e56cba7f92bb2cbd6907bb6e833c41aee529644783b8b2c5f5a3a43791",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "macos",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "x86_64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 2183,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "macos",
+          "physical_behavior_validated": false,
+          "rendered_frames": 16,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 4365.488558,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 4462.734606,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 5461.044722000001,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 5461.173763,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 5547.328448,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 5615.993331000001,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "native_desktop"
+        },
+        "status": "passed",
+        "stderr_tail": "2026-11-04T08:08:35.804+00:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on macos x86_64\n2026-11-04T08:08:35.804+00:00 INFO  ak_configurator::diagnostics: macOS runtime architecture: native x86_64 Intel\n2026-11-04T08:08:35.804+00:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T08:08:40.171+00:00 INFO  ak_configurator::startup: Startup window_creator: 4365.5 ms from process entry\n2026-11-04T08:08:40.268+00:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 4462.7 ms from process entry\n2026-11-04T08:08:41.267+00:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 5461.0 ms from process entry\n2026-11-04T08:08:41.267+00:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 5461.2 ms from process entry\n2026-11-04T08:08:41.281+00:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T08:08:41.353+00:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 5547.3 ms from process entry\n2026-11-04T08:08:41.422+00:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 5616.0 ms from process entry\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "4c4a55264677958a678278b61235d99e6d3bcebe3751ba3d1ace919204262d27",
+        "audio_helper_sha256": "4bc05d86edfae3dc2a1dda18fbbf092addfd656d972090610db4847913af61bd",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "2580b6e56cba7f92bb2cbd6907bb6e833c41aee529644783b8b2c5f5a3a43791",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "macos-x86_64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "macos-x86_64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "macos-x86_64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "4c4a55264677958a678278b61235d99e6d3bcebe3751ba3d1ace919204262d27"
+    },
+    "windows-arm64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "aarch64",
+        "ci_graphics_fixture": {
+          "application_renderer": "production Glow/WGL",
+          "archive_sha256": "e7df75398d50e07a68bbffa5cff2ece4c85e5f8ef8bda497f560dd04fe60cbbd",
+          "archive_url": "https://github.com/mmozeiko/build-mesa/releases/download/26.2.5/mesa-llvmpipe-arm64-26.2.5.7z",
+          "copied_executable_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+          "distribution": "mmozeiko/build-mesa",
+          "driver_load_independently_verified": false,
+          "driver_selection": "adjacent_wgl_dll",
+          "driver_sha256": "e2ae12869b428c00f733ff17907785ddaab8d5e4076d08294098fc9e7cd3778a",
+          "hardware_gpu_validated": false,
+          "native_arch": "aarch64",
+          "original_executable_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+          "packaged_driver": false,
+          "requested_driver": "Mesa llvmpipe",
+          "scope": "ci_only_software_opengl",
+          "source_commit": "cb4cc458eff7c4b4b31d2623edd954d66201b88f",
+          "version": "26.2.5"
+        },
+        "error": null,
+        "executable_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "windows",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "aarch64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 617,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "windows",
+          "physical_behavior_validated": false,
+          "rendered_frames": 17,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 190.2312,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 209.0906,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 371.0427,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 371.1902,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 432.9915,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 446.5782,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "native_desktop"
+        },
+        "status": "passed",
+        "stderr_tail": "2026-11-04T00:17:10.398-08:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on windows aarch64\n2026-11-04T00:17:10.398-08:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T00:17:10.587-08:00 INFO  ak_configurator::startup: Startup window_creator: 190.2 ms from process entry\n2026-11-04T00:17:10.606-08:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 209.1 ms from process entry\n2026-11-04T00:17:10.768-08:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 371.0 ms from process entry\n2026-11-04T00:17:10.768-08:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 371.2 ms from process entry\n2026-11-04T00:17:10.786-08:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T00:17:10.830-08:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 433.0 ms from process entry\n2026-11-04T00:17:10.844-08:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 446.6 ms from process entry\nError removing system tray icon\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+        "audio_helper_sha256": "c59dab53b890650054d73e96dc45c52a4b37b29b4fa660ae87efcb2180c0000a",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "windows-arm64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "windows-arm64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "windows-arm64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+      "windows_installer": {
+        "application_version": "0.1.0-alpha.1",
+        "candidate_source_dirty": false,
+        "checkout_dirty": false,
+        "compiler_name": "ISCC.exe",
+        "compiler_sha256": "e0f9f1dc32032650c6629f6dee41eb6d20ba140e4e3c07c25d8a24f9ba781644",
+        "compiler_version": "7.1.1",
+        "format": "ak-configurator-windows-installer-build-1",
+        "input_executable_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+        "input_zip": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip",
+        "input_zip_sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+        "output": "ak-configurator-0.1.0-alpha.1-windows-arm64-setup.exe",
+        "output_sha256": "2e17b2204afa2703b683a1ebf1b73e327c832fecb5791899ea18f722c5225dd6",
+        "platform": "windows-arm64",
+        "qualification": "local single-platform build; not full release qualification",
+        "setup_architecture": "x64",
+        "signing": {
+          "mode": "local-development",
+          "public_trust": false,
+          "setup_signature_verified": true,
+          "signed_uninstaller_requested": true,
+          "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7"
+        },
+        "source_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
+        "start_menu_group_override": true
+      },
+      "windows_installer_smoke": {
+        "format": "ak-configurator-windows-installer-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "windows-arm64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "reinstall_verified": true,
+        "setup_sha256": "2e17b2204afa2703b683a1ebf1b73e327c832fecb5791899ea18f722c5225dd6",
+        "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+        "start_menu_group_isolated": true,
+        "uninstalled": true,
+        "uninstaller_signature_verified": true,
+        "user_data_preserved": true
+      },
+      "windows_signing": {
+        "files": {
+          "ak-configurator.exe": {
+            "signed_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+            "unsigned_sha256": "626a2864d38c9695ca9fa1aba3b596372df3af6803ab777f2f4ed649ea1bfa5b"
+          },
+          "audio/cava.exe": {
+            "signed_sha256": "c59dab53b890650054d73e96dc45c52a4b37b29b4fa660ae87efcb2180c0000a",
+            "unsigned_sha256": "037dfeaafdaf9ebe456045ca007947dff8b6f3800e401eae0947bf10badc1d51"
+          },
+          "install-user.ps1": {
+            "signed_sha256": "64bc824755388bfdbee1070b88d509e840ee9688998bbda1f4968d60a7e5a013",
+            "unsigned_sha256": "f4d71eddd5cd20373f05db171d0177b804106514325a0e56c62435affdc6efa2"
+          },
+          "uninstall-user.ps1": {
+            "signed_sha256": "fa26d516e6b38e4ef6d21f36e3af8ccd3bd0bcc0ce5aef79528dbef9b3700fa7",
+            "unsigned_sha256": "41a9de414ca5e9c1f2e4c8586d360b64717a57c6ef7a39ada5bf48dfd242471a"
+          }
+        },
+        "format": "ak-configurator-windows-signing-1",
+        "mode": "local-development",
+        "public_trust": false,
+        "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7"
+      }
+    },
+    "windows-x86_64": {
+      "archive": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip",
+      "gui_runtime_smoke": {
+        "application_version": "0.1.0-alpha.1",
+        "arch": "x86_64",
+        "ci_graphics_fixture": {
+          "application_renderer": "production Glow/WGL",
+          "archive_sha256": "d1b713ca2a7fba47a50c058099f13c435ddb76a16a422c334e4d787f9755a31d",
+          "archive_url": "https://github.com/mmozeiko/build-mesa/releases/download/26.2.5/mesa-llvmpipe-x64-26.2.5.7z",
+          "copied_executable_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+          "distribution": "mmozeiko/build-mesa",
+          "driver_load_independently_verified": false,
+          "driver_selection": "adjacent_wgl_dll",
+          "driver_sha256": "8ddc061ee752fff06ae682de0ac2e010926d76a93c1aecc4c206adee771856e1",
+          "hardware_gpu_validated": false,
+          "native_arch": "x86_64",
+          "original_executable_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+          "packaged_driver": false,
+          "requested_driver": "Mesa llvmpipe",
+          "scope": "ci_only_software_opengl",
+          "source_commit": "cb4cc458eff7c4b4b31d2623edd954d66201b88f",
+          "version": "26.2.5"
+        },
+        "error": null,
+        "executable_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+        "exit_code": 0,
+        "format": "ak820-runtime-smoke-harness-1",
+        "os": "windows",
+        "runtime_smoke": {
+          "application_version": "0.1.0-alpha.1",
+          "arch": "x86_64",
+          "cases": [
+            {
+              "detail": "Native renderer completed at least three application frames",
+              "name": "window_launch",
+              "status": "passed"
+            },
+            {
+              "detail": "Actual RGB settings page remained selected across rendered frames",
+              "name": "rgb_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Application settings rendered using private temporary preferences",
+              "name": "settings_navigation",
+              "status": "passed"
+            },
+            {
+              "detail": "Production tray registered; native visibility changed hidden to visible; rendering resumed",
+              "name": "native_tray",
+              "status": "passed"
+            },
+            {
+              "detail": "Native application continued rendering after lifecycle exercise",
+              "name": "render_after_navigation",
+              "status": "passed"
+            }
+          ],
+          "elapsed_ms": 589,
+          "error": null,
+          "evidence": "native_gui_offline_model",
+          "exclusions": [
+            "physical keyboard and LED behavior",
+            "actual tray mouse click routing",
+            "desktop panel rendering with synthetic tray host",
+            "Wayland qualification when run under Xvfb",
+            "live OS helper and HID latency"
+          ],
+          "format": "ak820-runtime-smoke-1",
+          "isolated_settings": true,
+          "live_hid_allowed": false,
+          "os": "windows",
+          "physical_behavior_validated": false,
+          "rendered_frames": 19,
+          "startup_timings": {
+            "display_fence_measured": false,
+            "phases": [
+              {
+                "elapsed_ms": 152.9165,
+                "phase": "window_creator"
+              },
+              {
+                "elapsed_ms": 172.6284,
+                "phase": "splash_first_frame_submitted"
+              },
+              {
+                "elapsed_ms": 284.2096,
+                "phase": "editor_initialization_started"
+              },
+              {
+                "elapsed_ms": 284.3198,
+                "phase": "editor_fonts_configured"
+              },
+              {
+                "elapsed_ms": 332.3039,
+                "phase": "editor_initialization_finished"
+              },
+              {
+                "elapsed_ms": 343.4973,
+                "phase": "editor_first_frame_submitted"
+              }
+            ],
+            "unit": "milliseconds_from_process_entry"
+          },
+          "status": "passed",
+          "tray_host": "native_desktop"
+        },
+        "status": "passed",
+        "stderr_tail": "2026-11-04T08:13:11.785+00:00 INFO  ak_configurator::diagnostics: AK Configurator v0.1.0-alpha.1 starting on windows x86_64\n2026-11-04T08:13:11.785+00:00 INFO  ak_configurator: Single-instance guard disabled by AK_CONFIGURATOR_SINGLE_INSTANCE\n2026-11-04T08:13:11.937+00:00 INFO  ak_configurator::startup: Startup window_creator: 152.9 ms from process entry\n2026-11-04T08:13:11.957+00:00 INFO  ak_configurator::startup: Startup splash_first_frame_submitted: 172.6 ms from process entry\n2026-11-04T08:13:12.068+00:00 INFO  ak_configurator::startup: Startup editor_initialization_started: 284.2 ms from process entry\n2026-11-04T08:13:12.069+00:00 INFO  ak_configurator::startup: Startup editor_fonts_configured: 284.3 ms from process entry\n2026-11-04T08:13:12.087+00:00 INFO  ak_configurator::device: Found 1 Vial device(s)\n2026-11-04T08:13:12.117+00:00 INFO  ak_configurator::startup: Startup editor_initialization_finished: 332.3 ms from process entry\n2026-11-04T08:13:12.128+00:00 INFO  ak_configurator::startup: Startup editor_first_frame_submitted: 343.5 ms from process entry\n"
+      },
+      "installation_smoke": {
+        "archive_sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+        "audio_helper_sha256": "21495948638b1413c6c021899b69d1e9352dadbecfbdace050d382ddf2067dc7",
+        "audio_helper_version": "cava 1.0.0",
+        "binary_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+        "format": "ak-configurator-installed-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "windows-x86_64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "platform": "windows-x86_64",
+        "uninstalled": true,
+        "upgrade_verified": true,
+        "user_data_preserved": true
+      },
+      "runtime_self_check": {
+        "application_version": "0.1.0-alpha.1",
+        "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+        "firmware_release": "v0.6.0-beta.5",
+        "format": "ak-configurator-self-check-1",
+        "hardware_access": false,
+        "network_access": false,
+        "platform": "windows-x86_64",
+        "profiles": [
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+            "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+            "profile": "mmo"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+            "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+            "profile": "pointer"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+            "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+            "profile": "onehand"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+            "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+            "profile": "game"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+            "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+            "profile": "typing"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+            "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+            "profile": "code"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+            "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+            "profile": "shortcuts"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+            "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+            "profile": "creative"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+            "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+            "profile": "main"
+          },
+          {
+            "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+            "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+            "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+            "profile": "multios"
+          }
+        ],
+        "status": "passed"
+      },
+      "sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+      "windows_installer": {
+        "application_version": "0.1.0-alpha.1",
+        "candidate_source_dirty": false,
+        "checkout_dirty": false,
+        "compiler_name": "ISCC.exe",
+        "compiler_sha256": "e0f9f1dc32032650c6629f6dee41eb6d20ba140e4e3c07c25d8a24f9ba781644",
+        "compiler_version": "7.1.1",
+        "format": "ak-configurator-windows-installer-build-1",
+        "input_executable_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+        "input_zip": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip",
+        "input_zip_sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+        "output": "ak-configurator-0.1.0-alpha.1-windows-x86_64-setup.exe",
+        "output_sha256": "afe667ead3fc3278012bc596b51629b696ba897d9a20b0d12a3adca1bd0175c2",
+        "platform": "windows-x86_64",
+        "qualification": "local single-platform build; not full release qualification",
+        "setup_architecture": "x64",
+        "signing": {
+          "mode": "local-development",
+          "public_trust": false,
+          "setup_signature_verified": true,
+          "signed_uninstaller_requested": true,
+          "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7"
+        },
+        "source_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
+        "start_menu_group_override": true
+      },
+      "windows_installer_smoke": {
+        "format": "ak-configurator-windows-installer-smoke-1",
+        "installed_self_check": {
+          "application_version": "0.1.0-alpha.1",
+          "catalog_sha256": "9a033d944db3282120df5b68c0c0c2a3c3a370d103e9482b95c66d673a43882d",
+          "firmware_release": "v0.6.0-beta.5",
+          "format": "ak-configurator-self-check-1",
+          "hardware_access": false,
+          "network_access": false,
+          "platform": "windows-x86_64",
+          "profiles": [
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "ed78426a8c0841c2ec26ba9a72dc676cb61b7a579fda066215118e850972d360",
+              "map_sha256": "655e3cbd7a51b6aa09cfa98ccfe795e05402833781e1632beb2a2866c1c05f09",
+              "profile": "mmo"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "97c4771741f22c894d3f8caa637249d2a356895e957222f4bfdfa59f530904f9",
+              "map_sha256": "599112a055f56a1896d02b500396de55b3b8f8a8a6f7f6ae1ac17c3eaf131d82",
+              "profile": "pointer"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "bf44a5d1a3f74bb0ee14cd24dcbb20883340609fb8262eef048503b54a985a34",
+              "map_sha256": "19a4d6d94ebd7bf5e0908bf45cf65b0f238a0e78da652cf3ae736cb7c38b1c23",
+              "profile": "onehand"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9b4c535c9e32e4fc70667e00da4f80056ab064b91cd55113635a1ea9e54e2069",
+              "map_sha256": "a277e4f62074cd526f31bbc0b045f34aed3c84d8e1cd31df1a0fd558c74d7538",
+              "profile": "game"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "8eea737bb62a956c293150125cc144cb637c1abe329f8915d1bf2ddf3a7cd65b",
+              "map_sha256": "71eb7d1d1712b2d5b22c19f0f141192909c9ce3456851094cf7327698fda2c02",
+              "profile": "typing"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "644cf1e4bab800bad1d3119f9e37fd173b4518436700c4a038ecd27bf01407a1",
+              "map_sha256": "c6f85d1b3644197113a2a2f90cd996ecb7068d185d72b60fcdb89e489f61adbf",
+              "profile": "code"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "78deedc044311631082ecccc9cc15622adbf7a200b219ca622515517b6987ca1",
+              "map_sha256": "f39d64561021444fab26e53d73eb277d8ec78125c940e79cba10f92c140e48c2",
+              "profile": "shortcuts"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "636bb6dc26e003c1110a6030130262cf5e3bd10cda42c7f8285cde4eee9ab760",
+              "map_sha256": "9dc3c95e302766b552eb19acdfd91e73087e6863819c48058d63571951b86113",
+              "profile": "creative"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "3e5b53ff49e11e3bfd204289569cd9e77e55ae9e6bb05ed962dc843e9f3877b3",
+              "map_sha256": "375db12fbbc6528bcbb089213a97354546b5667f3ccf85ca2635fe41dc5946c4",
+              "profile": "main"
+            },
+            {
+              "default_settings_sha256": "a5d91c5619527fc5b0ebb9fd1117aa8259f17e1ac9212a063599711a4b129a46",
+              "ihx_sha256": "9dd18d0746c6e11a13efe8369cfb80d3683fc79f7524c3dae6de11cc1bf6a358",
+              "map_sha256": "2ca3908e63b166eeb35e8ff8fc958b751da0e2bf893be9f575c72d1a2f7bc72f",
+              "profile": "multios"
+            }
+          ],
+          "status": "passed"
+        },
+        "reinstall_verified": true,
+        "setup_sha256": "afe667ead3fc3278012bc596b51629b696ba897d9a20b0d12a3adca1bd0175c2",
+        "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7",
+        "start_menu_group_isolated": true,
+        "uninstalled": true,
+        "uninstaller_signature_verified": true,
+        "user_data_preserved": true
+      },
+      "windows_signing": {
+        "files": {
+          "ak-configurator.exe": {
+            "signed_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+            "unsigned_sha256": "d6bdbd65258dae2e0446655850cb2badbcd0312d588743419714981a4328abcc"
+          },
+          "audio/cava.exe": {
+            "signed_sha256": "21495948638b1413c6c021899b69d1e9352dadbecfbdace050d382ddf2067dc7",
+            "unsigned_sha256": "e8095c6e9e83832504007637b130bd3dc1a7aaf70aacaa94693b847c62f77fed"
+          },
+          "install-user.ps1": {
+            "signed_sha256": "2b8fbfeaf8bf110057d75727dfcfd945dfdc6a73b7937439164e5e81e42a2612",
+            "unsigned_sha256": "f4d71eddd5cd20373f05db171d0177b804106514325a0e56c62435affdc6efa2"
+          },
+          "uninstall-user.ps1": {
+            "signed_sha256": "8566136c54d0a79c29e4a70e8c51f5b0b64128058d6c4bedc43d39743be772e9",
+            "unsigned_sha256": "41a9de414ca5e9c1f2e4c8586d360b64717a57c6ef7a39ada5bf48dfd242471a"
+          }
+        },
+        "format": "ak-configurator-windows-signing-1",
+        "mode": "local-development",
+        "public_trust": false,
+        "signer_thumbprint": "1D9596F961B7F24D9F66AE7BE2B1EA39FF1543C7"
+      }
+    }
+  },
+  "source_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
+  "status": "Windows local-development signing evidence verified; public trust and hardware qualification remain separate"
+}

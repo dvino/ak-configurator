@@ -1,0 +1,62 @@
+{
+  "assets": [
+    {
+      "arch": "arm64",
+      "name": "ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz",
+      "platform": "linux",
+      "sha256": "f4ad99e79fe2b99670dbc24cf14de94aaf46c39b91519f28376ae722c921be97",
+      "size": 37592730,
+      "target": "aarch64-unknown-linux-gnu",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-arm64.tar.gz"
+    },
+    {
+      "arch": "x86_64",
+      "name": "ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz",
+      "platform": "linux",
+      "sha256": "0aa17200e4e19882f391093be4e60b44c60f7ee9b18daaa337b8ff4e95d1fdfe",
+      "size": 38333649,
+      "target": "x86_64-unknown-linux-gnu",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-linux-x86_64.tar.gz"
+    },
+    {
+      "arch": "arm64",
+      "name": "ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip",
+      "platform": "macos",
+      "sha256": "37ae784d3868713a1bb166dd30e9bb77f2ca72feb071c7fe04638a79923cd16c",
+      "size": 42395824,
+      "target": "aarch64-apple-darwin",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-arm64.app.zip"
+    },
+    {
+      "arch": "x86_64",
+      "name": "ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip",
+      "platform": "macos",
+      "sha256": "4c4a55264677958a678278b61235d99e6d3bcebe3751ba3d1ace919204262d27",
+      "size": 42783631,
+      "target": "x86_64-apple-darwin",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-macos-x86_64.app.zip"
+    },
+    {
+      "arch": "arm64",
+      "name": "ak-configurator-0.1.0-alpha.1-windows-arm64.zip",
+      "platform": "windows",
+      "sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+      "size": 39041174,
+      "target": "aarch64-pc-windows-msvc",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-arm64.zip"
+    },
+    {
+      "arch": "x86_64",
+      "name": "ak-configurator-0.1.0-alpha.1-windows-x86_64.zip",
+      "platform": "windows",
+      "sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+      "size": 39787548,
+      "target": "x86_64-pc-windows-msvc",
+      "url": "https://github.com/dvino/ak-configurator/releases/download/v0.1.0-alpha.1/ak-configurator-0.1.0-alpha.1-windows-x86_64.zip"
+    }
+  ],
+  "prerelease": true,
+  "schema_version": 1,
+  "tag": "v0.1.0-alpha.1",
+  "version": "0.1.0-alpha.1"
+}

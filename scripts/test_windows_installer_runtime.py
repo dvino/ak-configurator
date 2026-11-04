@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise install, reinstall and uninstall in an isolated Windows runner account."""
 import argparse
+import base64
 import ctypes
 import hashlib
 import json
@@ -9,7 +10,6 @@ from pathlib import Path
 import subprocess
 import tempfile
 import uuid
-import winreg
 
 KEY = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{98D90734-FF33-4BCE-9E69-5434767DD69B}_is1'
 
@@ -43,17 +43,56 @@ def new_group(programs):
 
 
 def existing_install():
-    locations = []
-    for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, KEY, 0, winreg.KEY_READ | view) as key:
-                try:
-                    locations.append(winreg.QueryValueEx(key, 'InstallLocation')[0])
-                except FileNotFoundError:
-                    locations.append('<unknown location>')
-        except FileNotFoundError:
-            continue
-    return locations
+    # A child process may inherit a packaged runtime's registry view. Refuse it:
+    # an apparently absent key in that view does not prove physical absence.
+    length = ctypes.c_uint32(0)
+    status = ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None)
+    if status != 15700:  # APPMODEL_ERROR_NO_PACKAGE
+        raise OSError('Registry guard requires an unpackaged Python process')
+    # Query both views from Windows PowerShell.
+    script = r'''
+$ErrorActionPreference = 'Stop'
+Import-Module "$env:SystemRoot\System32\WindowsPowerShell\v1.0\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$result = @()
+foreach ($view in @([Microsoft.Win32.RegistryView]::Registry32, [Microsoft.Win32.RegistryView]::Registry64)) {
+    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, $view)
+    try {
+        $key = $base.OpenSubKey($env:AK_INSTALLER_TEST_REGISTRY_KEY)
+        try {
+            if ($null -eq $key) { $result += @{present = $false; location = $null} }
+            else {
+                $location = $key.GetValue('InstallLocation', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                if ($location -isnot [string] -or [string]::IsNullOrWhiteSpace($location)) { $location = '<unknown location>' }
+                $result += @{present = $true; location = $location}
+            }
+        } finally { if ($null -ne $key) { $key.Dispose() } }
+    } finally { $base.Dispose() }
+}
+ConvertTo-Json -InputObject $result -Compress
+'''
+    powershell = Path(os.environ['SystemRoot']) / 'System32' / 'WindowsPowerShell' / 'v1.0' / 'powershell.exe'
+    encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
+    result = subprocess.run([str(powershell), '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+                            env={**os.environ, 'AK_INSTALLER_TEST_REGISTRY_KEY': KEY},
+                            capture_output=True, check=True, timeout=30)
+    try:
+        views = json.loads(result.stdout.decode('utf-8-sig'))
+        if not isinstance(views, list) or len(views) != 2:
+            raise ValueError('Invalid registry view count')
+        locations = []
+        for view in views:
+            if not isinstance(view, dict) or set(view) != {'present', 'location'} or type(view['present']) is not bool:
+                raise ValueError('Invalid registry view result')
+            if view['present']:
+                if not isinstance(view['location'], str) or not view['location'].strip():
+                    raise ValueError('Invalid installation location')
+                locations.append(view['location'])
+            elif view['location'] is not None:
+                raise ValueError('Invalid absent registry view')
+        return locations
+    except (UnicodeError, json.JSONDecodeError, TypeError) as exc:
+        raise ValueError('Invalid registry query output') from exc
 
 
 def guard(root, install, expected=None):
@@ -77,6 +116,10 @@ def execute(setup, report, signing_thumbprint=None, signtool=None):
     if (build.get('start_menu_group_override') is not True
             or build.get('output_sha256') != hashlib.sha256(setup.read_bytes()).hexdigest()):
         raise ValueError('Setup build report does not prove the isolated group override')
+    # Refuse before creating any test files if the registry view is unsafe or
+    # an installation already owns the registration. guard() checks again later.
+    if existing_install():
+        raise ValueError('Existing Inno installation belongs to another location; refusing test')
     # Keep the directory on failure so an incomplete install is not deleted blindly.
     root = Path(tempfile.mkdtemp(prefix='ak-installer-test-')).resolve()
     print(f'Isolated installer test directory: {root}', flush=True)

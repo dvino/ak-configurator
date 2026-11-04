@@ -1,0 +1,2178 @@
+{
+  "conclusion": "success",
+  "headSha": "65e1a90041c434b98401203bb160e8986c4f0a46",
+  "jobs": [
+    {
+      "completedAt": "2026-11-04T07:47:09Z",
+      "conclusion": "success",
+      "databaseId": 126455464804,
+      "name": "Windows signing preflight (arm64)",
+      "startedAt": "2026-11-04T07:46:12Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:46:15Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:46:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:37Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:46:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:38Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@v7",
+          "number": 3,
+          "startedAt": "2026-11-04T07:46:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:02Z",
+          "conclusion": "success",
+          "name": "Import temporary identity and verify CMS signing",
+          "number": 4,
+          "startedAt": "2026-11-04T07:46:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:03Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@v7",
+          "number": 7,
+          "startedAt": "2026-11-04T07:47:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:07Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 8,
+          "startedAt": "2026-11-04T07:47:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:07Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-11-04T07:47:07Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455464804"
+    },
+    {
+      "completedAt": "2026-11-04T07:46:33Z",
+      "conclusion": "success",
+      "databaseId": 126455465087,
+      "name": "Windows signing preflight (x64)",
+      "startedAt": "2026-11-04T07:46:12Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:46:13Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:46:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:23Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:46:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:23Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@v7",
+          "number": 3,
+          "startedAt": "2026-11-04T07:46:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:29Z",
+          "conclusion": "success",
+          "name": "Import temporary identity and verify CMS signing",
+          "number": 4,
+          "startedAt": "2026-11-04T07:46:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:29Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@v7",
+          "number": 7,
+          "startedAt": "2026-11-04T07:46:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:32Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 8,
+          "startedAt": "2026-11-04T07:46:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:46:32Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-11-04T07:46:32Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455465087"
+    },
+    {
+      "completedAt": "2026-11-04T08:21:06Z",
+      "conclusion": "success",
+      "databaseId": 126455831914,
+      "name": "Build (windows-arm64)",
+      "startedAt": "2026-11-04T07:47:12Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:14Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:26Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:40Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:08Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:11Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:49:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "success",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:49:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:41Z",
+          "conclusion": "success",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:43Z",
+          "conclusion": "success",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:49:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:46Z",
+          "conclusion": "success",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:49:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:32Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:49:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:32Z",
+          "conclusion": "skipped",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:54:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:32Z",
+          "conclusion": "success",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:54:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:05:06Z",
+          "conclusion": "success",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:54:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:05:06Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T08:05:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:05:06Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T08:05:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:05:06Z",
+          "conclusion": "skipped",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T08:05:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:22Z",
+          "conclusion": "success",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T08:05:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:22Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T08:13:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:15:40Z",
+          "conclusion": "success",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T08:13:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:36Z",
+          "conclusion": "success",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T08:15:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:39Z",
+          "conclusion": "success",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T08:16:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:39Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T08:16:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:45Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T08:16:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:45Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T08:16:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:45Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T08:16:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:45Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T08:16:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:45Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T08:16:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:46Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T08:16:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:46Z",
+          "conclusion": "skipped",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T08:16:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:52Z",
+          "conclusion": "success",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T08:16:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:17:47Z",
+          "conclusion": "success",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T08:16:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:17:47Z",
+          "conclusion": "skipped",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T08:17:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:17:50Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T08:17:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:17:54Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T08:17:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:17:59Z",
+          "conclusion": "success",
+          "name": "Post Check out pinned Windows audio build tools",
+          "number": 70,
+          "startedAt": "2026-11-04T08:17:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:20:59Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T08:17:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:21:04Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T08:20:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:21:04Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T08:21:04Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455831914"
+    },
+    {
+      "completedAt": "2026-11-04T08:02:27Z",
+      "conclusion": "success",
+      "databaseId": 126455831970,
+      "name": "Build (linux-x86_64)",
+      "startedAt": "2026-11-04T07:47:12Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:14Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:18Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:26Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:45Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:47:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:10Z",
+          "conclusion": "success",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:10Z",
+          "conclusion": "skipped",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:10Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:10Z",
+          "conclusion": "skipped",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:07Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:09Z",
+          "conclusion": "success",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:49:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:09Z",
+          "conclusion": "skipped",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:49:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:47Z",
+          "conclusion": "success",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:49:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:47Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T07:54:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:47Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T07:54:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:54:47Z",
+          "conclusion": "skipped",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T07:54:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:00:18Z",
+          "conclusion": "success",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T07:54:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:00:18Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T08:00:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:10Z",
+          "conclusion": "success",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T08:00:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:42Z",
+          "conclusion": "success",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T08:01:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:42Z",
+          "conclusion": "success",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T08:01:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T08:01:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:48Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:55Z",
+          "conclusion": "success",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T08:01:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:55Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T08:01:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:55Z",
+          "conclusion": "skipped",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T08:01:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:57Z",
+          "conclusion": "success",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T08:01:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:00Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T08:01:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:03Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T08:02:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:25Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T08:02:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:25Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T08:02:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:25Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T08:02:25Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455831970"
+    },
+    {
+      "completedAt": "2026-11-04T08:11:52Z",
+      "conclusion": "success",
+      "databaseId": 126455831983,
+      "name": "Build (macos-x86_64)",
+      "startedAt": "2026-11-04T07:47:14Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:25Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:34Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:58Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:17Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:49:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "success",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:18Z",
+          "conclusion": "skipped",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:53:07Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:49:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:53:13Z",
+          "conclusion": "success",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:53:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:53:13Z",
+          "conclusion": "skipped",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:53:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:53:13Z",
+          "conclusion": "skipped",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:53:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:57:08Z",
+          "conclusion": "success",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T07:53:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:57:09Z",
+          "conclusion": "success",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T07:57:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:57:10Z",
+          "conclusion": "success",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T07:57:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:57:10Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T07:57:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "success",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T07:57:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "skipped",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "skipped",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "skipped",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:35Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:43Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T08:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:44Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T08:08:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:45Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T08:08:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:45Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T08:08:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:45Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T08:08:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:51Z",
+          "conclusion": "success",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T08:08:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:51Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T08:08:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:51Z",
+          "conclusion": "skipped",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T08:08:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:08:54Z",
+          "conclusion": "success",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T08:08:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:09:02Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T08:08:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:09:06Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T08:09:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:11:46Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T08:09:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:11:49Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T08:11:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:11:49Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T08:11:49Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455831983"
+    },
+    {
+      "completedAt": "2026-11-04T08:03:25Z",
+      "conclusion": "success",
+      "databaseId": 126455832002,
+      "name": "Build (linux-arm64)",
+      "startedAt": "2026-11-04T07:47:14Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:16Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:19Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:24Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:44Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:44Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:47:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:44Z",
+          "conclusion": "skipped",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:47:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:44Z",
+          "conclusion": "skipped",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:47:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:18Z",
+          "conclusion": "success",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:47:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:18Z",
+          "conclusion": "skipped",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:48:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:18Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:48:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:18Z",
+          "conclusion": "skipped",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:48:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:01Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:48:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:04Z",
+          "conclusion": "success",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:49:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:04Z",
+          "conclusion": "skipped",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:49:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:25Z",
+          "conclusion": "success",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:49:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:25Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T07:55:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:25Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T07:55:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:25Z",
+          "conclusion": "skipped",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T07:55:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:04Z",
+          "conclusion": "success",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T07:55:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:04Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T08:01:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:11Z",
+          "conclusion": "success",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T08:01:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:52Z",
+          "conclusion": "success",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T08:02:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:52Z",
+          "conclusion": "success",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T08:02:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:57Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T08:02:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:57Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T08:02:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:57Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T08:02:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:57Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T08:02:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:58Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T08:02:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:58Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T08:02:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:02:58Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T08:02:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:02Z",
+          "conclusion": "success",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T08:02:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:02Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T08:03:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:02Z",
+          "conclusion": "skipped",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T08:03:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:03Z",
+          "conclusion": "success",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T08:03:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:05Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T08:03:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:07Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T08:03:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:23Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T08:03:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:24Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T08:03:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:03:24Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T08:03:24Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455832002"
+    },
+    {
+      "completedAt": "2026-11-04T08:16:24Z",
+      "conclusion": "success",
+      "databaseId": 126455832009,
+      "name": "Build (windows-x86_64)",
+      "startedAt": "2026-11-04T07:47:13Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:16Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:26Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:39Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:26Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:29Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:48:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:34Z",
+          "conclusion": "success",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:48:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:34Z",
+          "conclusion": "skipped",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:48:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:34Z",
+          "conclusion": "skipped",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:48:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:42Z",
+          "conclusion": "success",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:48:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:43Z",
+          "conclusion": "success",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:48:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:48:46Z",
+          "conclusion": "success",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:48:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:52:42Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:48:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:52:42Z",
+          "conclusion": "skipped",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:52:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:52:42Z",
+          "conclusion": "success",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:52:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:43Z",
+          "conclusion": "success",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:52:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:43Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T08:01:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:43Z",
+          "conclusion": "skipped",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T08:01:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:01:43Z",
+          "conclusion": "skipped",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T08:01:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:10:09Z",
+          "conclusion": "success",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T08:01:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:10:09Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T08:10:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:07Z",
+          "conclusion": "success",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T08:10:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:49Z",
+          "conclusion": "success",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T08:12:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:50Z",
+          "conclusion": "success",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T08:12:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:50Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T08:12:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T08:12:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:54Z",
+          "conclusion": "skipped",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:12:58Z",
+          "conclusion": "success",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T08:12:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:41Z",
+          "conclusion": "success",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T08:12:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:41Z",
+          "conclusion": "skipped",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T08:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:45Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T08:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:48Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T08:13:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:13:50Z",
+          "conclusion": "success",
+          "name": "Post Check out pinned Windows audio build tools",
+          "number": 70,
+          "startedAt": "2026-11-04T08:13:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:20Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T08:13:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:22Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T08:16:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:16:22Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T08:16:22Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455832009"
+    },
+    {
+      "completedAt": "2026-11-04T07:56:52Z",
+      "conclusion": "success",
+      "databaseId": 126455832085,
+      "name": "Build (macos-arm64)",
+      "startedAt": "2026-11-04T07:47:13Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T07:47:15Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T07:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:18Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T07:47:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:25Z",
+          "conclusion": "success",
+          "name": "Install Rust 1.94.1",
+          "number": 3,
+          "startedAt": "2026-11-04T07:47:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:45Z",
+          "conclusion": "success",
+          "name": "Cache Rust",
+          "number": 4,
+          "startedAt": "2026-11-04T07:47:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "success",
+          "name": "Test audio dependency setup (offline)",
+          "number": 5,
+          "startedAt": "2026-11-04T07:47:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Test Windows installer CI guards (offline)",
+          "number": 6,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "success",
+          "name": "Install macOS Rust target",
+          "number": 7,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Install Linux build dependencies",
+          "number": 8,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Check out pinned Windows audio build tools",
+          "number": 9,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Windows static audio dependencies",
+          "number": 10,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:47:46Z",
+          "conclusion": "skipped",
+          "name": "Prepare pinned native Windows pkgconf",
+          "number": 11,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:07Z",
+          "conclusion": "success",
+          "name": "Build bundled audio helper without capture",
+          "number": 12,
+          "startedAt": "2026-11-04T07:47:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:09Z",
+          "conclusion": "success",
+          "name": "Verify real helper using synthetic FIFO PCM",
+          "number": 13,
+          "startedAt": "2026-11-04T07:49:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:09Z",
+          "conclusion": "skipped",
+          "name": "Guard Windows static CRT configuration",
+          "number": 14,
+          "startedAt": "2026-11-04T07:49:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:49:09Z",
+          "conclusion": "skipped",
+          "name": "Test all targets (Linux and Windows)",
+          "number": 15,
+          "startedAt": "2026-11-04T07:49:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:50:05Z",
+          "conclusion": "success",
+          "name": "Test AK820 filesystem and ownership (macOS)",
+          "number": 16,
+          "startedAt": "2026-11-04T07:49:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:50:06Z",
+          "conclusion": "success",
+          "name": "Test AK820 device ownership (macOS)",
+          "number": 17,
+          "startedAt": "2026-11-04T07:50:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:50:06Z",
+          "conclusion": "success",
+          "name": "Test macOS USB metadata validation",
+          "number": 18,
+          "startedAt": "2026-11-04T07:50:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:50:06Z",
+          "conclusion": "skipped",
+          "name": "Build development binary (Linux and Windows)",
+          "number": 19,
+          "startedAt": "2026-11-04T07:50:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "success",
+          "name": "Build development binary (macOS)",
+          "number": 20,
+          "startedAt": "2026-11-04T07:50:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "skipped",
+          "name": "Test optional MCP contracts (Linux and Windows)",
+          "number": 21,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "skipped",
+          "name": "Build optional MCP mock binary (Linux and Windows)",
+          "number": 22,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "skipped",
+          "name": "Exercise MCP stdio with mock backend (Linux and Windows)",
+          "number": 23,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke under Xvfb (Linux)",
+          "number": 24,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:46Z",
+          "conclusion": "skipped",
+          "name": "Execute native GUI runtime smoke (Windows)",
+          "number": 25,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:51Z",
+          "conclusion": "success",
+          "name": "Execute native GUI runtime smoke (macOS)",
+          "number": 26,
+          "startedAt": "2026-11-04T07:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:51Z",
+          "conclusion": "skipped",
+          "name": "Retain failed native GUI runtime smoke diagnostics",
+          "number": 27,
+          "startedAt": "2026-11-04T07:55:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:51Z",
+          "conclusion": "success",
+          "name": "Write SHA-256 manifest (Linux and macOS)",
+          "number": 28,
+          "startedAt": "2026-11-04T07:55:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:51Z",
+          "conclusion": "skipped",
+          "name": "Write SHA-256 manifest (Windows)",
+          "number": 29,
+          "startedAt": "2026-11-04T07:55:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:52Z",
+          "conclusion": "success",
+          "name": "Execute target runtime self-check (offline, no device access)",
+          "number": 30,
+          "startedAt": "2026-11-04T07:55:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:56Z",
+          "conclusion": "success",
+          "name": "Package unsigned desktop alpha candidate",
+          "number": 31,
+          "startedAt": "2026-11-04T07:55:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:56Z",
+          "conclusion": "skipped",
+          "name": "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+          "number": 32,
+          "startedAt": "2026-11-04T07:55:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:56Z",
+          "conclusion": "skipped",
+          "name": "Build and exercise Windows GUI installer",
+          "number": 33,
+          "startedAt": "2026-11-04T07:55:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:55:58Z",
+          "conclusion": "success",
+          "name": "Install, execute, and uninstall candidate on native runner",
+          "number": 34,
+          "startedAt": "2026-11-04T07:55:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:56:02Z",
+          "conclusion": "success",
+          "name": "Upload development binary and checksum",
+          "number": 35,
+          "startedAt": "2026-11-04T07:55:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:56:06Z",
+          "conclusion": "success",
+          "name": "Upload candidate package and checksum",
+          "number": 36,
+          "startedAt": "2026-11-04T07:56:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:56:46Z",
+          "conclusion": "success",
+          "name": "Post Cache Rust",
+          "number": 71,
+          "startedAt": "2026-11-04T07:56:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:56:47Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 72,
+          "startedAt": "2026-11-04T07:56:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T07:56:49Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 73,
+          "startedAt": "2026-11-04T07:56:47Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126455832085"
+    },
+    {
+      "completedAt": "2026-11-04T08:24:24Z",
+      "conclusion": "success",
+      "databaseId": 126469304369,
+      "name": "Verify all six desktop candidates",
+      "startedAt": "2026-11-04T08:21:09Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-04T08:21:11Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-04T08:21:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:21:14Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v7",
+          "number": 2,
+          "startedAt": "2026-11-04T08:21:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:21:15Z",
+          "conclusion": "success",
+          "name": "Test package source line endings",
+          "number": 3,
+          "startedAt": "2026-11-04T08:21:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:21:15Z",
+          "conclusion": "success",
+          "name": "Test Windows runtime dependency parser",
+          "number": 4,
+          "startedAt": "2026-11-04T08:21:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:24:13Z",
+          "conclusion": "success",
+          "name": "Test offline package contracts",
+          "number": 5,
+          "startedAt": "2026-11-04T08:21:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:24:17Z",
+          "conclusion": "success",
+          "name": "Run actions/download-artifact@v7",
+          "number": 6,
+          "startedAt": "2026-11-04T08:24:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:24:22Z",
+          "conclusion": "success",
+          "name": "Verify packages and provenance",
+          "number": 7,
+          "startedAt": "2026-11-04T08:24:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:24:22Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v7",
+          "number": 14,
+          "startedAt": "2026-11-04T08:24:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-04T08:24:22Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-11-04T08:24:22Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734/job/126469304369"
+    }
+  ],
+  "url": "https://github.com/dvino/ak-configurator/actions/runs/41794559734"
+}

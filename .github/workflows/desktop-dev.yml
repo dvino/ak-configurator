@@ -196,6 +196,10 @@ jobs:
               raise SystemExit('Windows MSVC static CRT configuration is missing or changed')
           PY
 
+      - name: Test Windows installer registry guard
+        if: startsWith(matrix.platform, 'windows-')
+        run: python scripts/test_windows_installer_registry.py
+
       - name: Test all targets (Linux and Windows)
         if: startsWith(matrix.platform, 'linux-') || startsWith(matrix.platform, 'windows-')
         run: cargo test --locked --all-targets -- --test-threads=1

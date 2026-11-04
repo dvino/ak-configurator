@@ -1,0 +1,34 @@
+{
+  "format": "ak-configurator-independent-artifact-review-1",
+  "reviewer": "final_windows_artifact_review",
+  "source_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
+  "result": "No material blocker within the read-only artifact scope",
+  "independently_reproduced": [
+    "Shared verifier on all six platforms with require_windows_signing=True",
+    "All 34 raw candidate files match verified-inputs without filename collisions",
+    "Pinned CMS, internal/external checksums, source commit and setup/smoke bindings",
+    "Both development binary SHA256SUMS",
+    "Unsigned-to-signed app PE changes limited to signing fields and certificate table on both Windows architectures",
+    "23 app imports and 3 helper imports on each Windows architecture"
+  ],
+  "windows_x86_64": {
+    "setup_bytes": 32190680,
+    "setup_sha256": "afe667ead3fc3278012bc596b51629b696ba897d9a20b0d12a3adca1bd0175c2",
+    "zip_bytes": 39787548,
+    "zip_sha256": "46bc0f9fedf04d53e634ae1fc96dffc9885dd1707d3d3ece3d2a6e6ffbc8b83b",
+    "signed_app_bytes": 55023288,
+    "signed_app_sha256": "1118f034f601bf8753086961f46611a4103807e8ad6996df81779081c724bc68",
+    "unsigned_app_sha256": "d6bdbd65258dae2e0446655850cb2badbcd0312d588743419714981a4328abcc"
+  },
+  "windows_arm64": {
+    "setup_bytes": 31593688,
+    "setup_sha256": "2e17b2204afa2703b683a1ebf1b73e327c832fecb5791899ea18f722c5225dd6",
+    "zip_bytes": 39041174,
+    "zip_sha256": "5c8d2bc966a5bb60eb51991276ef61ac5ebb73fa095592cfd67e63565e471335",
+    "signed_app_bytes": 51303096,
+    "signed_app_sha256": "b940bf8d103a92badadf932e5068e8d11107e8eea742a9fa8d92120f2e378e1c",
+    "unsigned_app_sha256": "626a2864d38c9695ca9fa1aba3b596372df3af6803ab777f2f4ed649ea1bfa5b"
+  },
+  "signing": "Pinned local-development certificate, not public CA",
+  "limits": "Not compiler attestation, user-host Windows trust, clean-PC launch, physical keyboard behavior, macOS qualification or release acceptance. Reviewer did not execute installer/app, mutate stores or access devices."
+}

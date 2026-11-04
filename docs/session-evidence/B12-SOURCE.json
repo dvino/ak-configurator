@@ -1,6 +1,6 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "92411ceb6c8c6a557c4fc5f5ff4a6192a18fc8d2",
+  "base_commit": "65e1a90041c434b98401203bb160e8986c4f0a46",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
   "selection": {
@@ -25,8 +25,8 @@
     ],
     "aggregate_encoding": "SHA256 of UTF-8 json.dumps(files, sort_keys=True, separators=(comma, colon)); each entry contains path, bytes, sha256 of working-tree bytes"
   },
-  "file_count": 714,
-  "aggregate_sha256": "aadcf0ddd52b63ba89d1398b2dd88a795c14088ca3e9a870ca5e0d3030d2aa59",
+  "file_count": 715,
+  "aggregate_sha256": "ed3c02f3dfecfe1048ad2dc3585aa1b10fc57cbe3d4e36dbf8f62609d3399de2",
   "files": [
     {
       "path": ".cargo/config.toml",
@@ -80,8 +80,8 @@
     },
     {
       "path": ".github/workflows/desktop-dev.yml",
-      "bytes": 19457,
-      "sha256": "59fa83850be8de819273f3407a7a6c06f626191ee37172f998d20098d3bc2f13"
+      "bytes": 19625,
+      "sha256": "0e995916b7b7b3278ba6e9061cc816631660fbae2d7bd4859796aa78c81de121"
     },
     {
       "path": ".github/workflows/nix.yml",
@@ -1230,8 +1230,8 @@
     },
     {
       "path": "scripts/test_ak820_release_workflow.py",
-      "bytes": 38148,
-      "sha256": "acd692ddb1719ef3d684312bcb64a83abdc7dee928647334c1f09e687157ac64"
+      "bytes": 38772,
+      "sha256": "8e2e247ec31f4dce196ed7511c9d59160b3b7fc6d4636525b6190a91db68727c"
     },
     {
       "path": "scripts/test_ak820_runtime_smoke.py",
@@ -1349,9 +1349,14 @@
       "sha256": "79fbf30b4c8377df7661c426f5e5ecc6c9560cf08b7e986a322e0cbaadfcbc91"
     },
     {
+      "path": "scripts/test_windows_installer_registry.py",
+      "bytes": 4235,
+      "sha256": "5076d2986e2fb4177360ace4a66876ef5293bd00b77a3582ac8226f6bc7da3ba"
+    },
+    {
       "path": "scripts/test_windows_installer_runtime.py",
-      "bytes": 7509,
-      "sha256": "3b469aa5af1735f16331517205bcd0b8a7bf9ba3e35a6d5de90a6745547ace8c"
+      "bytes": 10341,
+      "sha256": "1bd5bdd1b0b2a55ce4b7b15b8b930eb1d381fd90bd4287ef6df6187cc8c774dc"
     },
     {
       "path": "scripts/test_windows_runtime_dependencies.py",

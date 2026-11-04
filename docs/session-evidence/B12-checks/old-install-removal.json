@@ -1,0 +1,12 @@
+﻿{
+    "format":  "ak-configurator-authorized-legacy-removal-1",
+    "files_verified":  67,
+    "backup_reverified":  true,
+    "reparse_descendants":  0,
+    "old_processes":  0,
+    "old_program_removed":  true,
+    "old_shortcut_removed":  true,
+    "user_settings_touched":  false,
+    "backup_retained":  true,
+    "replacement_setup_sha256":  "afe667ead3fc3278012bc596b51629b696ba897d9a20b0d12a3adca1bd0175c2"
+}
