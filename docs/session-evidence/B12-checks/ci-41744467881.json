@@ -1,0 +1,67 @@
+{
+  "format": "ak-configurator-ci-result-1",
+  "qualification": "Completed GitHub job metadata; no binary-source attestation or macOS acceptance",
+  "run_id": 41744467881,
+  "repository": "dvino/ak-configurator",
+  "head_sha": "54ffc289b9a2d4720f847440a21aedc21754050c",
+  "url": "https://github.com/dvino/ak-configurator/actions/runs/41744467881",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-11-04T00:07:43Z",
+  "updated_at": "2026-11-04T00:08:23Z",
+  "observed_utc": "2026-11-04T00:12:55.340596+00:00",
+  "jobs": [
+    {
+      "job_id": 126293879327,
+      "name": "Windows signing preflight (x64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41744467881/job/126293879327",
+      "conclusion": "success",
+      "failed_steps": [],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Run actions/setup-python@v7",
+        "Import temporary identity and verify CMS signing",
+        "Post Run actions/setup-python@v7",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126293879672,
+      "name": "Windows signing preflight (arm64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41744467881/job/126293879672",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Import temporary identity and verify CMS signing",
+          "number": 4
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Run actions/setup-python@v7",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126294156335,
+      "name": "Build (${{ matrix.platform }})",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41744467881/job/126294156335",
+      "conclusion": "skipped",
+      "failed_steps": [],
+      "successful_steps": []
+    }
+  ],
+  "artifacts": [],
+  "failure_diagnostic": {
+    "platform": "windows-arm64",
+    "stage": "publisher-import",
+    "hresult": "0x80070005",
+    "base_hresult": "0x80070005",
+    "source": "bounded completed job log inspected by designated monitor",
+    "root_cause": "not established"
+  }
+}

@@ -111,6 +111,18 @@ foreach ($name in @('Get-AuthenticodeSignature', 'Import-PfxCertificate', 'Impor
         self.assertNotIn('encoded-secret-marker', str(caught.exception))
         self.assertEqual(caught.exception.cmd, 'Windows PowerShell signing helper')
 
+    def test_machine_publisher_is_checked_imported_and_cleaned(self):
+        machine = r'Cert:\LocalMachine\TrustedPublisher'
+        user = r'Cert:\CurrentUser\TrustedPublisher'
+        self.assertEqual(signing.IMPORT.count(machine), 2)
+        self.assertEqual(signing.CLEANUP.count(machine), 1)
+        self.assertNotIn(user, signing.IMPORT + signing.CLEANUP)
+        self.assertLess(signing.IMPORT.index('Certificate already exists'),
+                        signing.IMPORT.index("WriteAllText($env:AK_CI_CERT_OWNERSHIP"))
+        self.assertIn('if ($imported.Thumbprint -ne $thumb)', signing.IMPORT)
+        self.assertIn('if (-not (Test-Path -LiteralPath $env:AK_CI_CERT_OWNERSHIP))', signing.CLEANUP)
+        self.assertIn('if (Test-Path $path) { Remove-Item $path -Force }', signing.CLEANUP)
+
     def test_untrusted_event_rejected_before_import(self):
         with mock.patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted', 'GITHUB_REPOSITORY': 'dvino/ak-configurator',
                                           'GITHUB_EVENT_NAME': 'pull_request'}, clear=True), \

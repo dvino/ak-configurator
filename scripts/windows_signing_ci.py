@@ -36,7 +36,7 @@ $stage = 'pfx-identity'
 if ($collection.Count -ne 1 -or $collection[0].Thumbprint -ne $thumb -or -not $collection[0].HasPrivateKey) { throw 'PFX identity mismatch' }
 $collection[0].Dispose()
 $stage = 'existing-certificate-check'
-foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublisher')) {
+foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\LocalMachine\TrustedPublisher')) {
     if (Test-Path "$store\$thumb") { throw "Certificate already exists in $store" }
 }
 # Mark ownership only after all pre-existing store checks have passed.
@@ -45,7 +45,7 @@ $stage = 'ownership-marker'
 $stage = 'pfx-my-import'
 $imported = Import-PfxCertificate -FilePath $env:AK_CI_CERT_PFX -CertStoreLocation Cert:\CurrentUser\My -Password $password
 if ($imported.Thumbprint -ne $thumb) { throw 'Imported PFX mismatch' }
-foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublisher')) {
+foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\LocalMachine\TrustedPublisher')) {
     $stage = if ($store -eq 'Cert:\LocalMachine\Root') { 'root-import' } else { 'publisher-import' }
     $imported = Import-Certificate -FilePath $env:AK_CI_CERT_PUBLIC -CertStoreLocation $store
     if ($imported.Thumbprint -ne $thumb) { throw "Imported $store certificate mismatch" }
@@ -69,7 +69,7 @@ try {
         else { throw 'Unsupported private-key provider' }
     }
 } catch { $errors += 'Private-key cleanup failed' }
-foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublisher')) {
+foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\LocalMachine\TrustedPublisher')) {
     try {
         $path = "$store\$thumb"
         if (Test-Path $path) { Remove-Item $path -Force }
