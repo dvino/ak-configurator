@@ -114,7 +114,7 @@ foreach ($name in @('Get-AuthenticodeSignature', 'Import-PfxCertificate', 'Impor
     def test_machine_publisher_is_checked_imported_and_cleaned(self):
         machine = r'Cert:\LocalMachine\TrustedPublisher'
         user = r'Cert:\CurrentUser\TrustedPublisher'
-        self.assertEqual(signing.IMPORT.count(machine), 2)
+        self.assertEqual(signing.IMPORT.count(machine), 3)
         self.assertEqual(signing.CLEANUP.count(machine), 1)
         self.assertNotIn(user, signing.IMPORT + signing.CLEANUP)
         self.assertLess(signing.IMPORT.index('Certificate already exists'),
@@ -122,6 +122,20 @@ foreach ($name in @('Get-AuthenticodeSignature', 'Import-PfxCertificate', 'Impor
         self.assertIn('if ($imported.Thumbprint -ne $thumb)', signing.IMPORT)
         self.assertIn('if (-not (Test-Path -LiteralPath $env:AK_CI_CERT_OWNERSHIP))', signing.CLEANUP)
         self.assertIn('if (Test-Path $path) { Remove-Item $path -Force }', signing.CLEANUP)
+
+    def test_publisher_store_open_is_guarded_and_single_attempt(self):
+        script = signing.IMPORT
+        self.assertLess(script.index('PFX identity mismatch'), script.index('Certificate already exists'))
+        self.assertLess(script.index('Certificate already exists'), script.index("WriteAllText($env:AK_CI_CERT_OWNERSHIP"))
+        self.assertLess(script.index("WriteAllText($env:AK_CI_CERT_OWNERSHIP"), script.index("$stage = 'publisher-store-open'"))
+        self.assertLess(script.index("$stage = 'publisher-store-open'"), script.index('$publisher.Open('))
+        self.assertLess(script.index('$publisher.Open('), script.index('Import-Certificate -FilePath'))
+        self.assertEqual(script.count('$publisher.Open('), 1)
+        self.assertIn('OpenFlags]::ReadWrite', script)
+        self.assertIn('RegistryView]::Registry64', script)
+        self.assertEqual(script.count("OpenSubKey('SOFTWARE\\Microsoft\\SystemCertificates\\TrustedPublisher', $false)"), 2)
+        self.assertIn('finally { $publisher.Close() }', script)
+        self.assertNotIn('New-Item', script)
 
     def test_untrusted_event_rejected_before_import(self):
         with mock.patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted', 'GITHUB_REPOSITORY': 'dvino/ak-configurator',

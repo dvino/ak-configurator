@@ -46,6 +46,21 @@ $stage = 'pfx-my-import'
 $imported = Import-PfxCertificate -FilePath $env:AK_CI_CERT_PFX -CertStoreLocation Cert:\CurrentUser\My -Password $password
 if ($imported.Thumbprint -ne $thumb) { throw 'Imported PFX mismatch' }
 foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\LocalMachine\TrustedPublisher')) {
+    if ($store -eq 'Cert:\LocalMachine\TrustedPublisher') {
+        $stage = 'publisher-store-open'
+        $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+        try {
+            $key = $registry.OpenSubKey('SOFTWARE\Microsoft\SystemCertificates\TrustedPublisher', $false)
+            try { [Console]::WriteLine(('Publisher registry container before open: {0}' -f ($null -ne $key))) }
+            finally { if ($key) { $key.Dispose() } }
+            $publisher = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine)
+            try { $publisher.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite) }
+            finally { $publisher.Close() }
+            $key = $registry.OpenSubKey('SOFTWARE\Microsoft\SystemCertificates\TrustedPublisher', $false)
+            try { [Console]::WriteLine(('Publisher registry container after open: {0}' -f ($null -ne $key))) }
+            finally { if ($key) { $key.Dispose() } }
+        } finally { $registry.Dispose() }
+    }
     $stage = if ($store -eq 'Cert:\LocalMachine\Root') { 'root-import' } else { 'publisher-import' }
     $imported = Import-Certificate -FilePath $env:AK_CI_CERT_PUBLIC -CertStoreLocation $store
     if ($imported.Thumbprint -ne $thumb) { throw "Imported $store certificate mismatch" }

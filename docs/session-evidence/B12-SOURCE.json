@@ -1,10 +1,10 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "54ffc289b9a2d4720f847440a21aedc21754050c",
+  "base_commit": "41208ca3afe5210d800002474d08d5af1919b183",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
   "file_count": 710,
-  "aggregate_sha256": "9c58519c0a158a2a9a040f7ba0a6115ee91538ec369e804081fae52446aeaa4b",
+  "aggregate_sha256": "4cdeaaac6c175f8a73c69634a83c2c0d73d20766f0941bcf7a2cf805a3b03087",
   "files": [
     {
       "path": ".gitattributes",
@@ -1313,8 +1313,8 @@
     },
     {
       "path": "scripts/test_windows_installer_ci.py",
-      "bytes": 8663,
-      "sha256": "91dcbc7c40a7c614f3af295b313a5dafd37b21d1c18305d11fc40ffc3fa63440"
+      "bytes": 9748,
+      "sha256": "79fbf30b4c8377df7661c426f5e5ecc6c9560cf08b7e986a322e0cbaadfcbc91"
     },
     {
       "path": "scripts/test_windows_installer_runtime.py",
@@ -1358,8 +1358,8 @@
     },
     {
       "path": "scripts/windows_signing_ci.py",
-      "bytes": 7542,
-      "sha256": "b26c8fb704778951ad31714f7e3ef61487a85cd4bd60a9c0b980280ce375a20a"
+      "bytes": 8732,
+      "sha256": "cec3cb30f2dad4d4abdf2ff1af854d259361f92b145642c55e34a9a3a229dae4"
     },
     {
       "path": "src/action_icons.rs",
