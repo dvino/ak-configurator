@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline rejection tests; pass a candidate ZIP as the first argument."""
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,34 @@ from unittest.mock import patch
 import build_windows_installer as builder
 
 ARCHIVE = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else None
+
+
+class SignToolOptionTests(unittest.TestCase):
+    def test_option_keeps_command_in_one_argument_without_literal_quotes(self):
+        path = Path('C:/Program Files/SDK/$tools/signtool.exe')
+        option = builder.inno_sign_tool_option(path,
+                                              'A' * 40, 'https://example.test/timestamp')
+        escaped_path = str(path).replace('$', '$$')
+        self.assertEqual(option, f'--signtool=akconfig=$q{escaped_path}$q sign '
+                         '/sha1 ' + 'A' * 40 + ' /fd SHA256 /tr https://example.test/timestamp /td SHA256 $f')
+        self.assertNotIn('"', option)
+
+    @unittest.skipUnless(os.environ.get('INNO_ISCC'), 'Set INNO_ISCC to run the native compiler parser')
+    def test_real_compiler_parses_sign_tool_option(self):
+        with tempfile.TemporaryDirectory(prefix='inno parser ') as tmp:
+            script = Path(tmp) / 'fixture script.iss'
+            script.write_text('[Setup]\nAppName=Parser fixture\nAppVersion=1\n'
+                              'DefaultDirName={autopf}\\ParserFixture\nSignTool=akconfig\n', encoding='utf-8')
+            option = builder.inno_sign_tool_option(Path(tmp) / '$tool folder' / 'signtool.exe',
+                                                  'A' * 40, 'https://example.test/timestamp')
+            old = f'/Sakconfig="{Path(tmp) / "tool folder" / "signtool.exe"}" sign /sha1 ' + 'A' * 40 + ' $f'
+            rejected = subprocess.run([os.environ['INNO_ISCC'], '--output=no', old, str(script)],
+                                      capture_output=True, text=True, errors='replace')
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('You may not specify more than one script filename', rejected.stdout + rejected.stderr)
+            result = subprocess.run([os.environ['INNO_ISCC'], '--output=no', option, str(script)],
+                                    capture_output=True, text=True, errors='replace')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class CandidateTests(unittest.TestCase):

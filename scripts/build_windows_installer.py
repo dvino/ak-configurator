@@ -19,6 +19,14 @@ from verify_ak820_release_candidate import (expected_static_files, expected_runt
 PLATFORM = "windows-x86_64"
 
 
+def inno_sign_tool_option(signtool, signing_thumbprint, timestamp_url):
+    # ISCC parses the Windows command line itself. Literal quotes inside an
+    # argument confuse its parser; $q is expanded only when the tool is run.
+    path = str(signtool).replace('$', '$$')
+    return (f'--signtool=akconfig=$q{path}$q sign /sha1 {signing_thumbprint} '
+            f'/fd SHA256 /tr {timestamp_url} /td SHA256 $f')
+
+
 def read_candidate(archive, version, commit, allow_dirty, platform=PLATFORM):
     if platform not in ('windows-x86_64', 'windows-arm64'):
         raise ValueError('Unsupported Windows installer platform')
@@ -160,7 +168,7 @@ def build(archive, compiler, output, allow_dirty=False, signing_thumbprint=None,
             # A signed installer must not silently contain unsigned payloads.
             for name in ('ak-configurator.exe', 'audio/cava.exe', 'install-user.ps1', 'uninstall-user.ps1'):
                 verify_file(stage / name, signing_thumbprint, signtool)
-            command += ['/DSigningEnabled', f'/Sakconfig="{signtool}" sign /sha1 {signing_thumbprint} /fd SHA256 /tr {timestamp_url} /td SHA256 $f']
+            command += ['/DSigningEnabled', inno_sign_tool_option(signtool, signing_thumbprint, timestamp_url)]
         command.append(str(installer_source))
         subprocess.run(command, check=True)
         exe = tmp / base

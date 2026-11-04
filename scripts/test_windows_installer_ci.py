@@ -87,6 +87,30 @@ foreach ($name in @('Get-AuthenticodeSignature', 'Import-PfxCertificate', 'Impor
         with self.assertRaises(signing.subprocess.CalledProcessError):
             signing.run_powershell("throw 'expected fixture failure'", dict(os.environ))
 
+    def test_signing_diagnostics_are_bounded_and_do_not_echo_exception(self):
+        error = signing.subprocess.CalledProcessError(1, ['encoded command'])
+        with mock.patch.object(signing.subprocess, 'run', side_effect=error) as run:
+            with self.assertRaises(signing.subprocess.CalledProcessError) as caught:
+                signing.run_powershell(signing.IMPORT, {})
+        encoded = run.call_args.args[0][-1]
+        wrapped = signing.base64.b64decode(encoded).decode('utf-16le')
+        self.assertIn("$stage = 'pfx-ephemeral-import'", wrapped)
+        self.assertIn("$stage = 'pfx-my-import'", wrapped)
+        self.assertIn("'root-import'", wrapped)
+        self.assertIn("'publisher-import'", wrapped)
+        self.assertIn('GetBaseException().HResult', wrapped)
+        self.assertNotIn('$_.Exception.Message', wrapped)
+        self.assertEqual(caught.exception.cmd, 'Windows PowerShell signing helper')
+
+    def test_powershell_timeout_redacts_command(self):
+        error = signing.subprocess.TimeoutExpired(['encoded-secret-marker'], 120)
+        with mock.patch.object(signing.subprocess, 'run', side_effect=error):
+            with self.assertRaises(signing.subprocess.TimeoutExpired) as caught:
+                signing.run_powershell('fixture', {})
+        self.assertEqual(caught.exception.timeout, 120)
+        self.assertNotIn('encoded-secret-marker', str(caught.exception))
+        self.assertEqual(caught.exception.cmd, 'Windows PowerShell signing helper')
+
     def test_untrusted_event_rejected_before_import(self):
         with mock.patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted', 'GITHUB_REPOSITORY': 'dvino/ak-configurator',
                                           'GITHUB_EVENT_NAME': 'pull_request'}, clear=True), \

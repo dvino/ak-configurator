@@ -1194,12 +1194,21 @@ mod inspection_tests {
             "code_sha256":identity.code_sha256,"counts":{"layers":6,"physical_keys":83,
             "assignments":498,"encoder_assignments":12,"macros":16,"macro_capacity":8192},"files":records});
         let dir = tempfile::tempdir().unwrap();
+        // The reader rejects symlink ancestors. Resolve the owned fixture path
+        // so platforms with a symlinked temporary root exercise manifest checks.
+        #[cfg(unix)]
+        let path = std::fs::canonicalize(dir.path()).unwrap();
+        #[cfg(not(unix))]
+        let path = dir.path().to_owned();
         for (name, bytes) in &files {
-            std::fs::write(dir.path().join(name), bytes).unwrap();
+            std::fs::write(path.join(name), bytes).unwrap();
         }
         let check = |raw: &[u8], expected| {
-            std::fs::write(dir.path().join(MANIFEST), raw).unwrap();
-            assert!(matches!(read_backup_inspection(dir.path(), None), Err(e) if e == expected));
+            std::fs::write(path.join(MANIFEST), raw).unwrap();
+            match read_backup_inspection(&path, None) {
+                Err(actual) => assert_eq!(actual, expected),
+                Ok(_) => panic!("backup inspection unexpectedly succeeded; expected {expected:?}"),
+            }
         };
         let raw = canonical(&manifest).unwrap();
         check(&raw, BackupInspectionError::Invalid); // Qualified identity does not authorize fake ROM.
@@ -1241,9 +1250,9 @@ mod inspection_tests {
             &canonical(&changed).unwrap(),
             BackupInspectionError::Invalid,
         );
-        std::fs::write(dir.path().join(MANIFEST), &raw).unwrap();
+        std::fs::write(path.join(MANIFEST), &raw).unwrap();
         assert!(matches!(
-            read_backup_inspection(dir.path(), Some(&"00".repeat(32))),
+            read_backup_inspection(&path, Some(&"00".repeat(32))),
             Err(BackupInspectionError::Changed)
         ));
     }

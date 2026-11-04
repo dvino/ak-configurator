@@ -1,0 +1,183 @@
+{
+  "format": "ak-configurator-ci-result-1",
+  "qualification": "Completed GitHub job metadata; no binary-source attestation or macOS acceptance",
+  "run_id": 41738924264,
+  "repository": "dvino/ak-configurator",
+  "head_sha": "145fd9fe360ccf3abbc4bb4faf1a973a7c804430",
+  "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-11-03T23:24:40Z",
+  "updated_at": "2026-11-03T23:48:41Z",
+  "observed_utc": "2026-11-04T00:03:00.411754+00:00",
+  "jobs": [
+    {
+      "job_id": 126275198739,
+      "name": "Build (linux-x86_64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275198739",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Test all targets (Linux)",
+          "number": 14
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Install Linux build dependencies",
+        "Build bundled audio helper without capture",
+        "Verify real helper using synthetic FIFO PCM",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126275198861,
+      "name": "Build (macos-x86_64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275198861",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Test AK820 filesystem and ownership (Windows and macOS)",
+          "number": 15
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Install macOS Rust target",
+        "Build bundled audio helper without capture",
+        "Verify real helper using synthetic FIFO PCM",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126275198896,
+      "name": "Build (windows-arm64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275198896",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Build and exercise Windows GUI installer",
+          "number": 32
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Test Windows installer CI guards (offline)",
+        "Check out pinned Windows audio build tools",
+        "Bootstrap pinned Windows static audio dependencies",
+        "Prepare pinned native Windows pkgconf",
+        "Build bundled audio helper without capture",
+        "Test AK820 filesystem and ownership (Windows and macOS)",
+        "Test AK820 device ownership (Windows and macOS)",
+        "Build development binary (Linux and Windows)",
+        "Execute native GUI runtime smoke (Windows)",
+        "Write SHA-256 manifest (Windows)",
+        "Execute target runtime self-check (offline, no device access)",
+        "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+        "Post Check out pinned Windows audio build tools",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126275198902,
+      "name": "Build (macos-arm64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275198902",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Test AK820 filesystem and ownership (Windows and macOS)",
+          "number": 15
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Install macOS Rust target",
+        "Build bundled audio helper without capture",
+        "Verify real helper using synthetic FIFO PCM",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126275199092,
+      "name": "Build (linux-arm64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275199092",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Test all targets (Linux)",
+          "number": 14
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Install Linux build dependencies",
+        "Build bundled audio helper without capture",
+        "Verify real helper using synthetic FIFO PCM",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    },
+    {
+      "job_id": 126275199362,
+      "name": "Build (windows-x86_64)",
+      "url": "https://github.com/dvino/ak-configurator/actions/runs/41738924264/job/126275199362",
+      "conclusion": "failure",
+      "failed_steps": [
+        {
+          "name": "Build and exercise Windows GUI installer",
+          "number": 32
+        }
+      ],
+      "successful_steps": [
+        "Set up job",
+        "Run actions/checkout@v7",
+        "Install Rust 1.94.1",
+        "Cache Rust",
+        "Test audio dependency setup (offline)",
+        "Test Windows installer CI guards (offline)",
+        "Check out pinned Windows audio build tools",
+        "Bootstrap pinned Windows static audio dependencies",
+        "Prepare pinned native Windows pkgconf",
+        "Build bundled audio helper without capture",
+        "Test AK820 filesystem and ownership (Windows and macOS)",
+        "Test AK820 device ownership (Windows and macOS)",
+        "Build development binary (Linux and Windows)",
+        "Test optional MCP contracts (x86_64 Linux and Windows only)",
+        "Build optional MCP mock binary (x86_64 Linux and Windows only)",
+        "Exercise MCP stdio with mock backend (x86_64 Linux and Windows only)",
+        "Execute native GUI runtime smoke (Windows)",
+        "Write SHA-256 manifest (Windows)",
+        "Execute target runtime self-check (offline, no device access)",
+        "Bootstrap pinned Inno Setup and locate Windows SDK SignTool",
+        "Post Check out pinned Windows audio build tools",
+        "Post Run actions/checkout@v7",
+        "Complete job"
+      ]
+    }
+  ],
+  "artifacts": []
+}

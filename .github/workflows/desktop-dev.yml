@@ -26,8 +26,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows_signing_preflight:
+    name: Windows signing preflight (${{ matrix.arch }})
+    if: ${{ github.repository == 'dvino/ak-configurator' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-vs2026-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Import temporary identity and verify CMS signing
+        env:
+          AK_WINDOWS_CODE_SIGN_PFX_BASE64: ${{ secrets.AK_WINDOWS_CODE_SIGN_PFX_BASE64 }}
+          AK_WINDOWS_CODE_SIGN_PFX_PASSWORD: ${{ secrets.AK_WINDOWS_CODE_SIGN_PFX_PASSWORD }}
+          AK_WINDOWS_CODE_SIGN_THUMBPRINT: ${{ vars.AK_WINDOWS_CODE_SIGN_THUMBPRINT }}
+          AK_WINDOWS_CODE_SIGN_MODE: ${{ vars.AK_WINDOWS_CODE_SIGN_MODE }}
+        run: python scripts/windows_signing_ci.py --public-cert assets/windows/ak-configurator-development.cer -- python scripts/test_windows_signing_preflight.py
+
   build:
     name: Build (${{ matrix.platform }})
+    needs: windows_signing_preflight
+    if: ${{ !cancelled() && (needs.windows_signing_preflight.result == 'success' || (needs.windows_signing_preflight.result == 'skipped' && !(github.repository == 'dvino/ak-configurator' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

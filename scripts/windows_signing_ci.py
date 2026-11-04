@@ -16,27 +16,37 @@ MODE = 'AK_WINDOWS_CODE_SIGN_MODE'
 # environment, never command-line arguments or generated files other than the PFX.
 IMPORT = r'''
 $ErrorActionPreference = 'Stop'
+$stage = 'security-module'
 Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -Force
+$stage = 'pki-module'
 Import-Module (Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\Modules\PKI\PKI.psd1') -Force
+$stage = 'administrator-check'
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Elevated GitHub-hosted runner required' }
+$stage = 'public-certificate'
 $thumb = $env:AK_CI_CERT_THUMB
 $password = ConvertTo-SecureString $env:AK_WINDOWS_CODE_SIGN_PFX_PASSWORD -AsPlainText -Force
 $public = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($env:AK_CI_CERT_PUBLIC)
 if ($public.Thumbprint -ne $thumb -or $public.HasPrivateKey) { throw 'Public certificate mismatch' }
+$stage = 'pfx-ephemeral-import'
 $collection = [System.Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
 $flags = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
 $collection.Import($env:AK_CI_CERT_PFX, $env:AK_WINDOWS_CODE_SIGN_PFX_PASSWORD, $flags)
+$stage = 'pfx-identity'
 if ($collection.Count -ne 1 -or $collection[0].Thumbprint -ne $thumb -or -not $collection[0].HasPrivateKey) { throw 'PFX identity mismatch' }
 $collection[0].Dispose()
+$stage = 'existing-certificate-check'
 foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublisher')) {
     if (Test-Path "$store\$thumb") { throw "Certificate already exists in $store" }
 }
 # Mark ownership only after all pre-existing store checks have passed.
+$stage = 'ownership-marker'
 [IO.File]::WriteAllText($env:AK_CI_CERT_OWNERSHIP, 'owned')
+$stage = 'pfx-my-import'
 $imported = Import-PfxCertificate -FilePath $env:AK_CI_CERT_PFX -CertStoreLocation Cert:\CurrentUser\My -Password $password
 if ($imported.Thumbprint -ne $thumb) { throw 'Imported PFX mismatch' }
 foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublisher')) {
+    $stage = if ($store -eq 'Cert:\LocalMachine\Root') { 'root-import' } else { 'publisher-import' }
     $imported = Import-Certificate -FilePath $env:AK_CI_CERT_PUBLIC -CertStoreLocation $store
     if ($imported.Thumbprint -ne $thumb) { throw "Imported $store certificate mismatch" }
 }
@@ -44,8 +54,10 @@ foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\CurrentUser\TrustedPublis
 
 CLEANUP = r'''
 $ErrorActionPreference = 'Stop'
+$stage = 'cleanup-security-module'
 Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -Force
 if (-not (Test-Path -LiteralPath $env:AK_CI_CERT_OWNERSHIP)) { exit 0 }
+$stage = 'cleanup-owned-certificate'
 $thumb = $env:AK_CI_CERT_THUMB
 $errors = @()
 try {
@@ -64,15 +76,23 @@ foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\Root', 'Cert:\C
         if (Test-Path $path) { throw 'Certificate remains' }
     } catch { $errors += "Certificate cleanup failed in $store" }
 }
-if ($errors.Count) { throw ($errors -join '; ') }
+if ($errors.Count) {
+    foreach ($message in $errors) { [Console]::Error.WriteLine($message) }
+    throw 'Signing cleanup failed'
+}
 '''
 
 
 def run_powershell(script, env):
-    wrapped = 'try {\n' + script + '\n} catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }\n'
+    wrapped = ("$stage = 'initialization'\ntry {\n" + script +
+               "\n} catch { [Console]::Error.WriteLine(('Windows signing stage={0} HRESULT=0x{1:X8} base-HRESULT=0x{2:X8}' -f $stage, ($_.Exception.HResult -band 0xFFFFFFFFL), ($_.Exception.GetBaseException().HResult -band 0xFFFFFFFFL))); exit 1 }\n")
     encoded = base64.b64encode(wrapped.encode('utf-16le')).decode('ascii')
-    return subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
-                          text=True, env=env, check=True, timeout=120)
+    try:
+        return subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+                              text=True, env=env, check=True, timeout=120)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        exc.cmd = 'Windows PowerShell signing helper'
+        raise
 
 
 def execute(public_cert, command):

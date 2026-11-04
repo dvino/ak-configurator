@@ -89,6 +89,27 @@ def replace_archive(archive, transform):
 
 
 class WorkflowDiagnosticsTests(unittest.TestCase):
+    def test_signing_preflight_gates_all_six_builds_and_skips_only_untrusted_events(self):
+        workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
+        preflight = workflow.split("  windows_signing_preflight:\n", 1)[1].split("\n  build:\n", 1)[0]
+        build_header = workflow.split("\n  build:\n", 1)[1].split("    strategy:", 1)[0]
+        self.assertIn("github.repository == 'dvino/ak-configurator'", preflight)
+        self.assertIn("github.event_name == 'push' || github.event_name == 'workflow_dispatch'", preflight)
+        self.assertIn("os: windows-latest", preflight)
+        self.assertIn("os: windows-11-vs2026-arm", preflight)
+        self.assertIn("ref: ${{ inputs.candidate_ref || github.sha }}", preflight)
+        self.assertIn("architecture: ${{ matrix.arch }}", preflight)
+        self.assertIn("scripts/windows_signing_ci.py", preflight)
+        self.assertIn("scripts/test_windows_signing_preflight.py", preflight)
+        self.assertIn("needs: windows_signing_preflight", build_header)
+        self.assertIn("!cancelled()", build_header)
+        self.assertIn("result == 'success'", build_header)
+        self.assertIn("result == 'skipped' && !(github.repository == 'dvino/ak-configurator'", build_header)
+        self.assertNotIn("continue-on-error", preflight)
+        preflight_script = (ROOT / "scripts/test_windows_signing_preflight.py").read_text(encoding="utf-8")
+        self.assertIn("sign_report(report, thumbprint)", preflight_script)
+        self.assertIn("verify_report_signature(report, signature", preflight_script)
+
     def test_full_normal_suite_covers_windows_and_macos_keeps_focused_tests(self):
         workflow = (ROOT / ".github/workflows/desktop-dev.yml").read_text(encoding="utf-8")
         steps = {block.splitlines()[0]: block for block in workflow.split("      - name: ")[1:]}
@@ -172,7 +193,7 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         self.assertIn("scripts/build_windows_ci_candidate.py", installer)
         for name in ("AK_WINDOWS_CODE_SIGN_PFX_BASE64", "AK_WINDOWS_CODE_SIGN_PFX_PASSWORD"):
             self.assertIn("secrets." + name, installer)
-            self.assertEqual(workflow.count("secrets." + name), 1)
+            self.assertEqual(workflow.count("secrets." + name), 2)
         self.assertIn("target/candidate/*-setup.exe", steps["Upload candidate package and checksum"])
         self.assertIn("target/candidate/*-setup.exe.build.p7s", steps["Upload candidate package and checksum"])
 

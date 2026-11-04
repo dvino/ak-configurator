@@ -1,10 +1,10 @@
 {
   "format": "ak-configurator-b12-source-checkpoint-1",
-  "base_commit": "145fd9fe360ccf3abbc4bb4faf1a973a7c804430",
+  "base_commit": "37ce72bc5491bbe80b68e06e3bd3b84acf36d49d",
   "checkout_dirty": true,
   "qualification": "Current source file inventory; not a compiler attestation or binary-source identity proof. Documentation is reviewed separately.",
-  "file_count": 709,
-  "aggregate_sha256": "e2b358b52eede5c19a82f7b0de5dede66c0841b14a7ff7bb72f4c5a88d374bc2",
+  "file_count": 710,
+  "aggregate_sha256": "55f10290f1514069c0dee36834f20086880fb3b1835437032403beb2d671c649",
   "files": [
     {
       "path": ".gitattributes",
@@ -53,8 +53,8 @@
     },
     {
       "path": ".github/workflows/desktop-dev.yml",
-      "bytes": 15713,
-      "sha256": "4e42c37d53c04bb1b32caf76a840bf7f76c0fe7a92e8199b38665a914ca8d45c"
+      "bytes": 17354,
+      "sha256": "3e126090c74a4ac44fbf0e81d0dc15ea75138518514a3089654adef1f16461a3"
     },
     {
       "path": ".github/workflows/nix.yml",
@@ -1113,8 +1113,8 @@
     },
     {
       "path": "scripts/build_windows_installer.py",
-      "bytes": 12575,
-      "sha256": "95213f3ed79895936f7ba353d01b234aeaecf14579745173e989657e7401f719"
+      "bytes": 12949,
+      "sha256": "4136edacb736950a73fa9405ca3f508d7684b2a6fd5460ea438f646707440d87"
     },
     {
       "path": "scripts/check_i18n.py",
@@ -1203,8 +1203,8 @@
     },
     {
       "path": "scripts/test_ak820_release_workflow.py",
-      "bytes": 32073,
-      "sha256": "102e3c0f787ae7fbdda8af48e84664c03266bda1745d0998ae9afad2e5886979"
+      "bytes": 33689,
+      "sha256": "0bb43ad11cc66c203fd1efa2cf230038f4c65cad96607454fb7d4bef0a186bff"
     },
     {
       "path": "scripts/test_ak820_runtime_smoke.py",
@@ -1308,13 +1308,13 @@
     },
     {
       "path": "scripts/test_windows_installer.py",
-      "bytes": 3687,
-      "sha256": "3a36b447b8db95425a34a42c25a70681a5238e83c54844571028c993dad63edc"
+      "bytes": 5718,
+      "sha256": "8949f2838355cd4061a08b2f0fc99a6d7476fb4a58871f5a57e5d6c625c0ca7b"
     },
     {
       "path": "scripts/test_windows_installer_ci.py",
-      "bytes": 6367,
-      "sha256": "60b2d8dddbca99e04495a6dec2498694ed6b4b40bb5da5ed74511b428caa9bbe"
+      "bytes": 7861,
+      "sha256": "ee8c03bf8b4515188d356f1673e96887c0bfd39b7d5cea4eaf21c3c9b0bdbb90"
     },
     {
       "path": "scripts/test_windows_installer_runtime.py",
@@ -1325,6 +1325,11 @@
       "path": "scripts/test_windows_signing.py",
       "bytes": 6502,
       "sha256": "896096b22d748f0d50b0c99e56baa53b52c3276785b1f54af96e7889ed17131a"
+    },
+    {
+      "path": "scripts/test_windows_signing_preflight.py",
+      "bytes": 618,
+      "sha256": "4479d2d3c17a906f2c5fa35726cbe5ac8840f1b3f1e1acd7a360ebeaa9733132"
     },
     {
       "path": "scripts/tool_pins.sh",
@@ -1353,8 +1358,8 @@
     },
     {
       "path": "scripts/windows_signing_ci.py",
-      "bytes": 6658,
-      "sha256": "4b91571a685aaa8cec54cdf5f0b54a597a5ae27a4f47ba2e3d4279526b0314e7"
+      "bytes": 7539,
+      "sha256": "d8a9b725e9cb81c894034b771234cb3181c424ee9af4aec84e6de8b67b96d600"
     },
     {
       "path": "src/action_icons.rs",
@@ -1373,8 +1378,8 @@
     },
     {
       "path": "src/ak820_backup_files.rs",
-      "bytes": 65595,
-      "sha256": "03f7a3646dc09f025dfa816a326772ddb486485d58523082442b215641b64f86"
+      "bytes": 66019,
+      "sha256": "88d5ef549ec60eddc7b0b573b442d6412cc3472b9718fa8b171f81638903110f"
     },
     {
       "path": "src/ak820_backup_windows.rs",
